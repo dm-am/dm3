@@ -48,10 +48,23 @@ export type LoginCredentials = {
  * the first screen. Typed as a bare User here, the whole envelope went into the
  * store as though it were the viewer, and every field read off it was
  * undefined until the next boot reconciled the store against the server.
+ *
+ * The viewer is optional because one successful answer carries none:
+ * `twoFactorRequired` means the password was accepted and the login is not
+ * finished, so there is no session yet and nothing to describe. Typed as
+ * required, that answer read as "signed in as nobody".
  */
 export type LoginResponse = {
-  user: User;
-  preferences: Preferences;
+  user?: User;
+  preferences?: Preferences;
+  /** The password was accepted and the second factor is still owed. */
+  twoFactorRequired?: boolean;
+};
+
+/** Second step of a login: the code that answers the challenge. */
+export type TwoFactorLoginRequest = {
+  /** Six digits from the authenticator app, or one of the recovery codes. */
+  code: string;
 };
 
 /**
@@ -170,7 +183,8 @@ export type NotificationCategory =
   | "Games"
   | "Subscriptions"
   | "Security"
-  | "Moderation";
+  | "Moderation"
+  | "Blog";
 
 /**
  * Bot connection for a notification channel (Telegram/Discord)
@@ -235,13 +249,25 @@ export type SecurityEventType =
   | "PasswordResetRequest"
   | "PasswordResetComplete"
   | "AccountLocked"
-  | "SuspiciousLogin";
+  | "SuspiciousLogin"
+  // Everything that happens to the second factor. The server has written
+  // these nine since the factor shipped; unlisted here, all nine printed as
+  // the one fallback line the journal shows an unknown type.
+  | "TwoFactorEnabled"
+  | "TwoFactorDisabled"
+  | "TwoFactorRecoveryCodeUsed"
+  | "TwoFactorRecoveryCodesReissued"
+  | "TwoFactorRemovalScheduled"
+  | "TwoFactorRemovalCancelled"
+  | "TwoFactorRemovedByAdmin"
+  | "TwoFactorRemovalRefused"
+  | "TwoFactorSetupFailure";
 
 /**
  * Which slice of the security journal to ask for. Mirrors SecurityLogType on
  * the server, which refuses anything else.
  */
-export type SecurityLogType = "login" | "password" | "session";
+export type SecurityLogType = "login" | "password" | "session" | "twofactor";
 
 /**
  * Security audit log event
@@ -249,9 +275,60 @@ export type SecurityLogType = "login" | "password" | "session";
 export type SecurityEvent = {
   id: string;
   eventType: SecurityEventType;
-  description: string;
   timestampUtc: string;
   ipAddress?: string;
   deviceInfo?: string;
   details?: string;
+};
+
+// === Two-factor authentication ===
+
+/**
+ * State of the second factor, as GET /v1/account/two-factor reports it.
+ *
+ * Nothing here can be used to pass the factor: no secret, no code, no hash.
+ * The dates and the count are what the owner needs in order to decide whether
+ * to reissue the codes or to switch the factor off.
+ */
+export type TwoFactorStatus = {
+  enabled: boolean;
+  /** Since when it has been on. Absent while it is off. */
+  enabledUtc?: string;
+  /** Last time it was passed, by a code or by a recovery code. */
+  lastVerifiedUtc?: string;
+  recoveryCodesLeft: number;
+  /** When a removal asked for by mail takes effect, if one is pending. */
+  removalDueUtc?: string;
+  /** Whether this account's rank owes a factor. */
+  required: boolean;
+  /** Whether the rank is withheld for want of a factor. */
+  privilegeWithheld: boolean;
+};
+
+/**
+ * The secret, handed over once.
+ *
+ * It exists in this one answer and nowhere else: asking again before the
+ * factor is confirmed replaces it rather than repeating it.
+ */
+export type TwoFactorSetup = {
+  /** Base32, for typing into the app by hand. */
+  secret: string;
+  /** The same secret as an otpauth URI, for the QR code. */
+  otpAuthUri: string;
+};
+
+/** A set of recovery codes, returned once and readable nowhere afterwards. */
+export type RecoveryCodes = {
+  codes: string[];
+};
+
+/**
+ * Switching the factor off and reissuing the recovery codes cost the same: the
+ * current password and a passed second factor, where a recovery code counts as
+ * the second factor.
+ */
+export type TwoFactorConfirmedAction = {
+  password: string;
+  code: string;
 };

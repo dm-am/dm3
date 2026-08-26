@@ -1,12 +1,11 @@
 using System;
-using AutoMapper;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Uploads;
 using DM.Testing;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Moderation.Bans;
 using DM.Web.API.Features.Moderation.Warnings;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
 using Xunit;
 using DomainBan = DM.Domain.Moderation.Features.Warnings.Ban;
 
@@ -23,32 +22,6 @@ namespace DM.Web.API.Tests.Features.Moderation;
 /// </summary>
 public class BanMappingShould : UnitTestBase
 {
-    private IMapper MapperAt(DateTimeOffset moment)
-    {
-        var clock = Mock<IDateTimeProvider>();
-        clock.SetupGet(c => c.Now).Returns(moment);
-
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<WarningMappingProfile>();
-        });
-
-        return configuration.CreateMapper(type =>
-        {
-            if (type == typeof(BanActivityResolver))
-            {
-                return new BanActivityResolver(clock.Object);
-            }
-
-            if (type == typeof(BanTypeResolver))
-            {
-                return new BanTypeResolver(clock.Object);
-            }
-
-            return Activator.CreateInstance(type)!;
-        });
-    }
 
     [Fact]
     public void ReportABanWhoseWindowHasNotOpenedAsInactive()
@@ -56,7 +29,7 @@ public class BanMappingShould : UnitTestBase
         var moment = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var ban = new DomainBan { StartedUtc = moment.AddDays(1), EndedUtc = moment.AddDays(2) };
 
-        MapperAt(moment).Map<PublicBan>(ban).IsActive.Should().BeFalse();
+        WarningMappers.At(moment).ToPublicBan(ban).IsActive.Should().BeFalse();
     }
 
     [Fact]
@@ -65,7 +38,7 @@ public class BanMappingShould : UnitTestBase
         var moment = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var ban = new DomainBan { StartedUtc = moment.AddDays(-1), EndedUtc = moment.AddDays(1) };
 
-        MapperAt(moment).Map<PublicBan>(ban).IsActive.Should().BeTrue();
+        WarningMappers.At(moment).ToPublicBan(ban).IsActive.Should().BeTrue();
     }
 
     [Fact]
@@ -79,7 +52,7 @@ public class BanMappingShould : UnitTestBase
             LiftedUtc = moment
         };
 
-        MapperAt(moment).Map<PublicBan>(ban).IsActive.Should().BeFalse();
+        WarningMappers.At(moment).ToPublicBan(ban).IsActive.Should().BeFalse();
     }
 
     /// <summary>
@@ -102,7 +75,7 @@ public class BanMappingShould : UnitTestBase
             LiftReason = "Разобрались"
         };
 
-        var mapped = MapperAt(moment).Map<Ban>(ban);
+        var mapped = WarningMappers.At(moment).ToBan(ban);
 
         mapped.IsLifted.Should().BeTrue();
         mapped.LiftedUtc.Should().Be(moment.AddDays(-1));
@@ -116,7 +89,7 @@ public class BanMappingShould : UnitTestBase
         var moment = new DateTimeOffset(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var ban = new DomainBan { StartedUtc = moment, EndedUtc = moment.AddYears(10) };
 
-        MapperAt(moment).Map<PublicBan>(ban).Type.Should().Be(BanType.Temporary);
+        WarningMappers.At(moment).ToPublicBan(ban).Type.Should().Be(BanType.Temporary);
     }
 
     [Fact]
@@ -129,6 +102,6 @@ public class BanMappingShould : UnitTestBase
             EndedUtc = moment.AddYears(DomainBan.PermanentYears)
         };
 
-        MapperAt(moment).Map<PublicBan>(ban).Type.Should().Be(BanType.Permanent);
+        WarningMappers.At(moment).ToPublicBan(ban).Type.Should().Be(BanType.Permanent);
     }
 }

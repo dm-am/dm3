@@ -54,7 +54,7 @@ internal class AwardService : IAwardService
     public async Task<AwardType> CreateTypeAsync(CreateAwardType create, CancellationToken ct = default)
     {
         await _createTypeValidator.ValidateAndThrowAsync(create, ct);
-        EnsureIconValid(create.IconName);
+        GameIconCatalog.EnsureValid(create.IconName);
         var existing = await _repository.GetTypeByCodeAsync(create.Code, ct);
         if (existing != null)
         {
@@ -66,7 +66,7 @@ internal class AwardService : IAwardService
     public async Task<AwardType> UpdateTypeAsync(UpdateAwardType update, CancellationToken ct = default)
     {
         await _updateTypeValidator.ValidateAndThrowAsync(update, ct);
-        if (update.IconName != null) EnsureIconValid(update.IconName);
+        if (update.IconName != null) GameIconCatalog.EnsureValid(update.IconName);
         _ = await _repository.GetTypeAsync(update.Id, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.AwardTypeNotFound);
         return await _repository.UpdateTypeAsync(update, ct);
@@ -177,14 +177,5 @@ internal class AwardService : IAwardService
             ?? throw new HttpException(HttpStatusCode.NotFound, "Награда не найдена");
 
         await _repository.RevokeAsync(awardId, _identity.Current.User.UserId, ct);
-    }
-
-    private static void EnsureIconValid(string iconName)
-    {
-        if (!GameIconCatalog.IsValid(iconName))
-        {
-            throw new HttpException(HttpStatusCode.BadRequest,
-                RefusalMessage.UnknownIconName(iconName));
-        }
     }
 }

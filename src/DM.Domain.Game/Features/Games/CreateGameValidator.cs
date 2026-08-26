@@ -30,6 +30,14 @@ internal class CreateGameValidator : AbstractValidator<CreateGame>
             .NotEmpty().WithMessage(ValidationError.Empty)
             .MinimumLength(GameFieldLimits.InfoMinLength).WithMessage(ValidationError.Short);
 
+        // The game description renders on the Profile surface, which declares
+        // neither [mod] nor [private]: the tag is not markup there and hides
+        // nothing. [private] belongs to the posts inside the game, not to the
+        // page that advertises it.
+        RuleFor(g => g.Info)
+            .Must(info => !PrivateBlockMarkup.ContainsPrivateMarkup(info))
+            .WithMessage(g => PrivateBlockMarkup.DescribeSurfaceRefusal(g.Info));
+
         RuleFor(g => g.CommentsAccessMode)
             .IsInEnum().WithMessage(ValidationError.Invalid);
 

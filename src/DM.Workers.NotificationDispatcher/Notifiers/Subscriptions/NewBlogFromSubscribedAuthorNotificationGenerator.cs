@@ -54,29 +54,11 @@ internal class NewBlogFromSubscribedAuthorNotificationGenerator : BaseNotificati
             yield break;
         }
 
-        var usersInterested = new HashSet<Guid>();
-
-        var authorSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
-            SubscriptionTargetType.User,
+        var usersInterested = await SubscribedAudience.OfTeamAsync(
+            _subscriptionRepository,
             blogData.AuthorId,
+            blogData.AssistantIds,
             SubscriptionSettings.AuthorBlogEvents);
-        usersInterested.UnionWith(authorSubscriptions.Select(s => s.SubscriberId));
-
-        foreach (var assistantId in blogData.AssistantIds)
-        {
-            var assistantSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
-                SubscriptionTargetType.User,
-                assistantId,
-                SubscriptionSettings.AuthorBlogEvents);
-            usersInterested.UnionWith(assistantSubscriptions.Select(s => s.SubscriberId));
-        }
-
-        // Exclude the team — they manage the blog themselves.
-        usersInterested.Remove(blogData.AuthorId);
-        foreach (var assistantId in blogData.AssistantIds)
-        {
-            usersInterested.Remove(assistantId);
-        }
 
         if (usersInterested.Count == 0)
         {

@@ -10,6 +10,7 @@ import Button from "@/shared/ui/Button/Button.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
+import { unwrapResource } from "@/shared/api";
 import { notifyFailure } from "@/shared/lib/errors";
 
 // State machine for activation flow
@@ -164,14 +165,20 @@ async function submitActivation() {
     return;
   }
 
-  if (data) {
+  // Out of the envelope. Stored as it came, the session held the wrapper
+  // instead of the account - and the auth store writes that to localStorage -
+  // so right after activation the header greeted a signed-in visitor with no
+  // name, the link to the profile led nowhere, and the other tab was told
+  // somebody named undefined had activated.
+  const activated = unwrapResource<User>(data);
+  if (activated) {
     // Success!
-    userStore.updateUser(data);
-    activatedUser.value = data;
+    userStore.updateUser(activated);
+    activatedUser.value = activated;
     phase.value = "success";
 
     // Notify other tabs
-    channel?.postMessage({ type: "activated", username: data.username });
+    channel?.postMessage({ type: "activated", username: activated.username });
 
     // Clean up sessionStorage
     sessionStorage.removeItem("dm_pending_email");
@@ -359,7 +366,7 @@ function goToProfile() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .activation-page
   max-width: 380px
@@ -442,7 +449,6 @@ function goToProfile() {
   margin-bottom: $small
   padding: $small $medium
   border: 1px solid $border-accent-red
-  border-radius: $border-radius
   font-size: $secondary-font-size
   line-height: 1.5
 
@@ -488,7 +494,6 @@ function goToProfile() {
   margin: $medium 0
   padding: $small $medium
   border: 1px solid $border-accent-red
-  border-radius: $border-radius
   font-size: $secondary-font-size
   line-height: 1.5
   text-align: left

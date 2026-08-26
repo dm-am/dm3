@@ -6,11 +6,12 @@ using System.Threading.Tasks;
 using DM.Domain.Account.Features.Availability;
 using DM.Domain.Account.Features.EmailChange;
 using DM.Domain.Account.Features.Registration;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.Chats;
 using DM.Domain.Messaging.Features.Search;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -183,7 +184,7 @@ public class IdentityLookupShould : IntegrationTestBase
         var byAuthor = await search.Search(TestConstants.TestUserId, new MessageSearchQuery
         {
             FromUsername = TestConstants.TestUserLogin.ToUpperInvariant(),
-            Limit = MessageSearchQuery.MaxLimit
+            Limit = CursorQuery.MaxLimit
         });
 
         // Without these three the emptiness below would also hold for a branch that
@@ -195,7 +196,7 @@ public class IdentityLookupShould : IntegrationTestBase
         var byWildcard = await search.Search(TestConstants.TestUserId, new MessageSearchQuery
         {
             FromUsername = "%",
-            Limit = MessageSearchQuery.MaxLimit
+            Limit = CursorQuery.MaxLimit
         });
 
         byWildcard.Data.Should().BeEmpty(

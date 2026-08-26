@@ -3,10 +3,10 @@ import type {
   Envelope,
   ListEnvelope,
   PagingQuery,
+  QuoteSource,
   User,
 } from "@/shared/api/models/common";
 import type {
-  NotepadEntry,
   CreateNotepadEntryRequest,
   UpdateNotepadEntryRequest,
 } from "@/shared/api/models/notepads";
@@ -25,7 +25,12 @@ import type {
   UpdateBlogInput,
   UpdatePublicationInput,
 } from "../model/types";
-import { Api, toCommentsQueryParams, type CommentsQuery } from "@/shared/api";
+import {
+  Api,
+  notepadEndpoints,
+  toCommentsQueryParams,
+  type CommentsQuery,
+} from "@/shared/api";
 import { RENDER_AUDIENCE } from "@/shared/api/audience";
 
 /**
@@ -250,7 +255,7 @@ export default new (class {
   }
 
   public createBlogComment(blogId: string, comment: { text: string }) {
-    return Api.post<Comment>(`blogs/${blogId}/comments`, comment);
+    return Api.post<Envelope<Comment>>(`blogs/${blogId}/comments`, comment);
   }
 
   public markBlogCommentsAsRead(blogId: string) {
@@ -275,6 +280,18 @@ export default new (class {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
+  }
+
+  /**
+   * Fetch the markup of a quotation of a blog comment.
+   *
+   * The server composes the whole tag, author included, already filtered for
+   * whoever is asking. The client does not build one out of the rendered page:
+   * that conversion is lossy, and the source of somebody else's message is not
+   * something the browser holds.
+   */
+  public getBlogCommentQuote(id: string) {
+    return Api.get<Envelope<QuoteSource>>(`blogs/comments/${id}/quote`);
   }
 
   public likeBlogComment(id: string) {
@@ -302,7 +319,10 @@ export default new (class {
     publicationId: string,
     comment: { text: string },
   ) {
-    return Api.post<Comment>(`publications/${publicationId}/comments`, comment);
+    return Api.post<Envelope<Comment>>(
+      `publications/${publicationId}/comments`,
+      comment,
+    );
   }
 
   public updatePublicationComment(id: string, comment: { text: string }) {
@@ -324,6 +344,18 @@ export default new (class {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
+  }
+
+  /**
+   * Fetch the markup of a quotation of a publication comment.
+   *
+   * The server composes the whole tag, author included, already filtered for
+   * whoever is asking. The client does not build one out of the rendered page:
+   * that conversion is lossy, and the source of somebody else's message is not
+   * something the browser holds.
+   */
+  public getPublicationCommentQuote(id: string) {
+    return Api.get<Envelope<QuoteSource>>(`publications/comments/${id}/quote`);
   }
 
   public likePublicationComment(id: string) {
@@ -372,12 +404,16 @@ export default new (class {
 
   // === Blog notepad (BlogNotepadController) ===
 
+  private notepadOf(blogId: string) {
+    return notepadEndpoints(`blogs/${blogId}/notepad`);
+  }
+
   public getNotepad(blogId: string) {
-    return Api.get<ListEnvelope<NotepadEntry>>(`blogs/${blogId}/notepad`);
+    return this.notepadOf(blogId).list();
   }
 
   public createNote(blogId: string, input: CreateNotepadEntryRequest) {
-    return Api.post<Envelope<NotepadEntry>>(`blogs/${blogId}/notepad`, input);
+    return this.notepadOf(blogId).create(input);
   }
 
   public updateNote(
@@ -385,14 +421,11 @@ export default new (class {
     entryId: string,
     input: UpdateNotepadEntryRequest,
   ) {
-    return Api.patch<Envelope<NotepadEntry>>(
-      `blogs/${blogId}/notepad/${entryId}`,
-      input,
-    );
+    return this.notepadOf(blogId).update(entryId, input);
   }
 
   public deleteNote(blogId: string, entryId: string) {
-    return Api.delete(`blogs/${blogId}/notepad/${entryId}`);
+    return this.notepadOf(blogId).remove(entryId);
   }
 
   // === Blog blacklist (BlogBlacklistController) ===

@@ -55,6 +55,15 @@ internal class MessageSearchRepository : IMessageSearchRepository
     /// words that were searched for; and it could not have found them by looking,
     /// because the search matches by lexeme - a query for "странник" matches
     /// "странников", which no substring of the query occurs in.
+    ///
+    /// Both branches cut the private block out, and the branch that builds a
+    /// window has to cut it for a reason the fallback does not: ts_headline reads
+    /// the document it is given rather than the vector, so the strip in the
+    /// generated column protects which rows match and says nothing about what is
+    /// shown. A window opened around any other word in the same body ran straight
+    /// through the block. The projection has removed it since, so this is the
+    /// second lock of the pair - the one that also covers a row written before the
+    /// projection learned to.
     /// </remarks>
     private async Task Preview(MessageSearchHit[] page, string query, CancellationToken ct)
     {
@@ -90,7 +99,11 @@ internal class MessageSearchRepository : IMessageSearchRepository
                 {
                     m.MessageId,
                     Headline = EF.Functions.WebSearchToTsQuery(SearchConfig, query)
-                        .GetResultHeadline(SearchConfig, EF.Property<string>(m, "SearchText"), SearchSnippet.HeadlineOptions),
+                        .GetResultHeadline(
+                            SearchConfig,
+                            DmDbContext.RegexpReplace(
+                                EF.Property<string>(m, "SearchText"), PrivateBlockPattern, " ", "gi"),
+                            SearchSnippet.HeadlineOptions),
                 })
                 .ToArrayAsync(ct))
             {
@@ -106,7 +119,11 @@ internal class MessageSearchRepository : IMessageSearchRepository
                 {
                     p.PostId,
                     Headline = EF.Functions.WebSearchToTsQuery(SearchConfig, query)
-                        .GetResultHeadline(SearchConfig, EF.Property<string>(p, "SearchText"), SearchSnippet.HeadlineOptions),
+                        .GetResultHeadline(
+                            SearchConfig,
+                            DmDbContext.RegexpReplace(
+                                EF.Property<string>(p, "SearchText"), PrivateBlockPattern, " ", "gi"),
+                            SearchSnippet.HeadlineOptions),
                 })
                 .ToArrayAsync(ct))
             {

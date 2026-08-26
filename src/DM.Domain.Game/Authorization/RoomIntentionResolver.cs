@@ -24,9 +24,13 @@ internal class RoomIntentionResolver :
         {
             case RoomIntention.CreatePost when characterId.HasValue:
                 var access = room.Accesses.FirstOrDefault(a => a.Character?.Id == characterId.Value);
+                // The owner check reads through a nullable author on purpose:
+                // an NPC has none, and the NPC arm right below is the one that
+                // decides such a post. Dereferencing it first turned posting
+                // as an NPC into a null reference before the rule was reached.
                 return access != null &&
                        GrantsWriting(access) &&
-                       (access.Character.Author.UserId == user.UserId ||
+                       (access.Character.Author?.UserId == user.UserId ||
                         access.Character.IsNpc &&
                         room.Game.GetRoles(user.UserId).HasEditAccess());
             case RoomIntention.CreatePost:
@@ -48,7 +52,7 @@ internal class RoomIntentionResolver :
 
     public bool IsAllowed(IAuthorizationSubject user, RoomIntention intention, RoomToUpdate target) => intention switch
     {
-        RoomIntention.CreatePostPendency => target.Accesses.Any(a => a.Character?.Author.UserId == user.UserId) ||
+        RoomIntention.CreatePostPendency => target.Accesses.Any(a => a.Character?.Author?.UserId == user.UserId) ||
                                             target.Game.GetRoles(user.UserId).HasEditAccess(),
         // Chat room history: master/assistant, or anybody the room was opened to
         RoomIntention.ViewMessages =>

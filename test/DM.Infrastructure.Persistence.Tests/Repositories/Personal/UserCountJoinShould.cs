@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Infrastructure.Persistence.Repositories.Personal;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;

@@ -38,17 +38,4 @@ internal class TokenFactory : ITokenFactory
             CreatedUtc = _dateTimeProvider.Now
         };
     }
-
-    /// <inheritdoc />
-    public CreateToken Create(Guid userId, Guid entityId, TokenType type)
-    {
-        return new CreateToken
-        {
-            TokenId = _guidFactory.Create(),
-            UserId = userId,
-            EntityId = entityId,
-            Type = type,
-            CreatedUtc = _dateTimeProvider.Now
-        };
-    }
 }

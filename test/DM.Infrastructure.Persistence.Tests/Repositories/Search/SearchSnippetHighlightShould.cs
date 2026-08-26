@@ -1,6 +1,6 @@
 using System.Linq;
 using DM.Infrastructure.Persistence.Repositories.Search;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Search;

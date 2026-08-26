@@ -8,13 +8,14 @@
              hole through which a codebase that already reached nullable compliance
              could silently regress out of it. -->
         <Nullable>enable</Nullable>
-        <!-- Vulnerability warnings are silenced at build time, not ignored: with
-             TreatWarningsAsErrors any advisory on a direct dependency would stop every
-             build, and the .NET 8 SDK has no per-advisory suppression to exempt the one
-             that is reviewed and accepted. The single enforcement point is the
-             dependency-scan job, which fails on anything outside
-             .github/vulnerability-allowlist.txt — putting the same policy in MSBuild too
-             would give it two sources of truth. -->
+        <!-- Vulnerability warnings are silenced at build time, not ignored. The
+             SDK does offer per-advisory suppression these days (NuGetAuditSuppress,
+             since NuGet 6.11), but adopting it would put a second copy of the
+             reviewed-advisory list into MSBuild next to the one the dependency-scan
+             job already enforces through .github/vulnerability-allowlist.txt — and
+             two sources of truth is the exact failure this comment used to justify
+             by SDK limitation. One enforcement point, on purpose: the scan job
+             fails on anything outside the allowlist. -->
         <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
         <!-- CS8524 is the half of switch-expression exhaustiveness that cannot be
              satisfied. It fires on the cast of an undeclared integer, so a switch
@@ -45,11 +46,11 @@
              are; removing them is a separate pass, and nothing demands the next one. -->
         <NoWarn>$(NoWarn);CS1591</NoWarn>
         <!-- Pinned, not "preview". The accepted language used to be whatever SDK
-             happened to be installed: CI pins 8.0.x and the images use sdk:8.0, so a
+             happened to be installed: CI pins 10.0.x and the images use sdk:10.0, so a
              developer on a newer SDK could write a feature that compiles locally and
-             fails in CI with an error that names no cause. 12.0 is the language of
-             net8.0; a Rebuild of the whole solution in Release is clean under it. -->
-        <LangVersion>12.0</LangVersion>
+             fails in CI with an error that names no cause. 14.0 is the language of
+             net10.0; a Rebuild of the whole solution in Release is clean under it. -->
+        <LangVersion>14.0</LangVersion>
         <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     </PropertyGroup>
 

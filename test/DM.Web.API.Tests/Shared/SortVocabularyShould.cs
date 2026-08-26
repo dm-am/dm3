@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using DM.Testing;
 using DM.Web.API.Features.Forum.Topics;
 using DM.Web.API.Shared.Sorting;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;

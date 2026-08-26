@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Forum.Topics;
@@ -38,6 +39,13 @@ public interface ITopicApiService
     /// <param name="topicId">Topic identifier</param>
     /// <returns>Envelope of topic</returns>
     Task<Envelope<Topic>> Get(Guid topicId);
+
+    /// <summary>
+    /// Get the markup of a quotation of a topic
+    /// </summary>
+    /// <param name="topicId">Topic identifier</param>
+    /// <returns>Envelope containing the quotation source</returns>
+    Task<Envelope<QuoteSource>> GetQuote(Guid topicId);
 
     /// <summary>
     /// Get topic by board alias and topic number

@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Moderation.Features.ProfileNotes;
 using Microsoft.EntityFrameworkCore;
 using DbNote = DM.Infrastructure.Persistence.Entities.Account.ModeratedProfileNote;
@@ -14,13 +12,11 @@ namespace DM.Infrastructure.Persistence.Repositories.Moderation;
 internal class ModeratedProfileNoteRepository : IModeratedProfileNoteRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     /// <inheritdoc />
-    public ModeratedProfileNoteRepository(DmDbContext dbContext, IMapper mapper)
+    public ModeratedProfileNoteRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -28,14 +24,14 @@ internal class ModeratedProfileNoteRepository : IModeratedProfileNoteRepository
         await _dbContext.ModeratedProfileNotes
             .Where(n => !n.IsRemoved && n.UserId == userId)
             .OrderByDescending(n => n.CreatedUtc)
-            .ProjectTo<ModeratedProfileNote>(_mapper.ConfigurationProvider)
+            .ProjectToModeratedProfileNote()
             .ToArrayAsync();
 
     /// <inheritdoc />
     public Task<ModeratedProfileNote?> GetNote(Guid noteId) =>
         _dbContext.ModeratedProfileNotes
             .Where(n => !n.IsRemoved && n.ModeratedProfileNoteId == noteId)
-            .ProjectTo<ModeratedProfileNote>(_mapper.ConfigurationProvider)
+            .ProjectToModeratedProfileNote()
             .FirstOrDefaultAsync();
 
     /// <inheritdoc />

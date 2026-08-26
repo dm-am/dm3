@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using FluentAssertions;
+using AwesomeAssertions;
 using MailKit;
 using Xunit;
 
@@ -33,7 +32,7 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class MailTransportOwnershipShould
 {
-    private static readonly IReadOnlyCollection<Type> TransportOwners = ProductionTypes()
+    private static readonly IReadOnlyCollection<Type> TransportOwners = ProductionAssemblies.Types()
         .Where(IsWritten)
         .Where(HoldsAMailTransport)
         .ToArray();
@@ -68,30 +67,6 @@ public class MailTransportOwnershipShould
                 "else, so a holder the container cannot release leaks one open, " +
                 "authenticated session per letter until the relay refuses the next " +
                 "connection and mail stops being delivered at all");
-
-    private static IEnumerable<Type> ProductionTypes() => Directory
-        .EnumerateFiles(AppContext.BaseDirectory, "DM.*.dll", SearchOption.TopDirectoryOnly)
-        .Where(path => !Path.GetFileNameWithoutExtension(path)
-            .EndsWith(".Tests", StringComparison.Ordinal))
-        .SelectMany(TypesOf);
-
-    private static IEnumerable<Type> TypesOf(string assemblyPath)
-    {
-        try
-        {
-            return Assembly.LoadFrom(assemblyPath).GetTypes();
-        }
-        catch (ReflectionTypeLoadException e)
-        {
-            // One dependency that did not resolve must not hide the types that did
-            return e.Types.Where(type => type is not null).Select(type => type!);
-        }
-        catch (Exception)
-        {
-            // Not an assembly this runtime can load, so it holds no transport
-            return Array.Empty<Type>();
-        }
-    }
 
     private static bool HoldsAMailTransport(Type type)
     {

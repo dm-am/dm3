@@ -729,6 +729,23 @@ const router = createRouter({
           meta: { title: "Смена имени" },
           component: () => import("@/pages/account/UsernameChangePage.vue"),
         },
+        // The two addresses the letters about taking a second factor off point
+        // at. The paths are the server's - TwoFactorRemovalMailSender composes
+        // them - so they are written here exactly as they are written there,
+        // and a guest reaches both: whoever needs them cannot sign in.
+        {
+          name: "two-factor-removal",
+          path: "/two-factor/removal",
+          meta: { title: "Снятие второго фактора" },
+          component: () => import("@/pages/account/TwoFactorRemovalPage.vue"),
+        },
+        {
+          name: "two-factor-removal-cancel",
+          path: "/two-factor/removal/cancel",
+          meta: { title: "Отмена снятия второго фактора" },
+          component: () =>
+            import("@/pages/account/TwoFactorRemovalCancelPage.vue"),
+        },
         {
           name: "support",
           path: "/support",
@@ -798,27 +815,6 @@ const router = createRouter({
           meta: { title: "Переход к публикации" },
           component: () => import("@/pages/redirect/PublicationRedirect.vue"),
         },
-        // Mockup catalogs under /dev are registered in development builds only. Vite
-        // substitutes import.meta.env.DEV with false when building, so rollup drops the
-        // branch together with the dynamic import and the chunk is never emitted. A
-        // comment promising future removal is not a mechanism; this is.
-        ...(import.meta.env.DEV
-          ? [
-              {
-                name: "dev-style-variants",
-                path: "/dev/style-variants",
-                meta: { title: "Мокапы: стиль" },
-                component: () => import("@/pages/dev/StyleVariantsPage.vue"),
-              },
-              {
-                name: "dev-chat-events-variants",
-                path: "/dev/chat-events",
-                meta: { title: "Мокапы: эвенты чата" },
-                component: () =>
-                  import("@/pages/dev/ChatEventsVariantsPage.vue"),
-              },
-            ]
-          : []),
         // Error page — dynamic route for /error/:code (400, 401, 403, symbolic
         // OAuth codes…). The code segment is optional so /error?code= also matches.
         {

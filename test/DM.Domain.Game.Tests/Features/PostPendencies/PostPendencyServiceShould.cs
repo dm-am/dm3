@@ -18,38 +18,37 @@ using DM.Domain.Game.Features.Rooms;
 using DM.Testing.Dsl;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostPendencies;
 
 public class PostPendencyServiceShould : UnitTestBase
 {
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IRoomService> _roomService;
-    private readonly Mock<IPostPendencyRepository> _repository;
-    private readonly Mock<IEventProducer> _producer;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IIdentityProvider> _identityProvider;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IRoomService _roomService;
+    private readonly IPostPendencyRepository _repository;
+    private readonly IEventProducer _producer;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IIdentityProvider _identityProvider;
     private readonly PostPendencyService _service;
 
     public PostPendencyServiceShould()
     {
         var validator = Mock<IValidator<CreatePostPendency>>();
         validator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreatePostPendency>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreatePostPendency>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<RoomIntention>(), It.IsAny<Room>()));
 
         _roomService = Mock<IRoomService>();
 
         var factory = Mock<IPostPendencyFactory>();
-        factory.Setup(f => f.Create(It.IsAny<CreatePostPendency>(), It.IsAny<Guid>(), It.IsAny<Guid>()))
+        factory.Create(Arg.Any<CreatePostPendency>(), Arg.Any<Guid>(), Arg.Any<Guid>())
             .Returns(new CreatePostPendencyEntity());
 
         _userLookupService = Mock<IUserLookupService>();
@@ -57,22 +56,21 @@ public class PostPendencyServiceShould : UnitTestBase
         _repository = Mock<IPostPendencyRepository>();
 
         _producer = Mock<IEventProducer>();
-        _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         _identityProvider = Mock<IIdentityProvider>();
         var identity = Identities.User(Guid.NewGuid(), "testuser");
-        _identityProvider.Setup(p => p.Current).Returns(identity);
+        _identityProvider.Current.Returns(identity);
 
         _service = new PostPendencyService(
-            validator.Object,
-            _roomService.Object,
-            _intentionManager.Object,
-            factory.Object,
-            _userLookupService.Object,
-            _repository.Object,
-            _producer.Object,
-            _identityProvider.Object);
+            validator,
+            _roomService,
+            _intentionManager,
+            factory,
+            _userLookupService,
+            _repository,
+            _producer,
+            _identityProvider);
     }
 
     [Fact]
@@ -82,22 +80,21 @@ public class PostPendencyServiceShould : UnitTestBase
         var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), WaitingForUsername = "targetuser" };
         var room = CreateRoomWithAccesses(targetUserId);
 
-        _roomService.Setup(s => s.GetWithGameAsync(It.IsAny<Guid>())).ReturnsAsync(room);
-        _userLookupService.Setup(s => s.FindUserIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((true, targetUserId));
-        _repository.Setup(r => r.Create(It.IsAny<CreatePostPendencyEntity>()))
-            .ReturnsAsync(new PostPendency());
+        _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
+        _userLookupService.FindUserIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((true, targetUserId));
+        _repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency());
 
         await _service.CreateAsync(createPendency);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(RoomIntention.CreatePostPendency, room), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(RoomIntention.CreatePostPendency, room);
     }
 
     [Fact]
     public async Task PreventDuplicatePendencyForSameUser()
     {
         var waitingForUserId = Guid.NewGuid();
-        var currentUserId = _identityProvider.Object.Current.User.UserId;
+        var currentUserId = _identityProvider.Current.User.UserId;
         var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), WaitingForUsername = "targetuser" };
 
         var room = new RoomToUpdate
@@ -117,9 +114,9 @@ public class PostPendencyServiceShould : UnitTestBase
             }
         };
 
-        _roomService.Setup(s => s.GetWithGameAsync(It.IsAny<Guid>())).ReturnsAsync(room);
-        _userLookupService.Setup(s => s.FindUserIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((true, waitingForUserId));
+        _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
+        _userLookupService.FindUserIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((true, waitingForUserId));
 
         var act = async () => await _service.CreateAsync(createPendency);
 
@@ -135,16 +132,15 @@ public class PostPendencyServiceShould : UnitTestBase
         var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), WaitingForUsername = "targetuser" };
         var room = CreateRoomWithAccesses(targetUserId);
 
-        _roomService.Setup(s => s.GetWithGameAsync(It.IsAny<Guid>())).ReturnsAsync(room);
-        _userLookupService.Setup(s => s.FindUserIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((true, targetUserId));
-        _repository.Setup(r => r.Create(It.IsAny<CreatePostPendencyEntity>()))
-            .ReturnsAsync(new PostPendency { Id = pendencyId });
+        _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
+        _userLookupService.FindUserIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((true, targetUserId));
+        _repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency { Id = pendencyId });
 
         await _service.CreateAsync(createPendency);
 
-        _repository.Verify(r => r.Create(It.IsAny<CreatePostPendencyEntity>()), Times.Once);
-        _producer.Verify(p => p.SendAsync(EventType.RoomPendencyCreated, pendencyId), Times.Once);
+        await _repository.Received(1).Create(Arg.Any<CreatePostPendencyEntity>());
+        await _producer.Received(1).SendAsync(EventType.RoomPendencyCreated, pendencyId);
     }
 
     [Fact]
@@ -153,12 +149,12 @@ public class PostPendencyServiceShould : UnitTestBase
         var pendencyId = Guid.NewGuid();
         var pendency = new PostPendency { Id = pendencyId };
 
-        _repository.Setup(r => r.Get(pendencyId)).ReturnsAsync(pendency);
-        _repository.Setup(r => r.Delete(pendencyId)).Returns(Task.CompletedTask);
+        _repository.Get(pendencyId).Returns(pendency);
+        _repository.Delete(pendencyId).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(pendencyId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(RoomIntention.DeletePostPendency, pendency), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(RoomIntention.DeletePostPendency, pendency);
     }
 
     [Fact]
@@ -167,13 +163,13 @@ public class PostPendencyServiceShould : UnitTestBase
         var pendencyId = Guid.NewGuid();
         var pendency = new PostPendency { Id = pendencyId };
 
-        _repository.Setup(r => r.Get(pendencyId)).ReturnsAsync(pendency);
-        _repository.Setup(r => r.Delete(pendencyId)).Returns(Task.CompletedTask);
+        _repository.Get(pendencyId).Returns(pendency);
+        _repository.Delete(pendencyId).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(pendencyId);
 
-        _repository.Verify(r => r.Delete(pendencyId), Times.Once);
-        _producer.Verify(p => p.SendAsync(EventType.RoomPendencyDeleted, pendencyId), Times.Once);
+        await _repository.Received(1).Delete(pendencyId);
+        await _producer.Received(1).SendAsync(EventType.RoomPendencyDeleted, pendencyId);
     }
 
     /// <summary>

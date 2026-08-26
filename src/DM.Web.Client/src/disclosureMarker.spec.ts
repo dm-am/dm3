@@ -22,10 +22,6 @@
  *
  * Guillemets (U+2039, U+203A) are deliberately not markers here: the period
  * pickers step with them and their line is meant to copy with them in it.
- *
- * `pages/dev` is out of scope, as in accessibleNames.spec.ts — the router
- * registers those mockup catalogs under `import.meta.env.DEV` only and rollup
- * drops them from the build.
  */
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "fs";
@@ -37,9 +33,6 @@ const CLIENT_SRC = dirname(fileURLToPath(import.meta.url));
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "coverage"]);
 const SOURCES = [".vue", ".ts", ".sass", ".scss", ".css"];
-
-/** Mockup catalogs; the router registers them in development builds only. */
-const NOT_SHIPPED = "pages/dev/";
 
 /**
  * U+25B2..U+25C4 is the triangle block whole — every size, both fills, all four
@@ -94,7 +87,7 @@ describe("the disclosure marker is drawn, not written", () => {
     const offenders: string[] = [];
     for (const file of files) {
       const path = asPath(file);
-      if (path.startsWith(NOT_SHIPPED) || path in ALLOWED) continue;
+      if (path in ALLOWED) continue;
       readFileSync(file, "utf8")
         .split("\n")
         .forEach((line, index) => {

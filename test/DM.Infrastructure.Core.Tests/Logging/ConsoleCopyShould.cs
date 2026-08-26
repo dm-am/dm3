@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using DM.Infrastructure.Core.Logging;
-using FluentAssertions;
+using AwesomeAssertions;
 using Serilog.Events;
 using Serilog.Parsing;
 using Xunit;

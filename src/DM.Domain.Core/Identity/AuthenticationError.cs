@@ -54,4 +54,16 @@ public enum AuthenticationError
     /// Account is temporarily locked due to too many failed login attempts
     /// </summary>
     AccountLocked = 9,
+
+    /// <summary>
+    /// The second factor was not passed
+    /// </summary>
+    /// <remarks>
+    /// One member for every way of failing it - a wrong code, an unknown
+    /// challenge, an expired one, one out of attempts, a recovery code already
+    /// spent - because the answer to all five is required to be the same answer.
+    /// Splitting it here would put the difference on the wire the moment
+    /// somebody wrote a branch per member.
+    /// </remarks>
+    TwoFactorRejected = 10,
 }

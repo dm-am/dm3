@@ -6,8 +6,8 @@
 
 | Слой | Фреймворк | Назначение |
 |------|-----------|------------|
-| Backend Unit | xUnit + Moq + FluentAssertions | Бизнес-логика: ветки правил, валидация, маппинг |
-| Backend Integration | xUnit + Testcontainers | Контракт HTTP, трансляция в SQL, транзакции против реальных БД в контейнерах |
+| Backend Unit | xUnit + NSubstitute + AwesomeAssertions | Бизнес-логика: ветки правил, валидация, маппинг |
+| Backend Integration | xUnit + Testcontainers | Контракт HTTP, трансляция в SQL, транзакции против настоящей базы и настоящего брокера в контейнерах |
 | Architecture | xUnit + ArchUnitNET | Конвенции дерева: слои, зависимости, текстовые гейты по исходникам |
 | Frontend Unit | Vitest + Vue Test Utils | Компоненты, утилиты, BBCode |
 | E2E | Playwright | Сценарии в браузере против поднятого стека |
@@ -85,8 +85,14 @@ npm run test:unit              # Watch mode
 ```bash
 cd src/DM.Web.Client
 
-npx playwright test --project=chromium
+npm run test:e2e:fast    # один браузер (chromium) - его же гоняет CI
+npm run test:e2e         # все браузерные профили, перед релизом
+npm run test:e2e:ui      # интерактивный прогон
+npm run test:e2e:debug   # пошаговая отладка
 ```
+
+Скрипты в package.json - единственное определение того, как запускается e2e:
+CI зовет тот же test:e2e:fast, а не собственную копию команды.
 
 Ярус ходит в API по HTTP и проверяет то, что нарисовал браузер, поэтому ему нужен поднятый стек с сидом ([Установка](./LOCAL_SETUP.md)). Бандл конфиг собирает и поднимает сам: дев-сервер для прогона не годится и не переиспользуется, иначе измеряется чужая сборка.
 
@@ -124,13 +130,13 @@ PollVotingShould.RefuseASecondOptionToTheSameVoter
 ```csharp
 public class TopicServiceShould : UnitTestBase
 {
-    private readonly Mock<ITopicRepository> _repository;
+    private readonly ITopicRepository _repository;
     private readonly TopicService _service;
 
     public TopicServiceShould()
     {
         _repository = Mock<ITopicRepository>();
-        _service = new TopicService(_repository.Object);
+        _service = new TopicService(_repository);
     }
 
     [Fact]
@@ -141,25 +147,41 @@ public class TopicServiceShould : UnitTestBase
         var act = () => _service.CreateTopic(createTopic);
 
         await act.Should().ThrowAsync<HttpException>();
-        _repository.Verify(
-            r => r.Create(It.IsAny<Topic>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _repository.DidNotReceive().Create(
+            Arg.Any<Topic>(), Arg.Any<CancellationToken>());
     }
 }
 ```
 
-Утверждение направлено на наблюдаемый результат, а не на настройку мока. Тест, единственная проверка которого - что мок вернул подготовленное значение, остается зеленым после удаления проверяемого кода и поэтому не считается тестом.
+Дубль здесь и есть сам интерфейс: отдельного объекта-обертки нет, поэтому в поле
+лежит `ITopicRepository`, в конструктор сервиса уходит он же, и он же отвечает на
+вопрос о полученных вызовах. Ответы задаются вызовом с последующим
+`.Returns(...)`, вопросы - `Received(1)` и `DidNotReceive()`.
 
-### CancellationToken в Mocks
+Хелпер `Mock<T>()` из `UnitTestBase` отдает новый дубль на каждый вызов, поэтому
+дубль заводится один раз в поле: настройка, написанная через повторный вызов
+хелпера, достанется экземпляру, которого сервис не видел.
+
+Утверждение направлено на наблюдаемый результат, а не на настройку дубля. Тест, единственная проверка которого - что дубль вернул подготовленное значение, остается зеленым после удаления проверяемого кода и поэтому не считается тестом.
+
+### CancellationToken в проверках
+
+Токен в проверке задается матчером `Arg.Any<CancellationToken>()`, а не значением
+`default`. Проверка с `default` сверяет токен с конкретным значением и совпадает
+лишь пока сервис не прокидывает свой: в день, когда прокинет, отрицательная
+проверка станет тавтологией и перестанет ловить лишний вызов, а положительная
+упадет на ровном месте.
 
 ```csharp
 // Правильно
-repository.Setup(r => r.Get(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-    .ReturnsAsync(entity);
+await repository.DidNotReceive().Create(Arg.Any<Topic>(), Arg.Any<CancellationToken>());
 
-// Неправильно (CS0854)
-repository.Setup(r => r.Get(It.IsAny<Guid>()))
-    .ReturnsAsync(entity);
+// Неправильно: проверка держится на том, что токен пустой
+await repository.DidNotReceive().Create(Arg.Any<Topic>(), default);
 ```
+
+Проверка асинхронного метода ждет результата: без `await` вызов уходит в CS4014,
+а предупреждения в сборке - ошибки.
 
 ---
 

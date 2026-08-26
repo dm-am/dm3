@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,7 +12,7 @@ namespace DM.Architecture.Tests;
 /// </summary>
 /// <remarks>
 /// PATTERNS draws the shape: {Concern}/ folders, Shared/{Concern}/ for the
-/// kernel contracts, and one {Name}Module.cs. DM.Infrastructure.Core kept five
+/// kernel contracts, and one registration file. DM.Infrastructure.Core kept five
 /// files outside any of them — the clock, the identifier factory, the random
 /// generator, the cursor encoder and a file of type forwarders — and each one
 /// was a precedent for the next file to land there, until the root is where
@@ -31,7 +31,7 @@ namespace DM.Architecture.Tests;
 public class InfrastructureLayoutShould
 {
     private const string Project = "DM.Infrastructure.Core";
-    private const string Module = "CoreModule.cs";
+    private const string Module = "CoreRegistrationExtensions.cs";
 
     private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
@@ -48,7 +48,7 @@ public class InfrastructureLayoutShould
         Directory.GetDirectories(project)
             .Select(path => new DirectoryInfo(path).Name)
             .Where(name => name is not ("bin" or "obj"))
-            .Should().HaveCountGreaterOrEqualTo(8,
+            .Should().HaveCountGreaterThanOrEqualTo(8,
                 "the project is a folder per technical concern, and finding a handful " +
                 "would mean the rule below reads a tree that no longer exists");
     }

@@ -4,8 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
@@ -15,6 +13,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
+using DM.Infrastructure.Persistence.Shared.Subscriptions;
 using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
@@ -28,19 +27,16 @@ internal class BlogRepository : IBlogRepository
 {
 
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IPublicIdService _publicIdService;
 
     /// <inheritdoc />
     public BlogRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IDateTimeProvider dateTimeProvider,
         IPublicIdService publicIdService)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
         _publicIdService = publicIdService;
     }
@@ -68,7 +64,7 @@ internal class BlogRepository : IBlogRepository
             // BlogDto projects three independent collections (Rubrics,
             // Assistants, Tokens); a single query LEFT-JOINs them into a
             // cartesian product that can OOM the reader. Split them.
-            .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .ProjectToBlog()
             .AsSplitQuery()
             .ToListAsync(ct);
 
@@ -236,7 +232,8 @@ internal class BlogRepository : IBlogRepository
     /// <inheritdoc />
     public async Task<IEnumerable<BlogDto>> GetUserBlogs(Guid ownerId, Guid viewerId, CancellationToken ct = default)
     {
-        // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
+        // Note: Include not needed - ProjectToBlog is a Select expression, so EF
+        // composes the collection subqueries and joins from it directly
         var blogs = await _dbContext.Blogs
             .TagWith("DM.Blog.ListByUser")
             .Where(b => !b.IsRemoved && b.AuthorId == ownerId)
@@ -244,7 +241,7 @@ internal class BlogRepository : IBlogRepository
             // BlogDto's Rubrics/Assistants/Tokens collections cartesian-explode
             // on a single query; split them (no row limiting here, so EF orders
             // each split by the parent key automatically).
-            .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .ProjectToBlog()
             .AsSplitQuery()
             .ToListAsync(ct);
 
@@ -255,12 +252,13 @@ internal class BlogRepository : IBlogRepository
     /// <inheritdoc />
     public async Task<BlogDto?> Get(Guid blogId, Guid viewerId, CancellationToken ct = default)
     {
-        // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
+        // Note: Include not needed - ProjectToBlog is a Select expression, so EF
+        // composes the collection subqueries and joins from it directly
         var blog = await _dbContext.Blogs
             .TagWith("DM.Blog.Get")
             .Where(b => b.BlogId == blogId)
             // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
-            .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .ProjectToBlog()
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
 
@@ -282,12 +280,13 @@ internal class BlogRepository : IBlogRepository
     /// <inheritdoc />
     public async Task<BlogDto?> GetByPublicId(string publicId, Guid viewerId, CancellationToken ct = default)
     {
-        // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
+        // Note: Include not needed - ProjectToBlog is a Select expression, so EF
+        // composes the collection subqueries and joins from it directly
         var blog = await _dbContext.Blogs
             .TagWith("DM.Blog.GetByPublicId")
             .Where(b => b.PublicId == publicId)
             // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
-            .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .ProjectToBlog()
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
 
@@ -309,12 +308,13 @@ internal class BlogRepository : IBlogRepository
     /// <inheritdoc />
     public async Task<BlogDto?> GetByOwnerUsernameAsync(string username, Guid viewerId, CancellationToken ct = default)
     {
-        // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
+        // Note: Include not needed - ProjectToBlog is a Select expression, so EF
+        // composes the collection subqueries and joins from it directly
         var blog = await _dbContext.Blogs
             .TagWith("DM.Blog.GetByUsername")
             .Where(b => b.Author.Username.ToLower() == username.ToLower())
             // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
-            .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .ProjectToBlog()
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
 
@@ -341,7 +341,7 @@ internal class BlogRepository : IBlogRepository
             .Where(r => !r.IsRemoved && r.BlogId == blogId)
             .OrderBy(r => r.SortOrder)
             .ThenBy(r => r.Title)
-            .ProjectTo<Rubric>(_mapper.ConfigurationProvider)
+            .ProjectToRubric()
             .ToListAsync(ct);
     }
 
@@ -358,7 +358,7 @@ internal class BlogRepository : IBlogRepository
             return (null, Guid.Empty);
         }
 
-        var rubric = _mapper.Map<Rubric>(dbRubric);
+        var rubric = dbRubric.ToRubric();
         return (rubric, dbRubric.BlogId);
     }
 
@@ -384,7 +384,7 @@ internal class BlogRepository : IBlogRepository
             .ThenBy(b => b.BlogId)
             .Take(count)
             // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
-            .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .ProjectToBlog()
             .AsSplitQuery()
             .ToListAsync(ct);
 
@@ -405,15 +405,7 @@ internal class BlogRepository : IBlogRepository
         return await _dbContext.Users
             .TagWith("DM.Blog.Readers")
             .Where(u => subscriberIds.Contains(u.UserId))
-            .Select(u => new GeneralUser
-            {
-                UserId = u.UserId,
-                Username = u.Username,
-                Role = u.Role,
-                Status = u.Status,
-                LastActivityUtc = u.LastActivityUtc,
-                Picture = AvatarProjections.From(u.AvatarUpload),
-            })
+            .Select(ExpressionSplicer.Expand(GeneralUserProjections.RosterCard))
             .ToListAsync(ct);
     }
 
@@ -423,15 +415,7 @@ internal class BlogRepository : IBlogRepository
         return await _dbContext.BlogAssistants
             .TagWith("DM.Blog.Assistants")
             .Where(a => a.BlogId == blogId)
-            .Select(a => new GeneralUser
-            {
-                UserId = a.User.UserId,
-                Username = a.User.Username,
-                Role = a.User.Role,
-                Status = a.User.Status,
-                LastActivityUtc = a.User.LastActivityUtc,
-                Picture = AvatarProjections.From(a.User.AvatarUpload),
-            })
+            .SelectSpliced(a => GeneralUserProjections.RosterCard.Splice(a.User))
             .ToListAsync(ct);
     }
 
@@ -441,17 +425,9 @@ internal class BlogRepository : IBlogRepository
         return await _dbContext.BlogAssistants
             .TagWith("DM.Blog.AssistantsWithJoinDate")
             .Where(a => a.BlogId == blogId)
-            .Select(a => new BlogUser
+            .SelectSpliced(a => new BlogUser
             {
-                User = new GeneralUser
-                {
-                    UserId = a.User.UserId,
-                    Username = a.User.Username,
-                    Role = a.User.Role,
-                    Status = a.User.Status,
-                    LastActivityUtc = a.User.LastActivityUtc,
-                    Picture = AvatarProjections.From(a.User.AvatarUpload),
-                },
+                User = GeneralUserProjections.RosterCard.Splice(a.User),
                 Role = BlogRole.Assistant,
                 JoinedUtc = a.JoinedUtc
             })
@@ -466,13 +442,14 @@ internal class BlogRepository : IBlogRepository
         if (blogIdList.Count == 0)
             return [];
 
-        // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
+        // Note: Include not needed - ProjectToBlog is a Select expression, so EF
+        // composes the collection subqueries and joins from it directly
         var blogs = await _dbContext.Blogs
             .TagWith("DM.Blog.GetByIds")
             .Where(b => !b.IsRemoved && blogIdList.Contains(b.BlogId))
             .OrderByDescending(b => b.ActivatedUtc ?? b.CreatedUtc)
             // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
-            .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .ProjectToBlog()
             .AsSplitQuery()
             .ToListAsync(ct);
 
@@ -489,14 +466,15 @@ internal class BlogRepository : IBlogRepository
             .Select(a => a.BlogId)
             .ToListAsync(ct);
 
-        // Note: Include not needed with ProjectTo - AutoMapper generates SQL subqueries
+        // Note: Include not needed - ProjectToBlog is a Select expression, so EF
+        // composes the collection subqueries and joins from it directly
         var blogs = await _dbContext.Blogs
             .TagWith("DM.Blog.GetOwnBlogs")
             .Where(b => !b.IsRemoved &&
                 (b.AuthorId == userId || b.MentorId == userId || assistantBlogIds.Contains(b.BlogId)))
             .OrderByDescending(b => b.ActivatedUtc ?? b.CreatedUtc)
             // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
-            .ProjectTo<BlogDto>(_mapper.ConfigurationProvider)
+            .ProjectToBlog()
             .AsSplitQuery()
             .ToListAsync(ct);
 
@@ -606,7 +584,7 @@ internal class BlogRepository : IBlogRepository
         return await _dbContext.Rubrics
             .TagWith("DM.Blog.CreatedRubric")
             .Where(r => r.RubricId == entity.RubricId)
-            .ProjectTo<Rubric>(_mapper.ConfigurationProvider)
+            .ProjectToRubric()
             .FirstAsync(ct);
     }
 
@@ -629,7 +607,7 @@ internal class BlogRepository : IBlogRepository
         return await _dbContext.Rubrics
             .TagWith("DM.Blog.UpdatedRubric")
             .Where(r => r.RubricId == entity.RubricId)
-            .ProjectTo<Rubric>(_mapper.ConfigurationProvider)
+            .ProjectToRubric()
             .FirstAsync(ct);
     }
 
@@ -754,27 +732,9 @@ internal class BlogRepository : IBlogRepository
         var blogIdSet = blogs.Select(b => b.Id).ToHashSet();
         var activeThreshold = _dateTimeProvider.Now - ActivityPolicy.ActivePeriod;
 
-        // Total, viewer flag and name preview in one statement — see the twin
-        // block in GameRepository.EnrichGamesAsync for the SQL this produces and
-        // why the preview needs an explicit order at all.
-        var summaries = await _dbContext.Subscriptions
-            .Where(s => s.TargetType == SubscriptionTargetType.Blog && blogIdSet.Contains(s.TargetId))
-            .GroupBy(s => s.TargetId)
-            .Select(g => new
-            {
-                BlogId = g.Key,
-                // Distinct subscribers, not subscription rows — see the same count in
-                // GameRepository.EnrichGamesAsync for why the two differ.
-                Count = g.Select(s => s.SubscriberId).Distinct().Count(),
-                ViewerSubscribed = g.Any(s => s.SubscriberId == userId),
-                Preview = g.OrderByDescending(s => s.Subscriber.LastActivityUtc != null)
-                    .ThenByDescending(s => s.Subscriber.LastActivityUtc)
-                    .ThenBy(s => s.SubscriptionId)
-                    .Take(SubscriptionPolicy.PreviewCap)
-                    .Select(s => s.Subscriber.Username)
-                    .ToList(),
-            })
-            .ToDictionaryAsync(x => x.BlogId, ct);
+        // Total, viewer flag and name preview in one statement.
+        var summaries = await SubscriberSummaries.ByTarget(
+            _dbContext.Subscriptions, SubscriptionTargetType.Blog, blogIdSet, userId, ct);
 
         // The active count stays its own GROUP BY. Folded into the group above as
         // a conditional Count it degenerates: the predicate is on the subscriber's

@@ -2,13 +2,9 @@ using System;
 using System.Linq;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Testing;
-using FluentAssertions;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Driver;
+using AwesomeAssertions;
 using Xunit;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
-using DbPoll = DM.Infrastructure.Persistence.Entities.Community.Poll;
 using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared.Queries;
@@ -77,43 +73,21 @@ public class DateRangeFiltersShould : UnitTestBase
         result.Should().ContainSingle().Which.ActivatedUtc.Should().Be(bound);
     }
 
-    // ═══ Mongo filters (poll list) ═══
-
-    [Fact]
-    public void RenderExclusiveNextMidnightBoundForDateOnlyPollFilter()
-    {
-        var filter = DateRangeFilters.AtOrBefore<DbPoll>(p => p.EndsUtc, Day);
-
-        var rendered = Render(filter);
-
-        rendered["EndsUtc"]["$lt"].ToUniversalTime()
-            .Should().Be(new DateTime(2026, 7, 2, 0, 0, 0, DateTimeKind.Utc));
-    }
-
-    [Fact]
-    public void RenderInclusiveBoundForPollFilterWithTimeComponent()
-    {
-        var to = Day.AddHours(15);
-
-        var filter = DateRangeFilters.AtOrBefore<DbPoll>(p => p.EndsUtc, to);
-
-        var rendered = Render(filter);
-
-        rendered["EndsUtc"]["$lte"].ToUniversalTime().Should().Be(to.UtcDateTime);
-    }
-
     [Fact]
     public void ExtendDateOnlyBoundWithinItsOwnOffset()
     {
         // The whole day is the user's local day, not the UTC one
         var localMidnight = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.FromHours(3));
+        var topics = new[]
+        {
+            Topic(new DateTimeOffset(2026, 7, 1, 20, 59, 0, TimeSpan.Zero)), // July 1, 23:59 local
+            Topic(new DateTimeOffset(2026, 7, 1, 21, 0, 0, TimeSpan.Zero)),  // July 2, 00:00 local
+        }.AsQueryable();
 
-        var filter = DateRangeFilters.AtOrBefore<DbPoll>(p => p.EndsUtc, localMidnight);
+        var result = topics.WhereAtOrBefore(t => t.CreatedUtc, localMidnight).ToArray();
 
-        var rendered = Render(filter);
-
-        rendered["EndsUtc"]["$lt"].ToUniversalTime()
-            .Should().Be(new DateTime(2026, 7, 1, 21, 0, 0, DateTimeKind.Utc));
+        result.Should().ContainSingle().Which.CreatedUtc.ToUniversalTime()
+            .Should().Be(new DateTimeOffset(2026, 7, 1, 20, 59, 0, TimeSpan.Zero));
     }
 
     // ═══ Calendar edge: whole-day bound cannot extend past the max date ═══
@@ -141,33 +115,16 @@ public class DateRangeFiltersShould : UnitTestBase
     }
 
     [Fact]
-    public void RenderInclusiveBoundForMaxDatePollFilter()
-    {
-        var filter = DateRangeFilters.AtOrBefore<DbPoll>(p => p.EndsUtc, MaxDay);
-
-        var rendered = Render(filter);
-
-        rendered["EndsUtc"]["$lte"].ToUniversalTime().Should().Be(MaxDay.UtcDateTime);
-    }
-
-    [Fact]
     public void NotOverflowForMaxDateBoundWithPositiveOffset()
     {
         // The instant is below DateTimeOffset.MaxValue, but the clock date
         // is already the last representable day
         var localMaxDay = new DateTimeOffset(9999, 12, 31, 0, 0, 0, TimeSpan.FromHours(3));
+        var topics = new[] { Topic(localMaxDay), Topic(localMaxDay.AddTicks(1)) }.AsQueryable();
 
-        var filter = DateRangeFilters.AtOrBefore<DbPoll>(p => p.EndsUtc, localMaxDay);
+        var result = topics.WhereAtOrBefore(t => t.CreatedUtc, localMaxDay).ToArray();
 
-        var rendered = Render(filter);
-
-        rendered["EndsUtc"]["$lte"].ToUniversalTime().Should().Be(localMaxDay.UtcDateTime);
-    }
-
-    private static BsonDocument Render(FilterDefinition<DbPoll> filter)
-    {
-        var registry = BsonSerializer.SerializerRegistry;
-        return filter.Render(registry.GetSerializer<DbPoll>(), registry);
+        result.Should().ContainSingle().Which.CreatedUtc.Should().Be(localMaxDay);
     }
 
     private static DbTopic Topic(DateTimeOffset createdUtc) => new() { CreatedUtc = createdUtc };

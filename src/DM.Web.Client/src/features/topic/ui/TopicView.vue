@@ -18,6 +18,7 @@ import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { PeriodDigestBoards } from "@/features/leaderboard/@x/topic";
 import TopicCard from "./TopicCard.vue";
 import { notifyFailure } from "@/shared/lib/errors";
+import { useQuoteAction } from "@/shared/lib/composables/useQuoteComposer";
 import { TOPIC_TITLE_MAX_LENGTH } from "@/shared/lib/constants/forum";
 
 const props = withDefaults(
@@ -120,6 +121,18 @@ const canEditTopic = computed(
 const canDeleteTopic = computed(
   () => !props.previewOnly && (canManage.value || isAuthor.value),
 );
+
+// Quoting the opening message. Offered only where the page below the card has
+// a reply composer to write into — on the news list, where the same card is a
+// read-only preview, there is nothing to answer in and no button.
+const { canQuote: composerAcceptsQuotes, quote } = useQuoteAction();
+const canQuote = computed(
+  () => !props.previewOnly && composerAcceptsQuotes.value,
+);
+
+function quoteTopic() {
+  return quote(() => forumApi.getTopicQuote(props.topic.id));
+}
 const canCloseTopic = computed(() => canManage.value);
 
 const isLikedByMe = computed(() => {
@@ -238,6 +251,7 @@ function saveEdit() {
     :likes="topic.likes"
     :can-like="canLike"
     :is-liked-by-me="isLikedByMe"
+    :can-quote="canQuote"
     :can-warn="isModerator"
     :is-closed="isClosed"
     :can-edit="canEditTopic"
@@ -248,6 +262,7 @@ function saveEdit() {
     :heading-level="headingLevel"
     :preview-only="previewOnly"
     @toggle-like="handleToggleLike"
+    @quote="quoteTopic"
     @warn="emit('warn', topic.id)"
     @edit="startEdit"
     @delete="emit('delete', topic.id)"
@@ -271,7 +286,7 @@ function saveEdit() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .topic-edit
   display: flex

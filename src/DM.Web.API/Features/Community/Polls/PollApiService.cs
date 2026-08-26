@@ -2,51 +2,36 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Community.Features.Polls;
 using DM.Domain.Core.Users;
 using DM.Web.API.Shared.Dto;
 using DomainPoll = DM.Domain.Community.Features.Polls.Poll;
-using DomainPollsQuery = DM.Domain.Community.Features.Polls.PollsQuery;
 
 namespace DM.Web.API.Features.Community.Polls;
 
 /// <inheritdoc />
 internal class PollApiService : IPollApiService
 {
-    private readonly IPollService pollService;
-    private readonly IUserLookupService userLookupService;
-    private readonly IMapper mapper;
+    private readonly IPollService _pollService;
+    private readonly IUserLookupService _userLookupService;
+    private readonly PollMapper _mapper;
 
     /// <inheritdoc />
     public PollApiService(
         IPollService pollService,
         IUserLookupService userLookupService,
-        IMapper mapper)
+        PollMapper mapper)
     {
-        this.pollService = pollService;
-        this.userLookupService = userLookupService;
-        this.mapper = mapper;
+        _pollService = pollService;
+        _userLookupService = userLookupService;
+        _mapper = mapper;
     }
 
     /// <inheritdoc />
     public async Task<ListEnvelope<Poll>> Get(PollsQuery query)
     {
-        var domainQuery = new DomainPollsQuery
-        {
-            Skip = query.Skip,
-            Take = query.Take,
-            Status = query.Status,
-            Search = query.Search,
-            StartsFromUtc = query.StartsFromUtc,
-            StartsToUtc = query.StartsToUtc,
-            EndsFromUtc = query.EndsFromUtc,
-            EndsToUtc = query.EndsToUtc,
-            SortBy = query.SortBy,
-            SortOrder = query.SortOrder,
-            IsAnonymous = query.IsAnonymous
-        };
-        var (polls, paging) = await pollService.GetListAsync(domainQuery);
+        var domainQuery = _mapper.ToDomainQuery(query);
+        var (polls, paging) = await _pollService.GetListAsync(domainQuery);
         var mappedPolls = await MapPollsAsync(polls);
         return new ListEnvelope<Poll>(mappedPolls, new PagingInfo(paging));
     }
@@ -54,58 +39,46 @@ internal class PollApiService : IPollApiService
     /// <inheritdoc />
     public async Task<Envelope<Poll>> Get(Guid id)
     {
-        var poll = await pollService.GetAsync(id);
+        var poll = await _pollService.GetAsync(id);
         return new Envelope<Poll>(await MapPollAsync(poll));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Poll>> Create(CreatePollRequest request)
     {
-        var createPoll = new CreatePoll
-        {
-            Title = request.Title,
-            Details = request.Details,
-            StartsUtc = request.StartsUtc,
-            EndsUtc = request.EndsUtc,
-            IsAnonymous = request.IsAnonymous,
-            Options = request.Options
-        };
-        var createdPoll = await pollService.CreateAsync(createPoll);
+        var createPoll = _mapper.ToCreatePoll(request);
+        // The very list the request arrived with, not a copy of it.
+        createPoll.Options = request.Options;
+        var createdPoll = await _pollService.CreateAsync(createPoll);
         return new Envelope<Poll>(await MapPollAsync(createdPoll));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Poll>> Vote(Guid pollId, Guid optionId)
     {
-        var poll = await pollService.VoteAsync(pollId, optionId);
+        var poll = await _pollService.VoteAsync(pollId, optionId);
         return new Envelope<Poll>(await MapPollAsync(poll));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Poll>> Unvote(Guid pollId)
     {
-        var poll = await pollService.UnvoteAsync(pollId);
+        var poll = await _pollService.UnvoteAsync(pollId);
         return new Envelope<Poll>(await MapPollAsync(poll));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Poll>> Update(Guid id, UpdatePollRequest request)
     {
-        var updatePoll = new UpdatePoll
-        {
-            Id = id,
-            Title = request.Title,
-            Details = request.Details,
-            StartsUtc = request.StartsUtc,
-            EndsUtc = request.EndsUtc,
-            IsAnonymous = request.IsAnonymous
-        };
-        var updatedPoll = await pollService.UpdateAsync(updatePoll);
+        var updatePoll = _mapper.ToUpdatePoll(request);
+        // From the route, not from the body.
+        updatePoll.Id = id;
+        var updatedPoll = await _pollService.UpdateAsync(updatePoll);
         return new Envelope<Poll>(await MapPollAsync(updatedPoll));
     }
 
     /// <inheritdoc />
-    public Task Delete(Guid id) => pollService.DeleteAsync(id);
+    public Task Delete(Guid id) => _pollService.DeleteAsync(id);
 
     /// <summary>
     /// Map multiple domain polls to API polls with batch-loaded voters (avoids DbContext concurrency)
@@ -130,38 +103,13 @@ internal class PollApiService : IPollApiService
         Dictionary<Guid, Domain.Core.Dto.UserReference> usersDict = new();
         if (allUserIds.Count > 0)
         {
-            var users = await userLookupService.GetReferencesAsync(allUserIds);
+            var users = await _userLookupService.GetReferencesAsync(allUserIds);
             usersDict = users.ToDictionary(u => u.UserId);
         }
 
-        // Map all polls sequentially (no parallel DbContext access)
-        return pollsList.Select(poll => MapPollWithUsers(poll, usersDict)).ToList();
-    }
-
-    /// <summary>
-    /// Map domain poll to API poll with pre-loaded users dictionary
-    /// </summary>
-    private Poll MapPollWithUsers(DomainPoll poll, Dictionary<Guid, Domain.Core.Dto.UserReference> usersDict)
-    {
-        Dictionary<Guid, List<UserRef>>? votersByOptionId = null;
-
-        if (!poll.IsAnonymous)
-        {
-            votersByOptionId = poll.Options.ToDictionary(
-                o => o.Id,
-                o => o.UserIds
-                    .Select(id => usersDict.GetValueOrDefault(id))
-                    .Where(u => u != null)
-                    .Select(u => mapper.Map<UserRef>(u!))
-                    .ToList());
-        }
-
-        return mapper.Map<Poll>(poll, opts =>
-        {
-            opts.Items["IsAnonymous"] = poll.IsAnonymous;
-            if (votersByOptionId != null)
-                opts.Items["VotersByOptionId"] = votersByOptionId;
-        });
+        return pollsList
+            .Select(poll => _mapper.ToPoll(poll, VotersByOptionId(poll, usersDict)))
+            .ToList();
     }
 
     /// <summary>
@@ -169,7 +117,7 @@ internal class PollApiService : IPollApiService
     /// </summary>
     private async Task<Poll> MapPollAsync(DomainPoll poll)
     {
-        Dictionary<Guid, List<UserRef>>? votersByOptionId = null;
+        Dictionary<Guid, Domain.Core.Dto.UserReference> usersDict = new();
 
         // Batch-load voters for public polls
         if (!poll.IsAnonymous)
@@ -181,24 +129,33 @@ internal class PollApiService : IPollApiService
 
             if (allUserIds.Count > 0)
             {
-                var users = await userLookupService.GetReferencesAsync(allUserIds);
-                var usersDict = users.ToDictionary(u => u.UserId);
-
-                votersByOptionId = poll.Options.ToDictionary(
-                    o => o.Id,
-                    o => o.UserIds
-                        .Select(id => usersDict.GetValueOrDefault(id))
-                        .Where(u => u != null)
-                        .Select(u => mapper.Map<UserRef>(u!))
-                        .ToList());
+                var users = await _userLookupService.GetReferencesAsync(allUserIds);
+                usersDict = users.ToDictionary(u => u.UserId);
             }
         }
 
-        return mapper.Map<Poll>(poll, opts =>
+        return _mapper.ToPoll(poll, VotersByOptionId(poll, usersDict));
+    }
+
+    /// <summary>
+    /// Pre-mapped voter lists per option for a public poll; null for anonymous
+    /// polls and when nothing was loaded, which renders as "no voter lists"
+    /// </summary>
+    private static Dictionary<Guid, List<UserRef>>? VotersByOptionId(
+        DomainPoll poll,
+        Dictionary<Guid, Domain.Core.Dto.UserReference> usersDict)
+    {
+        if (poll.IsAnonymous || usersDict.Count == 0)
         {
-            opts.Items["IsAnonymous"] = poll.IsAnonymous;
-            if (votersByOptionId != null)
-                opts.Items["VotersByOptionId"] = votersByOptionId;
-        });
+            return null;
+        }
+
+        return poll.Options.ToDictionary(
+            o => o.Id,
+            o => o.UserIds
+                .Select(id => usersDict.GetValueOrDefault(id))
+                .Where(u => u != null)
+                .Select(u => UserRefMappers.ToUserRef(u!))
+                .ToList());
     }
 }

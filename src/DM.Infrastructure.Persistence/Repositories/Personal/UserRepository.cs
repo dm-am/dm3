@@ -3,8 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -13,32 +11,27 @@ using DM.Domain.Core.Users;
 using DM.Domain.Personal.Features.Profiles;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Account.Settings;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
+
+using DM.Infrastructure.Persistence.Shared.Users;
 
 namespace DM.Infrastructure.Persistence.Repositories.Personal;
 
 /// <inheritdoc />
-internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRepository
+internal class UserRepository : IUserRepository
 {
     private readonly DmDbContext _dmDbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IMapper _mapper;
-
 
     /// <inheritdoc />
     public UserRepository(
         DmDbContext dmDbContext,
-        DmMongoClient mongoClient,
-        IDateTimeProvider dateTimeProvider,
-        IMapper mapper) : base(mongoClient)
+        IDateTimeProvider dateTimeProvider)
     {
         _dmDbContext = dmDbContext;
         _dateTimeProvider = dateTimeProvider;
-        _mapper = mapper;
     }
 
     // ═══ READ ═══
@@ -50,7 +43,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     public async Task<IEnumerable<GeneralUser>> GetUsersAsync(PagingData paging, UserFilter filter)
     {
         var users = await BuildPageQuery(paging, filter)
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ProjectToGeneralUser()
             .ToArrayAsync();
 
         await PopulateListCounts(users);
@@ -175,7 +168,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     {
         var user = await _dmDbContext.Users
             .Where(u => !u.IsRemoved && u.Username.ToLower() == username.ToLower())
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ProjectToGeneralUser()
             .FirstOrDefaultAsync();
 
         if (user != null)
@@ -199,7 +192,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     {
         var user = await _dmDbContext.Users
             .Where(u => !u.IsRemoved && u.UserId == userId)
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ProjectToGeneralUser()
             .FirstOrDefaultAsync();
 
         if (user != null)
@@ -215,7 +208,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     {
         var userDetails = await _dmDbContext.Users
             .Where(u => !u.IsRemoved && u.Username.ToLower() == username.ToLower())
-            .ProjectTo<UserDetails>(_mapper.ConfigurationProvider)
+            .ProjectToUserDetails()
             .FirstOrDefaultAsync();
 
         if (userDetails == null)
@@ -225,12 +218,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
         await PopulatePostReviewCounts(new[] { userDetails });
 
-        var userSettings = await Collection
-            .Find(Filter.Eq(u => u.UserId, userDetails.UserId))
-            .FirstOrDefaultAsync();
-        userDetails.Settings = userSettings == null
-            ? DM.Domain.Core.Identity.UserSettings.Default
-            : _mapper.Map<DM.Domain.Core.Identity.UserSettings>(userSettings);
+        userDetails.Settings = await ReadSettings(userDetails.UserId);
         return userDetails;
     }
 
@@ -239,7 +227,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     {
         var userDetails = await _dmDbContext.Users
             .Where(u => !u.IsRemoved && u.UserId == userId)
-            .ProjectTo<UserDetails>(_mapper.ConfigurationProvider)
+            .ProjectToUserDetails()
             .FirstOrDefaultAsync();
 
         if (userDetails == null)
@@ -249,12 +237,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
         await PopulatePostReviewCounts(new[] { userDetails });
 
-        var userSettings = await Collection
-            .Find(Filter.Eq(u => u.UserId, userDetails.UserId))
-            .FirstOrDefaultAsync();
-        userDetails.Settings = userSettings == null
-            ? DM.Domain.Core.Identity.UserSettings.Default
-            : _mapper.Map<DM.Domain.Core.Identity.UserSettings>(userSettings);
+        userDetails.Settings = await ReadSettings(userDetails.UserId);
         return userDetails;
     }
 
@@ -263,7 +246,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     {
         var userDetails = await _dmDbContext.Users
             .Where(u => !u.IsRemoved && u.Email.ToLower() == email.ToLower())
-            .ProjectTo<UserDetails>(_mapper.ConfigurationProvider)
+            .ProjectToUserDetails()
             .FirstOrDefaultAsync();
 
         if (userDetails == null)
@@ -273,12 +256,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
         await PopulatePostReviewCounts(new[] { userDetails });
 
-        var userSettings = await Collection
-            .Find(Filter.Eq(u => u.UserId, userDetails.UserId))
-            .FirstOrDefaultAsync();
-        userDetails.Settings = userSettings == null
-            ? DM.Domain.Core.Identity.UserSettings.Default
-            : _mapper.Map<DM.Domain.Core.Identity.UserSettings>(userSettings);
+        userDetails.Settings = await ReadSettings(userDetails.UserId);
         return userDetails;
     }
 
@@ -288,7 +266,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         var users = await _dmDbContext.Users
             .Where(u => !u.IsRemoved && u.Role == role)
             .OrderBy(u => u.Username)
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ProjectToGeneralUser()
             .ToArrayAsync();
 
         await PopulatePostReviewCounts(users);
@@ -306,7 +284,7 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
 
         var users = await _dmDbContext.Users
             .Where(u => !u.IsRemoved && idsList.Contains(u.UserId))
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ProjectToGeneralUser()
             .ToArrayAsync();
 
         await PopulatePostReviewCounts(users);
@@ -342,6 +320,17 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
     // ═══ WRITE ═══
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The settings write is load-modify-save with one retry on a lost insert
+    /// race, and deliberately not a dynamic ON CONFLICT: the set of updated
+    /// fields is decided by the caller field by field, and composing that
+    /// statement dynamically costs more than repeating the existing retry
+    /// semantics. The settings row has more than one writer (this method and
+    /// the bot link), so the insert of a fresh row can lose; the loser reruns
+    /// as an update of the row the winner created. Exempted by name in
+    /// DurableWritesShould: the second write replays the first, it does not
+    /// follow it.
+    /// </remarks>
     public async Task UpdateUser(UpdateUserEntity userUpdate, UpdateUserSettingsEntity settingsUpdate)
     {
         var user = await _dmDbContext.Users.FindAsync(userUpdate.UserId);
@@ -356,59 +345,65 @@ internal class UserRepository : MongoCollectionRepository<UserSettings>, IUserRe
         if (userUpdate.ShowBirthday?.Value.HasValue == true) user.ShowBirthday = userUpdate.ShowBirthday.Value.Value;
         if (userUpdate.AvatarUploadId?.Value.HasValue == true) user.AvatarUploadId = userUpdate.AvatarUploadId.Value;
 
-        await _dmDbContext.SaveChangesAsync();
-
-        // Update user settings in MongoDB
-        var filter = Builders<UserSettings>.Filter.Eq(s => s.UserId, settingsUpdate.UserId);
-        var defaults = UserSettings.CreateDefault(settingsUpdate.UserId);
-
-        // A document written before Paging was mandatory, or by a caller that
-        // left it out, has Paging: null — and Mongo cannot create a field
-        // inside a null element, so the per-field $set below fails the whole
-        // update with a 500. Such a document is repaired to defaults first and
-        // then updated normally. The condition is part of the filter rather than
-        // a value read into this process, so the repair is decided by the server
-        // on the document it is about to write.
-        await Collection.UpdateOneAsync(
-            Builders<UserSettings>.Filter.And(filter,
-                Builders<UserSettings>.Filter.Eq(s => s.Paging, null!)),
-            Builders<UserSettings>.Update.Set(s => s.Paging, defaults.Paging));
-
-        // One write, whether or not the user has a document yet. Reading first
-        // and inserting on null is not atomic, and IX_UserSettings_UserId is
-        // unique: the loser of that race got a duplicate key error instead of the
-        // update it asked for, and this collection has more than one writer. What
-        // the caller sent goes through $set and the rest of a fresh document
-        // through $setOnInsert, which the server applies only on the insert that
-        // creates it. The paging fields are named one by one rather than as the
-        // whole sub-document, because one path cannot appear in both operators of
-        // the same update.
-        var updateDefinitions = new List<UpdateDefinition<UserSettings>>
+        // The settings row travels in the same SaveChanges as the user fields:
+        // one transaction, both or neither.
+        var settings = await _dmDbContext.UserSettings.FindAsync(settingsUpdate.UserId);
+        var inserting = settings == null;
+        if (settings == null)
         {
-            settingsUpdate.Theme?.Value.HasValue == true
-                ? Builders<UserSettings>.Update.Set(s => s.Theme, settingsUpdate.Theme.Value.Value)
-                : Builders<UserSettings>.Update.SetOnInsert(s => s.Theme, defaults.Theme),
-            settingsUpdate.CommentsPerPage?.Value.HasValue == true
-                ? Builders<UserSettings>.Update.Set(s => s.Paging.CommentsPerPage, settingsUpdate.CommentsPerPage.Value.Value)
-                : Builders<UserSettings>.Update.SetOnInsert(s => s.Paging.CommentsPerPage, defaults.Paging.CommentsPerPage),
-            settingsUpdate.TopicsPerPage?.Value.HasValue == true
-                ? Builders<UserSettings>.Update.Set(s => s.Paging.TopicsPerPage, settingsUpdate.TopicsPerPage.Value.Value)
-                : Builders<UserSettings>.Update.SetOnInsert(s => s.Paging.TopicsPerPage, defaults.Paging.TopicsPerPage),
-            settingsUpdate.MessagesPerPage?.Value.HasValue == true
-                ? Builders<UserSettings>.Update.Set(s => s.Paging.MessagesPerPage, settingsUpdate.MessagesPerPage.Value.Value)
-                : Builders<UserSettings>.Update.SetOnInsert(s => s.Paging.MessagesPerPage, defaults.Paging.MessagesPerPage),
-            settingsUpdate.PostsPerPage?.Value.HasValue == true
-                ? Builders<UserSettings>.Update.Set(s => s.Paging.PostsPerPage, settingsUpdate.PostsPerPage.Value.Value)
-                : Builders<UserSettings>.Update.SetOnInsert(s => s.Paging.PostsPerPage, defaults.Paging.PostsPerPage),
-            settingsUpdate.EntitiesPerPage?.Value.HasValue == true
-                ? Builders<UserSettings>.Update.Set(s => s.Paging.EntitiesPerPage, settingsUpdate.EntitiesPerPage.Value.Value)
-                : Builders<UserSettings>.Update.SetOnInsert(s => s.Paging.EntitiesPerPage, defaults.Paging.EntitiesPerPage),
-        };
+            // A fresh row is the defaults with the caller's fields over them: a
+            // partial row is unrepresentable (every paging column is NOT NULL),
+            // so the rest has to be the default rather than empty.
+            settings = UserSettings.CreateDefault(settingsUpdate.UserId);
+            _dmDbContext.UserSettings.Add(settings);
+        }
 
-        await Collection.UpdateOneAsync(
-            filter,
-            Builders<UserSettings>.Update.Combine(updateDefinitions),
-            new UpdateOptions { IsUpsert = true });
+        ApplySettingsUpdate(settings, settingsUpdate);
+
+        try
+        {
+            await _dmDbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException e) when (inserting && IsDuplicateKey(e))
+        {
+            // Another writer created the row between the read and the insert.
+            // The whole SaveChanges rolled back, so the user fields are still
+            // pending on the tracked entity; the settings insert becomes an
+            // update of the winner's row.
+            _dmDbContext.Entry(settings).State = EntityState.Detached;
+            var existing = await _dmDbContext.UserSettings
+                .TagWith("DM.User.Settings.RetryAfterLostInsert")
+                .FirstAsync(s => s.UserId == settingsUpdate.UserId);
+            ApplySettingsUpdate(existing, settingsUpdate);
+            await _dmDbContext.SaveChangesAsync();
+        }
+    }
+
+    private static void ApplySettingsUpdate(UserSettings settings, UpdateUserSettingsEntity settingsUpdate)
+    {
+        if (settingsUpdate.Theme?.Value.HasValue == true) settings.Theme = settingsUpdate.Theme.Value.Value;
+        if (settingsUpdate.CommentsPerPage?.Value.HasValue == true) settings.CommentsPerPage = settingsUpdate.CommentsPerPage.Value.Value;
+        if (settingsUpdate.TopicsPerPage?.Value.HasValue == true) settings.TopicsPerPage = settingsUpdate.TopicsPerPage.Value.Value;
+        if (settingsUpdate.MessagesPerPage?.Value.HasValue == true) settings.MessagesPerPage = settingsUpdate.MessagesPerPage.Value.Value;
+        if (settingsUpdate.PostsPerPage?.Value.HasValue == true) settings.PostsPerPage = settingsUpdate.PostsPerPage.Value.Value;
+        if (settingsUpdate.EntitiesPerPage?.Value.HasValue == true) settings.EntitiesPerPage = settingsUpdate.EntitiesPerPage.Value.Value;
+    }
+
+    /// <summary>
+    /// A unique-constraint refusal, the relational spelling of the duplicate-key
+    /// error the retry used to catch.
+    /// </summary>
+    private static bool IsDuplicateKey(DbUpdateException e) =>
+        e.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation };
+
+    private async Task<DM.Domain.Core.Identity.UserSettings> ReadSettings(Guid userId)
+    {
+        var userSettings = await _dmDbContext.UserSettings
+            .TagWith("DM.User.Settings")
+            .FirstOrDefaultAsync(s => s.UserId == userId);
+        return userSettings == null
+            ? DM.Domain.Core.Identity.UserSettings.Default
+            : userSettings.ToUserSettings();
     }
 
     /// <inheritdoc />

@@ -6,7 +6,7 @@ using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.Blacklists;
 using DM.Testing;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Blacklists;
@@ -14,20 +14,19 @@ namespace DM.Domain.Game.Tests.Features.Blacklists;
 public class OperateBlacklistLinkValidatorShould : UnitTestBase
 {
     private readonly OperateBlacklistLinkValidator validator;
-    private readonly Mock<IUserLookupService> userLookupServiceMock;
+    private readonly IUserLookupService userLookupServiceMock;
 
     public OperateBlacklistLinkValidatorShould()
     {
         userLookupServiceMock = Mock<IUserLookupService>();
-        validator = new OperateBlacklistLinkValidator(userLookupServiceMock.Object);
+        validator = new OperateBlacklistLinkValidator(userLookupServiceMock);
     }
 
     [Fact]
     public async Task PassForValidInput()
     {
         userLookupServiceMock
-            .Setup(s => s.UsernameExistsAsync("existinguser", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .UsernameExistsAsync("existinguser", Arg.Any<CancellationToken>()).Returns(true);
 
         var input = new OperateBlacklistLink
         {
@@ -84,8 +83,7 @@ public class OperateBlacklistLinkValidatorShould : UnitTestBase
     public async Task FailWhenUserDoesNotExist()
     {
         userLookupServiceMock
-            .Setup(s => s.UsernameExistsAsync("nonexistentuser", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .UsernameExistsAsync("nonexistentuser", Arg.Any<CancellationToken>()).Returns(false);
 
         var input = new OperateBlacklistLink
         {

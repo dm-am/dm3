@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -52,7 +52,7 @@ public class NotificationAudienceShould
     /// </summary>
     [Fact]
     public void FindTheGeneratorsThatRenameTheirEvent() =>
-        RenamingGenerators.Should().HaveCountGreaterOrEqualTo(4);
+        RenamingGenerators.Should().HaveCountGreaterThanOrEqualTo(4);
 
     [Fact]
     public void LeaveStatusSubscribersToTheStatusGenerator()

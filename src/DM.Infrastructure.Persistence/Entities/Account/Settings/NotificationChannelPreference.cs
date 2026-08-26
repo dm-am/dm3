@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using MongoDB.Bson.Serialization.Attributes;
 using DM.Domain.Core.Enums;
 
 namespace DM.Infrastructure.Persistence.Entities.Account.Settings;
@@ -22,7 +21,6 @@ namespace DM.Infrastructure.Persistence.Entities.Account.Settings;
 ///   <item><description>Otherwise → deliver to this channel</description></item>
 /// </list>
 /// </summary>
-[BsonIgnoreExtraElements]
 public class NotificationChannelPreference
 {
     /// <summary>

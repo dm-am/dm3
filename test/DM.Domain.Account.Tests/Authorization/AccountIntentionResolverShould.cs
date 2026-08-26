@@ -4,7 +4,7 @@ using DM.Domain.Core.Identity;
 using DM.Testing.Dsl;
 using DM.Domain.Core.Enums;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Authorization;

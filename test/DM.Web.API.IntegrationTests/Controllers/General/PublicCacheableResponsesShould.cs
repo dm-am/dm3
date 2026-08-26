@@ -9,7 +9,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using DM.Infrastructure.Core.Parsing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Xunit;
@@ -117,8 +117,11 @@ public class PublicCacheableResponsesShould : IntegrationTestBase
     /// The wire values of <c>X-Dm-Audience</c>, taken from the parser rather than
     /// written out, so a rendering audience added later is asked about too.
     /// </summary>
+    // The audiences a client may name, not every value of the enum: the
+    // rendering intent behind a quotation is chosen by the endpoint that
+    // composes one and has no wire value at all (see BbAudienceHeader.Wire).
     private static IEnumerable<string> Audiences() =>
-        Enum.GetValues<RenderAudience>().Select(BbAudienceHeader.Serialize);
+        BbAudienceHeader.Wire.Select(BbAudienceHeader.Serialize);
 
     /// <summary>
     /// A publicly cacheable response says the same thing whatever rendering

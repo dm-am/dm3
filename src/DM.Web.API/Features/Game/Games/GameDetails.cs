@@ -88,9 +88,12 @@ public class CharacterShortInfo
     public string Name { get; set; } = null!;
 
     /// <summary>
-    /// Character owner (lightweight reference)
+    /// Character owner (lightweight reference). Absent for an NPC: the game
+    /// master runs it and no player owns it. Same shape as
+    /// <see cref="Characters.Character.Author"/>, which has always been
+    /// nullable for the same reason.
     /// </summary>
-    public UserRef Author { get; set; } = null!;
+    public UserRef? Author { get; set; }
 
     /// <summary>
     /// Character status

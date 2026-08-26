@@ -26,7 +26,7 @@ public class Notification
     /// </summary>
     /// <remarks>
     /// The converter is what keeps the keys of this bag identical whether the DTO
-    /// came off the bus or out of Mongo; see NotificationPayloadConverter.
+    /// came off the bus or out of the store; see NotificationPayloadConverter.
     /// </remarks>
     [JsonConverter(typeof(NotificationPayloadConverter))]
     public object Payload { get; set; } = new { };

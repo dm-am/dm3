@@ -10,23 +10,24 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.UsernameChange;
 
 public class UsernameChangeServiceShould : UnitTestBase
 {
-    private readonly Mock<IValidator<CreateUsernameChangeRequest>> _validator;
-    private readonly Mock<IUsernameChangeRepository> _repository;
-    private readonly Mock<IUsernameHistoryRepository> _historyRepository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IUsernameChangeMailSender> _notificationSender;
+    private readonly IValidator<CreateUsernameChangeRequest> _validator;
+    private readonly IUsernameChangeRepository _repository;
+    private readonly IUsernameHistoryRepository _historyRepository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IUsernameChangeMailSender _notificationSender;
     private readonly UsernameChangeService _service;
 
     public UsernameChangeServiceShould()
@@ -39,24 +40,23 @@ public class UsernameChangeServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _notificationSender = Mock<IUsernameChangeMailSender>();
 
-        _validator.Setup(v => v.ValidateAsync(
-                It.IsAny<ValidationContext<CreateUsernameChangeRequest>>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _validator.ValidateAsync(
+                Arg.Any<ValidationContext<CreateUsernameChangeRequest>>(),
+                Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
         // A distinct value per call: the approval token and the history id are issued
         // in one and the same flow, and a single fixed guid would hide a swap of them.
-        _guidFactory.Setup(g => g.Create()).Returns(() => Guid.NewGuid());
+        _guidFactory.Create().Returns(_ => Guid.NewGuid());
 
         _service = new UsernameChangeService(
-            _validator.Object,
-            _repository.Object,
-            _historyRepository.Object,
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
-            _notificationSender.Object);
+            _validator,
+            _repository,
+            _historyRepository,
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider,
+            _notificationSender);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class UsernameChangeServiceShould : UnitTestBase
             Reason = "Test reason"
         };
 
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Current.Returns(Identity.Guest());
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.CreateAsync(request));
@@ -89,9 +89,9 @@ public class UsernameChangeServiceShould : UnitTestBase
             Reason = "Test reason"
         };
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _repository.Setup(r => r.GetActiveByUserId(userId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UsernameChangeRequest());
+        _identityProvider.Current.Returns(identity);
+        _repository.GetActiveByUserId(userId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new UsernameChangeRequest());
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.CreateAsync(request));
@@ -113,8 +113,9 @@ public class UsernameChangeServiceShould : UnitTestBase
             Reason = "Want to change username"
         };
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _repository.Setup(r => r.GetActiveByUserId(userId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>())).ReturnsAsync((UsernameChangeRequest?)null);
+        _identityProvider.Current.Returns(identity);
+        _repository.GetActiveByUserId(userId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns((UsernameChangeRequest?)null);
 
         var result = await _service.CreateAsync(request);
 
@@ -122,11 +123,11 @@ public class UsernameChangeServiceShould : UnitTestBase
         result.CurrentUsername.Should().Be("testuser");
         result.Reason.Should().Be(request.Reason);
         result.Status.Should().Be(UsernameChangeRequestStatus.Pending);
-        _repository.Verify(r => r.Add(It.Is<UsernameChangeRequest>(req =>
+        await _repository.Received(1).Add(Arg.Is<UsernameChangeRequest>(req =>
             req.UserId == userId &&
             req.Reason == request.Reason &&
             req.Status == UsernameChangeRequestStatus.Pending
-        ), It.IsAny<CancellationToken>()), Times.Once);
+        ), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -156,23 +157,23 @@ public class UsernameChangeServiceShould : UnitTestBase
             Comment = "Approved"
         };
 
-        _identityProvider.Setup(p => p.Current).Returns(moderator);
-        _repository.Setup(r => r.GetById(requestId, It.IsAny<CancellationToken>())).ReturnsAsync(request);
+        _identityProvider.Current.Returns(moderator);
+        _repository.GetById(requestId, Arg.Any<CancellationToken>()).Returns(request);
 
         var result = await _service.ResolveAsync(resolve);
 
         result.Status.Should().Be(UsernameChangeRequestStatus.Approved);
         request.ApprovalToken.Should().NotBeNull();
-        _repository.Verify(r => r.Update(It.Is<UsernameChangeRequest>(req =>
+        await _repository.Received(1).Update(Arg.Is<UsernameChangeRequest>(req =>
             req.Status == UsernameChangeRequestStatus.Approved &&
             req.ResolvedByUserId == moderatorId &&
             req.ApprovalToken != null
-        ), It.IsAny<CancellationToken>()), Times.Once);
-        _notificationSender.Verify(n => n.SendApprovalAsync(
+        ), Arg.Any<CancellationToken>());
+        await _notificationSender.Received(1).SendApprovalAsync(
             request.UserEmail,
             request.UserUsername!,
             request.ApprovalToken!.Value
-        ), Times.Once);
+        );
     }
 
     /// <summary>
@@ -206,8 +207,8 @@ public class UsernameChangeServiceShould : UnitTestBase
             UserSettings.Default,
             "token");
 
-        _identityProvider.Setup(p => p.Current).Returns(moderator);
-        _repository.Setup(r => r.GetById(requestId, It.IsAny<CancellationToken>())).ReturnsAsync(request);
+        _identityProvider.Current.Returns(moderator);
+        _repository.GetById(requestId, Arg.Any<CancellationToken>()).Returns(request);
 
         var exception = await Assert.ThrowsAsync<HttpBadRequestException>(
             () => _service.ResolveAsync(new ResolveUsernameChangeRequest
@@ -219,9 +220,8 @@ public class UsernameChangeServiceShould : UnitTestBase
         exception.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         request.Status.Should().Be(UsernameChangeRequestStatus.Pending,
             "a refused resolution leaves the request where the moderator found it");
-        _repository.Verify(r => r.Update(It.IsAny<UsernameChangeRequest>(), It.IsAny<CancellationToken>()),
-            Times.Never);
-        _notificationSender.VerifyNoOtherCalls();
+        await _repository.DidNotReceive().Update(Arg.Any<UsernameChangeRequest>(), Arg.Any<CancellationToken>());
+        _notificationSender.ShouldHaveReceivedNoCalls();
     }
 
     [Fact]
@@ -240,11 +240,11 @@ public class UsernameChangeServiceShould : UnitTestBase
             UserUsername = "oldusername"
         };
 
-        _repository.Setup(r => r.GetByApprovalToken(tokenId, It.IsAny<CancellationToken>())).ReturnsAsync(request);
-        _repository.Setup(r => r.IsUsernameAvailable("newusername", It.IsAny<Guid?>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        _historyRepository.Setup(h => h.IsUsernameReservedForOthers("newusername", userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _repository.GetByApprovalToken(tokenId, Arg.Any<CancellationToken>()).Returns(request);
+        _repository.IsUsernameAvailable("newusername", Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns(true);
+        _historyRepository.IsUsernameReservedForOthers("newusername", userId, Arg.Any<CancellationToken>())
+            .Returns(false);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = await _service.CompleteWithTokenAsync(tokenId, "newusername");
 
@@ -253,8 +253,8 @@ public class UsernameChangeServiceShould : UnitTestBase
         // One call, because the three rows go in together: separately, a refusal in
         // between could leave the user renamed with the request still pending, and
         // one approval then buys a second rename.
-        _repository.Verify(r => r.ApplyRename(
-            It.Is<UsernameChangeRequest>(req =>
+        await _repository.Received(1).ApplyRename(
+            Arg.Is<UsernameChangeRequest>(req =>
                 req.UserId == userId &&
                 req.Status == UsernameChangeRequestStatus.Completed &&
                 // The token stays on the row. Completed is what spends the approval,
@@ -262,11 +262,11 @@ public class UsernameChangeServiceShould : UnitTestBase
                 // and a link nobody was issued the same row-less lookup - so the
                 // person whose name had just changed was told the link was bad.
                 req.ApprovalToken == tokenId),
-            It.Is<CreateUsernameHistory>(hist =>
+            Arg.Is<CreateUsernameHistory>(hist =>
                 hist.UserId == userId &&
                 hist.OldUsername == "oldusername" &&
                 hist.NewUsername == "newusername"),
-            It.IsAny<CancellationToken>()), Times.Once);
+            Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -281,16 +281,15 @@ public class UsernameChangeServiceShould : UnitTestBase
     private Guid IssuedApproval(UsernameChangeRequestStatus status, DateTimeOffset expiresUtc, Guid? userId = null)
     {
         var token = Guid.NewGuid();
-        _repository.Setup(r => r.GetByApprovalToken(token, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UsernameChangeRequest
-            {
-                RequestId = Guid.NewGuid(),
-                UserId = userId ?? Guid.NewGuid(),
-                Status = status,
-                ApprovalToken = token,
-                ApprovalTokenExpiresUtc = expiresUtc,
-                UserUsername = "reader"
-            });
+        _repository.GetByApprovalToken(token, Arg.Any<CancellationToken>()).Returns(new UsernameChangeRequest
+        {
+            RequestId = Guid.NewGuid(),
+            UserId = userId ?? Guid.NewGuid(),
+            Status = status,
+            ApprovalToken = token,
+            ApprovalTokenExpiresUtc = expiresUtc,
+            UserUsername = "reader"
+        });
         return token;
     }
 
@@ -301,7 +300,7 @@ public class UsernameChangeServiceShould : UnitTestBase
     public async Task ReportTheApprovalAsReadyWhileItStands()
     {
         var now = DateTimeOffset.UtcNow;
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
         var token = IssuedApproval(UsernameChangeRequestStatus.Approved, now.AddHours(1));
 
         var info = await _service.GetApprovalInfoAsync(token);
@@ -321,7 +320,7 @@ public class UsernameChangeServiceShould : UnitTestBase
     public async Task ReportTheApprovalAsExpiredOnceItsWindowClosed(UsernameChangeRequestStatus status)
     {
         var now = DateTimeOffset.UtcNow;
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
         var token = IssuedApproval(status, now.AddHours(-1));
 
         var info = await _service.GetApprovalInfoAsync(token);
@@ -343,7 +342,7 @@ public class UsernameChangeServiceShould : UnitTestBase
     public async Task ReportTheApprovalAsUsedWhenTheNameWasAlreadyChangedThroughIt()
     {
         var now = DateTimeOffset.UtcNow;
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
         var token = IssuedApproval(UsernameChangeRequestStatus.Completed, now.AddHours(-1));
 
         var info = await _service.GetApprovalInfoAsync(token);
@@ -356,9 +355,8 @@ public class UsernameChangeServiceShould : UnitTestBase
     public async Task ReportNothingForATokenNoRequestWasIssuedFor()
     {
         var token = Guid.NewGuid();
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
-        _repository.Setup(r => r.GetByApprovalToken(token, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((UsernameChangeRequest?)null);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        _repository.GetByApprovalToken(token, Arg.Any<CancellationToken>()).Returns((UsernameChangeRequest?)null);
 
         (await _service.GetApprovalInfoAsync(token)).Should().BeNull();
     }
@@ -374,21 +372,19 @@ public class UsernameChangeServiceShould : UnitTestBase
     {
         var now = DateTimeOffset.UtcNow;
         var userId = Guid.NewGuid();
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
         var token = IssuedApproval(UsernameChangeRequestStatus.Approved, now.AddHours(1), userId);
-        _repository.Setup(r => r.IsUsernameAvailable("taken", It.IsAny<Guid?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(available);
-        _historyRepository.Setup(h => h.IsUsernameReservedForOthers("taken", userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(reservedForOthers);
+        _repository.IsUsernameAvailable("taken", Arg.Any<Guid?>(), Arg.Any<CancellationToken>()).Returns(available);
+        _historyRepository.IsUsernameReservedForOthers("taken", userId, Arg.Any<CancellationToken>())
+            .Returns(reservedForOthers);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.CompleteWithTokenAsync(token, "taken"));
 
         exception.StatusCode.Should().Be(HttpStatusCode.Conflict);
         exception.Message.Should().Contain("занято");
-        _repository.Verify(r => r.ApplyRename(
-            It.IsAny<UsernameChangeRequest>(), It.IsAny<CreateUsernameHistory>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _repository.DidNotReceive().ApplyRename(
+            Arg.Any<UsernameChangeRequest>(), Arg.Any<CreateUsernameHistory>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -399,7 +395,7 @@ public class UsernameChangeServiceShould : UnitTestBase
     public async Task RefuseALinkWhoseNameWasAlreadyChosen()
     {
         var now = DateTimeOffset.UtcNow;
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
         var token = IssuedApproval(UsernameChangeRequestStatus.Completed, now.AddHours(-1));
 
         var exception = await Assert.ThrowsAsync<HttpException>(
@@ -407,16 +403,15 @@ public class UsernameChangeServiceShould : UnitTestBase
 
         exception.StatusCode.Should().Be(HttpStatusCode.Conflict);
         exception.Message.Should().Contain("уже изменено");
-        _repository.Verify(r => r.ApplyRename(
-            It.IsAny<UsernameChangeRequest>(), It.IsAny<CreateUsernameHistory>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _repository.DidNotReceive().ApplyRename(
+            Arg.Any<UsernameChangeRequest>(), Arg.Any<CreateUsernameHistory>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task RefuseALinkThePassAlreadyWithdrew()
     {
         var now = DateTimeOffset.UtcNow;
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
         var token = IssuedApproval(UsernameChangeRequestStatus.Expired, now.AddHours(-1));
 
         var exception = await Assert.ThrowsAsync<HttpException>(
@@ -438,8 +433,8 @@ public class UsernameChangeServiceShould : UnitTestBase
             ApprovalTokenExpiresUtc = now.AddDays(-1)
         };
 
-        _repository.Setup(r => r.GetByApprovalToken(tokenId, It.IsAny<CancellationToken>())).ReturnsAsync(request);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _repository.GetByApprovalToken(tokenId, Arg.Any<CancellationToken>()).Returns(request);
+        _dateTimeProvider.Now.Returns(now);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.CompleteWithTokenAsync(tokenId, "newusername"));
@@ -472,23 +467,23 @@ public class UsernameChangeServiceShould : UnitTestBase
             UserSettings.Default,
             "token");
 
-        _identityProvider.Setup(p => p.Current).Returns(moderator);
-        _repository.Setup(r => r.GetById(requestId, It.IsAny<CancellationToken>())).ReturnsAsync(request);
-        _historyRepository.Setup(h => h.GetLatestByUserId(userId, It.IsAny<CancellationToken>())).ReturnsAsync(history);
-        _repository.Setup(r => r.IsUsernameAvailable("oldusername", userId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        _identityProvider.Current.Returns(moderator);
+        _repository.GetById(requestId, Arg.Any<CancellationToken>()).Returns(request);
+        _historyRepository.GetLatestByUserId(userId, Arg.Any<CancellationToken>()).Returns(history);
+        _repository.IsUsernameAvailable("oldusername", userId, Arg.Any<CancellationToken>()).Returns(true);
 
         var result = await _service.RollbackAsync(requestId);
 
         result.Status.Should().Be(UsernameChangeRequestStatus.Rejected);
-        _repository.Verify(r => r.ApplyRename(
-            It.Is<UsernameChangeRequest>(req =>
+        await _repository.Received(1).ApplyRename(
+            Arg.Is<UsernameChangeRequest>(req =>
                 req.UserId == userId &&
                 req.Status == UsernameChangeRequestStatus.Rejected),
-            It.Is<CreateUsernameHistory>(hist =>
+            Arg.Is<CreateUsernameHistory>(hist =>
                 hist.UserId == userId &&
                 hist.OldUsername == "newusername" &&
                 hist.NewUsername == "oldusername"),
-            It.IsAny<CancellationToken>()), Times.Once);
+            Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -500,9 +495,9 @@ public class UsernameChangeServiceShould : UnitTestBase
     public async Task RefuseASecondRequestWhileAnApprovalIsStillUnspent()
     {
         var userId = Guid.NewGuid();
-        _identityProvider.Setup(p => p.Current).Returns(AuthenticatedAs(userId));
-        _repository.Setup(r => r.GetActiveByUserId(userId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UsernameChangeRequest { Status = UsernameChangeRequestStatus.Approved });
+        _identityProvider.Current.Returns(AuthenticatedAs(userId));
+        _repository.GetActiveByUserId(userId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new UsernameChangeRequest { Status = UsernameChangeRequestStatus.Approved });
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.CreateAsync(new CreateUsernameChangeRequest { Reason = "Test reason" }));
@@ -523,12 +518,12 @@ public class UsernameChangeServiceShould : UnitTestBase
     public async Task AcceptANewRequestAfterAFinishedOne(UsernameChangeRequestStatus finished)
     {
         var userId = Guid.NewGuid();
-        _identityProvider.Setup(p => p.Current).Returns(AuthenticatedAs(userId));
+        _identityProvider.Current.Returns(AuthenticatedAs(userId));
         // A finished request is not active, so the guard never sees it.
-        _repository.Setup(r => r.GetActiveByUserId(userId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((UsernameChangeRequest?)null);
-        _repository.Setup(r => r.GetLatestByUserId(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UsernameChangeRequest { Status = finished });
+        _repository.GetActiveByUserId(userId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns((UsernameChangeRequest?)null);
+        _repository.GetLatestByUserId(userId, Arg.Any<CancellationToken>())
+            .Returns(new UsernameChangeRequest { Status = finished });
 
         var result = await _service.CreateAsync(new CreateUsernameChangeRequest { Reason = "Test reason" });
 
@@ -543,23 +538,21 @@ public class UsernameChangeServiceShould : UnitTestBase
     public async Task TellAnUnreviewedExpiryFromALapsedApproval()
     {
         var userId = Guid.NewGuid();
-        _identityProvider.Setup(p => p.Current).Returns(AuthenticatedAs(userId));
+        _identityProvider.Current.Returns(AuthenticatedAs(userId));
 
-        _repository.Setup(r => r.GetLatestByUserId(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UsernameChangeRequest
-            {
-                Status = UsernameChangeRequestStatus.Expired,
-                ApprovalTokenExpiresUtc = null
-            });
+        _repository.GetLatestByUserId(userId, Arg.Any<CancellationToken>()).Returns(new UsernameChangeRequest
+        {
+            Status = UsernameChangeRequestStatus.Expired,
+            ApprovalTokenExpiresUtc = null
+        });
         var unreviewed = await _service.GetCurrentUserRequestAsync();
         unreviewed!.ExpiryReason.Should().Be(UsernameChangeExpiryReason.Unreviewed);
 
-        _repository.Setup(r => r.GetLatestByUserId(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UsernameChangeRequest
-            {
-                Status = UsernameChangeRequestStatus.Expired,
-                ApprovalTokenExpiresUtc = DateTimeOffset.UnixEpoch
-            });
+        _repository.GetLatestByUserId(userId, Arg.Any<CancellationToken>()).Returns(new UsernameChangeRequest
+        {
+            Status = UsernameChangeRequestStatus.Expired,
+            ApprovalTokenExpiresUtc = DateTimeOffset.UnixEpoch
+        });
         var lapsed = await _service.GetCurrentUserRequestAsync();
         lapsed!.ExpiryReason.Should().Be(UsernameChangeExpiryReason.ApprovalLapsed);
     }
@@ -572,13 +565,12 @@ public class UsernameChangeServiceShould : UnitTestBase
     public async Task LeaveTheExpiryReasonUnsetOnEveryOtherStatus()
     {
         var userId = Guid.NewGuid();
-        _identityProvider.Setup(p => p.Current).Returns(AuthenticatedAs(userId));
-        _repository.Setup(r => r.GetLatestByUserId(userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new UsernameChangeRequest
-            {
-                Status = UsernameChangeRequestStatus.Approved,
-                ApprovalTokenExpiresUtc = DateTimeOffset.UnixEpoch
-            });
+        _identityProvider.Current.Returns(AuthenticatedAs(userId));
+        _repository.GetLatestByUserId(userId, Arg.Any<CancellationToken>()).Returns(new UsernameChangeRequest
+        {
+            Status = UsernameChangeRequestStatus.Approved,
+            ApprovalTokenExpiresUtc = DateTimeOffset.UnixEpoch
+        });
 
         var result = await _service.GetCurrentUserRequestAsync();
 
@@ -595,12 +587,11 @@ public class UsernameChangeServiceShould : UnitTestBase
     public async Task AcceptANewRequestWhenTheApprovalLinkHasRunOut()
     {
         var userId = Guid.NewGuid();
-        _identityProvider.Setup(p => p.Current).Returns(AuthenticatedAs(userId));
+        _identityProvider.Current.Returns(AuthenticatedAs(userId));
         // The repository decides this by comparing against the moment it is given,
         // so a lapsed approval is simply not among the rows it returns.
-        _repository.Setup(r => r.GetActiveByUserId(
-                userId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((UsernameChangeRequest?)null);
+        _repository.GetActiveByUserId(
+                userId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns((UsernameChangeRequest?)null);
 
         var result = await _service.CreateAsync(new CreateUsernameChangeRequest { Reason = "Test reason" });
 
@@ -616,16 +607,15 @@ public class UsernameChangeServiceShould : UnitTestBase
     {
         var userId = Guid.NewGuid();
         var now = new DateTimeOffset(2026, 5, 1, 10, 0, 0, TimeSpan.Zero);
-        _identityProvider.Setup(p => p.Current).Returns(AuthenticatedAs(userId));
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
-        _repository.Setup(r => r.GetActiveByUserId(
-                userId, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((UsernameChangeRequest?)null);
+        _identityProvider.Current.Returns(AuthenticatedAs(userId));
+        _dateTimeProvider.Now.Returns(now);
+        _repository.GetActiveByUserId(
+                userId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns((UsernameChangeRequest?)null);
 
         await _service.CreateAsync(new CreateUsernameChangeRequest { Reason = "Test reason" });
 
-        _repository.Verify(r => r.GetActiveByUserId(
-            userId, now, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).GetActiveByUserId(
+            userId, now, Arg.Any<CancellationToken>());
     }
 
     private static IIdentity AuthenticatedAs(Guid userId) => Identity.Success(

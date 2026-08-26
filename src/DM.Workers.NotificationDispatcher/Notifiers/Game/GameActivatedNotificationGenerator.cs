@@ -51,25 +51,6 @@ internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
-        var usersInterested = new HashSet<Guid>();
-
-        // Get subscribers of the Master
-        var masterSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
-            SubscriptionTargetType.User,
-            gameData.MasterId,
-            SubscriptionSettings.AuthorGameEvents);
-        usersInterested.UnionWith(masterSubscriptions.Select(s => s.SubscriberId));
-
-        // Get subscribers of Assistants
-        foreach (var assistantId in gameData.AssistantIds)
-        {
-            var assistantSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
-                SubscriptionTargetType.User,
-                assistantId,
-                SubscriptionSettings.AuthorGameEvents);
-            usersInterested.UnionWith(assistantSubscriptions.Select(s => s.SubscriberId));
-        }
-
         // Readers of this game are deliberately absent. They are subscribed to the
         // game itself, so GameStatusChangedNotificationGenerator answers the same
         // event and already tells them it went active under the event type of the
@@ -77,13 +58,11 @@ internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
         // NewGameFromSubscribedAuthor, which is only true for the audience that
         // could not see the game while it was a draft; delivered to a reader it was
         // a second copy of one activation calling a game they already follow new.
-
-        // Exclude game team members (they get notified via GameStatusChangedNotificationGenerator)
-        usersInterested.Remove(gameData.MasterId);
-        foreach (var assistantId in gameData.AssistantIds)
-        {
-            usersInterested.Remove(assistantId);
-        }
+        var usersInterested = await SubscribedAudience.OfTeamAsync(
+            _subscriptionRepository,
+            gameData.MasterId,
+            gameData.AssistantIds,
+            SubscriptionSettings.AuthorGameEvents);
 
         if (usersInterested.Count == 0)
         {

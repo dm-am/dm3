@@ -7,7 +7,7 @@ using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
@@ -15,25 +15,24 @@ namespace DM.Domain.Game.Tests.Features.Characters;
 public class CreateCharacterValidatorShould : UnitTestBase
 {
     private readonly CreateCharacterValidator validator;
-    private readonly Mock<ICharacterRepository> characterRepository;
-    private readonly Mock<IAttributeValueValidator> attributeValueValidator;
+    private readonly ICharacterRepository characterRepository;
+    private readonly IAttributeValueValidator attributeValueValidator;
 
     public CreateCharacterValidatorShould()
     {
-        // The mocks, not just their objects: Mock<T>() hands out a new mock on
-        // every call, so a setup written through a second call configured an
-        // instance the validator never saw.
+        // Held in fields: Mock<T>() hands out a new substitute on every call, so
+        // a stub written through a second call would configure an instance the
+        // validator never saw.
         characterRepository = Mock<ICharacterRepository>();
         attributeValueValidator = Mock<IAttributeValueValidator>();
-        validator = new CreateCharacterValidator(characterRepository.Object, attributeValueValidator.Object);
+        validator = new CreateCharacterValidator(characterRepository, attributeValueValidator);
     }
 
     [Fact]
     public async Task PassForValidInput()
     {
         characterRepository
-            .Setup(r => r.GameRequiresAttributes(It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
-            .ReturnsAsync(false);
+            .GameRequiresAttributes(Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(false);
 
         var input = new CreateCharacter
         {
@@ -90,8 +89,7 @@ public class CreateCharacterValidatorShould : UnitTestBase
     public async Task PassWithMaxLengthValues()
     {
         characterRepository
-            .Setup(r => r.GameRequiresAttributes(It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
-            .ReturnsAsync(false);
+            .GameRequiresAttributes(Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(false);
 
         var input = new CreateCharacter
         {
@@ -114,11 +112,9 @@ public class CreateCharacterValidatorShould : UnitTestBase
     {
         var specificationId = Guid.NewGuid();
         characterRepository
-            .Setup(r => r.GameRequiresAttributes(It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
-            .ReturnsAsync(true);
+            .GameRequiresAttributes(Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(true);
         characterRepository
-            .Setup(r => r.GetGameSchema(It.IsAny<Guid>()))
-            .ReturnsAsync(new AttributeSchema
+            .GetGameSchema(Arg.Any<Guid>()).Returns(new AttributeSchema
             {
                 Id = Guid.NewGuid(),
                 Specifications =
@@ -130,8 +126,7 @@ public class CreateCharacterValidatorShould : UnitTestBase
                 ]
             });
         attributeValueValidator
-            .Setup(v => v.Validate(It.IsAny<string>(), It.IsAny<AttributeSpecification>()))
-            .Returns((true, (string?)null));
+            .Validate(Arg.Any<string>(), Arg.Any<AttributeSpecification>()).Returns((true, (string?)null));
 
         var input = new CreateCharacter
         {
@@ -159,8 +154,7 @@ public class CreateCharacterValidatorShould : UnitTestBase
     {
         var specificationId = Guid.NewGuid();
         characterRepository
-            .Setup(r => r.GameRequiresAttributes(It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
-            .ReturnsAsync(false);
+            .GameRequiresAttributes(Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(false);
 
         var input = new CreateCharacter
         {

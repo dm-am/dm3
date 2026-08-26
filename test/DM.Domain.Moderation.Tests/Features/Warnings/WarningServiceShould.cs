@@ -14,22 +14,23 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Warnings;
 
 public class WarningServiceShould : UnitTestBase
 {
-    private readonly Mock<IWarningRepository> _warningRepository;
-    private readonly Mock<IBanRepository> _banRepository;
-    private readonly Mock<IWarningEntityResolver> _entityResolver;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IEventProducer> _eventProducer;
+    private readonly IWarningRepository _warningRepository;
+    private readonly IBanRepository _banRepository;
+    private readonly IWarningEntityResolver _entityResolver;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IEventProducer _eventProducer;
     private readonly WarningService _service;
     private readonly Guid _moderatorUserId = Guid.NewGuid();
     private readonly Guid _targetUserId = Guid.NewGuid();
@@ -52,32 +53,31 @@ public class WarningServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        _identityProvider.Setup(p => p.Current).Returns(moderatorIdentity);
-        _dateTimeProvider.Setup(d => d.Now).Returns(_now);
-        _guidFactory.Setup(g => g.Create()).Returns(_warningId);
+        _identityProvider.Current.Returns(moderatorIdentity);
+        _dateTimeProvider.Now.Returns(_now);
+        _guidFactory.Create().Returns(_warningId);
         // Default: nothing is known about any offending object. Tests that care
         // about the evidence override this.
         _entityResolver
-            .Setup(r => r.ResolveStates(
-                It.IsAny<IReadOnlyCollection<WarningEntityRequest>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<Guid, WarningEntityState>());
+            .ResolveStates(
+                Arg.Any<IReadOnlyCollection<WarningEntityRequest>>(), Arg.Any<CancellationToken>()).Returns(new Dictionary<Guid, WarningEntityState>());
 
         _service = new WarningService(
             new CreateWarningValidator(),
-            _warningRepository.Object,
-            _banRepository.Object,
-            _entityResolver.Object,
-            _userLookupService.Object,
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
-            _eventProducer.Object);
+            _warningRepository,
+            _banRepository,
+            _entityResolver,
+            _userLookupService,
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider,
+            _eventProducer);
     }
 
     [Fact]
     public async Task ReturnEmptyListWhenGettingWarningsForNonexistentUser()
     {
-        _userLookupService.Setup(s => s.GetAsync("Unknown"))
+        _userLookupService.GetAsync("Unknown")
             .ThrowsAsync(new HttpException(HttpStatusCode.NotFound, "Пользователь не найден"));
 
         var result = await _service.GetUserWarnings("Unknown");
@@ -90,9 +90,8 @@ public class WarningServiceShould : UnitTestBase
     {
         // "No warnings" and "we could not read them" look the same to the
         // moderator and the same in the log, because there is no log.
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
-        _warningRepository.Setup(r => r.GetUserWarnings(_targetUserId, It.IsAny<CancellationToken>()))
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _warningRepository.GetUserWarnings(_targetUserId, Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("connection reset"));
 
         var act = () => _service.GetUserWarnings("Target");
@@ -103,10 +102,9 @@ public class WarningServiceShould : UnitTestBase
     [Fact]
     public async Task LetAStorageFailureThroughInsteadOfReportingZeroPoints()
     {
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
         _warningRepository
-            .Setup(r => r.GetUserWarningPoints(_targetUserId, It.IsAny<CancellationToken>()))
+            .GetUserWarningPoints(_targetUserId, Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("connection reset"));
 
         var act = () => _service.GetUserWarningPoints("Target");
@@ -122,7 +120,7 @@ public class WarningServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        _identityProvider.Setup(p => p.Current).Returns(userIdentity);
+        _identityProvider.Current.Returns(userIdentity);
 
         var act = () => _service.GetAllWarnings();
 
@@ -147,7 +145,7 @@ public class WarningServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        _identityProvider.Setup(p => p.Current).Returns(userIdentity);
+        _identityProvider.Current.Returns(userIdentity);
 
         var createWarning = new CreateWarning { Username = "Target", Reason = "Bad behavior", Points = 2 };
         var act = () => _service.CreateWarning(createWarning);
@@ -161,12 +159,16 @@ public class WarningServiceShould : UnitTestBase
     public async Task CreateWarningWithCorrectData()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
+        _userLookupService.GetAsync("Target").Returns(targetUser);
 
         CreateWarningEntity? capturedEntity = null;
-        _warningRepository.Setup(r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateWarningEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Warning());
+        _warningRepository.Create(Arg.Any<CreateWarningEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Warning())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateWarningEntity>(0);
+                capturedEntity = e;
+            });
 
         var entityId = Guid.NewGuid();
         var createWarning = new CreateWarning
@@ -204,8 +206,7 @@ public class WarningServiceShould : UnitTestBase
     [Fact]
     public async Task RefuseAWarningOnGameContent()
     {
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
 
         var act = () => _service.CreateWarning(new CreateWarning
         {
@@ -219,21 +220,18 @@ public class WarningServiceShould : UnitTestBase
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest);
 
-        _warningRepository.Verify(
-            r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()), Times.Never);
-        _entityResolver.Verify(
-            r => r.CaptureSnapshot(
-                It.IsAny<WarningEntityType>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _warningRepository.DidNotReceive().Create(Arg.Any<CreateWarningEntity>(), Arg.Any<CancellationToken>());
+        await _entityResolver.DidNotReceive().CaptureSnapshot(
+                Arg.Any<WarningEntityType>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task AnnounceAnIssuedWarning()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
-        _warningRepository.Setup(r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Warning { WarningId = _warningId });
+        _userLookupService.GetAsync("Target").Returns(targetUser);
+        _warningRepository.Create(Arg.Any<CreateWarningEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Warning { WarningId = _warningId });
 
         await _service.CreateWarning(new CreateWarning
         {
@@ -242,7 +240,7 @@ public class WarningServiceShould : UnitTestBase
             Points = 2
         });
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.WarningIssued, _warningId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.WarningIssued, _warningId);
     }
 
     [Theory]
@@ -267,12 +265,16 @@ public class WarningServiceShould : UnitTestBase
     public async Task CreateVerbalWarningWithZeroPoints()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
+        _userLookupService.GetAsync("Target").Returns(targetUser);
 
         CreateWarningEntity? capturedEntity = null;
-        _warningRepository.Setup(r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateWarningEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Warning());
+        _warningRepository.Create(Arg.Any<CreateWarningEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Warning())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateWarningEntity>(0);
+                capturedEntity = e;
+            });
 
         var createWarning = new CreateWarning
         {
@@ -291,12 +293,16 @@ public class WarningServiceShould : UnitTestBase
     public async Task ParseEntityTypeCorrectly()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
+        _userLookupService.GetAsync("Target").Returns(targetUser);
 
         CreateWarningEntity? capturedEntity = null;
-        _warningRepository.Setup(r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateWarningEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Warning());
+        _warningRepository.Create(Arg.Any<CreateWarningEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Warning())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateWarningEntity>(0);
+                capturedEntity = e;
+            });
 
         var createWarning = new CreateWarning
         {
@@ -320,7 +326,7 @@ public class WarningServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        _identityProvider.Setup(p => p.Current).Returns(userIdentity);
+        _identityProvider.Current.Returns(userIdentity);
 
         var act = () => _service.RemoveWarning(_warningId);
 
@@ -334,16 +340,15 @@ public class WarningServiceShould : UnitTestBase
     {
         await _service.RemoveWarning(_warningId);
 
-        _warningRepository.Verify(r => r.Remove(_warningId, It.IsAny<CancellationToken>()), Times.Once);
+        await _warningRepository.Received(1).Remove(_warningId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task GetUserWarningPointsSuccessfully()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
-        _warningRepository.Setup(r => r.GetUserWarningPoints(_targetUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(5);
+        _userLookupService.GetAsync("Target").Returns(targetUser);
+        _warningRepository.GetUserWarningPoints(_targetUserId, Arg.Any<CancellationToken>()).Returns(5);
 
         var result = await _service.GetUserWarningPoints("Target");
 
@@ -358,7 +363,7 @@ public class WarningServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        _identityProvider.Setup(p => p.Current).Returns(userIdentity);
+        _identityProvider.Current.Returns(userIdentity);
 
         var act = () => _service.GetViolators();
 
@@ -374,14 +379,12 @@ public class WarningServiceShould : UnitTestBase
         var bannedUser = new GeneralUser { UserId = Guid.NewGuid(), Username = "BannedOnly" };
         var bothUser = new GeneralUser { UserId = Guid.NewGuid(), Username = "Both" };
 
-        _warningRepository.Setup(r => r.GetActiveWarningSummaries(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(
+        _warningRepository.GetActiveWarningSummaries(Arg.Any<CancellationToken>()).Returns(
             [
                 new UserWarningSummary { User = pointsUser, Points = 2, LastWarningUtc = _now.AddDays(-1) },
                 new UserWarningSummary { User = bothUser, Points = 5, LastWarningUtc = _now.AddDays(-2) }
             ]);
-        _banRepository.Setup(r => r.GetAllActiveBans(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(
+        _banRepository.GetAllActiveBans(Arg.Any<CancellationToken>()).Returns(
             [
                 new Ban { BanId = Guid.NewGuid(), TargetUser = bannedUser, EndedUtc = _now.AddDays(3) },
                 new Ban { BanId = Guid.NewGuid(), TargetUser = bothUser, EndedUtc = _now.AddDays(7) }
@@ -408,10 +411,10 @@ public class WarningServiceShould : UnitTestBase
         var pointsUser = new GeneralUser { UserId = Guid.NewGuid(), Username = "PointsOnly" };
         var bannedUser = new GeneralUser { UserId = Guid.NewGuid(), Username = "BannedOnly" };
 
-        _warningRepository.Setup(r => r.GetActiveWarningSummaries(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new UserWarningSummary { User = pointsUser, Points = 3, LastWarningUtc = _now }]);
-        _banRepository.Setup(r => r.GetAllActiveBans(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new Ban { BanId = Guid.NewGuid(), TargetUser = bannedUser, EndedUtc = _now.AddDays(1) }]);
+        _warningRepository.GetActiveWarningSummaries(Arg.Any<CancellationToken>())
+            .Returns([new UserWarningSummary { User = pointsUser, Points = 3, LastWarningUtc = _now }]);
+        _banRepository.GetAllActiveBans(Arg.Any<CancellationToken>())
+            .Returns([new Ban { BanId = Guid.NewGuid(), TargetUser = bannedUser, EndedUtc = _now.AddDays(1) }]);
 
         var banned = (await _service.GetViolators(ViolatorsFilter.Banned)).ToList();
         var pointsOnly = (await _service.GetViolators(ViolatorsFilter.PointsOnly)).ToList();
@@ -428,8 +431,8 @@ public class WarningServiceShould : UnitTestBase
     [Fact]
     public async Task ReturnEveryWarningWhenNoUserIsNamed()
     {
-        _warningRepository.Setup(r => r.GetAllWarnings(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new Warning { WarningId = _warningId, Points = 3 }]);
+        _warningRepository.GetAllWarnings(Arg.Any<CancellationToken>())
+            .Returns([new Warning { WarningId = _warningId, Points = 3 }]);
 
         var result = (await _service.GetAllWarnings()).ToList();
 
@@ -450,16 +453,19 @@ public class WarningServiceShould : UnitTestBase
     public async Task TakeASnapshotOfTheOffendingTextWhenIssuingTheWarning()
     {
         var entityId = Guid.NewGuid();
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
         _entityResolver
-            .Setup(r => r.CaptureSnapshot(WarningEntityType.Comment, entityId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync("Оскорбление, за которое выносится предупреждение");
+            .CaptureSnapshot(WarningEntityType.Comment, entityId, Arg.Any<CancellationToken>())
+            .Returns("Оскорбление, за которое выносится предупреждение");
 
         CreateWarningEntity? captured = null;
-        _warningRepository.Setup(r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateWarningEntity, CancellationToken>((e, _) => captured = e)
-            .ReturnsAsync(new Warning());
+        _warningRepository.Create(Arg.Any<CreateWarningEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Warning())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateWarningEntity>(0);
+                captured = e;
+            });
 
         await _service.CreateWarning(new CreateWarning
         {
@@ -481,13 +487,16 @@ public class WarningServiceShould : UnitTestBase
     [Fact]
     public async Task TakeNoSnapshotWhenTheWarningNamesNoContent()
     {
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
 
         CreateWarningEntity? captured = null;
-        _warningRepository.Setup(r => r.Create(It.IsAny<CreateWarningEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateWarningEntity, CancellationToken>((e, _) => captured = e)
-            .ReturnsAsync(new Warning());
+        _warningRepository.Create(Arg.Any<CreateWarningEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Warning())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateWarningEntity>(0);
+                captured = e;
+            });
 
         await _service.CreateWarning(new CreateWarning
         {
@@ -498,10 +507,8 @@ public class WarningServiceShould : UnitTestBase
 
         captured.Should().NotBeNull();
         captured!.EntitySnapshot.Should().BeNull();
-        _entityResolver.Verify(
-            r => r.CaptureSnapshot(
-                It.IsAny<WarningEntityType>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _entityResolver.DidNotReceive().CaptureSnapshot(
+                Arg.Any<WarningEntityType>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -513,8 +520,7 @@ public class WarningServiceShould : UnitTestBase
     public async Task DescribeTheOffendingObjectOnTheModerationList()
     {
         var entityId = Guid.NewGuid();
-        _warningRepository.Setup(r => r.GetAllWarnings(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
+        _warningRepository.GetAllWarnings(Arg.Any<CancellationToken>()).Returns([
                 new Warning
                 {
                     WarningId = _warningId,
@@ -525,12 +531,11 @@ public class WarningServiceShould : UnitTestBase
                 }
             ]);
         _entityResolver
-            .Setup(r => r.ResolveStates(
-                It.IsAny<IReadOnlyCollection<WarningEntityRequest>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<Guid, WarningEntityState>
-            {
-                [_warningId] = new() { Url = "/forum/flood/12", EditedAfterWarning = true }
-            });
+            .ResolveStates(
+                Arg.Any<IReadOnlyCollection<WarningEntityRequest>>(), Arg.Any<CancellationToken>()).Returns(new Dictionary<Guid, WarningEntityState>
+                {
+                    [_warningId] = new() { Url = "/forum/flood/12", EditedAfterWarning = true }
+                });
 
         var warning = (await _service.GetAllWarnings()).Single();
 
@@ -547,10 +552,8 @@ public class WarningServiceShould : UnitTestBase
     [Fact]
     public async Task NotDescribeTheOffendingObjectForThePublicProfileView()
     {
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
-        _warningRepository.Setup(r => r.GetUserWarnings(_targetUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _warningRepository.GetUserWarnings(_targetUserId, Arg.Any<CancellationToken>()).Returns([
                 new Warning
                 {
                     WarningId = _warningId,
@@ -562,9 +565,7 @@ public class WarningServiceShould : UnitTestBase
 
         await _service.GetUserWarnings("Target");
 
-        _entityResolver.Verify(
-            r => r.ResolveStates(
-                It.IsAny<IReadOnlyCollection<WarningEntityRequest>>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _entityResolver.DidNotReceive().ResolveStates(
+                Arg.Any<IReadOnlyCollection<WarningEntityRequest>>(), Arg.Any<CancellationToken>());
     }
 }

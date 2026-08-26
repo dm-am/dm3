@@ -3,8 +3,8 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostPendencies;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostPendencies;
@@ -12,8 +12,8 @@ namespace DM.Domain.Game.Tests.Features.PostPendencies;
 public class PostPendencyFactoryShould : UnitTestBase
 {
     private readonly PostPendencyFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public PostPendencyFactoryShould()
     {
@@ -21,8 +21,8 @@ public class PostPendencyFactoryShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
         _factory = new PostPendencyFactory(
-            _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _guidFactory,
+            _dateTimeProvider);
     }
 
     [Fact]
@@ -41,8 +41,8 @@ public class PostPendencyFactoryShould : UnitTestBase
             CharacterId = characterId
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(pendencyId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _guidFactory.Create().Returns(pendencyId);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = _factory.Create(createPostPendency, createdById, waitingForUserId);
 
@@ -66,8 +66,8 @@ public class PostPendencyFactoryShould : UnitTestBase
             CharacterId = Guid.NewGuid()
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(createPostPendency, createdById, waitingForUserId);
 
@@ -85,8 +85,8 @@ public class PostPendencyFactoryShould : UnitTestBase
             CharacterId = Guid.NewGuid()
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(createPostPendency, createdById, waitingForUserId);
 
@@ -102,8 +102,8 @@ public class PostPendencyFactoryShould : UnitTestBase
             CharacterId = Guid.NewGuid()
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(createPostPendency, Guid.NewGuid(), Guid.NewGuid());
 

@@ -61,24 +61,65 @@ public static class MessagingMetrics
         Meter.CreateHistogram<double>("dm.messaging.duration", "s", "End-to-end message processing latency");
 
     /// <summary>
-    /// Events the publisher could not hand to the broker. Attributes:
-    /// <c>event</c> (event type), <c>reason</c> (exception type).
+    /// Events lost for good: nothing stored them and nothing will retry them.
+    /// Attributes: <c>event</c> (event type), <c>reason</c> (exception type).
     /// </summary>
     /// <remarks>
     /// An event is not the carrier of the fact — SYSTEM.md says so, and the
-    /// publisher therefore swallows a refusal instead of turning a committed
+    /// producer therefore swallows a refusal instead of turning a committed
     /// write into a 500. That trade only holds while someone can see the
-    /// swallowing: without this counter a broker that refuses every publish looks
-    /// exactly like a quiet site, and the first symptom is a user asking why
-    /// notifications stopped.
+    /// swallowing: without this counter the swallowed losses look exactly like a
+    /// quiet site, and the first symptom is a user asking why notifications
+    /// stopped.
     ///
-    /// Not only the bus. The one letter whose loss a caller swallows on the same
-    /// terms — the warning about a login from an unknown address — counts here
-    /// too, so <c>event</c> names what failed to leave rather than which pipe it
-    /// was leaving through.
+    /// Since the outbox (W1.5) this counts only the irrecoverable losses: the
+    /// outbox insert refused right after the domain commit, and the one letter
+    /// whose loss a caller swallows on the same terms — the warning about a
+    /// login from an unknown address. A broker refusal is no longer here at
+    /// all: it became a delay, counted by <see cref="OutboxPublishFailed"/>.
     /// </remarks>
     public static readonly Counter<long> PublishFailed =
         Meter.CreateCounter<long>("dm.messaging.publish_failed", null, "Events the publisher could not hand to the broker");
+
+    /// <summary>
+    /// Age of the oldest unpublished outbox row, seconds; 0 on an empty
+    /// backlog. Updated by every relay pass.
+    /// </summary>
+    /// <remarks>
+    /// The number behind the backlog alert. A growing lag with a live process
+    /// means the broker has been down longer than any deployment, or the relay
+    /// is jammed on a row it cannot assemble — either way the events are not
+    /// lost, only not delivered, and a human decides.
+    /// </remarks>
+    public static readonly Gauge<double> OutboxLag =
+        Meter.CreateGauge<double>("dm.messaging.outbox_lag", "s", "Age of the oldest unpublished outbox row");
+
+    /// <summary>Unpublished outbox rows. Updated by every relay pass.</summary>
+    public static readonly Gauge<long> OutboxPending =
+        Meter.CreateGauge<long>("dm.messaging.outbox_pending", null, "Unpublished outbox rows");
+
+    /// <summary>Outbox rows published with confirmation and marked.</summary>
+    public static readonly Counter<long> OutboxPublished =
+        Meter.CreateCounter<long>("dm.messaging.outbox_published", null, "Outbox rows published and marked");
+
+    /// <summary>
+    /// Publish refusals of the relay. Attributes: <c>reason</c> (exception
+    /// type). A delay, not a loss: the row stays in the outbox and the next
+    /// pass retries it — the opposite of <see cref="PublishFailed"/>.
+    /// </summary>
+    public static readonly Counter<long> OutboxPublishFailed =
+        Meter.CreateCounter<long>("dm.messaging.outbox_publish_failed", null, "Outbox publish refusals, retried by the next pass");
+
+    /// <summary>
+    /// Relay passes, ticking on an empty backlog too.
+    /// </summary>
+    /// <remarks>
+    /// Without this a stalled relay loop in a live process would leave the lag
+    /// gauge frozen at its last value — a zero that masks a growing backlog.
+    /// The stall alert reads the increase of this counter.
+    /// </remarks>
+    public static readonly Counter<long> OutboxRelayPasses =
+        Meter.CreateCounter<long>("dm.messaging.outbox_relay_passes", null, "Passes of the outbox relay");
 
     /// <summary>
     /// Notifications that reached their channel and were refused by it.

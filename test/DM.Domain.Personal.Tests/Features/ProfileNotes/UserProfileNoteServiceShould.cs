@@ -13,19 +13,19 @@ using DM.Domain.Personal.Features.ProfileNotes;
 using DM.Domain.Personal.Features.Profiles;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Personal.Tests.Features.ProfileNotes;
 
 public class UserProfileNoteServiceShould : UnitTestBase
 {
-    private readonly Mock<IUserProfileNoteRepository> _repository;
-    private readonly Mock<IUserRepository> _userRepository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IUserProfileNoteRepository _repository;
+    private readonly IUserRepository _userRepository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly UserProfileNoteService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly Guid _subjectUserId = Guid.NewGuid();
@@ -41,22 +41,22 @@ public class UserProfileNoteServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
         var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _dateTimeProvider.Setup(d => d.Now).Returns(_now);
-        _guidFactory.Setup(g => g.Create()).Returns(_noteId);
+        _identityProvider.Current.Returns(identity);
+        _dateTimeProvider.Now.Returns(_now);
+        _guidFactory.Create().Returns(_noteId);
 
         var validator = Mock<IValidator<CreateUserProfileNote>>();
         validator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateUserProfileNote>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreateUserProfileNote>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _service = new UserProfileNoteService(
-            _repository.Object,
-            _userRepository.Object,
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
-            validator.Object);
+            _repository,
+            _userRepository,
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider,
+            validator);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     public async Task ReturnNothingWhenGettingNoteWithoutAuthentication()
     {
         var guestIdentity = Identities.Guest();
-        _identityProvider.Setup(p => p.Current).Returns(guestIdentity);
+        _identityProvider.Current.Returns(guestIdentity);
 
         var note = await _service.GetNote("Subject");
 
@@ -83,8 +83,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ReturnNullWhenGettingNoteForNonexistentUser()
     {
-        _userRepository.Setup(r => r.FindUserIdAsync("Unknown"))
-            .ReturnsAsync((Guid?)null);
+        _userRepository.FindUserIdAsync("Unknown").Returns((Guid?)null);
 
         var result = await _service.GetNote("Unknown");
 
@@ -96,9 +95,8 @@ public class UserProfileNoteServiceShould : UnitTestBase
     {
         var note = new UserProfileNote { Id = _noteId };
 
-        _userRepository.Setup(r => r.FindUserIdAsync("Subject")).ReturnsAsync(_subjectUserId);
-        _repository.Setup(r => r.Get(_currentUserId, _subjectUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(note);
+        _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
+        _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns(note);
 
         var result = await _service.GetNote("Subject");
 
@@ -109,7 +107,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     public async Task ThrowWhenUpsertingNoteWithoutAuthentication()
     {
         var guestIdentity = Identities.Guest();
-        _identityProvider.Setup(p => p.Current).Returns(guestIdentity);
+        _identityProvider.Current.Returns(guestIdentity);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "Note" };
         var act = () => _service.UpsertNote(createNote);
@@ -121,8 +119,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenUpsertingNoteForNonexistentUser()
     {
-        _userRepository.Setup(r => r.FindUserIdAsync("Unknown"))
-            .ReturnsAsync((Guid?)null);
+        _userRepository.FindUserIdAsync("Unknown").Returns((Guid?)null);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Unknown", Text = "Note" };
         var act = () => _service.UpsertNote(createNote);
@@ -135,7 +132,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenCreatingNoteAboutYourself()
     {
-        _userRepository.Setup(r => r.FindUserIdAsync("CurrentUser")).ReturnsAsync(_currentUserId);
+        _userRepository.FindUserIdAsync("CurrentUser").Returns(_currentUserId);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "CurrentUser", Text = "Note" };
         var act = () => _service.UpsertNote(createNote);
@@ -150,28 +147,30 @@ public class UserProfileNoteServiceShould : UnitTestBase
     {
         var existingNote = new UserProfileNote { Id = _noteId };
 
-        _userRepository.Setup(r => r.FindUserIdAsync("Subject")).ReturnsAsync(_subjectUserId);
-        _repository.Setup(r => r.Get(_currentUserId, _subjectUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(existingNote);
+        _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
+        _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns(existingNote);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "" };
         var result = await _service.UpsertNote(createNote);
 
         result.Should().BeNull();
-        _repository.Verify(r => r.Delete(_noteId, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).Delete(_noteId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task CreateNewNoteWhenNoneExists()
     {
-        _userRepository.Setup(r => r.FindUserIdAsync("Subject")).ReturnsAsync(_subjectUserId);
-        _repository.Setup(r => r.Get(_currentUserId, _subjectUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((UserProfileNote?)null);
+        _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
+        _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns((UserProfileNote?)null);
 
         CreateUserProfileNoteEntity? capturedEntity = null;
-        _repository.Setup(r => r.Create(It.IsAny<CreateUserProfileNoteEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateUserProfileNoteEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new UserProfileNote());
+        _repository.Create(Arg.Any<CreateUserProfileNoteEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new UserProfileNote())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateUserProfileNoteEntity>(0);
+                capturedEntity = e;
+            });
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "Note text" };
         await _service.UpsertNote(createNote);
@@ -189,14 +188,17 @@ public class UserProfileNoteServiceShould : UnitTestBase
     {
         var existingNote = new UserProfileNote { Id = _noteId };
 
-        _userRepository.Setup(r => r.FindUserIdAsync("Subject")).ReturnsAsync(_subjectUserId);
-        _repository.Setup(r => r.Get(_currentUserId, _subjectUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(existingNote);
+        _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
+        _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns(existingNote);
 
         UpdateUserProfileNoteEntity? capturedEntity = null;
-        _repository.Setup(r => r.Update(It.IsAny<UpdateUserProfileNoteEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<UpdateUserProfileNoteEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(existingNote);
+        _repository.Update(Arg.Any<UpdateUserProfileNoteEntity>(), Arg.Any<CancellationToken>())
+            .Returns(existingNote)
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdateUserProfileNoteEntity>(0);
+                capturedEntity = e;
+            });
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "Updated text" };
         await _service.UpsertNote(createNote);
@@ -212,20 +214,19 @@ public class UserProfileNoteServiceShould : UnitTestBase
     {
         var note = new UserProfileNote { Id = _noteId };
 
-        _userRepository.Setup(r => r.FindUserIdAsync("Subject")).ReturnsAsync(_subjectUserId);
-        _repository.Setup(r => r.Get(_currentUserId, _subjectUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(note);
+        _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
+        _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns(note);
 
         await _service.DeleteNote("Subject");
 
-        _repository.Verify(r => r.Delete(_noteId, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).Delete(_noteId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ThrowWhenDeletingNoteWithoutAuthentication()
     {
         var guestIdentity = Identities.Guest();
-        _identityProvider.Setup(p => p.Current).Returns(guestIdentity);
+        _identityProvider.Current.Returns(guestIdentity);
 
         var act = () => _service.DeleteNote("Subject");
 

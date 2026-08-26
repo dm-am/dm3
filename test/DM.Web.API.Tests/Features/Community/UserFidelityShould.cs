@@ -2,14 +2,13 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using AutoMapper;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Uploads;
 using DM.Testing;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.Configuration;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 using DomainUsernameHistoryEntry = DM.Domain.Core.Users.UsernameHistoryEntry;
 
@@ -47,23 +46,7 @@ public class UserFidelityShould : UnitTestBase
         "rating", "picture", "registeredUtc",
     };
 
-    private IMapper CreateMapper()
-    {
-        var imgproxy = Mock<IImgproxyUrlBuilder>();
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            // The running application sets this where the mapper is registered: a
-            // null source collection stays null instead of becoming an empty one.
-            // Without it the two lists below would arrive empty rather than
-            // absent, which is the very difference under test.
-            cfg.AllowNullCollections = true;
-            cfg.AddProfile<UserMappingProfile>();
-        });
-
-        return configuration.CreateMapper(type => type == typeof(AvatarPictureConverter)
-            ? new AvatarPictureConverter(imgproxy.Object)
-            : Activator.CreateInstance(type)!);
-    }
+    private UserMapper CreateMapper() => new(Mock<IImgproxyUrlBuilder>());
 
     /// <summary>
     /// A user exactly as a nested projection produces one: identity, the two
@@ -93,7 +76,7 @@ public class UserFidelityShould : UnitTestBase
     [Fact]
     public void OmitTheAggregatesTheProjectionNeverComputed()
     {
-        var wire = Wire(CreateMapper().Map<User>(Projection()));
+        var wire = Wire(CreateMapper().ToUser(Projection()));
 
         wire.Select(property => property.Key).Should().BeEquivalentTo(Projected,
             "a nested user may carry only what the query that fetched it filled");
@@ -118,7 +101,7 @@ public class UserFidelityShould : UnitTestBase
             },
         };
 
-        var wire = Wire(CreateMapper().Map<User>(hydrated));
+        var wire = Wire(CreateMapper().ToUser(hydrated));
 
         wire["bansReceived"]!.GetValue<int>().Should().Be(0,
             "a zero somebody counted is a fact about the user and has to be sent");

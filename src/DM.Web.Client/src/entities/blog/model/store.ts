@@ -5,7 +5,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { ListEnvelope } from "@/shared/api/models/common";
-import type { Blog, BlogRef } from "./types";
+import type { Blog, BlogRef, BlogStatus } from "./types";
 import blogApi from "../api/blogApi";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
 import { Api } from "@/shared/api";
@@ -21,8 +21,9 @@ import {
  */
 export interface BlogsSearchParams {
   search?: string;
-  status?: string;
-  /** Hosts filter - author OR assistant (OR logic) */
+  /** One status, the way the filter offers it; the wire takes a list. */
+  status?: BlogStatus;
+  /** Hosts filter - author (owner) OR assistant (OR logic) */
   hostUsernames?: string[];
   createdFromUtc?: string;
   createdToUtc?: string;

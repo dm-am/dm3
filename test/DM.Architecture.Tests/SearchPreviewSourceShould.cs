@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -80,7 +80,7 @@ public class SearchPreviewSourceShould
             .Select(match => match.Groups[1].Value)
             .ToList();
 
-        uses.Should().HaveCountGreaterOrEqualTo(4,
+        uses.Should().HaveCountGreaterThanOrEqualTo(4,
             "four bodies are indexed, and a use the walk cannot see is one it says nothing about");
         uses.Should().OnlyContain(column => column == "SearchText",
             "a vector over the body as written tokenises markup, and the words it finds are " +

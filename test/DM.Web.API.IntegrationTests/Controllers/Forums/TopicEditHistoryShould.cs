@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using DM.Infrastructure.Persistence.Entities.Forum;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 

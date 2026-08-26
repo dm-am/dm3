@@ -15,6 +15,9 @@ export * from "./message";
 // Shared ID types (for FSD compliance - shared modules use these instead of entity imports)
 export * from "./ids";
 
+// Quotation source (one shape for every surface that can be quoted)
+export * from "./quote";
+
 export type PagingInfo = {
   pages: number;
   current: number;

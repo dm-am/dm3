@@ -12,7 +12,7 @@ namespace DM.Domain.Core.Dto;
 /// <remarks>
 /// Used for passing user data between services internally.
 /// NOT exposed via API - use User, UserProfile, or PersonalProfile DTOs instead.
-/// Maps from the User entity via GeneralUserMappingProfile.
+/// Maps from the User entity via GeneralUserProjections.
 /// </remarks>
 public class GeneralUser : IUser
 {
@@ -38,8 +38,9 @@ public class GeneralUser : IUser
 
     /// <summary>
     /// Avatar variants (original/medium/small). SSOT — a nested object instead of
-    /// three flat properties. Populated via
-    /// <c>AvatarProjections.From(u.AvatarUpload)</c> in EF Selects.
+    /// three flat properties. Populated by the AvatarProjections formula:
+    /// spliced as an expression inside EF Selects, compiled (<c>From</c>) over
+    /// rows already in memory.
     /// </summary>
     public AvatarPicture Picture { get; set; } = new();
 

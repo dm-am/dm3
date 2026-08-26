@@ -1,34 +1,30 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using DM.Infrastructure.Persistence.Entities.Contracts;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using MongoDB.Bson.Serialization.Attributes;
 
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
 /// <summary>
 /// DAL model for poll
 /// </summary>
-[MongoCollectionName("Polls")]
+[Table("Polls")]
 public class Poll : IRemovable
 {
     /// <summary>
     /// Identifier
     /// </summary>
-    [BsonId]
-    public Guid Id { get; set; }
+    public Guid PollId { get; set; }
 
     /// <summary>
     /// Start moment (UTC)
     /// </summary>
-    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime StartsUtc { get; set; }
+    public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
     /// End moment (UTC)
     /// </summary>
-    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime EndsUtc { get; set; }
+    public DateTimeOffset EndsUtc { get; set; }
 
     /// <summary>
     /// Question text
@@ -59,13 +55,18 @@ public class Poll : IRemovable
 /// <summary>
 /// DAL model for poll option
 /// </summary>
+[Table("PollOptions")]
 public class PollOption
 {
     /// <summary>
     /// Identifier
     /// </summary>
-    [BsonId]
-    public Guid Id { get; set; }
+    public Guid PollOptionId { get; set; }
+
+    /// <summary>
+    /// Owning poll identifier
+    /// </summary>
+    public Guid PollId { get; set; }
 
     /// <summary>
     /// Answer text
@@ -73,7 +74,42 @@ public class PollOption
     public string Text { get; set; } = null!;
 
     /// <summary>
-    /// Voted users identifiers
+    /// Order index within the poll. The order used to be held by the position in
+    /// the document's array; a table needs it spelled out.
     /// </summary>
-    public List<Guid> UserIds { get; set; } = [];
+    public int Order { get; set; }
+
+    /// <summary>
+    /// Votes cast for this option
+    /// </summary>
+    public List<PollVote> Votes { get; set; } = [];
+}
+
+/// <summary>
+/// DAL model for one vote. The primary key (PollId, UserId) is the rule "one
+/// voter, one option": a second vote is refused by the key, not by a read
+/// before the write.
+/// </summary>
+[Table("PollVotes")]
+public class PollVote
+{
+    /// <summary>
+    /// Poll identifier, part of the primary key
+    /// </summary>
+    public Guid PollId { get; set; }
+
+    /// <summary>
+    /// Voter identifier, part of the primary key
+    /// </summary>
+    public Guid UserId { get; set; }
+
+    /// <summary>
+    /// Chosen option identifier
+    /// </summary>
+    public Guid PollOptionId { get; set; }
+
+    /// <summary>
+    /// Moment the vote was cast (UTC)
+    /// </summary>
+    public DateTimeOffset VotedUtc { get; set; }
 }

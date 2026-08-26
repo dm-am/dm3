@@ -71,7 +71,7 @@ function handleSortSelect(value: string, direction?: "asc" | "desc") {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Filters"
+@use "@/assets/styles/Filters" as *
 
 .testimonials-filter
   display: flex

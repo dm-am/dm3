@@ -16,20 +16,20 @@ using DM.Domain.Forum.Features.Likes;
 using DM.Domain.Forum.Features.Topics;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Forum.Tests.Features.Likes;
 
 public class TopicLikeServiceShould : UnitTestBase
 {
-    private readonly Mock<ITopicService> _topicService;
-    private readonly Mock<ITopicCommentService> _commentService;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<ILikeOperations> _likeOperations;
-    private readonly Mock<IUserBlacklistChecker> _blacklistChecker;
+    private readonly ITopicService _topicService;
+    private readonly ITopicCommentService _commentService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly ILikeOperations _likeOperations;
+    private readonly IUserBlacklistChecker _blacklistChecker;
     private readonly TopicLikeService _service;
 
     public TopicLikeServiceShould()
@@ -38,34 +38,27 @@ public class TopicLikeServiceShould : UnitTestBase
         _commentService = Mock<ITopicCommentService>();
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<TopicIntention>(), It.IsAny<Topic>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<CommentIntention>(), It.IsAny<Comment>()));
 
         var userId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
 
         _likeOperations = Mock<ILikeOperations>();
-        _likeOperations.Setup(o => o.LikeAsync(It.IsAny<Topic>(), It.IsAny<EventType>()))
-            .ReturnsAsync(new GeneralUser());
-        _likeOperations.Setup(o => o.LikeAsync(It.IsAny<Comment>(), It.IsAny<EventType>()))
-            .ReturnsAsync(new GeneralUser());
-        _likeOperations.Setup(o => o.UnlikeAsync(It.IsAny<Topic>()))
-            .Returns(Task.CompletedTask);
-        _likeOperations.Setup(o => o.UnlikeAsync(It.IsAny<Comment>()))
-            .Returns(Task.CompletedTask);
+        _likeOperations.LikeAsync(Arg.Any<Topic>(), Arg.Any<EventType>()).Returns(new GeneralUser());
+        _likeOperations.LikeAsync(Arg.Any<Comment>(), Arg.Any<EventType>()).Returns(new GeneralUser());
+        _likeOperations.UnlikeAsync(Arg.Any<Topic>()).Returns(Task.CompletedTask);
+        _likeOperations.UnlikeAsync(Arg.Any<Comment>()).Returns(Task.CompletedTask);
 
         _blacklistChecker = Mock<IUserBlacklistChecker>();
-        _blacklistChecker.Setup(c => c.IsBlockedAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+        _blacklistChecker.IsBlockedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
 
         _service = new TopicLikeService(
-            _topicService.Object,
-            _commentService.Object,
-            _intentionManager.Object,
-            _identityProvider.Object,
-            _likeOperations.Object,
-            _blacklistChecker.Object);
+            _topicService,
+            _commentService,
+            _intentionManager,
+            _identityProvider,
+            _likeOperations,
+            _blacklistChecker);
     }
 
     [Fact]
@@ -73,11 +66,11 @@ public class TopicLikeServiceShould : UnitTestBase
     {
         var topicId = Guid.NewGuid();
         var topic = new Topic { Id = topicId };
-        _topicService.Setup(s => s.GetAsync(topicId, It.IsAny<CancellationToken>())).ReturnsAsync(topic);
+        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
 
         await _service.LikeTopicAsync(topicId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(TopicIntention.Like, topic), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(TopicIntention.Like, topic);
     }
 
     [Fact]
@@ -86,14 +79,13 @@ public class TopicLikeServiceShould : UnitTestBase
         var topicId = Guid.NewGuid();
         var topic = new Topic { Id = topicId };
         var expectedUser = new GeneralUser { UserId = Guid.NewGuid(), Username = "User1" };
-        _topicService.Setup(s => s.GetAsync(topicId, It.IsAny<CancellationToken>())).ReturnsAsync(topic);
-        _likeOperations.Setup(o => o.LikeAsync(topic, EventType.LikedTopic))
-            .ReturnsAsync(expectedUser);
+        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
+        _likeOperations.LikeAsync(topic, EventType.LikedTopic).Returns(expectedUser);
 
         var result = await _service.LikeTopicAsync(topicId);
 
         result.Should().Be(expectedUser);
-        _likeOperations.Verify(o => o.LikeAsync(topic, EventType.LikedTopic), Times.Once);
+        await _likeOperations.Received(1).LikeAsync(topic, EventType.LikedTopic);
     }
 
     [Fact]
@@ -101,15 +93,14 @@ public class TopicLikeServiceShould : UnitTestBase
     {
         var topicId = Guid.NewGuid();
         var authorId = Guid.NewGuid();
-        var currentUserId = _identityProvider.Object.Current.User.UserId;
+        var currentUserId = _identityProvider.Current.User.UserId;
         var topic = new Topic
         {
             Id = topicId,
             Author = new GeneralUser { UserId = authorId }
         };
-        _topicService.Setup(s => s.GetAsync(topicId, It.IsAny<CancellationToken>())).ReturnsAsync(topic);
-        _blacklistChecker.Setup(c => c.IsBlockedAsync(authorId, currentUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
+        _blacklistChecker.IsBlockedAsync(authorId, currentUserId, Arg.Any<CancellationToken>()).Returns(true);
 
         var act = async () => await _service.LikeTopicAsync(topicId);
 
@@ -123,11 +114,11 @@ public class TopicLikeServiceShould : UnitTestBase
     {
         var commentId = Guid.NewGuid();
         var comment = new Comment { Id = commentId };
-        _commentService.Setup(s => s.GetAsync(commentId)).ReturnsAsync(comment);
+        _commentService.GetAsync(commentId).Returns(comment);
 
         await _service.LikeCommentAsync(commentId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(CommentIntention.Like, comment), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Like, comment);
     }
 
     [Fact]
@@ -136,14 +127,13 @@ public class TopicLikeServiceShould : UnitTestBase
         var commentId = Guid.NewGuid();
         var comment = new Comment { Id = commentId };
         var expectedUser = new GeneralUser { UserId = Guid.NewGuid(), Username = "User1" };
-        _commentService.Setup(s => s.GetAsync(commentId)).ReturnsAsync(comment);
-        _likeOperations.Setup(o => o.LikeAsync(comment, EventType.LikedTopicComment))
-            .ReturnsAsync(expectedUser);
+        _commentService.GetAsync(commentId).Returns(comment);
+        _likeOperations.LikeAsync(comment, EventType.LikedTopicComment).Returns(expectedUser);
 
         var result = await _service.LikeCommentAsync(commentId);
 
         result.Should().Be(expectedUser);
-        _likeOperations.Verify(o => o.LikeAsync(comment, EventType.LikedTopicComment), Times.Once);
+        await _likeOperations.Received(1).LikeAsync(comment, EventType.LikedTopicComment);
     }
 
     [Fact]
@@ -151,15 +141,14 @@ public class TopicLikeServiceShould : UnitTestBase
     {
         var commentId = Guid.NewGuid();
         var authorId = Guid.NewGuid();
-        var currentUserId = _identityProvider.Object.Current.User.UserId;
+        var currentUserId = _identityProvider.Current.User.UserId;
         var comment = new Comment
         {
             Id = commentId,
             Author = new GeneralUser { UserId = authorId }
         };
-        _commentService.Setup(s => s.GetAsync(commentId)).ReturnsAsync(comment);
-        _blacklistChecker.Setup(c => c.IsBlockedAsync(authorId, currentUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        _commentService.GetAsync(commentId).Returns(comment);
+        _blacklistChecker.IsBlockedAsync(authorId, currentUserId, Arg.Any<CancellationToken>()).Returns(true);
 
         var act = async () => await _service.LikeCommentAsync(commentId);
 
@@ -173,11 +162,11 @@ public class TopicLikeServiceShould : UnitTestBase
     {
         var topicId = Guid.NewGuid();
         var topic = new Topic { Id = topicId };
-        _topicService.Setup(s => s.GetAsync(topicId, It.IsAny<CancellationToken>())).ReturnsAsync(topic);
+        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
 
         await _service.UnlikeTopicAsync(topicId);
 
-        _likeOperations.Verify(o => o.UnlikeAsync(topic), Times.Once);
+        await _likeOperations.Received(1).UnlikeAsync(topic);
     }
 
     [Fact]
@@ -185,10 +174,10 @@ public class TopicLikeServiceShould : UnitTestBase
     {
         var commentId = Guid.NewGuid();
         var comment = new Comment { Id = commentId };
-        _commentService.Setup(s => s.GetAsync(commentId)).ReturnsAsync(comment);
+        _commentService.GetAsync(commentId).Returns(comment);
 
         await _service.UnlikeCommentAsync(commentId);
 
-        _likeOperations.Verify(o => o.UnlikeAsync(comment), Times.Once);
+        await _likeOperations.Received(1).UnlikeAsync(comment);
     }
 }

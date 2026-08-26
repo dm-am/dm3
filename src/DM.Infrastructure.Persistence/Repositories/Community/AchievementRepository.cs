@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Community.Features.Achievements;
 using DM.Domain.Core.Abstractions;
 using Microsoft.EntityFrameworkCore;
@@ -19,13 +17,11 @@ namespace DM.Infrastructure.Persistence.Repositories.Community;
 internal class AchievementRepository : IAchievementRepository
 {
     private readonly DmDbContext _db;
-    private readonly IMapper _mapper;
     private readonly IGuidFactory _guidFactory;
 
-    public AchievementRepository(DmDbContext db, IMapper mapper, IGuidFactory guidFactory)
+    public AchievementRepository(DmDbContext db, IGuidFactory guidFactory)
     {
         _db = db;
-        _mapper = mapper;
         _guidFactory = guidFactory;
     }
 
@@ -37,7 +33,7 @@ internal class AchievementRepository : IAchievementRepository
         if (!includeInactive) query = query.Where(c => c.IsActive);
         return await query
             .OrderBy(c => c.SortOrder)
-            .ProjectTo<AchievementCategory>(_mapper.ConfigurationProvider)
+            .ProjectToCategory()
             .ToListAsync(ct);
     }
 
@@ -45,7 +41,7 @@ internal class AchievementRepository : IAchievementRepository
         await _db.AchievementCategories
             .AsNoTracking()
             .Where(c => c.AchievementCategoryId == id)
-            .ProjectTo<AchievementCategory>(_mapper.ConfigurationProvider)
+            .ProjectToCategory()
             .FirstOrDefaultAsync(ct);
 
     public async Task<AchievementCategory> UpdateCategoryAsync(UpdateAchievementCategory update, CancellationToken ct = default)
@@ -57,7 +53,7 @@ internal class AchievementRepository : IAchievementRepository
         if (update.SortOrder.HasValue) entity.SortOrder = update.SortOrder.Value;
         if (update.IsActive.HasValue) entity.IsActive = update.IsActive.Value;
         await _db.SaveChangesAsync(ct);
-        return _mapper.Map<AchievementCategory>(entity);
+        return entity.ToCategory();
     }
 
     // ---- Tiers ----
@@ -74,7 +70,7 @@ internal class AchievementRepository : IAchievementRepository
         return await query
             .OrderBy(t => t.Category.SortOrder)
             .ThenBy(t => t.Threshold)
-            .ProjectTo<AchievementType>(_mapper.ConfigurationProvider)
+            .ProjectToType()
             .ToListAsync(ct);
     }
 
@@ -82,14 +78,14 @@ internal class AchievementRepository : IAchievementRepository
         await _db.AchievementTypes
             .AsNoTracking()
             .Where(t => t.AchievementTypeId == id)
-            .ProjectTo<AchievementType>(_mapper.ConfigurationProvider)
+            .ProjectToType()
             .FirstOrDefaultAsync(ct);
 
     public async Task<AchievementType?> GetTypeByCodeAsync(string code, CancellationToken ct = default) =>
         await _db.AchievementTypes
             .AsNoTracking()
             .Where(t => t.Code == code)
-            .ProjectTo<AchievementType>(_mapper.ConfigurationProvider)
+            .ProjectToType()
             .FirstOrDefaultAsync(ct);
 
     public async Task<AchievementType> CreateTypeAsync(CreateAchievementType create, CancellationToken ct = default)
@@ -133,7 +129,7 @@ internal class AchievementRepository : IAchievementRepository
             .AsNoTracking()
             .Where(a => a.UserId == userId)
             .OrderByDescending(a => a.EarnedUtc)
-            .ProjectTo<UserAchievement>(_mapper.ConfigurationProvider)
+            .ProjectToUserAchievement()
             .ToListAsync(ct);
 
     public async Task<bool> TryGrantAsync(Guid userId, Guid achievementTypeId, DateTimeOffset earnedUtc, CancellationToken ct = default)

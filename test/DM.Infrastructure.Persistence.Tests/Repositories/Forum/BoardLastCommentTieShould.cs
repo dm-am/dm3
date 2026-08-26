@@ -1,10 +1,9 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Repositories.Forum;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbBoard = DM.Infrastructure.Persistence.Entities.Forum.Board;
@@ -47,9 +46,6 @@ public class BoardLastCommentTieShould
 
     /// <summary>The one second both comments were posted in.</summary>
     private static readonly DateTimeOffset Tie = new(2026, 5, 1, 18, 30, 0, TimeSpan.Zero);
-
-    private static readonly IMapper Mapper = new MapperConfiguration(cfg =>
-        cfg.AddProfile<BoardMappingProfile>()).CreateMapper();
 
     private static DbComment NewComment(Guid id) => new()
     {
@@ -108,7 +104,7 @@ public class BoardLastCommentTieShould
     private static async Task<Guid?> LastCommentIdAsync(params Guid[] commentIds)
     {
         using var context = Seeded(commentIds);
-        var boards = await new BoardRepository(context, Mapper.ConfigurationProvider).SelectBoards(null);
+        var boards = await new BoardRepository(context).SelectBoards(null);
         return boards.Single().LastComment?.Id;
     }
 
@@ -149,7 +145,7 @@ public class BoardLastCommentTieShould
         context.Comments.Add(newest);
         await context.SaveChangesAsync();
 
-        var boards = await new BoardRepository(context, Mapper.ConfigurationProvider).SelectBoards(null);
+        var boards = await new BoardRepository(context).SelectBoards(null);
 
         boards.Single().LastComment!.Id.Should().Be(EarlierId,
             "time decides first, and the identifier only speaks when time has nothing to say");

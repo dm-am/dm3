@@ -1,9 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -35,18 +34,7 @@ public class CacheKeyOwnershipShould
     /// </summary>
     private static readonly Regex KeyLiteral = new(@"\$""(?<prefix>[a-z][a-z0-9]*(?:_[a-z0-9]+)*_)\{", RegexOptions.Compiled);
 
-    private static string SourceRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "DM.sln")))
-        {
-            directory = directory.Parent;
-        }
-
-        return Path.Combine(
-            directory?.FullName ?? throw new InvalidOperationException("DM.sln not found above the test binaries"),
-            "src");
-    }
+    private static string SourceRoot() => Path.Combine(DM.Testing.RepositoryLayout.Root, "src");
 
     [Fact]
     public void SpellEveryCacheKeyInExactlyOnePlace()

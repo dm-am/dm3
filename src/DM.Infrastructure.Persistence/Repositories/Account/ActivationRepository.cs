@@ -3,12 +3,12 @@ using DM.Domain.Core.Tokens;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Account.Features.Registration;
 using DM.Domain.Core.Identity;
 using Microsoft.EntityFrameworkCore;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
+
+using DM.Infrastructure.Persistence.Shared.Users;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
@@ -18,12 +18,10 @@ namespace DM.Infrastructure.Persistence.Repositories.Account;
 internal class ActivationRepository : IActivationRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
-    public ActivationRepository(DmDbContext dbContext, IMapper mapper)
+    public ActivationRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -111,7 +109,7 @@ internal class ActivationRepository : IActivationRepository
     {
         return await _dbContext.Users
             .Where(u => u.Email.ToLower() == email.ToLower())
-            .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
+            .ProjectToAuthenticatedUser()
             .FirstOrDefaultAsync(cancellationToken);
     }
 }

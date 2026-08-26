@@ -1,13 +1,11 @@
 using System;
 using System.Linq;
 using System.Reflection;
-using Autofac;
-using Autofac.Extensions.DependencyInjection;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Forum.Features.Topics;
 using DM.Infrastructure.Persistence;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -15,36 +13,33 @@ using Xunit;
 namespace DM.Web.API.Tests.Features.General;
 
 /// <summary>
-/// Guards the DbContext scope contract against the Autofac scan regression:
-/// AddDbContextPool registers DmDbContext as a scoped service via Populate,
-/// while PersistenceModule's blanket RegisterDefaultTypes scan also catches
-/// the class. Autofac modules are applied AFTER Populate, so without
-/// PreserveExistingDefaults on the scan the pooled scoped registration was
-/// silently replaced with per-dependency construction: every consumer (each
-/// repository, each GetRequiredService call) received its own context,
-/// transactions never spanned service and repository, and identity
-/// resolution hid other consumers' writes.
+/// Guards the DbContext scope contract against the scan-shadowing regression:
+/// AddDbContextPool registers DmDbContext as a scoped service, while the
+/// persistence module's blanket AddDefaultTypes scan sweeps the same assembly.
+/// Under Autofac the scan once silently replaced the pooled scoped registration
+/// with per-dependency construction: every consumer (each repository, each
+/// GetRequiredService call) received its own context, transactions never
+/// spanned service and repository, and identity resolution hid other consumers'
+/// writes. The MS.DI scan refuses DbContext descendants outright; this holds it
+/// to that.
 /// </summary>
 public class DbContextScopeResolutionShould : UnitTestBase, IDisposable
 {
-    private readonly AutofacServiceProvider _provider;
+    private readonly ServiceProvider _provider;
 
     public DbContextScopeResolutionShould()
     {
-        // The real production wiring shape: MS.DI pool registration first
-        // (Populate), PersistenceModule after — exactly like
-        // AutofacServiceProviderFactory does for DM.Web.API.
+        // The real production wiring shape: the pool registration first, the
+        // module after - exactly the order Startup composes them in.
         var services = new ServiceCollection();
         services.AddDbContextPool<DmDbContext>(options =>
             options.UseNpgsql("Host=localhost;Database=di-probe;Username=probe;Password=probe"));
+        services.AddDmPersistence();
+        services.AddSingleton<IGuidFactory>(Mock<IGuidFactory>());
+        services.AddSingleton<IDateTimeProvider>(Mock<IDateTimeProvider>());
 
-        var builder = new ContainerBuilder();
-        builder.Populate(services);
-        builder.RegisterModule<PersistenceModule>();
-        builder.RegisterInstance(Mock<IGuidFactory>().Object).As<IGuidFactory>();
-        builder.RegisterInstance(Mock<IDateTimeProvider>().Object).As<IDateTimeProvider>();
-
-        _provider = new AutofacServiceProvider(builder.Build());
+        _provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateScopes = true });
     }
 
     [Fact]
@@ -95,6 +90,22 @@ public class DbContextScopeResolutionShould : UnitTestBase, IDisposable
         context.ContextId.Lease.Should().BePositive(
             "AddDbContextPool must actually engage the pool — a zero lease means " +
             "the instance was constructed outside of it");
+    }
+
+    /// <summary>
+    /// The scan itself keeps its hands off the context: no descriptor of the
+    /// module's making names DmDbContext, so nothing can outrank the pool.
+    /// </summary>
+    [Fact]
+    public void LeaveTheContextRegistrationToThePoolAlone()
+    {
+        var services = new ServiceCollection();
+        services.AddDmPersistence();
+
+        services.Where(descriptor => descriptor.ServiceType == typeof(DmDbContext))
+            .Should().BeEmpty(
+                "the blanket scan must refuse DbContext descendants - a scanned " +
+                "registration after the pool's would silently replace it");
     }
 
     /// <summary>

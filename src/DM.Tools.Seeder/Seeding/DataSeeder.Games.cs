@@ -1,50 +1,20 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using DM.Domain.Account.Features.Security;
-using DM.Domain.Community.Features.Polls;
-using DM.Domain.Core.Dto;
-using DM.Domain.Core.Identity;
-using DM.Domain.Personal.Features.Profiles;
-using DM.Domain.Personal.Authorization;
-using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Uploads;
-using DM.Infrastructure.Core.Storage;
-using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.RelationalStorage;
-using DM.Infrastructure.Persistence.Entities.Blog;
-using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DM.Infrastructure.Persistence.Entities.Messaging;
-using DM.Infrastructure.Persistence.Entities.Moderation;
 using DM.Infrastructure.Persistence.Entities.Personal.Notepads;
 using DM.Infrastructure.Persistence.Entities.Shared;
-using DM.Infrastructure.Persistence.Entities.Community;
 using DM.Infrastructure.Persistence.Entities.Subscriptions;
-using Microsoft.Extensions.Options;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
-using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
-using DbAttributeSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
-using DbStringConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.StringAttributeConstraints;
-using DbBbCodeConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.BbCodeAttributeConstraints;
-using DbListConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeConstraints;
-using DbListValueKind = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListValueKind;
-using DbListAttributeValue = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeValue;
-using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
-using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
-using DbUsernameHistory = DM.Infrastructure.Persistence.Entities.Account.UsernameHistory;
-using DbUserContact = DM.Infrastructure.Persistence.Entities.Account.UserContact;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Tools.Seeder.Seeding;
@@ -743,23 +713,8 @@ internal sealed partial class DataSeeder
             }
 
             // Create NPC
-            var npc = new Character
-            {
-                CharacterId = _guidFactory.Create(),
-                GameId = game.GameId,
-                AuthorId = null,
-                Status = CharacterStatus.Active,
-                CreatedUtc = game.CreatedUtc,
-                Name = "Таинственный Незнакомец",
-                IsNpc = true,
-                AccessPolicy = CharacterAccessPolicy.NoAccess,
-                IsRemoved = false
-            };
-            _dbContext.Set<Character>().Add(npc);
-            AddLegacyCharacterAttributes(npc.CharacterId,
-                race: "Неизвестно", @class: "Неизвестно", appearance: "Фигура, скрытая тенью.");
+            var npc = AddMysteriousStranger(game, result);
             createdCharacters.Add(npc);
-            result.CharactersCreated++;
 
             // Create posts in rooms - use variation count
             var activeCharacters = createdCharacters.Where(c => c.Status == CharacterStatus.Active && !c.IsNpc).ToList();
@@ -881,14 +836,12 @@ internal sealed partial class DataSeeder
                     // Add dice rolls for the large Diopside post
                     if (useLargePost)
                     {
-                        var diceCollection = _mongoClient.GetCollection<DiceRoll>();
-                        var diceRolls = new[]
-                        {
+                        _dbContext.DiceRolls.AddRange(
                             new DiceRoll
                             {
-                                Id = _guidFactory.Create(),
+                                DiceRollId = _guidFactory.Create(),
                                 PostId = post.PostId,
-                                CreatedUtc = post.CreatedUtc.UtcDateTime,
+                                CreatedUtc = post.CreatedUtc,
                                 DiceCount = 1,
                                 EdgesCount = 20,
                                 Bonus = 7,
@@ -897,17 +850,15 @@ internal sealed partial class DataSeeder
                             },
                             new DiceRoll
                             {
-                                Id = _guidFactory.Create(),
+                                DiceRollId = _guidFactory.Create(),
                                 PostId = post.PostId,
-                                CreatedUtc = post.CreatedUtc.UtcDateTime.AddSeconds(1),
+                                CreatedUtc = post.CreatedUtc.AddSeconds(1),
                                 DiceCount = 1,
                                 EdgesCount = 20,
                                 Bonus = 5,
                                 Comment = "Убеждение",
                                 Result = [new RollResult { Value = 14, IsCritical = false, IsExploded = false }]
-                            }
-                        };
-                        await diceCollection.InsertManyAsync(diceRolls);
+                            });
                     }
 
                     // Add edit history for ~10% of posts (including the large Diopside post)
@@ -963,8 +914,7 @@ internal sealed partial class DataSeeder
                 // sees the (N) unread badge instead of a silent zero.
                 if (postsToCreate > 0)
                 {
-                    var unreadCounters = _mongoClient.GetCollection<UnreadCounter>();
-                    await unreadCounters.InsertOneAsync(new UnreadCounter
+                    _dbContext.UnreadCounters.Add(new UnreadCounter
                     {
                         UserId = Guid.Empty,
                         EntityId = mainRoom.RoomId,

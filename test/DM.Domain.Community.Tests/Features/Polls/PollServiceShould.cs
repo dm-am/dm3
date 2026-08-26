@@ -6,68 +6,55 @@ using DM.Domain.Account.Features.Identity;
 using DM.Domain.Core.Identity;
 using DM.Domain.Community.Authorization;
 using DM.Domain.Community.Features.Polls;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
-using Moq.Language.Flow;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Polls;
 
 public class PollServiceShould : UnitTestBase
 {
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly ISetup<IPollFactory, CreatePollEntity> _createPollSetup;
-    private readonly Mock<IPollRepository> _repository;
-    private readonly ISetup<IPollRepository, Task<Poll>> _savePollSetup;
-    private readonly Mock<IEventProducer> _producer;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IPollFactory _factory;
+    private readonly IPollRepository _repository;
+    private readonly IEventProducer _producer;
     private readonly PollService _service;
 
     public PollServiceShould()
     {
         var validator = Mock<IValidator<CreatePoll>>();
         validator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreatePoll>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreatePoll>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<PollIntention>()));
-
-        var factory = Mock<IPollFactory>();
-        _createPollSetup = factory.Setup(f => f.Create(It.IsAny<CreatePoll>()));
-
+        _factory = Mock<IPollFactory>();
         _repository = Mock<IPollRepository>();
-        _savePollSetup = _repository.Setup(r => r.Create(It.IsAny<CreatePollEntity>()));
-
         _producer = Mock<IEventProducer>();
-        _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
-
-        var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        identityProvider.Current.Returns(Identity.Guest());
 
         var updateValidator = Mock<IValidator<UpdatePoll>>();
         updateValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdatePoll>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<UpdatePoll>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _service = new PollService(
-            validator.Object,
-            updateValidator.Object,
-            _intentionManager.Object,
-            factory.Object,
-            _repository.Object,
-            _producer.Object,
-            dateTimeProvider.Object,
-            identityProvider.Object);
+            validator,
+            updateValidator,
+            _intentionManager,
+            _factory,
+            _repository,
+            _producer,
+            identityProvider);
     }
 
     [Fact]
@@ -75,12 +62,12 @@ public class PollServiceShould : UnitTestBase
     {
         var createPoll = new CreatePoll { Title = "Test Poll" };
         var pollEntity = new CreatePollEntity();
-        _createPollSetup.Returns(pollEntity);
-        _savePollSetup.ReturnsAsync(new Poll());
+        _factory.Create(Arg.Any<CreatePoll>()).Returns(pollEntity);
+        _repository.Create(Arg.Any<CreatePollEntity>()).Returns(new Poll());
 
         await _service.CreateAsync(createPoll);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(PollIntention.Create));
+        _intentionManager.Received(1).ThrowIfForbidden(PollIntention.Create);
     }
 
     [Fact]
@@ -88,14 +75,14 @@ public class PollServiceShould : UnitTestBase
     {
         var createPoll = new CreatePoll { Title = "Test Poll" };
         var pollEntity = new CreatePollEntity();
-        _createPollSetup.Returns(pollEntity);
+        _factory.Create(Arg.Any<CreatePoll>()).Returns(pollEntity);
         var expected = new Poll();
-        _savePollSetup.ReturnsAsync(expected);
+        _repository.Create(Arg.Any<CreatePollEntity>()).Returns(expected);
 
         var actual = await _service.CreateAsync(createPoll);
 
         actual.Should().Be(expected);
-        _repository.Verify(r => r.Create(pollEntity), Times.Once);
+        await _repository.Received(1).Create(pollEntity);
     }
 
     [Fact]
@@ -104,12 +91,12 @@ public class PollServiceShould : UnitTestBase
         var createPoll = new CreatePoll { Title = "Test Poll" };
         var pollId = Guid.NewGuid();
         var pollEntity = new CreatePollEntity();
-        _createPollSetup.Returns(pollEntity);
-        _savePollSetup.ReturnsAsync(new Poll { Id = pollId });
+        _factory.Create(Arg.Any<CreatePoll>()).Returns(pollEntity);
+        _repository.Create(Arg.Any<CreatePollEntity>()).Returns(new Poll { Id = pollId });
 
         await _service.CreateAsync(createPoll);
 
-        _producer.Verify(p => p.SendAsync(EventType.NewPoll, pollId), Times.Once);
+        await _producer.Received(1).SendAsync(EventType.NewPoll, pollId);
     }
 
     [Fact]
@@ -118,14 +105,13 @@ public class PollServiceShould : UnitTestBase
         var pollId = Guid.NewGuid();
         var optionId = Guid.NewGuid();
         var poll = new Poll { Id = pollId };
-        _repository.Setup(r => r.Get(pollId)).ReturnsAsync(poll);
-        _repository.Setup(r => r.Vote(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>()))
-            .ReturnsAsync(poll);
+        _repository.Get(pollId).Returns(poll);
+        _repository.Vote(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>()).Returns(poll);
 
         (Poll, Guid)? capturedArg = null;
         _intentionManager
-            .Setup(m => m.ThrowIfForbidden(It.IsAny<PollIntention>(), It.IsAny<(Poll, Guid)>()))
-            .Callback<PollIntention, (Poll, Guid)>((_, arg) => capturedArg = arg);
+            .When(m => m.ThrowIfForbidden(Arg.Any<PollIntention>(), Arg.Any<(Poll, Guid)>()))
+            .Do(ci => capturedArg = ci.ArgAt<(Poll, Guid)>(1));
 
         await _service.VoteAsync(pollId, optionId);
 

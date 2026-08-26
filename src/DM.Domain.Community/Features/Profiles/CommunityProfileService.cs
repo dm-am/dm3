@@ -41,9 +41,8 @@ internal class CommunityProfileService : ICommunityProfileService
     /// <inheritdoc />
     public async Task<UserDetails> GetProfile(string username)
     {
-        var normalizedUsername = username.ToLowerInvariant();
         var user = await _cache.GetOrCreateAsync(
-            CacheKeys.UserDetails(normalizedUsername),
+            CacheKeys.UserDetails(username),
             () => _userRepository.GetUserDetailsAsync(username),
             CachePolicy.Medium);
 

@@ -4,7 +4,7 @@
 
 /**
  * PATTERNS.md says the layer rules are checked by the linter and not on review,
- * and `.eslintrc.cjs` repeats it on its seventh line: "this config is that
+ * and `eslint.config.js` repeats it over the layer list: "this config is that
  * document, enforced". Half of it was not. Direction was enforced and the `@x`
  * door was enforced, but the barrel was not: a page could import
  * `@/entities/game/model/store` and both CI gates stayed green, while a reviewer
@@ -25,7 +25,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { createRequire } from "module";
 import { dirname, join, relative, resolve } from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 /** Every .ts/.vue under a directory, node_modules and build output aside. */
 function sources(dir: string, out: string[] = []): string[] {
@@ -45,11 +45,16 @@ function sources(dir: string, out: string[] = []): string[] {
 const HERE = dirname(fileURLToPath(import.meta.url));
 // src -> DM.Web.Client
 const CLIENT_ROOT = resolve(HERE, "..");
-const CONFIG = join(CLIENT_ROOT, ".eslintrc.cjs");
+const CONFIG = join(CLIENT_ROOT, "eslint.config.js");
 
 const requireFromConfig = createRequire(CONFIG);
 
-interface EslintConfigShape {
+interface FlatConfigBlock {
+  settings?: Record<string, unknown>;
+  rules?: Record<string, unknown>;
+}
+
+interface BoundariesBlock {
   settings: Record<string, unknown>;
   rules: Record<string, unknown>;
 }
@@ -60,7 +65,6 @@ interface LintMessage {
 }
 
 interface LinterLike {
-  defineRules(rules: Record<string, unknown>): void;
   verify(
     code: string,
     config: unknown,
@@ -69,28 +73,29 @@ interface LinterLike {
 }
 
 /**
- * The config, evaluated rather than parsed.
- *
- * The one thing not run is the @rushstack module-resolution patch on its first
- * line: that patch walks the require stack looking for ESLint's own loader and
- * throws when the caller is anything else. It only widens where plugin packages
- * may live, and nothing asserted below depends on that.
+ * The config, evaluated rather than parsed. Flat config is an ES module whose
+ * default export is the finished array of blocks, so it is imported and the one
+ * block that carries the boundaries settings is picked out of it. Nothing below
+ * restates a rule; if that block ever splits in two, this throws rather than
+ * quietly lints against half a config.
  */
-function loadEslintConfig(): EslintConfigShape {
-  const shimmedRequire = (id: string): unknown =>
-    id.startsWith("@rushstack/eslint-patch") ? {} : requireFromConfig(id);
-  const shell = { exports: {} as Record<string, unknown> };
-  new Function(
-    "require",
-    "module",
-    "exports",
-    "__dirname",
-    readFileSync(CONFIG, "utf8"),
-  )(shimmedRequire, shell, shell.exports, CLIENT_ROOT);
-  return shell.exports as unknown as EslintConfigShape;
+const blocks = (
+  (await import(pathToFileURL(CONFIG).href)) as { default: FlatConfigBlock[] }
+).default;
+
+function boundariesBlock(all: FlatConfigBlock[]): BoundariesBlock {
+  const block = all.find(
+    (candidate) => candidate.settings?.["boundaries/elements"] !== undefined,
+  );
+  if (!block?.settings || !block.rules?.["boundaries/dependencies"]) {
+    throw new Error(
+      "eslint.config.js has no single block carrying both the boundaries settings and the boundaries/dependencies rule: this file would be linting against something other than the config CI runs.",
+    );
+  }
+  return { settings: block.settings, rules: block.rules };
 }
 
-const config = loadEslintConfig();
+const config = boundariesBlock(blocks);
 
 const { Linter } = requireFromConfig("eslint") as {
   Linter: new (options?: { cwd?: string }) => LinterLike;
@@ -100,27 +105,27 @@ const boundaries = requireFromConfig("eslint-plugin-boundaries") as {
 };
 
 const linter = new Linter({ cwd: CLIENT_ROOT });
-linter.defineRules(
-  Object.fromEntries(
-    Object.entries(boundaries.rules).map(([name, rule]) => [
-      `boundaries/${name}`,
-      rule,
-    ]),
-  ),
-);
 
 /** What the real rule says about one import from one place. */
 function refusals(file: string, specifier: string): LintMessage[] {
   return linter
     .verify(
       `import x from "${specifier}";\nexport default x;\n`,
-      {
-        parserOptions: { ecmaVersion: "latest", sourceType: "module" },
-        settings: config.settings,
-        rules: {
-          "boundaries/dependencies": config.rules["boundaries/dependencies"],
+      [
+        {
+          // Flat config decides by pattern, and a block that matches nothing
+          // makes the Linter answer "no matching configuration found" instead
+          // of running the rule — a warning with no ruleId, which the filter
+          // below would drop as silently as a clean file.
+          files: ["**/*.ts", "**/*.vue"],
+          plugins: { boundaries },
+          languageOptions: { ecmaVersion: "latest", sourceType: "module" },
+          settings: config.settings,
+          rules: {
+            "boundaries/dependencies": config.rules["boundaries/dependencies"],
+          },
         },
-      },
+      ],
       { filename: join(CLIENT_ROOT, file) },
     )
     .filter((message) => message.ruleId === "boundaries/dependencies");
@@ -275,7 +280,7 @@ describe("global component registration", () => {
 
     expect(
       registered.length,
-      "no registration call was found: this check and the whitelist .eslintrc.cjs derives from the same file would both be reading nothing",
+      "no registration call was found: this check and the whitelist eslint.config.js derives from the same file would both be reading nothing",
     ).toBeGreaterThan(0);
 
     expect(

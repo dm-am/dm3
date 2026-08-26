@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
@@ -8,23 +9,22 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Tokens;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Persistence.Entities.Account.Settings;
-using DM.Infrastructure.Persistence.MongoIntegration;
+using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Shared.Tokens;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
-using TokenEntity = DM.Infrastructure.Persistence.Entities.Account.Token;
+using Microsoft.EntityFrameworkCore.Query;
 
 namespace DM.Infrastructure.Persistence.Repositories.Personal;
 
 /// <inheritdoc />
-internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBotLinkRepository
+internal class BotLinkRepository : IBotLinkRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public BotLinkRepository(
         DmDbContext dbContext,
-        DmMongoClient mongoClient,
-        IDateTimeProvider dateTimeProvider) : base(mongoClient)
+        IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
@@ -33,16 +33,7 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
     /// <inheritdoc />
     public async Task CreateLinkToken(CreateToken tokenDto, CancellationToken ct = default)
     {
-        var tokenEntity = new TokenEntity
-        {
-            TokenId = tokenDto.TokenId,
-            UserId = tokenDto.UserId,
-            EntityId = tokenDto.EntityId,
-            CreatedUtc = tokenDto.CreatedUtc,
-            Type = tokenDto.Type,
-            CreatorId = tokenDto.CreatorId,
-            IsRemoved = false
-        };
+        var tokenEntity = TokenRows.From(tokenDto);
         _dbContext.Tokens.Add(tokenEntity);
         await _dbContext.SaveChangesAsync(ct);
     }
@@ -143,24 +134,30 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
     /// <inheritdoc />
     public async Task ClearChannelPreferences(Guid userId, string channelType, CancellationToken ct = default)
     {
-        var filter = Filter.Eq(u => u.UserId, userId);
-        var update = channelType.ToLowerInvariant() switch
-        {
-            "discord" => UpdateBuilder.Set(s => s.DiscordPreferences, null),
-            "telegram" => UpdateBuilder.Set(s => s.TelegramPreferences, null),
-            _ => throw new ArgumentException($"Invalid channel type: {channelType}")
-        };
+        // The switch picks the column setter, the single statement below does
+        // the one write: one UPDATE per call whichever channel it is.
+        Action<UpdateSettersBuilder<UserSettings>> clear =
+            channelType.ToLowerInvariant() switch
+            {
+                "discord" => s => s.SetProperty(
+                    x => x.DiscordPreferences, (NotificationChannelPreference?)null),
+                "telegram" => s => s.SetProperty(
+                    x => x.TelegramPreferences, (NotificationChannelPreference?)null),
+                _ => throw new ArgumentException($"Invalid channel type: {channelType}")
+            };
 
-        await Collection.UpdateOneAsync(filter, update, cancellationToken: ct);
+        await _dbContext.UserSettings
+            .Where(s => s.UserId == userId)
+            .ExecuteUpdateAsync(clear, ct);
     }
 
     /// <inheritdoc />
     public async Task<BotChannelPreferences> GetChannelPreferences(
         Guid userId, CancellationToken ct = default)
     {
-        var settings = await Collection
-            .Find(Filter.Eq(u => u.UserId, userId))
-            .FirstOrDefaultAsync(ct);
+        var settings = await _dbContext.UserSettings
+            .TagWith("DM.BotLink.ChannelPreferences")
+            .FirstOrDefaultAsync(s => s.UserId == userId, ct);
 
         return new BotChannelPreferences(
             ToDomain(settings?.DiscordPreferences),
@@ -180,44 +177,55 @@ internal class BotLinkRepository : MongoCollectionRepository<UserSettings>, IBot
         }, ct);
 
     /// <summary>
-    /// Writes one channel's preference, creating the settings document if the
-    /// user has none.
+    /// Writes one channel's preference, creating the settings row if the user
+    /// has none.
     /// </summary>
     /// <remarks>
-    /// Upsert with the defaults, and one method rather than two. A reader who
-    /// never opened the settings page has no document, and an update that matches
-    /// nothing writes nothing, so the preference was silently dropped. Reading
-    /// first and inserting on null is the other half of the same defect: it is
-    /// not atomic, IX_UserSettings_UserId is unique, and the loser of that race
+    /// One atomic INSERT ... ON CONFLICT, and one method rather than two. A
+    /// reader who never opened the settings page has no row, and an update that
+    /// matches nothing writes nothing, so the preference was silently dropped.
+    /// Reading first and inserting on null is the other half of the same
+    /// defect: it is not atomic, the key is unique, and the loser of that race
     /// got a duplicate key error instead of the write it asked for. The rest of
-    /// the document has to be the default rather than empty, because a document
-    /// without paging answers 500 on the next read of any list.
+    /// a fresh row is the defaults — only the insert branch writes them, the
+    /// update branch touches nothing but this channel's column.
     /// </remarks>
-    /// <param name="userId">Owner of the settings document.</param>
+    /// <param name="userId">Owner of the settings row.</param>
     /// <param name="channelType">Channel the preference belongs to.</param>
     /// <param name="preference">Preference to store.</param>
     /// <param name="ct">Cancellation token.</param>
-    private Task UpsertChannelPreference(
+    private async Task UpsertChannelPreference(
         Guid userId,
         string channelType,
         NotificationChannelPreference preference,
         CancellationToken ct)
     {
-        var update = channelType.ToLowerInvariant() switch
+        var column = channelType.ToLowerInvariant() switch
         {
-            "discord" => UpdateBuilder.Set(s => s.DiscordPreferences, preference),
-            "telegram" => UpdateBuilder.Set(s => s.TelegramPreferences, preference),
+            "discord" => "DiscordPreferences",
+            "telegram" => "TelegramPreferences",
             _ => throw new ArgumentException($"Invalid channel type: {channelType}")
         };
 
         var defaults = UserSettings.CreateDefault(userId);
-        return Collection.UpdateOneAsync(
-            Filter.Eq(u => u.UserId, userId),
-            UpdateBuilder.Combine(
-                update,
-                UpdateBuilder.SetOnInsert(s => s.Theme, defaults.Theme),
-                UpdateBuilder.SetOnInsert(s => s.Paging, defaults.Paging)),
-            new UpdateOptions { IsUpsert = true },
+        var json = JsonSerializer.Serialize(preference, JsonColumn.Options);
+
+        // The column name comes from the two-armed switch above, never from the
+        // caller's string; the values travel as parameters — which is why raw
+        // SQL is sound here.
+        var statement = $$"""
+            INSERT INTO "UserSettings"
+                ("UserId", "Theme", "TopicsPerPage", "CommentsPerPage", "PostsPerPage",
+                 "MessagesPerPage", "EntitiesPerPage", "{{column}}")
+            VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}::jsonb)
+            ON CONFLICT ("UserId") DO UPDATE SET "{{column}}" = {7}::jsonb
+            """;
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            statement,
+            [
+                userId, (int)defaults.Theme, defaults.TopicsPerPage, defaults.CommentsPerPage,
+                defaults.PostsPerPage, defaults.MessagesPerPage, defaults.EntitiesPerPage, json
+            ],
             ct);
     }
 

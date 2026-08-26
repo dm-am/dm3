@@ -11,33 +11,16 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import {
   ticketApi,
+  TICKET_STATUS_LABELS,
+  TICKET_SUBTYPE_LABELS,
   type TrackedTicket,
   type TicketStatus,
-  type TicketSubtype,
 } from "@/entities/ticket";
 import { LeadText, SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 
 const route = useRoute();
-
-// Labels mirror the backend enum Descriptions (TicketSubtype/TicketStatus)
-const SUBTYPE_LABELS: Record<TicketSubtype, string> = {
-  UserComplaint: "Жалоба на пользователя",
-  ModeratorDecisionComplaint: "Жалоба на решение младшего модератора",
-  SeniorModeratorDecisionComplaint: "Жалоба на решение старшего модератора",
-  SiteImprovementSuggestion: "Предложение по улучшению сайта",
-  Bug: "Ошибка",
-  AccessRecovery: "Восстановление доступа",
-  RegistrationIssue: "Проблемы с регистрацией",
-};
-
-const STATUS_LABELS: Record<TicketStatus, string> = {
-  WaitingForModeration: "Ожидает ответа модерации",
-  WaitingForUser: "Ожидает ответа пользователя",
-  Closed: "Закрыто",
-  Spam: "Спам",
-};
 
 // Status color contract from doc 4.2.2.23: green / normal / gray / red
 const STATUS_CLASSES: Record<TicketStatus, string> = {
@@ -85,7 +68,7 @@ watch(token, fetch);
 const subject = computed(
   () =>
     ticket.value &&
-    (ticket.value.subject || SUBTYPE_LABELS[ticket.value.subtype]),
+    (ticket.value.subject || TICKET_SUBTYPE_LABELS[ticket.value.subtype]),
 );
 </script>
 
@@ -120,12 +103,12 @@ const subject = computed(
       <div class="ticket-header">
         <h2 class="ticket-subject">{{ subject }}</h2>
         <span :class="STATUS_CLASSES[ticket.status]">
-          {{ STATUS_LABELS[ticket.status] }}
+          {{ TICKET_STATUS_LABELS[ticket.status] }}
         </span>
       </div>
 
       <SecondaryText class="ticket-meta">
-        {{ SUBTYPE_LABELS[ticket.subtype] }} | Создано:
+        {{ TICKET_SUBTYPE_LABELS[ticket.subtype] }} | Создано:
         {{ formatDateFull(ticket.createdUtc) }}
       </SecondaryText>
 

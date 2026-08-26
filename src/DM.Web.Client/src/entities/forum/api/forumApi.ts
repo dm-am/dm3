@@ -1,4 +1,9 @@
-import type { Envelope, ListEnvelope, User } from "@/shared/api/models/common";
+import type {
+  Envelope,
+  ListEnvelope,
+  QuoteSource,
+  User,
+} from "@/shared/api/models/common";
 import type {
   Comment,
   CommentId,
@@ -146,6 +151,18 @@ export default new (class ForumApi {
   }
 
   /**
+   * Fetch the markup of a quotation of the opening message of a topic.
+   *
+   * The server composes the whole tag, author included, already filtered for
+   * whoever is asking. The client does not build one out of the rendered page:
+   * that conversion is lossy, and the source of somebody else's message is not
+   * something the browser holds.
+   */
+  public getTopicQuote(id: TopicId) {
+    return Api.get<Envelope<QuoteSource>>(`topics/${id}/quote`);
+  }
+
+  /**
    * Create a new topic on a board.
    *
    * The wire body intentionally does NOT reuse `Post<Topic>` — the API DTO
@@ -199,7 +216,7 @@ export default new (class ForumApi {
   }
 
   public createComment(id: TopicId, comment: Post<Comment>) {
-    return Api.post<Comment>(`topics/${id}/comments`, comment);
+    return Api.post<Envelope<Comment>>(`topics/${id}/comments`, comment);
   }
 
   public updateComment(id: CommentId, comment: Patch<Comment>) {
@@ -218,6 +235,18 @@ export default new (class ForumApi {
     );
   }
 
+  /**
+   * Fetch the markup of a quotation of a topic comment.
+   *
+   * The server composes the whole tag, author included, already filtered for
+   * whoever is asking. The client does not build one out of the rendered page:
+   * that conversion is lossy, and the source of somebody else's message is not
+   * something the browser holds.
+   */
+  public getCommentQuote(id: CommentId) {
+    return Api.get<Envelope<QuoteSource>>(`forum/comments/${id}/quote`);
+  }
+
   public postCommentLike(id: CommentId) {
     return Api.post<Envelope<User>>(`forum/comments/${id}/likes`);
   }
@@ -226,7 +255,7 @@ export default new (class ForumApi {
   }
 
   public postTopicLike(id: TopicId) {
-    return Api.post<User>(`topics/${id}/likes`);
+    return Api.post<Envelope<User>>(`topics/${id}/likes`);
   }
   public deleteTopicLike(id: TopicId) {
     return Api.delete(`topics/${id}/likes`);

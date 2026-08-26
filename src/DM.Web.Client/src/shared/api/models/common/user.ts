@@ -181,6 +181,18 @@ export interface User extends UserRef {
   // own blog, which a flat client-side flag cannot express. The server decides.
   /** User settings (only for authenticated user) */
   settings?: import("@/shared/api/models/personal").UserSettings;
+  /**
+   * Whether this account's rank is withheld for want of a second factor.
+   *
+   * Present only where the response is about the viewer themselves — the
+   * sign-in, the step that finishes it and the own profile. Absent everywhere
+   * else, because whether somebody else's rank is withheld is theirs to know,
+   * so `undefined` reads as "this answer is not about you", not as "no".
+   *
+   * `role` beside it stays the recorded one: the account stopped being able,
+   * not being an administrator.
+   */
+  privilegeWithheld?: boolean;
 
   // Extended profile fields (present in UserProfile responses)
   /** User-defined extended information (BB-code rendered) */

@@ -29,6 +29,7 @@ import {
   dateToApiStart,
   parseDateFromUrl,
   parseSortDirection,
+  parsePageNumber,
   parseStringFromUrl,
   validateSortField,
 } from "./utils";
@@ -270,11 +271,8 @@ export function createAuthorDateFilter<TSortBy extends string = string>(
       params.sortOrder = state.sortOrder;
 
       // Use "number" param (unified pagination)
-      const numberParam = route.query.number;
-      if (numberParam) {
-        const num = parseInt(String(numberParam), 10);
-        if (!isNaN(num) && num > 0) params.number = num;
-      }
+      const pageNumber = parsePageNumber(route.query.number);
+      if (pageNumber) params.number = pageNumber;
 
       params.size = pageSize.value;
       return params;

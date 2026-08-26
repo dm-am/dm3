@@ -4,8 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
@@ -20,12 +18,10 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 internal class GameReviewRepository : IGameReviewRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
-    public GameReviewRepository(DmDbContext dbContext, IMapper mapper)
+    public GameReviewRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     // ═══ READ ═══
@@ -43,14 +39,14 @@ internal class GameReviewRepository : IGameReviewRepository
             .Where(r => r.GameId == gameId && !r.IsRemoved)
             .OrderByDescending(r => r.CreatedUtc)
             .Page(paging)
-            .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
+            .ProjectToGameReview()
             .ToArrayAsync();
 
     /// <inheritdoc />
     public Task<GameReview?> GetAsync(Guid id) => _dbContext.GameReviews
         .TagWith("DM.GameReview.GetById")
         .Where(r => !r.IsRemoved && r.GameReviewId == id)
-        .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
+        .ProjectToGameReview()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -59,7 +55,7 @@ internal class GameReviewRepository : IGameReviewRepository
         .Where(r => r.GameId == gameId &&
                     r.AuthorId == authorId &&
                     !r.IsRemoved)
-        .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
+        .ProjectToGameReview()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -85,7 +81,7 @@ internal class GameReviewRepository : IGameReviewRepository
 
         return await ApplySort(query, filter)
             .Page(paging)
-            .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
+            .ProjectToGameReview()
             .ToArrayAsync();
     }
 
@@ -128,7 +124,7 @@ internal class GameReviewRepository : IGameReviewRepository
         return await _dbContext.GameReviews
             .TagWith("DM.GameReview.Created")
             .Where(r => r.GameReviewId == dbReview.GameReviewId)
-            .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
+            .ProjectToGameReview()
             .FirstAsync();
     }
 
@@ -155,7 +151,7 @@ internal class GameReviewRepository : IGameReviewRepository
         return await _dbContext.GameReviews
             .TagWith("DM.GameReview.Updated")
             .Where(r => r.GameReviewId == entity.ReviewId)
-            .ProjectTo<GameReview>(_mapper.ConfigurationProvider)
+            .ProjectToGameReview()
             .FirstAsync();
     }
 

@@ -49,6 +49,28 @@ public class User : UserRef
     /// </summary>
     public UserPicture Picture { get; set; } = new();
 
+    /// <summary>
+    /// Whether this account's rank is withheld for want of a second factor
+    /// </summary>
+    /// <remarks>
+    /// Not a column of the user row: it is a property of the identity the
+    /// request was made with, folded in where that identity is built. So only
+    /// the answers about the caller themselves - the sign-in, the second step
+    /// that finishes it and the own profile - fill it, and everywhere else it
+    /// is absent rather than false. That distinction is the contract: the field
+    /// is present when the response is about the reader, and the security
+    /// posture of somebody else's account is not something a list of comment
+    /// authors gets to say.
+    ///
+    /// Delivered with the viewer rather than asked for separately, which was the
+    /// alternative: a request per page load, paid by everyone for a state two
+    /// accounts are in, plus the window in which the interface is already drawn
+    /// and the answer has not arrived. The recorded role travels beside it in
+    /// <see cref="UserRef.Role" /> and is the real one - only the role
+    /// permissions are compared against is withheld (INV-11).
+    /// </remarks>
+    public bool? PrivilegeWithheld { get; set; }
+
     // ========== Statistics, present only where somebody counted them ==========
     //
     // This schema travels at two fidelities. Asked for by name it is counted in

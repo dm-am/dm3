@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Community.Features.WebsiteTestimonials;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
@@ -18,17 +16,14 @@ namespace DM.Infrastructure.Persistence.Repositories.Community;
 internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public WebsiteTestimonialRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -57,7 +52,7 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
 
         return await orderedQuery
             .Page(pagingData)
-            .ProjectTo<WebsiteTestimonial>(_mapper.ConfigurationProvider)
+            .ProjectToWebsiteTestimonial()
             .ToArrayAsync();
     }
 
@@ -106,7 +101,7 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
     {
         return await _dbContext.WebsiteTestimonials
             .Where(t => t.WebsiteTestimonialId == id && !t.IsRemoved)
-            .ProjectTo<WebsiteTestimonial>(_mapper.ConfigurationProvider)
+            .ProjectToWebsiteTestimonial()
             .FirstOrDefaultAsync();
     }
 
@@ -115,7 +110,7 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
     {
         return await _dbContext.WebsiteTestimonials
             .Where(t => t.AuthorId == authorId && !t.IsRemoved)
-            .ProjectTo<WebsiteTestimonial>(_mapper.ConfigurationProvider)
+            .ProjectToWebsiteTestimonial()
             .FirstOrDefaultAsync();
     }
 
@@ -138,7 +133,7 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
 
         return await _dbContext.WebsiteTestimonials
             .Where(t => t.WebsiteTestimonialId == dbTestimonial.WebsiteTestimonialId)
-            .ProjectTo<WebsiteTestimonial>(_mapper.ConfigurationProvider)
+            .ProjectToWebsiteTestimonial()
             .FirstAsync();
     }
 
@@ -161,7 +156,7 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
 
         return await _dbContext.WebsiteTestimonials
             .Where(t => t.WebsiteTestimonialId == testimonial.Id)
-            .ProjectTo<WebsiteTestimonial>(_mapper.ConfigurationProvider)
+            .ProjectToWebsiteTestimonial()
             .FirstAsync();
     }
 

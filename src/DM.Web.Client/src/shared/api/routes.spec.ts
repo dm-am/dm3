@@ -47,6 +47,25 @@ const METHOD: Record<string, string> = {
 
 type Call = { file: string; method: string; path: string };
 
+/**
+ * The five calls notepadEndpoints(base) makes, in the order it declares them.
+ *
+ * The five notepads of the site are asked for through that factory rather than
+ * through Api directly (shared/api/notepadEndpoints.ts), so their addresses are
+ * spelled once, at the five call sites, and the verbs are the factory's. A walk
+ * that only reads Api.* would check none of them — which is the whole surface
+ * of every notepad on the site — so it reads the base here as well and expands
+ * it. A sixth call added to the factory and not to this list is a call nothing
+ * checks, and the same is true of a verb removed from it.
+ */
+const NOTEPAD_CALLS = [
+  { method: "GET", suffix: "" },
+  { method: "GET", suffix: "/{param}" },
+  { method: "POST", suffix: "" },
+  { method: "PATCH", suffix: "/{param}" },
+  { method: "DELETE", suffix: "/{param}" },
+];
+
 function sourceFiles(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
@@ -117,6 +136,19 @@ function callsIn(file: string): { calls: Call[]; skipped: number } {
       .replace(/\$\{[^}]*\}/g, "{param}")
       .split("?")[0];
     calls.push({ file: relative(repoRoot, file), method: METHOD[call], path });
+  }
+
+  for (const match of source.matchAll(
+    /\bnotepadEndpoints\(\s*(`[^`]*`|"[^"]*"|'[^']*')/g,
+  )) {
+    const base = match[1].slice(1, -1).replace(/\$\{[^}]*\}/g, "{param}");
+    for (const { method, suffix } of NOTEPAD_CALLS) {
+      calls.push({
+        file: relative(repoRoot, file),
+        method,
+        path: base + suffix,
+      });
+    }
   }
 
   return { calls, skipped };

@@ -12,10 +12,11 @@ using DM.Domain.Core.Identity;
 using DM.Testing;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Authentication.Credentials;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using RabbitMQ.Client.Exceptions;
 using Xunit;
 
@@ -42,14 +43,14 @@ public class WebAuthenticationServiceShould : UnitTestBase
     private static readonly Guid UserId = Guid.Parse("6ff6a1d8-1c0c-4b56-9c0b-2cf1a3d4e5f6");
     private const string Email = "reader@dm.am";
 
-    private readonly Mock<IAuthenticationService> authentication;
-    private readonly Mock<ICredentialsStorage> credentials;
-    private readonly Mock<IIdentitySetter> identitySetter;
-    private readonly Mock<ISuspiciousLoginDetector> detector;
-    private readonly Mock<ISuspiciousLoginNotificationSender> sender;
-    private readonly Mock<ISecurityAuditRepository> audit;
-    private readonly Mock<IEventProducer> events;
-    private readonly Mock<ILogger<WebAuthenticationService>> logger;
+    private readonly IAuthenticationService authentication;
+    private readonly ICredentialsStorage credentials;
+    private readonly IIdentitySetter identitySetter;
+    private readonly ISuspiciousLoginDetector detector;
+    private readonly ISuspiciousLoginNotificationSender sender;
+    private readonly ISecurityAuditRepository audit;
+    private readonly IEventProducer events;
+    private readonly RecordingLogger<WebAuthenticationService> logger;
     private readonly WebAuthenticationService service;
 
     public WebAuthenticationServiceShould()
@@ -61,23 +62,20 @@ public class WebAuthenticationServiceShould : UnitTestBase
         sender = Mock<ISuspiciousLoginNotificationSender>();
         audit = Mock<ISecurityAuditRepository>();
         events = Mock<IEventProducer>();
-        logger = Mock<ILogger<WebAuthenticationService>>();
+        logger = new RecordingLogger<WebAuthenticationService>();
 
         authentication
-            .Setup(a => a.Authenticate(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(),
-                It.IsAny<SessionContext>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Authenticated());
-        credentials.Setup(c => c.Load(It.IsAny<HttpContext>(), It.IsAny<IIdentity>())).Returns(Task.CompletedTask);
+            .Authenticate(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(),
+                Arg.Any<SessionContext>(), Arg.Any<CancellationToken>()).Returns(Authenticated());
+        credentials.Load(Arg.Any<HttpContext>(), Arg.Any<IIdentity>()).Returns(Task.CompletedTask);
         detector
-            .Setup(d => d.IsSuspiciousAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(true);
+            .IsSuspiciousAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>()).Returns(true);
         audit
-            .Setup(a => a.LogAsync(It.IsAny<Guid>(), It.IsAny<SecurityEventType>(), It.IsAny<string>(),
-                It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(Task.CompletedTask);
+            .LogAsync(Arg.Any<Guid>(), Arg.Any<SecurityEventType>(), Arg.Any<string>(),
+                Arg.Any<string>(), Arg.Any<string>()).Returns(Task.CompletedTask);
 
-        service = new WebAuthenticationService(authentication.Object, credentials.Object, identitySetter.Object,
-            detector.Object, sender.Object, audit.Object, events.Object, logger.Object);
+        service = new WebAuthenticationService(authentication, credentials, identitySetter,
+            detector, sender, audit, events, logger);
     }
 
     [Fact]
@@ -85,8 +83,7 @@ public class WebAuthenticationServiceShould : UnitTestBase
     {
         var handedOver = new TaskCompletionSource();
         sender
-            .Setup(s => s.SendAsync(Email, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(handedOver.Task);
+            .SendAsync(Email, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>()).Returns(handedOver.Task);
 
         var login = service.Authenticate(Credentials(), Context());
 
@@ -97,15 +94,14 @@ public class WebAuthenticationServiceShould : UnitTestBase
         handedOver.SetResult();
         await login;
 
-        sender.Verify(s => s.SendAsync(Email, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
-            Times.Once);
+        await sender.Received(1).SendAsync(Email, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
     }
 
     [Fact]
     public async Task KeepTheLoginWhenTheBrokerRefusesTheLetter()
     {
         sender
-            .Setup(s => s.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .ThrowsAsync(new BrokerUnreachableException(new Exception("connection refused")));
 
         var identity = await service.Awaiting(s => s.Authenticate(Credentials(), Context()))
@@ -115,15 +111,15 @@ public class WebAuthenticationServiceShould : UnitTestBase
 
         // The journal is the record the owner of the account reads afterwards, and
         // it does not depend on anything leaving the machine.
-        audit.Verify(a => a.LogAsync(UserId, SecurityEventType.SuspiciousLogin, It.IsAny<string>(),
-            It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        await audit.Received(1).LogAsync(UserId, SecurityEventType.SuspiciousLogin, Arg.Any<string>(),
+            Arg.Any<string>(), Arg.Any<string>());
     }
 
     [Fact]
     public async Task CountTheLetterItSwallowed()
     {
         sender
-            .Setup(s => s.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
             .ThrowsAsync(new BrokerUnreachableException(new Exception("connection refused")));
 
         var events = new List<string?>();
@@ -154,10 +150,7 @@ public class WebAuthenticationServiceShould : UnitTestBase
         // counter, and without it a broker refusing every publish looks exactly
         // like a site where nothing suspicious ever happens.
         events.Should().Contain(nameof(SecurityEventType.SuspiciousLogin));
-        logger.Verify(
-            l => l.Log(LogLevel.Warning, It.IsAny<EventId>(), It.IsAny<It.IsAnyType>(), It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        logger.At(LogLevel.Warning).Should().ContainSingle();
     }
 
     /// <summary>
@@ -173,23 +166,22 @@ public class WebAuthenticationServiceShould : UnitTestBase
     {
         await service.Authenticate(Credentials(), Context());
 
-        events.Verify(e => e.SendAsync(EventType.SuspiciousLoginActivity, UserId), Times.Once);
+        await events.Received(1).SendAsync(EventType.SuspiciousLoginActivity, UserId);
     }
 
     [Fact]
     public async Task SendNothingWhenTheLoginIsOrdinary()
     {
         detector
-            .Setup(d => d.IsSuspiciousAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(false);
+            .IsSuspiciousAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>()).Returns(false);
 
         await service.Authenticate(Credentials(), Context());
 
-        sender.Verify(s => s.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
-            It.IsAny<string>()), Times.Never);
-        audit.Verify(a => a.LogAsync(It.IsAny<Guid>(), It.IsAny<SecurityEventType>(), It.IsAny<string>(),
-            It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-        events.Verify(e => e.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()), Times.Never);
+        await sender.DidNotReceive().SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+            Arg.Any<string>());
+        await audit.DidNotReceive().LogAsync(Arg.Any<Guid>(), Arg.Any<SecurityEventType>(), Arg.Any<string>(),
+            Arg.Any<string>(), Arg.Any<string>());
+        await events.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
     }
 
     private static IIdentity Authenticated() => Identity.Success(

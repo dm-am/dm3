@@ -3,7 +3,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 

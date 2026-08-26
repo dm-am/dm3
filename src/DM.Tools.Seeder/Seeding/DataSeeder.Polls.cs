@@ -1,50 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using DM.Domain.Account.Features.Security;
 using DM.Domain.Community.Features.Polls;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
-using DM.Domain.Personal.Features.Profiles;
-using DM.Domain.Personal.Authorization;
-using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Configuration;
-using DM.Domain.Core.Enums;
-using DM.Domain.Core.Uploads;
-using DM.Infrastructure.Core.Storage;
-using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using DM.Infrastructure.Persistence.Entities.Blog;
-using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
-using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
-using DM.Infrastructure.Persistence.Entities.Messaging;
-using DM.Infrastructure.Persistence.Entities.Moderation;
-using DM.Infrastructure.Persistence.Entities.Personal.Notepads;
-using DM.Infrastructure.Persistence.Entities.Shared;
-using DM.Infrastructure.Persistence.Entities.Community;
-using DM.Infrastructure.Persistence.Entities.Subscriptions;
 using Microsoft.Extensions.Options;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
-using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
-using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
-using DbAttributeSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
-using DbStringConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.StringAttributeConstraints;
-using DbBbCodeConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.BbCodeAttributeConstraints;
-using DbListConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeConstraints;
-using DbListValueKind = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListValueKind;
-using DbListAttributeValue = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeValue;
-using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
-using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
-using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
-using DbUsernameHistory = DM.Infrastructure.Persistence.Entities.Account.UsernameHistory;
-using DbUserContact = DM.Infrastructure.Persistence.Entities.Account.UserContact;
-using Microsoft.EntityFrameworkCore;
 
 namespace DM.Tools.Seeder.Seeding;
 
@@ -58,40 +21,16 @@ internal sealed partial class DataSeeder
 
     private async Task CreatePolls(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
     {
-        // Polls live in MongoDB and survive a relational re-seed, while their
-        // votes reference Postgres user ids. After the relational database is
-        // recreated the surviving votes point at users that no longer exist
-        // ("ghost votes"): counts stay inflated and public-poll voter lists
-        // resolve to nobody, so the voters tooltip silently disappears.
-        // Detect that staleness and recreate the polls instead of skipping.
+        // Polls live in the same database as their voters now, and every vote
+        // carries a foreign key to the user it belongs to: a reset takes polls
+        // and votes together, so a ghost vote is unrepresentable and the
+        // self-healing block this method used to open with is gone.
         var existingPollsCount = await _pollRepository.Count(new PollsQuery());
         if (existingPollsCount > 0)
         {
-            var pollsQuery = new PollsQuery { Take = (int)existingPollsCount };
-            var existingPolls = (await _pollRepository.Get(
-                pollsQuery,
-                new PagingData(pollsQuery, (int)existingPollsCount, (int)existingPollsCount))).ToList();
-            var voterIds = existingPolls
-                .SelectMany(p => p.Options.SelectMany(o => o.UserIds))
-                .Distinct()
-                .ToList();
-            var knownVoterCount = await _dbContext.Set<DbUser>()
-                .Where(u => voterIds.Contains(u.UserId))
-                .CountAsync();
-
-            if (knownVoterCount == voterIds.Count)
-            {
-                result.Skipped++;
-                result.Details.Add($"Polls already exist ({existingPollsCount}), skipping");
-                return;
-            }
-
-            foreach (var stalePoll in existingPolls)
-            {
-                await _pollRepository.Delete(stalePoll.Id);
-            }
-            result.Details.Add(
-                $"Stale polls recreated: {voterIds.Count - knownVoterCount} ghost voter(s) from a dropped relational database");
+            result.Skipped++;
+            result.Details.Add($"Polls already exist ({existingPollsCount}), skipping");
+            return;
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -134,7 +73,7 @@ internal sealed partial class DataSeeder
         result.PollsCreated++;
 
         // ═══════════════════════════════════════════════════════════════════
-        // ACTIVE POLLS (3)
+        // ACTIVE POLLS (2)
         // ═══════════════════════════════════════════════════════════════════
 
         // Closed poll - RPG systems preference
@@ -539,6 +478,6 @@ internal sealed partial class DataSeeder
         }
         result.PollsCreated++;
 
-        result.Details.Add($"Created {result.PollsCreated} polls (2 pending, 3 active, 15 closed; 2 public)");
+        result.Details.Add($"Created {result.PollsCreated} polls (2 pending, 2 active, 15 closed; 2 public)");
     }
 }

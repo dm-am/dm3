@@ -14,6 +14,7 @@ import type {
 } from "@/entities/poll";
 import { PollStatus } from "@/entities/poll";
 import type { Served } from "@/shared/api/models";
+import type { User } from "@/shared/api/models/common";
 
 // Helper to cast raw values to Served type for test mocks
 function asServed<T>(value: T): Served<T> {
@@ -56,13 +57,35 @@ vi.mock("dayjs", () => {
   return { default: dayjs };
 });
 
-// Mock stores
-vi.mock("@/entities/user", () => ({
-  useAuthStore: () => ({
-    user: null,
-  }),
-  userIsSeniorModerator: vi.fn(() => false),
-}));
+// Mock stores.
+// The session double has to be a real store, not a bare object: the card reads
+// the viewer through storeToRefs, and pinia walks every own property of the
+// store probing for a computed before it falls back to refs, so a plain `null`
+// property throws there. defineStore keeps the double honest about the shape
+// the component consumes.
+//
+// The whole shape of shared/stores/auth, not just the one member this card
+// reads today. A double that offers less answers `undefined` for the rest, and
+// `undefined` for `isAuthenticated` is a guest — so the day something here
+// starts asking for it, the test would quietly assert the guest branch instead
+// of failing on a gap in the double.
+vi.mock("@/entities/user", async () => {
+  const { defineStore } = await import("pinia");
+  const { ref, computed } = await import("vue");
+  return {
+    useAuthStore: defineStore("auth", () => {
+      const user = ref<User | null>(null);
+      return {
+        user,
+        isAuthenticated: computed(() => user.value !== null),
+        updateUser: (newUser: User | null) => {
+          user.value = newUser;
+        },
+      };
+    }),
+    userIsSeniorModerator: vi.fn(() => false),
+  };
+});
 
 vi.mock("@/entities/poll", () => ({
   usePollsStore: () => ({

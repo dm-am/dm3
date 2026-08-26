@@ -5,6 +5,7 @@ import {
   pinia,
   router,
   installPlugins,
+  installRoutePrefetch,
   installSessionExpiredHandler,
   registerGlobalComponents,
   setupDayjs,
@@ -35,6 +36,12 @@ registerGlobalComponents(application);
 application.use(pinia);
 application.use(router);
 installPlugins(application);
+
+// Every page is a lazy chunk, so a click on a link costs a round trip before
+// anything renders. This listens for the reader aiming at one — hover, focus or
+// touch — and starts that request early. It draws nothing; the teardown it
+// returns is dropped because the listeners live as long as the document does.
+installRoutePrefetch();
 
 // Mount app
 application.mount("#application");

@@ -8,6 +8,7 @@ using System.Linq.Expressions;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
+using SystemUser = DM.Domain.Core.Identity.SystemUser;
 using DM.Infrastructure.Persistence.Entities.Blog;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Contracts;
@@ -22,7 +23,10 @@ using DM.Infrastructure.Persistence.Entities.Messaging;
 using DM.Infrastructure.Persistence.Entities.Personal.Notepads;
 using DM.Infrastructure.Persistence.Entities.Subscriptions;
 using DM.Infrastructure.Persistence.Entities.Account;
+using DM.Infrastructure.Persistence.Entities.Account.Settings;
 using DM.Infrastructure.Persistence.Entities.Community;
+using DM.Infrastructure.Persistence.Entities.Personal.Notifications;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using NpgsqlTypes;
 
@@ -526,7 +530,7 @@ public class DmDbContext : DbContext
         // overlap into a refused insert rather than two tags holding one number.
         if (isPostgres)
         {
-            modelBuilder.HasSequence<int>(TagShortIdSequence).StartsAt(66);
+            modelBuilder.HasSequence<int>(TagShortIdSequence).StartsAt(73);
         }
 
         // The readable chat id is resolved by equality in GET /chats/{id}. Without
@@ -760,12 +764,39 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<Tag>().HasData(
             new Tag
             {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000042"),
+                ShortId = 66,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "2d20",
+                Description = "Движок Modiphius: пул из двух d20 против характеристики",
+                SortOrder = 0
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000043"),
+                ShortId = 67,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "AD&D",
+                Description = "Первая и вторая редакции Dungeons & Dragons",
+                SortOrder = 1
+            },
+            new Tag
+            {
                 TagId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
                 ShortId = 1,
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Black Bird Pie",
                 Description = "Простая система с кубиком d6",
-                SortOrder = 0
+                SortOrder = 2
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000044"),
+                ShortId = 68,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "Cypher",
+                Description = "Движок Monte Cook Games: сложность против броска d20",
+                SortOrder = 3
             },
             new Tag
             {
@@ -773,8 +804,26 @@ public class DmDbContext : DbContext
                 ShortId = 2,
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "D&D",
-                Description = "Dungeons & Dragons — все редакции классической ролевой системы",
-                SortOrder = 1
+                Description = "Семейство Dungeons & Dragons",
+                SortOrder = 4
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000045"),
+                ShortId = 69,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "D&D 3.5",
+                Description = "Третья редакция Dungeons & Dragons, включая 3.0",
+                SortOrder = 5
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000046"),
+                ShortId = 70,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "D&D 4e",
+                Description = "Четвертая редакция Dungeons & Dragons",
+                SortOrder = 6
             },
             new Tag
             {
@@ -782,17 +831,17 @@ public class DmDbContext : DbContext
                 ShortId = 3,
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "D&D 5e",
-                Description = "Dungeons & Dragons 5th Edition",
-                SortOrder = 2
+                Description = "Пятая редакция Dungeons & Dragons",
+                SortOrder = 7
             },
             new Tag
             {
                 TagId = Guid.Parse("00000000-0000-0000-0000-000000000004"),
                 ShortId = 4,
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
-                Title = "D100",
+                Title = "d100",
                 Description = "Системы на основе процентного броска",
-                SortOrder = 3
+                SortOrder = 8
             },
             new Tag
             {
@@ -801,7 +850,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Dawn of Worlds",
                 Description = "Система для совместного создания мира",
-                SortOrder = 4
+                SortOrder = 9
             },
             new Tag
             {
@@ -810,7 +859,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Fallout",
                 Description = "Адаптация сеттинга Fallout",
-                SortOrder = 5
+                SortOrder = 10
             },
             new Tag
             {
@@ -819,7 +868,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "FATAL",
                 Description = "Без комментариев",
-                SortOrder = 6
+                SortOrder = 11
             },
             new Tag
             {
@@ -828,7 +877,16 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Fate",
                 Description = "Нарративная система с аспектами и фейт-пойнтами",
-                SortOrder = 7
+                SortOrder = 12
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000047"),
+                ShortId = 71,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "FitD",
+                Description = "Forged in the Dark: системы на движке Blades in the Dark",
+                SortOrder = 13
             },
             new Tag
             {
@@ -837,7 +895,16 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "FUDGE",
                 Description = "Универсальный движок для реализации практически любого концепта",
-                SortOrder = 8
+                SortOrder = 14
+            },
+            new Tag
+            {
+                TagId = Guid.Parse("00000000-0000-0000-0000-000000000048"),
+                ShortId = 72,
+                TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
+                Title = "GUMSHOE",
+                Description = "Детективный движок Robin Laws: улики не пропускаются на броске",
+                SortOrder = 15
             },
             new Tag
             {
@@ -846,7 +913,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "GURPS",
                 Description = "Универсальная система на базе броска 3d6 vs Сложность",
-                SortOrder = 9
+                SortOrder = 16
             },
             new Tag
             {
@@ -855,7 +922,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Interlock",
                 Description = "Система от R. Talsorian Games (Cyberpunk 2020 и другие)",
-                SortOrder = 10
+                SortOrder = 17
             },
             new Tag
             {
@@ -864,7 +931,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Microscope",
                 Description = "Система для создания эпических историй",
-                SortOrder = 11
+                SortOrder = 18
             },
             new Tag
             {
@@ -873,7 +940,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Pathfinder 1e",
                 Description = "Pathfinder первой редакции",
-                SortOrder = 12
+                SortOrder = 19
             },
             new Tag
             {
@@ -882,7 +949,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Pathfinder 2e",
                 Description = "Pathfinder второй редакции",
-                SortOrder = 13
+                SortOrder = 20
             },
             new Tag
             {
@@ -891,7 +958,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "PbtA",
                 Description = "Нарративные системы на базе 2d6 vs Сложность",
-                SortOrder = 14
+                SortOrder = 21
             },
             new Tag
             {
@@ -900,7 +967,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Risus",
                 Description = "Минималистичная комедийная система",
-                SortOrder = 15
+                SortOrder = 22
             },
             new Tag
             {
@@ -909,7 +976,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Savage Worlds",
                 Description = "Легковесная универсальная система — Fast! Furious! Fun!",
-                SortOrder = 16
+                SortOrder = 23
             },
             new Tag
             {
@@ -918,7 +985,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Starfinder 1e",
                 Description = "Sci-fi спин-офф Pathfinder",
-                SortOrder = 17
+                SortOrder = 24
             },
             new Tag
             {
@@ -927,7 +994,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Starfinder 2e",
                 Description = "Starfinder второй редакции",
-                SortOrder = 18
+                SortOrder = 25
             },
             new Tag
             {
@@ -936,7 +1003,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Warhammer",
                 Description = "Системы по вселенной Warhammer",
-                SortOrder = 19
+                SortOrder = 26
             },
             new Tag
             {
@@ -944,8 +1011,8 @@ public class DmDbContext : DbContext
                 ShortId = 21,
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "World of Darkness",
-                Description = "Мир Тьмы — вампиры, оборотни, маги",
-                SortOrder = 20
+                Description = "Мир Тьмы: Storyteller, Storytelling и Chronicles of Darkness",
+                SortOrder = 27
             },
             new Tag
             {
@@ -954,7 +1021,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Авторская",
                 Description = "Оригинальная система от мастера игры",
-                SortOrder = 21
+                SortOrder = 28
             },
             new Tag
             {
@@ -963,7 +1030,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Мафия",
                 Description = "Психологическая детективная командная игра",
-                SortOrder = 22
+                SortOrder = 29
             },
             new Tag
             {
@@ -972,7 +1039,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Словеска",
                 Description = "Игра без формальной системы правил",
-                SortOrder = 23
+                SortOrder = 30
             },
             new Tag
             {
@@ -981,7 +1048,7 @@ public class DmDbContext : DbContext
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000001"),
                 Title = "Эра Водолея",
                 Description = "Отечественная система ролевых игр",
-                SortOrder = 24
+                SortOrder = 31
             },
             new Tag
             {
@@ -2237,8 +2304,8 @@ public class DmDbContext : DbContext
             new User
             {
                 UserId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-                Username = "Робот-Администратор",
-                Email = "system@dm.local",
+                Username = SystemUser.Username,
+                Email = SystemUser.Email,
                 CreatedUtc = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero),
                 Role = UserRole.System,
                 AccessPolicy = AccessPolicy.NotSpecified,
@@ -2526,9 +2593,277 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<CharacterAttribute>()
             .HasIndex(a => new { a.CharacterId, a.AttributeId }).IsUnique();
 
-        // Global Query Filter: automatically exclude soft-deleted entities
+        #region Migrated document collections (W1.1)
+
+        // The nine collections that used to live in the document store, as
+        // tables. Everything below follows the W1.1 design
+        // (DATA_STORAGE.md): jsonb only where the shape is an
+        // honest document, atomicity by constraint rather than by client retry,
+        // retention by the sweep service instead of TTL indexes.
+
+        // UserSessions: a row per session, out of the document-per-user with an
+        // array. The FK index the convention adds serves the device list and
+        // RemoveAllSessions; ExpirationUtc serves the hourly purge.
+        modelBuilder.Entity<UserSession>(entity =>
+        {
+            entity.HasKey(s => s.SessionId);
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(s => s.ExpirationUtc);
+        });
+
+        // UserSettings: a row per user, keyed by the user. Absence of the row is
+        // UserSettings.Default. The paging numbers are NOT NULL columns so a
+        // partial row is unrepresentable; the channel preferences are nullable
+        // objects with a category set inside — a document shape, hence jsonb.
+        modelBuilder.Entity<UserSettings>(entity =>
+        {
+            entity.HasKey(s => s.UserId);
+            entity.HasOne<User>()
+                .WithOne()
+                .HasForeignKey<UserSettings>(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(s => s.DiscordPreferences).IsJson(isPostgres);
+            entity.Property(s => s.TelegramPreferences).IsJson(isPostgres);
+            entity.Property(s => s.EmailPreferences).IsJson(isPostgres);
+        });
+
+        // UnreadCounters: the primary key is the triple every upsert addresses,
+        // so encountering upserts are settled by the server (ON CONFLICT), with
+        // no client retry. No FK on EntityId/ParentId: the reference is
+        // polymorphic by EntryType, and integrity stays on the application like
+        // every polymorphic reference of the project. The partial RemovedUtc
+        // index is what the tombstone retention sweep reads.
+        modelBuilder.Entity<UnreadCounter>(entity =>
+        {
+            entity.HasKey(c => new { c.UserId, c.EntityId, c.EntryType });
+            entity.HasIndex(c => new { c.UserId, c.ParentId, c.EntryType, c.IsRemoved });
+            entity.HasIndex(c => new { c.EntityId, c.EntryType });
+            entity.HasIndex(c => new { c.ParentId, c.EntryType });
+            var tombstoneIndex = entity.HasIndex(c => c.RemovedUtc);
+            if (isPostgres)
+            {
+                tombstoneIndex.HasFilter("\"RemovedUtc\" IS NOT NULL");
+            }
+        });
+
+        // Notifications: one row per logical notification plus a row per
+        // recipient, out of the document with two user arrays. (CreatedUtc)
+        // serves retention and the list sort; (UserId, IsRead) serves the badge.
+        modelBuilder.Entity<Entities.Personal.Notifications.Notification>(entity =>
+        {
+            entity.HasKey(n => n.NotificationId);
+            entity.HasIndex(n => n.CreatedUtc);
+
+            // One row per (event, output type): what makes the write of a
+            // redelivered bus event idempotent as a constraint rather than a
+            // habit of the code. Partial, because NULL marks rows from messages
+            // that predate the key and those must never collide.
+            var eventIndex = entity.HasIndex(n => new { n.EventId, n.EventType }).IsUnique();
+            if (isPostgres)
+            {
+                eventIndex.HasFilter("\"EventId\" IS NOT NULL");
+            }
+            var metadata = entity.Property(n => n.Metadata);
+            if (isPostgres)
+            {
+                metadata.HasColumnType("jsonb");
+            }
+            entity.HasMany(n => n.Recipients)
+                .WithOne()
+                .HasForeignKey(r => r.NotificationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationRecipient>(entity =>
+        {
+            entity.HasKey(r => new { r.NotificationId, r.UserId });
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(r => new { r.UserId, r.IsRead });
+        });
+
+        // OutboxEvents: the transactional outbox of the domain event bus. The
+        // one partial index serves both the relay's claim (filter + order +
+        // LIMIT) and the backlog metrics (COUNT, MIN(OccurredUtc)); there is
+        // deliberately no second index for the retention delete of published
+        // rows - the table holds about a week of events, and an hourly seq
+        // scan is cheaper than a second index on every insert.
+        modelBuilder.Entity<Entities.Outbox.OutboxEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Attempts).HasDefaultValue(0);
+            var pendingIndex = entity
+                .HasIndex(e => new { e.OccurredUtc, e.Id })
+                .HasDatabaseName("IX_OutboxEvents_Pending");
+            if (isPostgres)
+            {
+                pendingIndex.HasFilter("\"PublishedUtc\" IS NULL");
+            }
+        });
+
+        // Polls: normalized into three tables. The PollVotes primary key
+        // (PollId, UserId) is the rule "one voter, one option" — the write is
+        // INSERT ... ON CONFLICT DO NOTHING, and the FKs make a ghost vote
+        // (voter, option or poll that does not exist) unrepresentable, which is
+        // what buried the seeder's self-healing block.
+        modelBuilder.Entity<Poll>(entity =>
+        {
+            entity.HasKey(p => p.PollId);
+            entity.HasIndex(p => new { p.IsRemoved, p.StartsUtc });
+            entity.HasIndex(p => new { p.IsRemoved, p.EndsUtc });
+            entity.HasMany(p => p.Options)
+                .WithOne()
+                .HasForeignKey(o => o.PollId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PollOption>(entity =>
+        {
+            entity.HasKey(o => o.PollOptionId);
+            entity.HasMany(o => o.Votes)
+                .WithOne()
+                .HasForeignKey(v => v.PollOptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PollVote>(entity =>
+        {
+            entity.HasKey(v => new { v.PollId, v.UserId });
+            entity.HasOne<Poll>()
+                .WithMany()
+                .HasForeignKey(v => v.PollId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(v => v.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // LoginAttempts: keyed by the composite string the domain forms
+        // (email|address). Email serves ResetAttempts(email), LastAttemptUtc
+        // serves the retention sweep.
+        modelBuilder.Entity<LoginAttempt>(entity =>
+        {
+            entity.HasKey(a => a.Key);
+            entity.HasIndex(a => a.Email);
+            entity.HasIndex(a => a.LastAttemptUtc);
+        });
+
+        // The second factor, in three tables. None of them widens the user row:
+        // that row is read on every request with a session, and a secret put
+        // there would ride along on all of them.
+        //
+        // UserTwoFactors is keyed by the account, which is the whole "one factor
+        // per person" rule expressed as a constraint. RemovalDueUtc carries a
+        // partial index because the only read of it is the sweep asking "whose
+        // waiting period is over", and that is a handful of rows out of the table.
+        modelBuilder.Entity<UserTwoFactor>(entity =>
+        {
+            entity.HasKey(f => f.UserId);
+            entity.HasOne<User>()
+                .WithOne()
+                .HasForeignKey<UserTwoFactor>(f => f.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            var dueIndex = entity.HasIndex(f => f.RemovalDueUtc);
+            if (isPostgres)
+            {
+                dueIndex.HasFilter("\"RemovalDueUtc\" IS NOT NULL");
+            }
+        });
+
+        // UserTwoFactorRecoveryCodes: ten rows per account, read as a set and
+        // written as a set. The FK index the convention adds is what serves both.
+        modelBuilder.Entity<UserTwoFactorRecoveryCode>(entity =>
+        {
+            entity.HasKey(c => c.RecoveryCodeId);
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // TwoFactorChallenges: a stream with a term. CreatedUtc serves the
+        // retention sweep; the FK index serves nothing today and exists because
+        // the cascade from a deleted account needs it not to scan.
+        modelBuilder.Entity<TwoFactorChallenge>(entity =>
+        {
+            entity.HasKey(c => c.ChallengeId);
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(c => c.CreatedUtc);
+        });
+
+        // SecurityAuditEntries: append-only stream, read as "this user's
+        // events, newest first" — the compound index serves the equality and
+        // hands the sort back ordered.
+        modelBuilder.Entity<SecurityAuditEntry>(entity =>
+        {
+            entity.HasKey(e => e.SecurityAuditEntryId);
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => new { e.UserId, e.TimestampUtc })
+                .IsDescending(false, true);
+        });
+
+        // DiceRolls: written only inside the post's transaction (INV-6). The FK
+        // index the convention adds serves the room render's batch read.
+        modelBuilder.Entity<DiceRoll>(entity =>
+        {
+            entity.HasKey(d => d.DiceRollId);
+            entity.HasOne<Post>()
+                .WithMany()
+                .HasForeignKey(d => d.PostId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(d => d.Result).IsJson(isPostgres);
+        });
+
+        // AttributeSchemata: an honest document — polymorphic constraints and
+        // nested value lists in one jsonb column. SetNull on the author: the
+        // schema can be public and outlive its author's account.
+        modelBuilder.Entity<AttributeSchema>(entity =>
+        {
+            entity.HasKey(s => s.AttributeSchemaId);
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.Property(s => s.Specifications).IsJson(isPostgres);
+        });
+
+        // INV-8: a game's schema reference carries a real FK now. Restrict, not
+        // cascade or set-null: the schema is soft-deleted, so the row outlives
+        // the delete and the game keeps resolving it.
+        modelBuilder.Entity<Entities.Game.Game>()
+            .HasOne<AttributeSchema>()
+            .WithMany()
+            .HasForeignKey(g => g.AttributeSchemaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        #endregion
+
+        // Global Query Filter: automatically exclude soft-deleted entities.
+        // UnreadCounters and AttributeSchemata opt out on purpose: their write
+        // paths have to see tombstone rows (an upsert over a tombstone revives
+        // the marker for a re-added participant, a game resolves its removed
+        // schema through its own reference), so each of their reads owns its
+        // IsRemoved predicate explicitly.
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
+            if (entityType.ClrType == typeof(UnreadCounter) ||
+                entityType.ClrType == typeof(AttributeSchema))
+            {
+                continue;
+            }
+
             if (typeof(IRemovable).IsAssignableFrom(entityType.ClrType))
             {
                 var parameter = Expression.Parameter(entityType.ClrType, "e");
@@ -2615,6 +2950,41 @@ public class DmDbContext : DbContext
     /// </summary>
     public DbSet<PendingRegistration> PendingRegistrations { get; set; }
 
+    /// <summary>
+    /// Authentication sessions (one row per session)
+    /// </summary>
+    public DbSet<UserSession> UserSessions { get; set; }
+
+    /// <summary>
+    /// User settings (one row per user; absence of the row means defaults)
+    /// </summary>
+    public DbSet<UserSettings> UserSettings { get; set; }
+
+    /// <summary>
+    /// Login attempt records (rate limiting and lockout)
+    /// </summary>
+    public DbSet<LoginAttempt> LoginAttempts { get; set; }
+
+    /// <summary>
+    /// Security audit log entries
+    /// </summary>
+    public DbSet<SecurityAuditEntry> SecurityAuditEntries { get; set; }
+
+    /// <summary>
+    /// Second factor state (one row per user; absence of the row means it is off)
+    /// </summary>
+    public DbSet<UserTwoFactor> UserTwoFactors { get; set; }
+
+    /// <summary>
+    /// Recovery codes of the second factor (a fixed set per user)
+    /// </summary>
+    public DbSet<UserTwoFactorRecoveryCode> UserTwoFactorRecoveryCodes { get; set; }
+
+    /// <summary>
+    /// Unfinished logins waiting for a second factor
+    /// </summary>
+    public DbSet<TwoFactorChallenge> TwoFactorChallenges { get; set; }
+
     #endregion
 
     #region Common
@@ -2648,6 +3018,26 @@ public class DmDbContext : DbContext
     /// Uploads
     /// </summary>
     public DbSet<Upload> Uploads { get; set; }
+
+    /// <summary>
+    /// Unread counters (one row per marker)
+    /// </summary>
+    public DbSet<UnreadCounter> UnreadCounters { get; set; }
+
+    /// <summary>
+    /// Notifications (one row per logical notification)
+    /// </summary>
+    public DbSet<Notification> Notifications { get; set; }
+
+    /// <summary>
+    /// Notification recipients
+    /// </summary>
+    public DbSet<NotificationRecipient> NotificationRecipients { get; set; }
+
+    /// <summary>
+    /// Transactional outbox of domain events
+    /// </summary>
+    public DbSet<Entities.Outbox.OutboxEvent> OutboxEvents { get; set; }
 
     #endregion
 
@@ -2755,6 +3145,16 @@ public class DmDbContext : DbContext
     /// post reviews (reviews of posts with ratings)
     /// </summary>
     public DbSet<PostReview> PostReviews { get; set; }
+
+    /// <summary>
+    /// Dice rolls (written only inside the post's transaction)
+    /// </summary>
+    public DbSet<DiceRoll> DiceRolls { get; set; }
+
+    /// <summary>
+    /// Character attribute schemata
+    /// </summary>
+    public DbSet<AttributeSchema> AttributeSchemata { get; set; }
 
     #endregion
 
@@ -2893,6 +3293,21 @@ public class DmDbContext : DbContext
     /// User endorsements (positive recommendations between users)
     /// </summary>
     public DbSet<UserEndorsement> UserEndorsements { get; set; }
+
+    /// <summary>
+    /// Polls
+    /// </summary>
+    public DbSet<Poll> Polls { get; set; }
+
+    /// <summary>
+    /// Poll options
+    /// </summary>
+    public DbSet<PollOption> PollOptions { get; set; }
+
+    /// <summary>
+    /// Poll votes (one per voter per poll, held by the primary key)
+    /// </summary>
+    public DbSet<PollVote> PollVotes { get; set; }
 
     /// <summary>
     /// Website fundraising progress (single-row table, seeded)

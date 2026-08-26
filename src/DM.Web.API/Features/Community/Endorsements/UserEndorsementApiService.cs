@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Community.Features.UserEndorsements;
 using DM.Domain.Core.Users;
 using DM.Web.API.Shared.Dto;
@@ -13,13 +12,13 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
 {
     private readonly IUserEndorsementService _endorsementService;
     private readonly IUserLookupService _userLookupService;
-    private readonly IMapper _mapper;
+    private readonly UserEndorsementMapper _mapper;
 
     /// <inheritdoc />
     public UserEndorsementApiService(
         IUserEndorsementService endorsementService,
         IUserLookupService userLookupService,
-        IMapper mapper)
+        UserEndorsementMapper mapper)
     {
         _endorsementService = endorsementService;
         _userLookupService = userLookupService;
@@ -56,7 +55,7 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
         UserEndorsementsQuery query, UserEndorsementFilter filter)
     {
         var (endorsements, paging) = await _endorsementService.GetAllAsync(query, filter);
-        var apiEndorsements = endorsements.Select(_mapper.Map<UserEndorsement>);
+        var apiEndorsements = endorsements.Select(_mapper.ToUserEndorsement);
         return new ListEnvelope<UserEndorsement>(apiEndorsements, new PagingInfo(paging));
     }
 
@@ -76,7 +75,7 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
     public async Task<UserEndorsement> Get(Guid id)
     {
         var endorsement = await _endorsementService.GetAsync(id);
-        return _mapper.Map<UserEndorsement>(endorsement);
+        return _mapper.ToUserEndorsement(endorsement);
     }
 
     /// <inheritdoc />
@@ -89,7 +88,7 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
             Text = request.Text
         };
         var endorsement = await _endorsementService.CreateAsync(createEndorsement);
-        return _mapper.Map<UserEndorsement>(endorsement);
+        return _mapper.ToUserEndorsement(endorsement);
     }
 
     /// <inheritdoc />
@@ -101,7 +100,7 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
             Text = request.Text
         };
         var endorsement = await _endorsementService.UpdateAsync(updateEndorsement);
-        return _mapper.Map<UserEndorsement>(endorsement);
+        return _mapper.ToUserEndorsement(endorsement);
     }
 
     /// <inheritdoc />

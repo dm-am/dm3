@@ -1,6 +1,6 @@
 using System;
 using DM.Domain.Core.Extensions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Core.Tests;

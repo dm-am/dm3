@@ -21,6 +21,7 @@ internal class NotificationFactory : INotificationFactory
         NotificationId = _guidFactory.Create(),
         CreatedUtc = createDate,
         EventType = createNotification.EventType,
+        EventId = createNotification.EventId,
         UsersInterested = createNotification.UsersInterested,
         Metadata = createNotification.Metadata
     };

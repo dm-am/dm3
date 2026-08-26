@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.PostReviews;
@@ -14,13 +13,13 @@ internal class PostReviewApiService : IPostReviewApiService
 {
     private readonly IPostReviewService _postReviewService;
     private readonly IUserLookupService _userLookupService;
-    private readonly IMapper _mapper;
+    private readonly ReviewMapper _mapper;
 
     /// <inheritdoc />
     public PostReviewApiService(
         IPostReviewService postReviewService,
         IUserLookupService userLookupService,
-        IMapper mapper)
+        ReviewMapper mapper)
     {
         _postReviewService = postReviewService;
         _userLookupService = userLookupService;
@@ -49,7 +48,7 @@ internal class PostReviewApiService : IPostReviewApiService
         }
 
         var (reviews, paging) = await _postReviewService.GetAllAsync(query, filter);
-        var apiReviews = reviews.Select(_mapper.Map<PostReviewDto>);
+        var apiReviews = reviews.Select(_mapper.ToPostReview);
         return new ListEnvelope<PostReviewDto>(apiReviews, new PagingInfo(paging));
     }
 
@@ -57,7 +56,7 @@ internal class PostReviewApiService : IPostReviewApiService
     public async Task<ListEnvelope<PostReviewDto>> GetList(Guid postId, PagingQuery query)
     {
         var (reviews, paging) = await _postReviewService.GetListAsync(postId, query);
-        var apiReviews = reviews.Select(_mapper.Map<PostReviewDto>);
+        var apiReviews = reviews.Select(_mapper.ToPostReview);
         return new ListEnvelope<PostReviewDto>(apiReviews, new PagingInfo(paging));
     }
 
@@ -65,7 +64,7 @@ internal class PostReviewApiService : IPostReviewApiService
     public async Task<Envelope<PostReviewDto>> Get(Guid postId, Guid reviewId)
     {
         var review = await _postReviewService.GetAsync(postId, reviewId);
-        return new Envelope<PostReviewDto>(_mapper.Map<PostReviewDto>(review));
+        return new Envelope<PostReviewDto>(_mapper.ToPostReview(review));
     }
 
     /// <inheritdoc />
@@ -78,7 +77,7 @@ internal class PostReviewApiService : IPostReviewApiService
             Text = request.Text
         };
         var review = await _postReviewService.CreateAsync(createReview);
-        return new Envelope<PostReviewDto>(_mapper.Map<PostReviewDto>(review));
+        return new Envelope<PostReviewDto>(_mapper.ToPostReview(review));
     }
 
     /// <inheritdoc />
@@ -91,7 +90,7 @@ internal class PostReviewApiService : IPostReviewApiService
             Text = request.Text
         };
         var review = await _postReviewService.UpdateAsync(updateReview);
-        return new Envelope<PostReviewDto>(_mapper.Map<PostReviewDto>(review));
+        return new Envelope<PostReviewDto>(_mapper.ToPostReview(review));
     }
 
     /// <inheritdoc />

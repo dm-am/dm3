@@ -1,3 +1,4 @@
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
@@ -14,7 +15,14 @@ internal class UpdateMessageValidator : AbstractValidator<UpdateMessage>
 
         RuleFor(m => m.Text)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(50000).WithMessage(ValidationError.Long)
+            .MaximumLength(BodyTextLimits.MaxLength).WithMessage(ValidationError.Long)
+            .When(m => m.Text != null);
+
+        // No chat surface declares [private], and an edit is the other way the
+        // tag gets into a stored message.
+        RuleFor(m => m.Text)
+            .Must(text => !PrivateBlockMarkup.ContainsPrivateMarkup(text))
+            .WithMessage(m => PrivateBlockMarkup.DescribeSurfaceRefusal(m.Text))
             .When(m => m.Text != null);
     }
 }

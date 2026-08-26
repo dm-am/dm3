@@ -90,66 +90,16 @@ export interface GamesFilterState {
 }
 
 /**
- * API search parameters for games
- * Note: "any" values are excluded from API calls (means "don't filter")
+ * API search parameters for games.
+ *
+ * The endpoint's shape, taken from the entity that owns it rather than
+ * restated here: the copy this replaces was a subset that had to be extended
+ * by hand every time the search grew a parameter, and a filter that sets a
+ * field the copy does not declare stops compiling for no reason a reader can
+ * see. What the filter never sets (the participation and master/assistant
+ * filters other screens pass) simply stays absent.
  */
-export interface GamesSearchParams {
-  search?: string;
-
-  /** Status filter */
-  status?: string;
-
-  /** Recruitment filter for Active games (excludes "any") */
-  recruitmentFilter?: "open" | "initial" | "subsequent" | "closed";
-
-  /** Closed reason filter for Closed games (only actual reasons, not "any") */
-  closedReasonFilter?: "None" | "Finished" | "Frozen";
-
-  /** Required tag IDs - AND logic */
-  requiredTags?: number[];
-
-  /** Excluded tag IDs - NOR logic */
-  excludedTags?: number[];
-
-  /** Hosts filter - master OR assistant (OR logic) */
-  hostUsernames?: string[];
-
-  /** Created date range start (ISO string) */
-  createdFromUtc?: string;
-
-  /** Created date range end (ISO string) */
-  createdToUtc?: string;
-
-  /** Activated date range start (ISO string) */
-  activatedFromUtc?: string;
-
-  /** Activated date range end (ISO string) */
-  activatedToUtc?: string;
-
-  /** Closed date range start (ISO string) */
-  closedFromUtc?: string;
-
-  /** Closed date range end (ISO string) */
-  closedToUtc?: string;
-
-  /** Recruitment started date range start (ISO string) */
-  recruitmentStartedFromUtc?: string;
-
-  /** Recruitment started date range end (ISO string) */
-  recruitmentStartedToUtc?: string;
-
-  /** Sort field */
-  sortBy?: string;
-
-  /** Sort order */
-  sortOrder?: string;
-
-  /** Page number (1-indexed entity position) */
-  number?: number;
-
-  /** Page size (items per page) */
-  size?: number;
-}
+export type { GamesSearchParams } from "@/entities/game";
 
 /**
  * Default filter state

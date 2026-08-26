@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -28,9 +28,9 @@ namespace DM.Architecture.Tests;
 /// touched stays invisible here: it costs the domain nothing until a type from it
 /// is used.
 ///
-/// Autofac is deliberately absent from the list. Each module composes its own
-/// registrations, so the container's builder is part of the shape a domain
-/// assembly publishes rather than machinery leaking into it.
+/// The DI abstractions are deliberately absent from the list. Each module
+/// composes its own registrations, so the service collection is part of the
+/// shape a domain assembly publishes rather than machinery leaking into it.
 /// </remarks>
 public class DomainPurityShould
 {
@@ -47,7 +47,6 @@ public class DomainPurityShould
         "Microsoft.AspNetCore",
         "Microsoft.EntityFrameworkCore",
         "RabbitMQ",
-        "Jamq",
         "DM.Infrastructure",
     ];
 

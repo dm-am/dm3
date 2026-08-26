@@ -1,13 +1,13 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Abstractions;
 using DM.Infrastructure.Persistence.Repositories.Moderation;
 using DM.Infrastructure.Persistence.Shared.Users;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 using Xunit;
 using DbBan = DM.Infrastructure.Persistence.Entities.Moderation.Ban;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
@@ -47,17 +47,11 @@ public class BanHistoryQueryShould : UnitTestBase
         .UseInMemoryDatabase(_databaseName)
         .Options);
 
-    private static IMapper Mapper() => new MapperConfiguration(cfg =>
-    {
-        cfg.AddProfile<GeneralUserMappingProfile>();
-        cfg.AddProfile<ModerationMappingProfile>();
-    }).CreateMapper();
-
     private BanRepository Repository(DmDbContext context)
     {
         var clock = Mock<IDateTimeProvider>();
-        clock.SetupGet(c => c.Now).Returns(Now);
-        return new BanRepository(context, Mapper(), clock.Object);
+        clock.Now.Returns(Now);
+        return new BanRepository(context, clock);
     }
 
     private static DbUser NewUser(Guid id, string username) => new()

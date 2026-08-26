@@ -1,5 +1,5 @@
 using DM.Infrastructure.Core.Randomness;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Randomness;

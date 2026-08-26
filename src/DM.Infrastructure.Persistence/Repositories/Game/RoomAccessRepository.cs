@@ -1,8 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.RoomAccesses;
@@ -16,14 +14,11 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 internal class RoomAccessRepository : IRoomAccessRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     public RoomAccessRepository(
-        DmDbContext dbContext,
-        IMapper mapper)
+        DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     #region Read
@@ -43,7 +38,7 @@ internal class RoomAccessRepository : IRoomAccessRepository
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
             .SelectMany(r => r.RoomAccesses)
             .Where(a => a.AccessId == accessId)
-            .ProjectTo<RoomAccess>(_mapper.ConfigurationProvider)
+            .ProjectToRoomAccess()
             .FirstOrDefaultAsync();
     }
 
@@ -106,7 +101,7 @@ internal class RoomAccessRepository : IRoomAccessRepository
         return await _dbContext.RoomAccesses
             .TagWith("DM.RoomAccess.Created")
             .Where(l => l.AccessId == entity.AccessId)
-            .ProjectTo<RoomAccess>(_mapper.ConfigurationProvider)
+            .ProjectToRoomAccess()
             .FirstAsync();
     }
 
@@ -123,7 +118,7 @@ internal class RoomAccessRepository : IRoomAccessRepository
         return await _dbContext.RoomAccesses
             .TagWith("DM.RoomAccess.Updated")
             .Where(l => l.AccessId == entity.AccessId)
-            .ProjectTo<RoomAccess>(_mapper.ConfigurationProvider)
+            .ProjectToRoomAccess()
             .FirstAsync();
     }
 

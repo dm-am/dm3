@@ -1,7 +1,7 @@
 using System;
 using DM.Domain.Community.Features.Polls;
 using DM.Domain.Core.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Polls;

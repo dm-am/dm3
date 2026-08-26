@@ -52,23 +52,6 @@ internal class BlogActivatedNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
-        var usersInterested = new HashSet<Guid>();
-
-        var authorSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
-            SubscriptionTargetType.User,
-            blogData.AuthorId,
-            SubscriptionSettings.AuthorBlogEvents);
-        usersInterested.UnionWith(authorSubscriptions.Select(s => s.SubscriberId));
-
-        foreach (var assistantId in blogData.AssistantIds)
-        {
-            var assistantSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
-                SubscriptionTargetType.User,
-                assistantId,
-                SubscriptionSettings.AuthorBlogEvents);
-            usersInterested.UnionWith(assistantSubscriptions.Select(s => s.SubscriberId));
-        }
-
         // Readers of this blog are deliberately absent. They are subscribed to the
         // blog itself, so BlogStatusChangedNotificationGenerator answers the same
         // event and already tells them it went active under the event type of the
@@ -76,13 +59,11 @@ internal class BlogActivatedNotificationGenerator : BaseNotificationGenerator
         // NewBlogFromSubscribedAuthor, which is only true for the audience that
         // could not see the blog while it was a draft; delivered to a reader it was
         // a second copy of one activation calling a blog they already follow new.
-
-        // Exclude the team — they're notified through team-targeted generators.
-        usersInterested.Remove(blogData.AuthorId);
-        foreach (var assistantId in blogData.AssistantIds)
-        {
-            usersInterested.Remove(assistantId);
-        }
+        var usersInterested = await SubscribedAudience.OfTeamAsync(
+            _subscriptionRepository,
+            blogData.AuthorId,
+            blogData.AssistantIds,
+            SubscriptionSettings.AuthorBlogEvents);
 
         if (usersInterested.Count == 0)
         {

@@ -5,37 +5,34 @@
  * moderator+ gated server-side, doc 4.2.3.8.9). A username filter narrows to
  * one user's uploads. Delete soft-deletes the file (ConfirmDialog-gated).
  *
- * The uploader column links to each file's owner via the Upload DTO's
- * uploaderUsername (falls back to the active username filter, then to "—").
+ * The table is the shared UploadsTable, the same one the owner's "Загруженное"
+ * draws; this page adds the column it alone has. The uploader column links to
+ * each file's owner via the Upload DTO's uploaderUsername (falls back to the
+ * active username filter, then to "—").
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { moderationApi } from "@/entities/moderation";
 import type { Upload } from "@/shared/api/models/common/upload";
 import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
-import { DataTable, type Column } from "@/shared/ui/DataTable";
+import { type Column } from "@/shared/ui/DataTable";
+import { UploadsTable } from "@/shared/ui/UploadsTable";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { formatDate } from "@/shared/lib/utils/datetime";
-import { formatFileSize } from "@/shared/lib/utils/fileSize";
+import { parsePageNumber } from "@/shared/lib/filters";
 import {
-  isImage,
-  fileExt,
-  uploadHref,
   uploadPreviewColumn,
   uploadFileColumn,
 } from "@/shared/lib/utils/upload";
-import { useToast } from "@/shared/lib/composables/useToast";
+import { useUploadDelete } from "@/shared/lib/composables/useUploadDelete";
 import { useRoleGate } from "./lib/useRoleGate";
-import { notifyFailure } from "@/shared/lib/errors";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const PAGE_SIZE = 25;
 
 const route = useRoute();
-const toast = useToast();
 const { hasAccess, deniedText } = useRoleGate("Moderator");
 
 const uploads = ref<Upload[]>([]);
@@ -47,10 +44,7 @@ const loadError = ref<string | null>(null);
 const usernameInput = ref("");
 const usernameFilter = ref("");
 
-const pageNumber = computed(() => {
-  const n = parseInt(String(route.query.number ?? "1"), 10);
-  return Number.isFinite(n) && n > 0 ? n : 1;
-});
+const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
 const columns: Column[] = [
   uploadPreviewColumn,
@@ -86,22 +80,7 @@ function applyFilter() {
 }
 
 // --- Delete upload (ConfirmDialog-gated) ---
-const deleteTarget = ref<Upload | null>(null);
-const deleting = ref(false);
-
-async function confirmDelete() {
-  if (!deleteTarget.value || deleting.value) return;
-  deleting.value = true;
-  const { error } = await moderationApi.deleteUpload(deleteTarget.value.id);
-  deleting.value = false;
-  if (error) {
-    notifyFailure(error, "Не удалось удалить файл");
-    return;
-  }
-  toast.success("Файл удален");
-  deleteTarget.value = null;
-  await fetch();
-}
+const { deleteTarget, deleting, confirmDelete } = useUploadDelete(fetch);
 </script>
 
 <template>
@@ -127,33 +106,12 @@ async function confirmDelete() {
       <ErrorState v-if="loadError" :message="loadError" :retry="fetch" />
 
       <template v-else>
-        <DataTable
+        <UploadsTable
           :columns="columns"
-          :data="uploads"
+          :uploads="uploads"
           :loading="loading"
-          empty-text="Загруженных файлов пока нет"
-          aria-label="Загруженные файлы"
+          @remove="(row) => (deleteTarget = row)"
         >
-          <template #cell-preview="{ row }">
-            <img
-              v-if="isImage(row)"
-              :src="uploadHref(row)"
-              :alt="row.originalFileName"
-              class="upload-thumb"
-              loading="lazy"
-            />
-            <span v-else class="upload-ext">{{ fileExt(row) }}</span>
-          </template>
-          <template #cell-file="{ row }">
-            <a
-              :href="uploadHref(row)"
-              target="_blank"
-              rel="noopener"
-              class="upload-name"
-            >
-              {{ row.originalFileName }}
-            </a>
-          </template>
           <template #cell-uploader="{ row }">
             <router-link
               v-if="row.uploaderUsername || usernameFilter"
@@ -168,22 +126,7 @@ async function confirmDelete() {
               VALUE_UNAVAILABLE
             }}</span>
           </template>
-          <template #cell-date="{ row }">
-            {{ formatDate(row.createdUtc) }}
-          </template>
-          <template #cell-size="{ row }">
-            {{ formatFileSize(row.sizeBytes) }}
-          </template>
-          <template #cell-actions="{ row }">
-            <button
-              type="button"
-              class="delete-button"
-              @click="deleteTarget = row"
-            >
-              Удалить
-            </button>
-          </template>
-        </DataTable>
+        </UploadsTable>
 
         <Paging
           v-if="paging"
@@ -209,8 +152,6 @@ async function confirmDelete() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-
 .filters
   display: flex
   align-items: flex-end
@@ -224,30 +165,6 @@ async function confirmDelete() {
   // vertical margin around the labeled field)
   button
     margin-bottom: $small
-
-.upload-thumb
-  display: block
-  width: 48px
-  height: 48px
-  object-fit: cover
-  border-radius: $border-radius
-  margin: 0 auto
-
-.upload-ext
-  color: $text-muted
-  font-size: $tertiary-font-size
-  font-weight: bold
-
-.upload-name
-  overflow-wrap: anywhere
-
-.delete-button
-  +inline-link-button
-
-  // Destructive action stays red at rest and on hover
-  &,
-  &:hover:not(:disabled)
-    color: $accent-red
 
 .muted
   color: $text-muted

@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -22,18 +20,15 @@ namespace DM.Infrastructure.Persistence.Repositories.Forum;
 internal class TopicRepository : ITopicRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public TopicRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
     }
@@ -118,7 +113,7 @@ internal class TopicRepository : ITopicRepository
         var topics = await sortedDbQuery
             .Page(pagingData)
             .AsNoTracking()
-            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .ProjectToTopic()
             .ToArrayAsync(ct);
 
         // Fill TotalCommentsCount + LikesCount in two batched GROUP BY
@@ -222,7 +217,7 @@ internal class TopicRepository : ITopicRepository
             .Where(t => !t.IsRemoved && t.TopicId == topicId &&
                         (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
             .AsNoTracking()
-            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .ProjectToTopic()
             .FirstOrDefaultAsync(ct);
 
         await FillCounts(topic, ct);
@@ -273,7 +268,7 @@ internal class TopicRepository : ITopicRepository
             .Where(t => !t.IsRemoved && t.BoardId == boardId && t.TopicNumber == topicNumber &&
                         (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
             .AsNoTracking()
-            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .ProjectToTopic()
             .FirstOrDefaultAsync(ct);
 
         await FillCounts(topic, ct);
@@ -302,7 +297,7 @@ internal class TopicRepository : ITopicRepository
             .ThenByDescending(t => t.CreatedUtc)
             .ThenBy(t => t.TopicId)
             .AsNoTracking()
-            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .ProjectToTopic()
             .FirstOrDefaultAsync(ct);
 
         await FillCounts(topic, ct);
@@ -315,7 +310,7 @@ internal class TopicRepository : ITopicRepository
     /// the list path materialises via batched GROUP BY. The mapping profile
     /// intentionally ignores these to avoid per-row correlated subqueries, so
     /// the single-topic page would otherwise show 0. See the list path above
-    /// and TopicMappingProfile for the rationale.
+    /// and TopicMapper for the rationale.
     /// </summary>
     private async Task FillCounts(Topic? topic, CancellationToken ct)
     {
@@ -349,19 +344,8 @@ internal class TopicRepository : ITopicRepository
         // The API host configures EnableRetryOnFailure, and a retrying execution
         // strategy refuses a transaction opened by hand — it has no way to replay
         // one. Everything below therefore runs as a single retriable unit.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                // A retry replays this whole block, so anything the failed attempt
-                // left tracked has to go: still Added it would insert the topic a
-                // second time, already Unchanged it would insert nothing at all.
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
 
             // TopicNumber is allocated as MAX+1 and the board's counters are a
@@ -413,7 +397,7 @@ internal class TopicRepository : ITopicRepository
         return await _dbContext.Topics
             .TagWith("DM.Forum.CreatedTopic")
             .Where(t => t.TopicId == topicId)
-            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .ProjectToTopic()
             .FirstAsync(ct);
     }
 
@@ -430,17 +414,8 @@ internal class TopicRepository : ITopicRepository
         // inside the block: cleared out of the tracker by a retry, an entity read
         // outside it would take every edit with it.
         var changed = false;
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
-
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
             var topic = await _dbContext.Topics.FindAsync(updateTopic.TopicId);
@@ -512,7 +487,7 @@ internal class TopicRepository : ITopicRepository
         var updated = await _dbContext.Topics
             .TagWith("DM.Forum.UpdatedTopic")
             .Where(t => t.TopicId == updateTopic.TopicId)
-            .ProjectTo<Topic>(_mapper.ConfigurationProvider)
+            .ProjectToTopic()
             .FirstAsync();
 
         return new TopicUpdateResult(updated, changed);
@@ -524,17 +499,8 @@ internal class TopicRepository : ITopicRepository
         // Both writes or neither: separately, a refusal between them left the board
         // counting a topic that is gone. The read is inside the block for the same
         // reason as in Update above.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
-
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
             var topic = await _dbContext.Topics.FindAsync(topicId);

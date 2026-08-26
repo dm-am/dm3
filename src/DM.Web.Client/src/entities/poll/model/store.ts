@@ -4,6 +4,7 @@ import type { Poll, PollId, PollOptionId, PollsSearchParams } from "./types";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import type { Patch, Post } from "@/shared/api/models";
 import pollApi from "../api/pollApi";
+import { unwrapResource } from "@/shared/api";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
@@ -53,27 +54,35 @@ export const usePollsStore = defineStore("polls", () => {
 
   async function createPoll(poll: Post<Poll>) {
     const { data, error } = await pollApi.postPoll(poll);
-    if (data && polls.value) {
-      polls.value.resources.unshift(data);
+    // Every answer here is an envelope, and the poll is under `resource`. Used
+    // as it came, its id is undefined: the new poll went into the list as an
+    // empty card, and updatePoll below matched nothing at all, so a vote, an
+    // unvote and an edit each left the card showing what it showed before.
+    const created = unwrapResource<Poll>(data);
+    if (created && polls.value) {
+      polls.value.resources.unshift(created);
     }
-    return { data, error };
+    return { data: created, error };
   }
 
   async function editPoll(pollId: PollId, poll: Patch<Poll>) {
     const { data, error } = await pollApi.patchPoll(pollId, poll);
-    if (data) updatePoll(data);
-    return { data, error };
+    const updated = unwrapResource<Poll>(data);
+    if (updated) updatePoll(updated);
+    return { data: updated, error };
   }
 
   async function vote(pollId: PollId, optionId: PollOptionId) {
     const { data, error } = await pollApi.postPollVote(pollId, optionId);
-    if (data) updatePoll(data);
+    const voted = unwrapResource<Poll>(data);
+    if (voted) updatePoll(voted);
     return { error };
   }
 
   async function unvote(pollId: PollId) {
     const { data } = await pollApi.deletePollVote(pollId);
-    if (data) updatePoll(data);
+    const unvoted = unwrapResource<Poll>(data);
+    if (unvoted) updatePoll(unvoted);
   }
 
   return {

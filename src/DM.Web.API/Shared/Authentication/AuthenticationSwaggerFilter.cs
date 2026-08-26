@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace DM.Web.API.Shared.Authentication;
@@ -29,17 +29,7 @@ public class AuthenticationSwaggerFilter : IOperationFilter
             operation.Security ??= [];
             operation.Security.Add(new OpenApiSecurityRequirement
             {
-                {
-                    new OpenApiSecurityScheme
-                    {
-                        Reference = new OpenApiReference
-                        {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = "cookieAuth"
-                        }
-                    },
-                    []
-                }
+                [new OpenApiSecuritySchemeReference("cookieAuth")] = []
             });
         }
     }

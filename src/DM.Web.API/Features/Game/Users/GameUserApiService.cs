@@ -1,5 +1,4 @@
 using System;
-using AutoMapper;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -22,20 +21,17 @@ internal class GameUserApiService : IGameUserApiService
     private readonly IGameSubscriptionService _subscriptionService;
     private readonly IGameService _gameService;
     private readonly IIdentityProvider _identityProvider;
-    private readonly IMapper _mapper;
 
     public GameUserApiService(
         IGameInvitationService invitationService,
         IGameSubscriptionService subscriptionService,
         IGameService gameService,
-        IIdentityProvider identityProvider,
-        IMapper mapper)
+        IIdentityProvider identityProvider)
     {
         _invitationService = invitationService;
         _subscriptionService = subscriptionService;
         _gameService = gameService;
         _identityProvider = identityProvider;
-        _mapper = mapper;
     }
 
     #region Users
@@ -140,14 +136,24 @@ internal class GameUserApiService : IGameUserApiService
     /// alone, with no record of when they took it.
     /// </summary>
     /// <remarks>
-    /// The reference is mapped rather than copied field by field: the profile
-    /// already states how each source becomes a UserRef, and a second copy here
-    /// silently dropped Role and IsNewbie from every assistant and reader.
+    /// The reference is mapped rather than copied field by field: the shared
+    /// mapper already states how each source becomes a UserRef, and a second
+    /// copy here silently dropped Role and IsNewbie from every assistant and
+    /// reader.
     /// </remarks>
-    private GameUser AsGameUser<TUser>(TUser user, GameRole role) =>
+    private static GameUser AsGameUser(GeneralUser user, GameRole role) =>
         new()
         {
-            User = _mapper.Map<UserRef>(user),
+            User = UserRefMappers.ToUserRef(user),
+            Role = role.ToApiString(),
+            JoinedUtc = DateTimeOffset.MinValue
+        };
+
+    /// <inheritdoc cref="AsGameUser(GeneralUser, GameRole)" />
+    private static GameUser AsGameUser(UserReference user, GameRole role) =>
+        new()
+        {
+            User = UserRefMappers.ToUserRef(user),
             Role = role.ToApiString(),
             JoinedUtc = DateTimeOffset.MinValue
         };

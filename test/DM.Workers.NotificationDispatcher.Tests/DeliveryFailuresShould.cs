@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Messaging.GeneralBus;
@@ -11,9 +10,10 @@ using DM.Workers.NotificationDispatcher.Bot;
 using DM.Workers.NotificationDispatcher.Dispatching;
 using DM.Workers.NotificationDispatcher.Email;
 using DM.Workers.NotificationDispatcher.Notifiers;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Workers.NotificationDispatcher.Tests;
@@ -23,10 +23,12 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// </summary>
 /// <remarks>
 /// Delivery is best effort by design: the notification is already durable when
-/// the senders run, the event carries no idempotency key, and letting one dead
-/// channel throw would replay the whole message and cost the recipient a second
-/// copy over every channel that is up. So a failure is swallowed - and swallowed
-/// is where it stopped. The message was consumed successfully, because from the
+/// the senders run, and letting one dead channel throw would replay the whole
+/// message - since W1.4 the idempotent write keeps the replay from storing and
+/// sending it all again, but the retries would burn on a channel that is down
+/// and a message from before the key existed would still cost the recipient a
+/// second copy over every channel that is up. So a failure is swallowed - and
+/// swallowed is where it stopped. The message was consumed successfully, because from the
 /// pipeline's side it was, so every counter about the queue and every panel about
 /// the process stayed exactly as green as on a day when everything arrived.
 ///
@@ -78,14 +80,13 @@ public class DeliveryFailuresShould
             Metadata = new object(),
         };
 
-        var generator = new Mock<INotificationGenerator>();
-        generator.Setup(g => g.CanResolve(It.IsAny<EventType>())).Returns(true);
-        generator.Setup(g => g.Generate(It.IsAny<Guid>())).Returns(One(notification));
+        var generator = Substitute.For<INotificationGenerator>();
+        generator.CanResolve(Arg.Any<EventType>()).Returns(true);
+        generator.Generate(Arg.Any<Guid>()).Returns(One(notification));
 
-        var service = new Mock<INotificationService>();
+        var service = Substitute.For<INotificationService>();
         service
-            .Setup(s => s.CreateAsync(It.IsAny<IReadOnlyList<CreateNotification>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[]
+            .CreateAsync(Arg.Any<IReadOnlyList<CreateNotification>>(), Arg.Any<CancellationToken>()).Returns(new[]
             {
                 new CreatedNotification(notification, new CreateNotificationEntity
                 {
@@ -95,53 +96,44 @@ public class DeliveryFailuresShould
                 }),
             });
 
-        var producer = new Mock<IRealtimeNotificationProducer>();
-        var email = new Mock<INotificationEmailSender>();
-        var bot = new Mock<INotificationBotSender>();
+        var producer = Substitute.For<IRealtimeNotificationProducer>();
+        var email = Substitute.For<INotificationEmailSender>();
+        var bot = Substitute.For<INotificationBotSender>();
 
         var refused = new InvalidOperationException("the channel refused it");
         if (failing == "realtime")
         {
             producer
-                .Setup(p => p.SendAsync(It.IsAny<RealtimeNotification>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(refused);
+                .SendAsync(Arg.Any<RealtimeNotification>(), Arg.Any<CancellationToken>()).ThrowsAsync(refused);
         }
 
         if (failing == "email")
         {
             email
-                .Setup(s => s.SendIfEnabled(It.IsAny<CreateNotification>(), It.IsAny<EventType>(),
-                    It.IsAny<CancellationToken>()))
-                .ThrowsAsync(refused);
+                .SendIfEnabled(Arg.Any<CreateNotification>(), Arg.Any<EventType>(),
+                    Arg.Any<CancellationToken>()).ThrowsAsync(refused);
         }
 
         if (failing == "bot")
         {
             bot
-                .Setup(s => s.SendIfEnabled(It.IsAny<CreateNotification>(), It.IsAny<EventType>(),
-                    It.IsAny<CancellationToken>()))
-                .ThrowsAsync(refused);
+                .SendIfEnabled(Arg.Any<CreateNotification>(), Arg.Any<EventType>(),
+                    Arg.Any<CancellationToken>()).ThrowsAsync(refused);
         }
 
-        var mapper = new Mock<IMapper>();
-        mapper
-            .Setup(m => m.Map<RealtimeNotification>(It.IsAny<CreateNotificationEntity>()))
-            .Returns(new RealtimeNotification());
-
         var processor = new NotificationProcessor(
-            [generator.Object],
-            service.Object,
-            email.Object,
-            bot.Object,
-            mapper.Object,
-            producer.Object,
-            Mock.Of<ILogger<NotificationProcessor>>());
+            [generator],
+            service,
+            email,
+            bot,
+            producer,
+            Substitute.For<ILogger<NotificationProcessor>>());
 
         var result = await processor.Process("key",
             new InvokedEvent { Type = EventType.NewTopic, EntityId = Guid.NewGuid() },
             CancellationToken.None);
 
-        result.Should().Be(Jamq.Client.Abstractions.Consuming.ProcessResult.Success,
+        result.Should().Be(DM.Infrastructure.Messaging.ProcessResult.Success,
             "a failed delivery must not hand the message back to the retry ladder: the " +
             "notification is already written, and a replay writes it again");
     }

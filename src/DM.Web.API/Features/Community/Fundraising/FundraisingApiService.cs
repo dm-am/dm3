@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Community.Features.Fundraising;
 using DM.Web.API.Shared.Dto;
 
@@ -9,12 +8,12 @@ namespace DM.Web.API.Features.Community.Fundraising;
 internal class FundraisingApiService : IFundraisingApiService
 {
     private readonly IFundraisingGoalService _fundraisingGoalService;
-    private readonly IMapper _mapper;
+    private readonly FundraisingMapper _mapper;
 
     /// <inheritdoc />
     public FundraisingApiService(
         IFundraisingGoalService fundraisingGoalService,
-        IMapper mapper)
+        FundraisingMapper mapper)
     {
         _fundraisingGoalService = fundraisingGoalService;
         _mapper = mapper;
@@ -24,7 +23,7 @@ internal class FundraisingApiService : IFundraisingApiService
     public async Task<Envelope<Fundraising>> Get()
     {
         var goal = await _fundraisingGoalService.GetAsync();
-        return new Envelope<Fundraising>(_mapper.Map<Fundraising>(goal));
+        return new Envelope<Fundraising>(_mapper.ToFundraising(goal));
     }
 
     /// <inheritdoc />
@@ -37,6 +36,6 @@ internal class FundraisingApiService : IFundraisingApiService
             CollectedAmount = request.CollectedAmount
         };
         var goal = await _fundraisingGoalService.UpdateAsync(updateGoal);
-        return new Envelope<Fundraising>(_mapper.Map<Fundraising>(goal));
+        return new Envelope<Fundraising>(_mapper.ToFundraising(goal));
     }
 }

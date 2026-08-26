@@ -20,7 +20,7 @@ export default defineConfig((env) => {
         // The SignalR hub. Without it the negotiate request is answered by Vite
         // with a 404 and realtime silently degrades to the 30s poll, which reads
         // as "working, just slow".
-        "/whatsup": {
+        "/hubs": {
           target: "http://localhost:5000",
           changeOrigin: true,
           ws: true,

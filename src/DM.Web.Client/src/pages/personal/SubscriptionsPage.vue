@@ -172,7 +172,7 @@ const handleUnsubscribe = async (subscription: Subscription) => {
 
 <style scoped lang="sass">
 // Variables are injected globally via vite.config.ts additionalData
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .subscriptions-page
   padding: $medium

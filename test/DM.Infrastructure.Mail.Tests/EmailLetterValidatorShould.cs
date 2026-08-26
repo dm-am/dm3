@@ -1,6 +1,6 @@
 using DM.Infrastructure.Mail;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 using DM.Domain.Core.Mail;

@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/ZIndex"
+@use "@/assets/styles/ZIndex" as *
 
 .drawer-scrim
   position: fixed

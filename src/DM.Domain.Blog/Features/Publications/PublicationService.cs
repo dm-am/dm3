@@ -226,9 +226,10 @@ internal class PublicationService : IPublicationService
 
         var userId = _identityProvider.Current.User.UserId;
         await _repository.DeletePublication(publicationId, userId, ct);
-        await Task.WhenAll(
-            _unreadCountersRepository.DeleteAsync(publicationId, UnreadEntryType.Message),
-            _eventProducer.SendAsync(EventType.DeletedPublication, publicationId));
+        // Sequential: the counter tombstone is a DmDbContext write now, and a
+        // context refuses to share the scope with a parallel operation (INV-7).
+        await _unreadCountersRepository.DeleteAsync(publicationId, UnreadEntryType.Message);
+        await _eventProducer.SendAsync(EventType.DeletedPublication, publicationId);
     }
 
     private async Task FillPublicationUnreadCounters(Publication[] publications)

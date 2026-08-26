@@ -15,19 +15,19 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Notepads;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Notepads;
 
 public class GameNotepadServiceShould : UnitTestBase
 {
-    private readonly Mock<INotepadRepository> _repository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IGameService> _gameService;
-    private readonly Mock<ICharacterService> _characterService;
+    private readonly INotepadRepository _repository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IGameService _gameService;
+    private readonly ICharacterService _characterService;
     private readonly GameNotepadService _service;
     private readonly Guid _currentUserId;
 
@@ -37,28 +37,27 @@ public class GameNotepadServiceShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         var guidFactory = Mock<IGuidFactory>();
-        guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        guidFactory.Create().Returns(Guid.NewGuid());
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<NotepadIntention>(), It.IsAny<NotepadAuthContext>()));
 
         _gameService = Mock<IGameService>();
         _characterService = Mock<ICharacterService>();
 
         _service = new GameNotepadService(
-            _repository.Object,
-            _identityProvider.Object,
-            guidFactory.Object,
-            dateTimeProvider.Object,
-            _intentionManager.Object,
-            _gameService.Object,
-            _characterService.Object);
+            _repository,
+            _identityProvider,
+            guidFactory,
+            dateTimeProvider,
+            _intentionManager,
+            _gameService,
+            _characterService);
     }
 
     private static GameDetails CreateGame(Guid gameId) => new GameDetails
@@ -72,13 +71,13 @@ public class GameNotepadServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         var game = CreateGame(gameId);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.GetEntriesAsync(NotepadType.Master, gameId, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<NotepadEntry>());
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.GetEntriesAsync(NotepadType.Master, gameId, null, Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<NotepadEntry>());
 
         await _service.GetMasterEntries(gameId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(NotepadIntention.Read, It.IsAny<NotepadAuthContext>()), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(NotepadIntention.Read, Arg.Any<NotepadAuthContext>());
     }
 
     [Fact]
@@ -87,16 +86,16 @@ public class GameNotepadServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var createEntry = new CreateNotepadEntry { Title = "Test Entry", Content = "Content" };
         var game = CreateGame(gameId);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.CreateEntryAsync(It.IsAny<CreateNotepadEntryInternal>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new NotepadEntry { Id = Guid.NewGuid() });
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.CreateEntryAsync(Arg.Any<CreateNotepadEntryInternal>(), Arg.Any<CancellationToken>())
+            .Returns(new NotepadEntry { Id = Guid.NewGuid() });
 
         var result = await _service.CreateMasterEntry(gameId, createEntry);
 
         result.Should().NotBeNull();
-        _repository.Verify(r => r.CreateEntryAsync(
-            It.Is<CreateNotepadEntryInternal>(e => e.NotepadType == NotepadType.Master && e.ContainerId == gameId),
-            It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).CreateEntryAsync(
+            Arg.Is<CreateNotepadEntryInternal>(e => e.NotepadType == NotepadType.Master && e.ContainerId == gameId),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -106,14 +105,14 @@ public class GameNotepadServiceShould : UnitTestBase
         var characterId = Guid.NewGuid();
         var game = CreateGame(gameId);
         var character = new Character { Id = characterId, GameId = gameId };
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _characterService.Setup(s => s.GetAsync(characterId)).ReturnsAsync(character);
-        _repository.Setup(r => r.GetEntriesAsync(NotepadType.Player, gameId, characterId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<NotepadEntry>());
+        _gameService.GetAsync(gameId).Returns(game);
+        _characterService.GetAsync(characterId).Returns(character);
+        _repository.GetEntriesAsync(NotepadType.Player, gameId, characterId, Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<NotepadEntry>());
 
         await _service.GetPlayerEntries(gameId, characterId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(NotepadIntention.Read, It.IsAny<NotepadAuthContext>()), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(NotepadIntention.Read, Arg.Any<NotepadAuthContext>());
     }
 
     [Fact]
@@ -124,20 +123,20 @@ public class GameNotepadServiceShould : UnitTestBase
         var createEntry = new CreateNotepadEntry { Title = "Test Entry", Content = "Content" };
         var game = CreateGame(gameId);
         var character = new Character { Id = characterId, GameId = gameId };
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _characterService.Setup(s => s.GetAsync(characterId)).ReturnsAsync(character);
-        _repository.Setup(r => r.CreateEntryAsync(It.IsAny<CreateNotepadEntryInternal>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new NotepadEntry { Id = Guid.NewGuid() });
+        _gameService.GetAsync(gameId).Returns(game);
+        _characterService.GetAsync(characterId).Returns(character);
+        _repository.CreateEntryAsync(Arg.Any<CreateNotepadEntryInternal>(), Arg.Any<CancellationToken>())
+            .Returns(new NotepadEntry { Id = Guid.NewGuid() });
 
         var result = await _service.CreatePlayerEntry(gameId, characterId, createEntry);
 
         result.Should().NotBeNull();
-        _repository.Verify(r => r.CreateEntryAsync(
-            It.Is<CreateNotepadEntryInternal>(e =>
+        await _repository.Received(1).CreateEntryAsync(
+            Arg.Is<CreateNotepadEntryInternal>(e =>
                 e.NotepadType == NotepadType.Player &&
                 e.ContainerId == gameId &&
                 e.OwnerId == characterId),
-            It.IsAny<CancellationToken>()), Times.Once);
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -147,22 +146,22 @@ public class GameNotepadServiceShould : UnitTestBase
         var characterId = Guid.NewGuid();
         var game = CreateGame(gameId);
         var character = new Character { Id = characterId, GameId = gameId };
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _characterService.Setup(s => s.GetAsync(characterId)).ReturnsAsync(character);
-        _repository.Setup(r => r.GetEntriesAsync(NotepadType.CharacterMaster, gameId, characterId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<NotepadEntry>());
+        _gameService.GetAsync(gameId).Returns(game);
+        _characterService.GetAsync(characterId).Returns(character);
+        _repository.GetEntriesAsync(NotepadType.CharacterMaster, gameId, characterId, Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<NotepadEntry>());
 
         await _service.GetCharacterMasterEntries(gameId, characterId);
 
         // Scoped to the character and to this notepad type. Read against the
         // player scope instead, the notes the leads keep would answer with what
         // the player wrote — the two notepads share a table and a character.
-        _repository.Verify(r => r.GetEntriesAsync(
-            NotepadType.CharacterMaster, gameId, characterId, It.IsAny<CancellationToken>()), Times.Once);
-        _intentionManager.Verify(m => m.ThrowIfForbidden(
+        await _repository.Received(1).GetEntriesAsync(
+            NotepadType.CharacterMaster, gameId, characterId, Arg.Any<CancellationToken>());
+        _intentionManager.Received(1).ThrowIfForbidden(
             NotepadIntention.Read,
-            It.Is<NotepadAuthContext>(c =>
-                c.NotepadType == NotepadType.CharacterMaster && c.OwnerId == characterId)), Times.Once);
+            Arg.Is<NotepadAuthContext>(c =>
+                c.NotepadType == NotepadType.CharacterMaster && c.OwnerId == characterId));
     }
 
     [Fact]
@@ -173,20 +172,20 @@ public class GameNotepadServiceShould : UnitTestBase
         var createEntry = new CreateNotepadEntry { Title = "Test Entry", Content = "Content" };
         var game = CreateGame(gameId);
         var character = new Character { Id = characterId, GameId = gameId };
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _characterService.Setup(s => s.GetAsync(characterId)).ReturnsAsync(character);
-        _repository.Setup(r => r.CreateEntryAsync(It.IsAny<CreateNotepadEntryInternal>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new NotepadEntry { Id = Guid.NewGuid() });
+        _gameService.GetAsync(gameId).Returns(game);
+        _characterService.GetAsync(characterId).Returns(character);
+        _repository.CreateEntryAsync(Arg.Any<CreateNotepadEntryInternal>(), Arg.Any<CancellationToken>())
+            .Returns(new NotepadEntry { Id = Guid.NewGuid() });
 
         var result = await _service.CreateCharacterMasterEntry(gameId, characterId, createEntry);
 
         result.Should().NotBeNull();
-        _repository.Verify(r => r.CreateEntryAsync(
-            It.Is<CreateNotepadEntryInternal>(e =>
+        await _repository.Received(1).CreateEntryAsync(
+            Arg.Is<CreateNotepadEntryInternal>(e =>
                 e.NotepadType == NotepadType.CharacterMaster &&
                 e.ContainerId == gameId &&
                 e.OwnerId == characterId),
-            It.IsAny<CancellationToken>()), Times.Once);
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -195,19 +194,19 @@ public class GameNotepadServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var characterId = Guid.NewGuid();
         var game = CreateGame(gameId);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.GetEntriesAsync(NotepadType.CharacterMaster, gameId, characterId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<NotepadEntry>());
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.GetEntriesAsync(NotepadType.CharacterMaster, gameId, characterId, Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<NotepadEntry>());
 
         await _service.GetCharacterMasterEntries(gameId, characterId);
 
         // This notepad is answered by the game role alone, which is what makes
         // it exist for every character rather than for the ones with a player.
         // A character owner in the context would be a second way in.
-        _intentionManager.Verify(m => m.ThrowIfForbidden(
+        _intentionManager.Received(1).ThrowIfForbidden(
             NotepadIntention.Read,
-            It.Is<NotepadAuthContext>(c => c.CharacterOwnerId == null)), Times.Once);
-        _characterService.Verify(s => s.GetAsync(It.IsAny<Guid>()), Times.Never);
+            Arg.Is<NotepadAuthContext>(c => c.CharacterOwnerId == null));
+        await _characterService.DidNotReceive().GetAsync(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -224,8 +223,8 @@ public class GameNotepadServiceShould : UnitTestBase
             OwnerId = characterId,
             AuthorId = Guid.NewGuid()
         };
-        _repository.Setup(r => r.GetEntryAsync(entryId, It.IsAny<CancellationToken>())).ReturnsAsync(entry);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(CreateGame(gameId));
+        _repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns(entry);
+        _gameService.GetAsync(gameId).Returns(CreateGame(gameId));
 
         // The entry endpoints take an id and nothing else, so the type guard in
         // front of them is what decides whether this service answers for the
@@ -233,15 +232,14 @@ public class GameNotepadServiceShould : UnitTestBase
         var result = await _service.GetEntry(entryId);
 
         result.Should().BeSameAs(entry);
-        _intentionManager.Verify(m => m.ThrowIfForbidden(NotepadIntention.Read, It.IsAny<NotepadAuthContext>()), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(NotepadIntention.Read, Arg.Any<NotepadAuthContext>());
     }
 
     [Fact]
     public async Task ThrowNotFoundWhenEntryDoesNotExist()
     {
         var entryId = Guid.NewGuid();
-        _repository.Setup(r => r.GetEntryAsync(entryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((NotepadEntry?)null);
+        _repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns((NotepadEntry?)null);
 
         var act = async () => await _service.GetEntry(entryId);
 
@@ -259,8 +257,7 @@ public class GameNotepadServiceShould : UnitTestBase
             NotepadType = NotepadType.User,
             ContainerId = Guid.NewGuid()
         };
-        _repository.Setup(r => r.GetEntryAsync(entryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(entry);
+        _repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns(entry);
 
         var act = async () => await _service.GetEntry(entryId);
 
@@ -281,15 +278,14 @@ public class GameNotepadServiceShould : UnitTestBase
             ContainerId = gameId
         };
         var game = CreateGame(gameId);
-        _repository.Setup(r => r.GetEntryAsync(entryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(entry);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.UpdateEntryAsync(It.IsAny<UpdateNotepadEntryInternal>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(entry);
+        _repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns(entry);
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.UpdateEntryAsync(Arg.Any<UpdateNotepadEntryInternal>(), Arg.Any<CancellationToken>())
+            .Returns(entry);
 
         await _service.UpdateEntry(entryId, updateEntry);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(NotepadIntention.Edit, It.IsAny<NotepadAuthContext>()), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(NotepadIntention.Edit, Arg.Any<NotepadAuthContext>());
     }
 
     [Fact]
@@ -304,15 +300,13 @@ public class GameNotepadServiceShould : UnitTestBase
             ContainerId = gameId
         };
         var game = CreateGame(gameId);
-        _repository.Setup(r => r.GetEntryAsync(entryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(entry);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.DeleteEntryAsync(entryId, _currentUserId, It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+        _repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns(entry);
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.DeleteEntryAsync(entryId, _currentUserId, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
         await _service.DeleteEntry(entryId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(NotepadIntention.Delete, It.IsAny<NotepadAuthContext>()), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(NotepadIntention.Delete, Arg.Any<NotepadAuthContext>());
     }
 
     [Fact]
@@ -330,20 +324,19 @@ public class GameNotepadServiceShould : UnitTestBase
             AuthorId = authorId
         };
         var game = CreateGame(gameId);
-        _repository.Setup(r => r.GetEntryAsync(entryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(entry);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.UpdateEntryAsync(It.IsAny<UpdateNotepadEntryInternal>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(entry);
+        _repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns(entry);
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.UpdateEntryAsync(Arg.Any<UpdateNotepadEntryInternal>(), Arg.Any<CancellationToken>())
+            .Returns(entry);
 
         await _service.UpdateEntry(entryId, updateEntry);
 
         // Editing belongs to the author alone. Left out of the context, the
         // resolver has nobody to compare the asker against and the rule cannot
         // be stated at all.
-        _intentionManager.Verify(m => m.ThrowIfForbidden(
+        _intentionManager.Received(1).ThrowIfForbidden(
             NotepadIntention.Edit,
-            It.Is<NotepadAuthContext>(c => c.AuthorId == authorId)), Times.Once);
+            Arg.Is<NotepadAuthContext>(c => c.AuthorId == authorId));
     }
 
     [Fact]
@@ -360,19 +353,17 @@ public class GameNotepadServiceShould : UnitTestBase
             AuthorId = authorId
         };
         var game = CreateGame(gameId);
-        _repository.Setup(r => r.GetEntryAsync(entryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(entry);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.DeleteEntryAsync(entryId, _currentUserId, It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+        _repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns(entry);
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.DeleteEntryAsync(entryId, _currentUserId, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
         await _service.DeleteEntry(entryId);
 
         // Deleting is the author's and the game master's, and the first half of
         // that needs the author in the context just as much as editing does.
-        _intentionManager.Verify(m => m.ThrowIfForbidden(
+        _intentionManager.Received(1).ThrowIfForbidden(
             NotepadIntention.Delete,
-            It.Is<NotepadAuthContext>(c => c.AuthorId == authorId)), Times.Once);
+            Arg.Is<NotepadAuthContext>(c => c.AuthorId == authorId));
     }
 
     [Fact]
@@ -380,16 +371,16 @@ public class GameNotepadServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         var game = CreateGame(gameId);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.CreateEntryAsync(It.IsAny<CreateNotepadEntryInternal>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new NotepadEntry { Id = Guid.NewGuid() });
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.CreateEntryAsync(Arg.Any<CreateNotepadEntryInternal>(), Arg.Any<CancellationToken>())
+            .Returns(new NotepadEntry { Id = Guid.NewGuid() });
 
         await _service.CreateMasterEntry(gameId, new CreateNotepadEntry { Title = "Test Entry", Content = "Content" });
 
         // Creating is not about an entry that exists, so there is no author yet
         // and the resolver must not be handed one.
-        _intentionManager.Verify(m => m.ThrowIfForbidden(
+        _intentionManager.Received(1).ThrowIfForbidden(
             NotepadIntention.Create,
-            It.Is<NotepadAuthContext>(c => c.AuthorId == null)), Times.Once);
+            Arg.Is<NotepadAuthContext>(c => c.AuthorId == null));
     }
 }

@@ -58,7 +58,7 @@ function handleEscape() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 // Icon-specific additions only — base visual comes from the unified +button mixin.
 .filter-btn

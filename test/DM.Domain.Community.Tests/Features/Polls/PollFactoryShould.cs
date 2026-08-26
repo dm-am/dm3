@@ -3,8 +3,8 @@ using System.Linq;
 using DM.Domain.Community.Features.Polls;
 using DM.Domain.Core.Abstractions;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Polls;
@@ -12,17 +12,13 @@ namespace DM.Domain.Community.Tests.Features.Polls;
 public class PollFactoryShould : UnitTestBase
 {
     private readonly PollFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
 
     public PollFactoryShould()
     {
         _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _factory = new PollFactory(
-            _guidFactory.Object,
-            _dateTimeProvider.Object);
+        _factory = new PollFactory(_guidFactory);
     }
 
     [Fact]
@@ -39,7 +35,7 @@ public class PollFactoryShould : UnitTestBase
             Options = new[] { "Option 1", "Option 2", "Option 3" }
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(pollId);
+        _guidFactory.Create().Returns(pollId);
 
         var result = _factory.Create(createPoll);
 
@@ -56,8 +52,8 @@ public class PollFactoryShould : UnitTestBase
         var optionIds = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
         var currentIndex = 0;
 
-        _guidFactory.Setup(f => f.Create())
-            .Returns(() => currentIndex < optionIds.Length ? optionIds[currentIndex++] : Guid.NewGuid());
+        _guidFactory.Create()
+            .Returns(_ => currentIndex < optionIds.Length ? optionIds[currentIndex++] : Guid.NewGuid());
 
         var createPoll = new CreatePoll
         {
@@ -76,7 +72,7 @@ public class PollFactoryShould : UnitTestBase
     [Fact]
     public void PreservePollOptionTexts()
     {
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var options = new[] { "First Option", "Second Option", "Third Option" };
         var createPoll = new CreatePoll
@@ -95,7 +91,7 @@ public class PollFactoryShould : UnitTestBase
     [Fact]
     public void PreserveDetailsWhenProvided()
     {
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var createPoll = new CreatePoll
         {

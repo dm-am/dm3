@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;

@@ -40,6 +40,7 @@ const create = (text: string) =>
 
 // Raw BBCode source fetch for the edit form (AuthorEdit audience).
 const fetchEditSource = (id: string) => blogApi.getBlogCommentForEdit(id);
+const fetchQuoteSource = (id: string) => blogApi.getBlogCommentQuote(id);
 
 async function markAsRead() {
   if (!user.value) return;
@@ -66,6 +67,7 @@ async function markAsRead() {
       :like="blogStore.likeComment"
       :unlike="blogStore.unlikeComment"
       :fetch-edit-source="fetchEditSource"
+      :fetch-quote-source="fetchQuoteSource"
       :paging-to="{ name: 'blog-comments', params: { id: blogId } }"
       :draft-key="composerDraftKey('blog', 'comment', blog?.id)"
       :can-comment="canComment"

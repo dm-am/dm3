@@ -53,12 +53,12 @@ public interface IBotLinkRepository
     Task<string?> GetUsername(Guid userId, CancellationToken ct = default);
 
     /// <summary>
-    /// Ensure UserSettings document exists in MongoDB and initialize channel preferences
+    /// Ensure the settings row exists and initialize channel preferences
     /// </summary>
     Task InitializeChannelPreferences(Guid userId, string channelType, CancellationToken ct = default);
 
     /// <summary>
-    /// Clear channel notification preferences in MongoDB
+    /// Clear channel notification preferences
     /// </summary>
     Task ClearChannelPreferences(Guid userId, string channelType, CancellationToken ct = default);
 

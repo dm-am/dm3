@@ -62,7 +62,7 @@ public class SecurityController : ControllerBase
         [FromQuery] SecurityLogType? type = null,
         // The page size is bounded by the same [Range] as every other list, and
         // for the same reason on both ends. Clipping only the top left zero to
-        // mean "no limit" in the Mongo driver, so ?take=0 answered with the
+        // mean "no limit" in the old document driver, so ?take=0 answered with the
         // whole security journal while the documentation promised max 100.
         //
         // `take`, not `limit`: limit belongs to a keyset page next to a cursor

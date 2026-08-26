@@ -2,16 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Domain.Game.Features.Games;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
 using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
 using DbAttributeSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
 using DbConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeConstraints;
@@ -24,39 +20,39 @@ using DbListAttributeValue = DM.Infrastructure.Persistence.Entities.Game.Charact
 using DtoListValue = DM.Domain.Game.Features.Games.ListValue;
 using DtoSpecificationInput = DM.Domain.Game.Features.Games.IAttributeSpecificationInput;
 
+using DM.Infrastructure.Persistence.Shared.Users;
+
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
 /// <inheritdoc cref="IAttributeSchemaRepository" />
-internal class AttributeSchemaRepository :
-    MongoCollectionRepository<DbAttributeSchema>,
-    IAttributeSchemaRepository
+internal class AttributeSchemaRepository : IAttributeSchemaRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IGuidFactory _guidFactory;
 
     /// <inheritdoc />
     public AttributeSchemaRepository(
-        DmMongoClient client,
         DmDbContext dbContext,
-        IMapper mapper,
-        IGuidFactory guidFactory) : base(client)
+        IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _guidFactory = guidFactory;
     }
 
     // --- READ ---
 
+    // The IsRemoved predicates below are spelled out on purpose: the entity is
+    // excluded from the global soft-delete filter, because GetGameSchema must
+    // resolve a schema its author has already removed from the lists.
+
     public async Task<IEnumerable<AttributeSchema>> GetSchemata(Guid userId)
     {
-        var schemata = await Collection
-            .Find(Filter.Eq(s => s.IsRemoved, false) &
-                  (Filter.Eq(s => s.Type, SchemaType.Public) | Filter.Eq(s => s.UserId, userId)))
+        var schemata = await _dbContext.AttributeSchemata
+            .TagWith("DM.AttributeSchema.List")
+            .Where(s => !s.IsRemoved && (s.Type == SchemaType.Public || s.UserId == userId))
             .ToListAsync();
 
-        if (!schemata.Any())
+        if (schemata.Count == 0)
         {
             return Enumerable.Empty<AttributeSchema>();
         }
@@ -71,7 +67,7 @@ internal class AttributeSchemaRepository :
 
         foreach (var schema in schemata)
         {
-            var attributeSchema = _mapper.Map<AttributeSchema>(schema);
+            var attributeSchema = schema.ToAttributeSchema();
             attributeSchema.Author = schema.UserId.HasValue &&
                                      authors.TryGetValue(schema.UserId.Value, out var author)
                 ? author
@@ -84,8 +80,9 @@ internal class AttributeSchemaRepository :
 
     public async Task<AttributeSchema?> GetSchema(Guid schemaId)
     {
-        var schema = await Collection
-            .Find(Filter.Eq(s => s.Id, schemaId) & Filter.Eq(s => s.IsRemoved, false))
+        var schema = await _dbContext.AttributeSchemata
+            .TagWith("DM.AttributeSchema.Get")
+            .Where(s => s.AttributeSchemaId == schemaId && !s.IsRemoved)
             .FirstOrDefaultAsync();
 
         if (schema == null)
@@ -93,7 +90,7 @@ internal class AttributeSchemaRepository :
             return null;
         }
 
-        var result = _mapper.Map<AttributeSchema>(schema);
+        var result = schema.ToAttributeSchema();
         if (schema.UserId.HasValue)
         {
             result.Author = (await GetSchemataAuthors(new[] { schema.UserId.Value })).FirstOrDefault();
@@ -114,11 +111,12 @@ internal class AttributeSchemaRepository :
             .Select(g => g.AttributeSchemaId)
             .FirstAsync();
 
-        var schema = await Collection
-            .Find(Filter.Eq(s => s.Id, schemaId!.Value))
+        var schema = await _dbContext.AttributeSchemata
+            .TagWith("DM.AttributeSchema.GetGameSchema")
+            .Where(s => s.AttributeSchemaId == schemaId!.Value)
             .FirstAsync();
 
-        return _mapper.Map<AttributeSchema>(schema);
+        return schema.ToAttributeSchema();
     }
 
     // --- WRITE ---
@@ -128,7 +126,7 @@ internal class AttributeSchemaRepository :
         var schemaId = _guidFactory.Create();
         var dbSchema = new DbAttributeSchema
         {
-            Id = schemaId,
+            AttributeSchemaId = schemaId,
             Title = createSchema.Title.Trim(),
             UserId = authorId,
             Type = createSchema.Type,
@@ -144,17 +142,14 @@ internal class AttributeSchemaRepository :
             }).ToList()
         };
 
-        await Collection.InsertOneAsync(dbSchema);
+        _dbContext.AttributeSchemata.Add(dbSchema);
+        await _dbContext.SaveChangesAsync();
 
-        var createdSchema = await Collection
-            .Find(Filter.Eq(s => s.Id, schemaId))
-            .FirstAsync();
-
-        var result = _mapper.Map<AttributeSchema>(createdSchema);
+        var result = dbSchema.ToAttributeSchema();
         var author = await _dbContext.Users
             .TagWith("DM.AttributeSchema.Create.GetAuthor")
             .Where(u => u.UserId == authorId)
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ProjectToGeneralUser()
             .FirstOrDefaultAsync();
 
         result.Author = author;
@@ -163,8 +158,9 @@ internal class AttributeSchemaRepository :
 
     public async Task<AttributeSchema> Update(UpdateAttributeSchema updateSchema)
     {
-        var existingSchema = await Collection
-            .Find(Filter.Eq(s => s.Id, updateSchema.SchemaId))
+        var existingSchema = await _dbContext.AttributeSchemata
+            .TagWith("DM.AttributeSchema.Update.Load")
+            .Where(s => s.AttributeSchemaId == updateSchema.SchemaId)
             .FirstAsync();
 
         if (updateSchema.Title != null)
@@ -190,13 +186,9 @@ internal class AttributeSchemaRepository :
             }).ToList();
         }
 
-        await Collection.ReplaceOneAsync(Filter.Eq(s => s.Id, updateSchema.SchemaId), existingSchema);
+        await _dbContext.SaveChangesAsync();
 
-        var updatedSchema = await Collection
-            .Find(Filter.Eq(s => s.Id, updateSchema.SchemaId))
-            .FirstAsync();
-
-        var result = _mapper.Map<AttributeSchema>(updatedSchema);
+        var result = existingSchema.ToAttributeSchema();
         if (existingSchema.UserId.HasValue)
         {
             result.Author = (await GetSchemataAuthors(new[] { existingSchema.UserId.Value })).FirstOrDefault();
@@ -205,13 +197,13 @@ internal class AttributeSchemaRepository :
         return result;
     }
 
-    // Soft delete: the class declares IRemovable, and a Postgres game row can
-    // still point at this id, so the document has to outlive the delete for the
-    // dangling reference to be repairable. Both reads filter the flag instead.
+    // Soft delete: the class declares IRemovable, and a game row can still point
+    // at this id through the FK, so the row has to outlive the delete for the
+    // reference to keep resolving. Both reads filter the flag instead.
     public async Task Delete(Guid schemaId) =>
-        await Collection.UpdateOneAsync(
-            Filter.Eq(s => s.Id, schemaId),
-            Builders<DbAttributeSchema>.Update.Set(s => s.IsRemoved, true));
+        await _dbContext.AttributeSchemata
+            .Where(s => s.AttributeSchemaId == schemaId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRemoved, true));
 
     public async Task<bool> IsUsedByUserGame(Guid schemaId, Guid userId) =>
         await _dbContext.Games
@@ -265,7 +257,7 @@ internal class AttributeSchemaRepository :
         return await _dbContext.Users
             .TagWith("DM.AttributeSchema.GetAuthors")
             .Where(u => userIds.Contains(u.UserId))
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ProjectToGeneralUser()
             .ToArrayAsync();
     }
 }

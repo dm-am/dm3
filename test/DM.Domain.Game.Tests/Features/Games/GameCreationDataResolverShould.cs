@@ -8,8 +8,8 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
@@ -28,18 +28,18 @@ public class GameCreationDataResolverShould : UnitTestBase
     private static readonly Guid SecondSystemTag = Guid.NewGuid();
     private static readonly Guid ThirdSystemTag = Guid.NewGuid();
 
-    private readonly Mock<IGameRepository> _repository;
+    private readonly IGameRepository _repository;
     private readonly GameCreationDataResolver _resolver;
 
     public GameCreationDataResolverShould()
     {
         _repository = Mock<IGameRepository>();
-        _repository.Setup(r => r.GetTags(It.IsAny<CancellationToken>())).ReturnsAsync(Catalogue);
+        _repository.GetTags(Arg.Any<CancellationToken>()).Returns(Catalogue);
 
         _resolver = new GameCreationDataResolver(
-            _repository.Object,
-            Mock<IAttributeSchemaRepository>().Object,
-            Mock<IIntentionManager>().Object);
+            _repository,
+            Mock<IAttributeSchemaRepository>(),
+            Mock<IIntentionManager>());
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class GameCreationDataResolverShould : UnitTestBase
         var resolved = await _resolver.ResolveTagIds(null);
 
         resolved.Should().BeEmpty();
-        _repository.Verify(r => r.GetTags(It.IsAny<CancellationToken>()), Times.Never);
+        await _repository.DidNotReceive().GetTags(Arg.Any<CancellationToken>());
     }
 
     /// <summary>

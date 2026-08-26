@@ -50,6 +50,14 @@ const STRIPS: { file: string; strip: string; line: string }[] = [
     line: "‹ {label} ›",
   },
   {
+    // The day calendar's caption. "Июль 2026" became a button when the month
+    // and year grids were put behind it, and a control is exactly the kind of
+    // part that gets laid out as a flex item on the next edit.
+    file: "shared/ui/DatePicker/CalendarGrid.vue",
+    strip: "dp-header",
+    line: "‹ {monthLabel} ›",
+  },
+  {
     file: "pages/profile/ProfilePage.vue",
     strip: "mod-header",
     line: "ПАНЕЛЬ МОДЕРАЦИИ {modSummary}",

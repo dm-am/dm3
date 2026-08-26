@@ -172,7 +172,7 @@ function markImageFailed(url: string) {
 </template>
 
 <style lang="sass">
-@import "@/assets/styles/ZIndex"
+@use "@/assets/styles/ZIndex" as *
 
 // Global (not scoped): TooltipContent renders inside the teleported tooltip.
 .rich-text-trigger

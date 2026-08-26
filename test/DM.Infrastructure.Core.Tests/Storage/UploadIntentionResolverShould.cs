@@ -6,7 +6,7 @@ using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Storage;
 using DM.Testing;
 using DM.Testing.Dsl;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Storage;

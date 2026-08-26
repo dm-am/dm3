@@ -1,20 +1,80 @@
 using System;
 using System.Threading.Tasks;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Posts;
 using DM.Testing;
 using FluentValidation.TestHelper;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Posts;
 
 public class CreatePostValidatorShould : UnitTestBase
 {
+    private readonly IBbCodeNestingLimit nestingLimit = Mock<IBbCodeNestingLimit>();
     private readonly CreatePostValidator validator;
 
     public CreatePostValidatorShould()
     {
-        validator = new CreatePostValidator();
+        nestingLimit.IsWithinLimit(Arg.Any<string>()).Returns(true);
+        validator = new CreatePostValidator(nestingLimit);
+    }
+
+    /// <summary>
+    /// Text the renderer will refuse is refused here, or it is stored and shows
+    /// as nothing to everyone but its author.
+    /// </summary>
+    [Fact]
+    public async Task RefuseTextTheRendererWillNotRender()
+    {
+        nestingLimit.IsWithinLimit(Arg.Any<string>()).Returns(false);
+        var input = new CreatePost
+        {
+            RoomId = Guid.NewGuid(),
+            GameText = "nested far too deep"
+        };
+
+        var result = await validator.TestValidateAsync(input);
+
+        result.ShouldHaveValidationErrorFor(p => p.GameText)
+            .WithErrorMessage(ValidationError.Invalid);
+    }
+
+    /// <summary>
+    /// A body past the length limit is refused, and refused by length rather
+    /// than by some other rule tripping over it.
+    /// </summary>
+    /// <remarks>
+    /// The post form had no limit at all, so the parse and the render of every
+    /// open of the page were bounded by the request size and nothing else.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseTextLongerThanTheLimit()
+    {
+        var input = new CreatePost
+        {
+            RoomId = Guid.NewGuid(),
+            GameText = new string('x', BodyTextLimits.MaxLength + 1)
+        };
+
+        var result = await validator.TestValidateAsync(input);
+
+        result.ShouldHaveValidationErrorFor(p => p.GameText)
+            .WithErrorMessage(ValidationError.Long);
+    }
+
+    [Fact]
+    public async Task PassForTextExactlyAtTheLimit()
+    {
+        var input = new CreatePost
+        {
+            RoomId = Guid.NewGuid(),
+            GameText = new string('x', BodyTextLimits.MaxLength)
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldNotHaveAnyValidationErrors();
     }
 
     [Fact]

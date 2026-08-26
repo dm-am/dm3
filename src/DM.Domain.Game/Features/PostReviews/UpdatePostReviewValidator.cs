@@ -1,3 +1,4 @@
+using DM.Domain.Core.Content;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.PostReviews;
@@ -28,5 +29,12 @@ internal class UpdatePostReviewValidator : AbstractValidator<UpdatePostReview>
             .NotEmpty()
             .When(r => r.Text != null)
             .WithMessage("Введите текст рецензии");
+
+        // The Comment surface does not declare [private], and an edit is the
+        // other way the tag gets into a stored review.
+        RuleFor(r => r.Text)
+            .Must(text => !PrivateBlockMarkup.ContainsPrivateMarkup(text))
+            .When(r => r.Text != null)
+            .WithMessage(r => PrivateBlockMarkup.DescribeSurfaceRefusal(r.Text));
     }
 }

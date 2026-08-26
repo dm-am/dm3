@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Game.Features.Characters;
 using DM.Web.API.Shared.Dto;
 
@@ -11,12 +10,12 @@ namespace DM.Web.API.Features.Game.Characters;
 internal class CharacterApiService : ICharacterApiService
 {
     private readonly ICharacterService _characterService;
-    private readonly IMapper _mapper;
+    private readonly CharacterMapper _mapper;
 
     /// <inheritdoc />
     public CharacterApiService(
         ICharacterService characterService,
-        IMapper mapper)
+        CharacterMapper mapper)
     {
         _characterService = characterService;
         _mapper = mapper;
@@ -26,20 +25,20 @@ internal class CharacterApiService : ICharacterApiService
     public async Task<ListEnvelope<Character>> GetAll(Guid gameId)
     {
         var characters = await _characterService.GetAllAsync(gameId);
-        return new ListEnvelope<Character>(characters.Select(_mapper.Map<Character>));
+        return new ListEnvelope<Character>(characters.Select(_mapper.ToCharacter));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<CharacterDetails>> Get(Guid characterId)
     {
         var character = await _characterService.GetAsync(characterId);
-        return new Envelope<CharacterDetails>(_mapper.Map<CharacterDetails>(character));
+        return new Envelope<CharacterDetails>(_mapper.ToCharacterDetails(character));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<CharacterDetails>> Create(Guid gameId, CharacterDetails character)
     {
-        var createCharacter = _mapper.Map<CreateCharacter>(character);
+        var createCharacter = _mapper.ToCreateCharacter(character);
         createCharacter.GameId = gameId;
         var createdCharacter = await _characterService.CreateAsync(createCharacter);
 
@@ -47,13 +46,13 @@ internal class CharacterApiService : ICharacterApiService
         // CharacterAttributeValueFiller (BbCode -> valueBbText, list modifiers/titles,
         // hidden-attribute redaction), matching the GET response shape.
         var filledCharacter = await _characterService.GetAsync(createdCharacter.Id);
-        return new Envelope<CharacterDetails>(_mapper.Map<CharacterDetails>(filledCharacter));
+        return new Envelope<CharacterDetails>(_mapper.ToCharacterDetails(filledCharacter));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<CharacterDetails>> Update(Guid characterId, UpdateCharacterRequest request)
     {
-        var updateCharacter = _mapper.Map<UpdateCharacter>(request);
+        var updateCharacter = _mapper.ToUpdateCharacter(request);
         updateCharacter.CharacterId = characterId;
         var updatedCharacter = await _characterService.UpdateAsync(updateCharacter);
 
@@ -61,7 +60,7 @@ internal class CharacterApiService : ICharacterApiService
         // CharacterAttributeValueFiller (BbCode -> valueBbText, list modifiers/titles,
         // hidden-attribute redaction), matching the GET response shape.
         var filledCharacter = await _characterService.GetAsync(updatedCharacter.Id);
-        return new Envelope<CharacterDetails>(_mapper.Map<CharacterDetails>(filledCharacter));
+        return new Envelope<CharacterDetails>(_mapper.ToCharacterDetails(filledCharacter));
     }
 
     /// <inheritdoc />
@@ -74,7 +73,7 @@ internal class CharacterApiService : ICharacterApiService
         // through the read path so attribute values come back in the shape a GET
         // returns them.
         var filledCharacter = await _characterService.GetAsync(changed.Id);
-        return new Envelope<CharacterDetails>(_mapper.Map<CharacterDetails>(filledCharacter));
+        return new Envelope<CharacterDetails>(_mapper.ToCharacterDetails(filledCharacter));
     }
 
     /// <inheritdoc />

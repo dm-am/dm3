@@ -1,6 +1,5 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Jamq.Client.Abstractions.Consuming;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Infrastructure.Messaging;
@@ -21,7 +20,7 @@ namespace DM.Infrastructure.Messaging;
 /// which is a different pipeline rather than another copy of this one.
 ///
 /// The constructor is internal because the queue has to be handed in, and the blanket
-/// Autofac scan over this assembly registers whatever declares a public one. Such a
+/// assembly scan over this assembly registers whatever declares a public one. Such a
 /// registration could not be activated - the queue is a string, and nothing in the
 /// graph answers for one - and it would sit there under
 /// <see cref="IConsumerMiddleware"/> until something enumerated the interface. So the

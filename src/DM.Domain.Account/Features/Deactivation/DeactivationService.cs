@@ -51,7 +51,7 @@ internal class DeactivationService : IDeactivationService
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                ["password"] = "Неверный пароль"
+                ["password"] = RefusalMessage.WrongPassword
             });
         }
 

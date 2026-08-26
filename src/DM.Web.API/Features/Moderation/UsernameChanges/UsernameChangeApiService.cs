@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Domain.Core.Exceptions;
 
@@ -15,11 +14,11 @@ namespace DM.Web.API.Features.Moderation.UsernameChanges;
 internal class UsernameChangeApiService : IUsernameChangeApiService
 {
     private readonly IUsernameChangeService _usernameChangeService;
-    private readonly IMapper _mapper;
+    private readonly UsernameChangeMapper _mapper;
 
     public UsernameChangeApiService(
         IUsernameChangeService usernameChangeService,
-        IMapper mapper)
+        UsernameChangeMapper mapper)
     {
         _usernameChangeService = usernameChangeService;
         _mapper = mapper;
@@ -29,7 +28,7 @@ internal class UsernameChangeApiService : IUsernameChangeApiService
     public async Task<IEnumerable<UsernameChangeRequest>> GetPendingRequestsAsync()
     {
         var requests = await _usernameChangeService.GetPendingRequestsAsync();
-        return requests.Select(r => _mapper.Map<UsernameChangeRequest>(r));
+        return requests.Select(r => _mapper.ToRequest(r));
     }
 
     /// <inheritdoc />
@@ -38,7 +37,7 @@ internal class UsernameChangeApiService : IUsernameChangeApiService
         var request = await _usernameChangeService.GetByIdAsync(id);
         if (request == null)
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UsernameChangeRequestNotFound);
-        return _mapper.Map<UsernameChangeRequest>(request);
+        return _mapper.ToRequest(request);
     }
 
     /// <inheritdoc />
@@ -51,6 +50,6 @@ internal class UsernameChangeApiService : IUsernameChangeApiService
             Comment = resolve.Comment
         };
         var result = await _usernameChangeService.ResolveAsync(domainResolve);
-        return _mapper.Map<UsernameChangeRequest>(result);
+        return _mapper.ToRequest(result);
     }
 }

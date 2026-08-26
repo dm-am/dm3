@@ -27,6 +27,7 @@ import {
   type CharacterInput,
   type CharacterPrivacySettings,
 } from "@/entities/game";
+import { unwrapResource } from "@/shared/api";
 import { Form, FormField } from "@/shared/ui/Form";
 import { ContentText } from "@/shared/ui/Content";
 import { SvgIcon } from "@/shared/ui/Icon";
@@ -203,9 +204,12 @@ async function submit() {
     );
     return;
   }
-  if (data) {
+  // The answer is a single-resource envelope, and the listener is handed the
+  // character rather than the wrapper it arrived in.
+  const character = unwrapResource<Character>(data);
+  if (character) {
     saved.value = true;
-    emit("saved", data);
+    emit("saved", character);
   }
 }
 

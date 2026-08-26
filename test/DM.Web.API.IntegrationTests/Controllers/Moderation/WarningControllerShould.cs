@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbWarning = DM.Infrastructure.Persistence.Entities.Moderation.Warning;

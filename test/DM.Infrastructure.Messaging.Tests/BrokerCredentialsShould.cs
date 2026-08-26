@@ -1,6 +1,6 @@
 using System;
 using DM.Infrastructure.Messaging;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Messaging.Tests;

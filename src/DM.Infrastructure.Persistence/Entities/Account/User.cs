@@ -149,7 +149,7 @@ public class User : IUser, IRemovable
     /// user's content, and whether direct messages from them are refused.
     /// </summary>
     /// <remarks>
-    /// Lives here rather than in the Mongo settings document because the entries
+    /// Lives here rather than in the settings row because the entries
     /// it governs are rows in Postgres with a foreign key: keeping the switch in
     /// the other store made "is this user blocked, and does it apply here" two
     /// reads across two databases with no way to make them agree.

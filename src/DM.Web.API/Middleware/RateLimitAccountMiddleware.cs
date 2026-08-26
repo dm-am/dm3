@@ -32,12 +32,12 @@ public class RateLimitAccountMiddleware
 {
     private const string AccountItem = "DM.RateLimiting.Account";
 
-    private readonly RequestDelegate next;
+    private readonly RequestDelegate _next;
 
     /// <inheritdoc />
     public RateLimitAccountMiddleware(RequestDelegate next)
     {
-        this.next = next;
+        _next = next;
     }
 
     /// <summary>
@@ -60,7 +60,7 @@ public class RateLimitAccountMiddleware
             }
         }
 
-        await next(httpContext);
+        await _next(httpContext);
     }
 
     /// <summary>

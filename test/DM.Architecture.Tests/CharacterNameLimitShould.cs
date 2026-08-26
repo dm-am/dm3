@@ -1,9 +1,8 @@
-using System;
 using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Configuration;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -58,13 +57,13 @@ public class CharacterNameLimitShould
         var limit = CharacterPolicy.NameMaxLength;
 
         var migration = SchemaSources.Migration;
-        Between(migration, "name: \"Characters\",", "constraints: table =>").Should().Contain(
+        SourceText.Between(migration, "name: \"Characters\",", "constraints: table =>").Should().Contain(
             $"Name = table.Column<string>(type: \"character varying({limit})\", maxLength: {limit}",
             "the column is the third place the limit lives, and the only one the other two cannot talk out of it");
 
         foreach (var (snapshot, text) in SchemaSources.Snapshots)
         {
-            var block = Between(
+            var block = SourceText.Between(
                 text,
                 CharacterEntity, "b.ToTable(\"Characters\");");
 
@@ -93,12 +92,4 @@ public class CharacterNameLimitShould
     /// Text between an opening marker and the first terminator after it: enough to
     /// read one table or one entity, and loud when either is gone or renamed.
     /// </summary>
-    private static string Between(string source, string start, string end)
-    {
-        var from = source.IndexOf(start, StringComparison.Ordinal);
-        from.Should().BeGreaterThan(-1, $"the source must still declare {start}");
-        var to = source.IndexOf(end, from + start.Length, StringComparison.Ordinal);
-        to.Should().BeGreaterThan(-1, $"the declaration of {start} must be terminated");
-        return source[from..to];
-    }
 }

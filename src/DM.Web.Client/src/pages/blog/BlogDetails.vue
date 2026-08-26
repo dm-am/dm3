@@ -115,7 +115,7 @@ function rubricTo(r: Rubric) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Tables"
+@use "@/assets/styles/Tables" as *
 
 .blog-details
   display: flex

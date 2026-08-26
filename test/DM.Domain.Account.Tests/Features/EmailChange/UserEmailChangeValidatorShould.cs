@@ -5,7 +5,7 @@ using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Exceptions;
 using DM.Testing;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.EmailChange;
@@ -13,8 +13,8 @@ namespace DM.Domain.Account.Tests.Features.EmailChange;
 public class UserEmailChangeValidatorShould : UnitTestBase
 {
     private readonly UserEmailChangeValidator validator;
-    private readonly Mock<IEmailChangeRepository> repository;
-    private readonly Mock<ISecurityManager> securityManager;
+    private readonly IEmailChangeRepository repository;
+    private readonly ISecurityManager securityManager;
 
     public UserEmailChangeValidatorShould()
     {
@@ -30,18 +30,14 @@ public class UserEmailChangeValidatorShould : UnitTestBase
             PasswordHash = "hash"
         };
 
-        repository.Setup(r => r.FindUser("testuser"))
-            .ReturnsAsync(authenticatedUser);
+        repository.FindUser("testuser").Returns(authenticatedUser);
 
-        repository.Setup(r => r.IsEmailFree(It.IsAny<string>(), default))
-            .ReturnsAsync(true);
+        repository.IsEmailFree(Arg.Any<string>(), default).Returns(true);
 
-        securityManager.Setup(s => s.ComparePasswords("correctpassword", "salt", "hash"))
-            .Returns(true);
-        securityManager.Setup(s => s.ComparePasswords(It.Is<string>(p => p != "correctpassword"), "salt", "hash"))
-            .Returns(false);
+        securityManager.ComparePasswords("correctpassword", "salt", "hash").Returns(true);
+        securityManager.ComparePasswords(Arg.Is<string>(p => p != "correctpassword"), "salt", "hash").Returns(false);
 
-        validator = new UserEmailChangeValidator(repository.Object, securityManager.Object);
+        validator = new UserEmailChangeValidator(repository, securityManager);
     }
 
     [Fact]

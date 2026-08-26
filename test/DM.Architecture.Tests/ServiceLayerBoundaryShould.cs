@@ -3,8 +3,8 @@ using System.IO;
 using ArchUnitNET.Domain;
 using ArchUnitNET.Fluent;
 using ArchUnitNET.Loader;
-using ArchUnitNET.xUnit;
-using FluentAssertions;
+using ArchUnitNET.xUnitV3;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
 using static ArchUnitNET.Fluent.ArchRuleDefinition;
@@ -31,12 +31,9 @@ namespace DM.Architecture.Tests;
 public class ServiceLayerBoundaryShould
 {
     // Every DM assembly the host drags into the output directory. A marker-type
-    // list would silently stop covering a Domain project added later. AutoMapper
-    // is loaded alongside them because one rule names a type from it, and a rule
-    // whose target is absent from the model passes without checking anything.
+    // list would silently stop covering a Domain project added later.
     private static readonly ArchitectureModel Solution = new ArchLoader()
         .LoadFilteredDirectory(AppContext.BaseDirectory, "DM.*.dll", SearchOption.TopDirectoryOnly)
-        .LoadAssembly(typeof(AutoMapper.IMapper).Assembly)
         .Build();
 
     private static readonly IObjectProvider<Class> Controllers = Classes()
@@ -58,10 +55,6 @@ public class ServiceLayerBoundaryShould
             "are interfaces declared in a DM.Domain.* assembly")
         .As("domain abstractions");
 
-    private static readonly IObjectProvider<IType> Mapper = Types()
-        .That().HaveFullName("AutoMapper.IMapper")
-        .As("the mapper");
-
     private static readonly IObjectProvider<Class> ApiServices = Classes()
         .That().HaveNameEndingWith("ApiService")
         .As("API services");
@@ -81,7 +74,6 @@ public class ServiceLayerBoundaryShould
         DomainAbstractions.GetObjects(Solution).Should().NotBeEmpty();
         ApiServices.GetObjects(Solution).Should().NotBeEmpty();
         DbContext.GetObjects(Solution).Should().ContainSingle();
-        Mapper.GetObjects(Solution).Should().ContainSingle();
     }
 
     [Fact]
@@ -92,21 +84,6 @@ public class ServiceLayerBoundaryShould
             .Because("a controller talks to its ApiService, which owns the shape of the " +
                      "response; reaching past it puts mapping and envelope assembly in " +
                      "the action and couples the wire format to the domain signature")
-            .Check(Solution);
-    }
-
-    /// <summary>
-    /// The mechanical marker of the same bypass. Every controller that reached
-    /// past its ApiService also held an IMapper, because mapping is the work it
-    /// was doing in the action.
-    /// </summary>
-    [Fact]
-    public void KeepControllersOffTheMapper()
-    {
-        Classes().That().Are(Controllers)
-            .Should().NotDependOnAny(Mapper)
-            .Because("turning a domain model into a DTO is the ApiService's job; a " +
-                     "controller holding a mapper is one that has taken it over")
             .Check(Solution);
     }
 

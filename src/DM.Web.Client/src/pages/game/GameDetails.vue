@@ -349,7 +349,7 @@ const npcColumns = computed<Column[]>(() => [
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Tables"
+@use "@/assets/styles/Tables" as *
 
 .game-details
   display: flex

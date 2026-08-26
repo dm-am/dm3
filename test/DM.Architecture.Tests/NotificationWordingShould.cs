@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -53,7 +53,7 @@ public class NotificationWordingShould
             .Where(m => m.Name is "FormatPropertyName" or "FormatPropertyValue" or "IsHiddenFromText")
             .ToList();
 
-        formatters.Should().HaveCountGreaterOrEqualTo(3,
+        formatters.Should().HaveCountGreaterThanOrEqualTo(3,
             "a rule that matches nothing passes: there is a formatter for the key, " +
             "one for the value, and the list of keys no channel prints");
         formatters.Select(m => m.DeclaringType!.FullName).Should().OnlyContain(

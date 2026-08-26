@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -36,7 +36,6 @@ public class DomainBoundaryShould
         "Npgsql",
         "MongoDB",
         "RabbitMQ",
-        "Jamq",
         "Microsoft.AspNetCore",
         "Serilog",
     ];
@@ -66,7 +65,7 @@ public class DomainBoundaryShould
         var projects = DomainProjects;
 
         projects.Should().Contain(Kernel, "the kernel is a domain project too");
-        projects.Should().HaveCountGreaterOrEqualTo(9,
+        projects.Should().HaveCountGreaterThanOrEqualTo(9,
             "the kernel and the eight modules the HTTP host composes");
     }
 

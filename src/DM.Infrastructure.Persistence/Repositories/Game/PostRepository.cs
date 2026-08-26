@@ -1,20 +1,21 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence.RelationalStorage;
-using DM.Infrastructure.Persistence.Repositories.Search;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
+
+using DM.Infrastructure.Persistence.Shared.Users;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
@@ -29,23 +30,59 @@ internal class PostWithRating
     public DateTimeOffset? LastReviewUtc { get; init; }
 }
 
+/// <summary>
+/// One page row of the rated-posts read: the post exactly as every other read
+/// projects it, plus the two room fields that read alone shows.
+/// </summary>
+/// <remarks>
+/// The post itself is not built here. It used to be - a second projection
+/// written out by hand, which filled the text and the author and left
+/// AuthorUserId, GameId, the master, the assistants and both private-text
+/// overrides at their defaults, because nothing obliges an object initializer
+/// to mention a field. Every one of those defaults is an empty id or a false,
+/// and the renderer read them as "the game has a lead whose id is empty" -
+/// which is the id an anonymous reader carries. The feed served [private]
+/// blocks to guests.
+///
+/// So the formula is spliced in from <see cref="PostMappers.PostProjection"/>
+/// instead of restated: whatever the post's rendering needs to know, this read
+/// knows too, and a field added there cannot go missing here.
+/// </remarks>
+internal class RatedPostRow
+{
+    public required Post Post { get; init; }
+    public int RoomNumber { get; init; }
+    public required string RoomTitle { get; init; }
+}
+
 /// <inheritdoc />
 internal class PostRepository : IPostRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IGameRepository _gameRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
+
+    /// <summary>
+    /// Page row of <see cref="GetRated"/>. Expanded once, into a static, because
+    /// the splice marker is a rewrite instruction and not a call: the expression
+    /// has to be rewritten before EF ever sees it.
+    /// </summary>
+    private static readonly Expression<Func<PostWithRating, RatedPostRow>> RatedPostRowProjection =
+        ExpressionSplicer.Expand<Func<PostWithRating, RatedPostRow>>(
+            x => new RatedPostRow
+            {
+                Post = PostMappers.PostProjection.Splice(x.Post),
+                RoomNumber = x.Post.Room.RoomNumber,
+                RoomTitle = x.Post.Room.Title
+            });
 
     /// <inheritdoc />
     public PostRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IGameRepository gameRepository,
         IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _gameRepository = gameRepository;
         _dateTimeProvider = dateTimeProvider;
     }
@@ -77,7 +114,7 @@ internal class PostRepository : IPostRepository
             .OrderBy(p => p.CreatedUtc)
             .ThenBy(p => p.PostId)
             .Page(paging)
-            .ProjectTo<Post>(_mapper.ConfigurationProvider)
+            .ProjectToPost()
             .ToArrayAsync();
 
         await EnrichWithCharacterPictures(posts);
@@ -99,7 +136,7 @@ internal class PostRepository : IPostRepository
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
             .SelectMany(r => r.Posts)
             .Where(p => p.PostId == postId)
-            .ProjectTo<Post>(_mapper.ConfigurationProvider)
+            .ProjectToPost()
             .FirstOrDefaultAsync();
 
         if (post != null)
@@ -113,10 +150,10 @@ internal class PostRepository : IPostRepository
     public async Task<(IEnumerable<Post> Posts, int TotalCount)> GetRated(PostsQuery query, Guid viewerId)
     {
         // Read-only path feeding the home-page widgets (best of week, latest
-        // featured, Pulse). PostWithRating below holds a Post reference, but it is
-        // never materialised: the terminals are CountAsync and a scalar anonymous
-        // projection, so nothing here reaches the change tracker either way.
-        // AsNoTracking stays as the default of a read path.
+        // featured, Pulse). PostWithRating below holds an entity reference, but no
+        // entity is ever materialised: the terminals are CountAsync and a
+        // projection into RatedPostRow, so nothing here reaches the change tracker
+        // either way. AsNoTracking stays as the default of a read path.
         // See PERFORMANCE.md → "AsNoTracking".
         var baseQuery = _dbContext.Posts
             .AsNoTracking()
@@ -134,22 +171,30 @@ internal class PostRepository : IPostRepository
             baseQuery = baseQuery.Where(p => p.Room.GameId == query.GameId.Value);
         }
 
-        // Search filter (case-insensitive contains on GameText, excluding [private] blocks).
-        // Uses PostgreSQL regexp_replace via DbFunction mapping to strip [private=X]...[/private]
-        // before matching, so private text is never included in search results. Pattern and
-        // replacement are the ones Post.SearchVector and the snippet use: cutting the block
-        // out with nothing in its place welds the words on either side of it into one the
-        // post never contained, and that word then matches.
+        // Search filter (case-insensitive contains on the visible text of the post —
+        // the projection written beside the body, which both full-text searches
+        // already read).
+        //
+        // It used to match against GameText with the [private] block cut out by a
+        // regexp inside the query, and the cut is what made the filter an oracle.
+        // Cutting leaves a trace: the block becomes a space, and the whitespace
+        // around it stays, so a phrase reaching across the place where the block
+        // stood matches the post without it and misses the post with it. The reader
+        // never sees a word of the hidden text and still learns it is there, from
+        // which rows came back and which did not.
+        //
+        // The projection has nothing to cut. It is the plain-text render of the
+        // body, where [private] is filtered out as a node rather than deleted as a
+        // string, and the runs of whitespace it leaves are collapsed — so a post
+        // carrying a hidden block and the same post without one project to the same
+        // text, and this filter cannot tell them apart. It is also the string the
+        // reader is shown: the markup is gone from it, so what matches here is what
+        // is on the page.
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var pattern = LikePatterns.Contains(query.Search);
             baseQuery = baseQuery.Where(p => EF.Functions.ILike(
-                DmDbContext.RegexpReplace(
-                    p.GameText,
-                    SearchSnippet.PrivateBlockPattern,
-                    " ",
-                    "gi"),
-                pattern));
+                EF.Property<string>(p, "SearchText"), pattern));
         }
 
         // Author filter (repeated parameter, materialised before LINQ)
@@ -260,113 +305,32 @@ internal class PostRepository : IPostRepository
 
         var totalCount = await sortedQuery.CountAsync();
 
-        // Project to anonymous type first to avoid EF Core issues with complex conditionals
         var rawData = await sortedQuery
             .Skip(query.Skip)
             .Take(query.Take)
-            .Select(x => new
-            {
-                x.Post.PostId,
-                x.Post.RoomId,
-                x.Post.GameText,
-                MetagameText = x.Post.MetagameText ?? string.Empty,
-                x.Post.CreatedUtc,
-                x.Rating,
-                x.ReviewCount,
-                // Author
-                AuthorUserId = x.Post.Author.UserId,
-                AuthorUsername = x.Post.Author.Username,
-                AuthorRole = x.Post.Author.Role,
-                AuthorStatus = x.Post.Author.Status,
-                // Game master/assistant info for author role
-                GameMasterId = x.Post.Room.Game.MasterId,
-                IsAuthorAssistant = x.Post.Room.Game.Assistants.Any(a => a.UserId == x.Post.Author.UserId),
-                // Room — game scalars dropped in favor of a batched
-                // hydration step below that returns the full GameDto
-                // (see sidebar-pattern notes in GameModels.RoomRef).
-                RoomNumber = x.Post.Room.RoomNumber,
-                RoomTitle = x.Post.Room.Title,
-                GameId = x.Post.Room.Game.GameId,
-                // Character — nullable navigation; `!` tells the compiler
-                // the subsequent member access is intentional. At SQL
-                // generation time EF Core emits LEFT JOINs that null-
-                // propagate cleanly, and the post-pagination projection
-                // below gates on CharId.HasValue before touching any of
-                // these fields, so a null character never reaches
-                // CharacterShort construction.
-                CharId = (Guid?)x.Post.Character!.CharacterId,
-                CharName = x.Post.Character!.Name,
-                CharAuthorUserId = (Guid?)x.Post.Character!.Author!.UserId,
-                CharAuthorUsername = x.Post.Character!.Author!.Username,
-                CharAuthorRole = (UserRole?)x.Post.Character!.Author!.Role,
-                CharAuthorStatus = x.Post.Character!.Author!.Status,
-                CharIsNpc = (bool?)x.Post.Character!.IsNpc
-                // Character picture is resolved post-pagination via
-                // EnrichWithCharacterPictures — one batched IN-query per
-                // page instead of an inline correlated subquery per row.
-            })
+            .Select(RatedPostRowProjection)
             .ToArrayAsync();
 
-        // Map to domain objects in memory with proper null handling
-        var posts = rawData.Select(x =>
+        var posts = rawData.Select(row =>
         {
-            // Character is only valid if all required fields are present
-            CharacterShort? character = null;
-            if (x.CharId.HasValue && x.CharAuthorUserId.HasValue && x.CharAuthorRole.HasValue)
+            var post = row.Post;
+            post.Room = new RoomRef
             {
-                character = new CharacterShort
-                {
-                    Id = x.CharId.Value,
-                    Name = x.CharName ?? string.Empty,
-                    // Picture is filled in batch by EnrichWithCharacterPictures.
-                    IsNpc = x.CharIsNpc ?? false,
-                    Author = new GeneralUser
-                    {
-                        UserId = x.CharAuthorUserId.Value,
-                        Username = x.CharAuthorUsername ?? string.Empty,
-                        Role = x.CharAuthorRole.Value,
-                        Status = x.CharAuthorStatus
-                    }
-                };
-            }
-
-            // Determine author's game role (DungeonMaster/Assistant/null)
-            string? authorGameRole = null;
-            if (character == null) // Post without character = master post
-            {
-                if (x.AuthorUserId == x.GameMasterId)
-                    authorGameRole = "DungeonMaster";
-                else if (x.IsAuthorAssistant)
-                    authorGameRole = "Assistant";
-            }
-
-            return new Post
-            {
-                Id = x.PostId,
-                RoomId = x.RoomId,
-                GameText = x.GameText,
-                MetagameText = x.MetagameText,
-                CreatedUtc = x.CreatedUtc,
-                Rating = x.Rating,
-                ReviewCount = x.ReviewCount,
-                AuthorGameRole = authorGameRole,
-                Author = new GeneralUser
-                {
-                    UserId = x.AuthorUserId,
-                    Username = x.AuthorUsername,
-                    Role = x.AuthorRole,
-                    Status = x.AuthorStatus
-                },
-                Room = new RoomRef
-                {
-                    Id = x.RoomId,
-                    RoomNumber = x.RoomNumber,
-                    Title = x.RoomTitle,
-                    // Game populated below via batched GetByIds.
-                    Game = null
-                },
-                Character = character!
+                Id = post.RoomId,
+                RoomNumber = row.RoomNumber,
+                Title = row.RoomTitle,
+                // Game populated below via batched GetByIds. Game scalars are
+                // dropped in favor of that batched hydration, which returns the
+                // full GameDto (see sidebar-pattern notes in GameModels.RoomRef).
+                Game = null
             };
+            post.AuthorGameRole = AuthorGameRoleOf(post);
+            // The feed's card does not show edit history, and the shared formula
+            // reads it for the room view that does. Cleared rather than kept: what
+            // a card shows is a decision of its own, not a side effect of the two
+            // reads coming to share one projection.
+            post.Edits = [];
+            return post;
         }).ToArray();
 
         // One batched query (IN(characterIds)) for avatar URLs, instead
@@ -383,8 +347,8 @@ internal class PostRepository : IPostRepository
         // The cost is a single EnrichGamesAsync call (~10 batched
         // queries, O(1) in page size) versus N HTTP calls from the
         // browser — strict improvement.
-        var uniqueGameIds = rawData
-            .Select(x => x.GameId)
+        var uniqueGameIds = posts
+            .Select(p => p.GameId)
             .Where(id => id != Guid.Empty)
             .Distinct()
             .ToArray();
@@ -409,12 +373,10 @@ internal class PostRepository : IPostRepository
             var gamesById = (await _gameRepository.GetByIds(uniqueGameIds, Guid.Empty, viewerId))
                 .ToDictionary(g => g.Id);
 
-            var rawByPostId = rawData.ToDictionary(x => x.PostId);
             foreach (var post in posts)
             {
                 if (post.Room is null) continue;
-                if (!rawByPostId.TryGetValue(post.Id, out var raw)) continue;
-                if (gamesById.TryGetValue(raw.GameId, out var hydratedGame))
+                if (gamesById.TryGetValue(post.GameId, out var hydratedGame))
                 {
                     post.Room.Game = hydratedGame;
                 }
@@ -422,6 +384,24 @@ internal class PostRepository : IPostRepository
         }
 
         return (posts, totalCount);
+    }
+
+    /// <summary>
+    /// The author's standing in the game the post belongs to, for the badge the
+    /// rated feed puts on a post nobody's character signed.
+    /// </summary>
+    /// <remarks>
+    /// A post with a character is a character's post and carries no badge — the
+    /// name shown is the character's. Read off the post itself now that the
+    /// projection fills the master and the assistants; it used to be two more
+    /// members of the hand-written row.
+    /// </remarks>
+    private static string? AuthorGameRoleOf(Post post)
+    {
+        if (post.Character != null) return null;
+        if (AnonymousIdentity.Is(post.AuthorUserId)) return null;
+        if (post.AuthorUserId == post.GameMasterUserId) return "DungeonMaster";
+        return post.GameAssistantUserIds.Contains(post.AuthorUserId) ? "Assistant" : null;
     }
 
     /// <summary>
@@ -556,21 +536,21 @@ internal class PostRepository : IPostRepository
         // the stored IsNewbie column, so that drift is user-visible and nothing
         // recomputes it. The strategy wrapper is required because the API host
         // configures EnableRetryOnFailure.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                // A retry replays this block; the post the failed attempt left
-                // tracked would otherwise be inserted twice or not at all.
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
             _dbContext.Posts.Add(dbPost);
+
+            // The rolls of the post, in the same transaction (INV-6): a roll
+            // cannot be produced a second time, so it must never exist without
+            // the post or the post without it. EF orders the inserts under the
+            // FK, so a single SaveChanges writes the post first.
+            if (createPost.DiceRolls.Count > 0)
+            {
+                _dbContext.DiceRolls.AddRange(DiceRollRepository.MapToDb(createPost.DiceRolls));
+            }
+
             await _dbContext.SaveChangesAsync();
 
             // Increment author's post count (QuantityRating)
@@ -594,7 +574,7 @@ internal class PostRepository : IPostRepository
 
         return await _dbContext.Posts
             .Where(p => p.PostId == createPost.PostId)
-            .ProjectTo<Post>(_mapper.ConfigurationProvider)
+            .ProjectToPost()
             .FirstAsync();
     }
 
@@ -619,7 +599,7 @@ internal class PostRepository : IPostRepository
 
         var updated = await _dbContext.Posts
             .Where(p => p.PostId == updatePost.PostId)
-            .ProjectTo<Post>(_mapper.ConfigurationProvider)
+            .ProjectToPost()
             .FirstOrDefaultAsync();
 
         // Enriched like both read paths: an edit answers with the post as it now
@@ -652,22 +632,8 @@ internal class PostRepository : IPostRepository
     {
         // The strategy wrapper is required because the API host configures
         // EnableRetryOnFailure.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                // A retry replays this block. SaveChanges leaves the post Unchanged
-                // even when the transaction around it rolls back, so without the
-                // clear the second attempt writes no soft-delete at all and still
-                // takes the rating point away — a live post with its author charged
-                // for deleting it.
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
-
             // Read inside the block: the clear above drops the tracked post, so it
             // has to be loaded again. On the first attempt this costs nothing extra.
             var post = await _dbContext.Posts.FindAsync(postId);

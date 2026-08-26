@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Autofac.Extensions.DependencyInjection;
 using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Core.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -48,7 +47,17 @@ public class Program
     public static IHostBuilder CreateWebHostBuilder(string[] args)
     {
         return Host.CreateDefaultBuilder(args)
-            .UseServiceProviderFactory(new AutofacServiceProviderFactory())
+            // Both validations, in every environment: a missing registration or
+            // a process-wide component holding a scoped one is a defect of the
+            // composition, not of the environment it surfaced in. Under the
+            // Autofac factory both flags were dead - MS.DI never built the
+            // final provider - which is how a captive DbContext once reached
+            // production.
+            .UseDefaultServiceProvider(options =>
+            {
+                options.ValidateScopes = true;
+                options.ValidateOnBuild = true;
+            })
             .UseSerilog()
             .ConfigureWebHostDefaults(webBuilder => webBuilder.UseDefault<Startup>());
     }

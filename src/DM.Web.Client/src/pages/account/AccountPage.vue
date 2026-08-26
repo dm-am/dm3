@@ -20,6 +20,10 @@
 
     <account-invitations-section />
     <account-security-section :user="user" />
+    <!-- Between the credentials it belongs with and the device list its
+         confirmation empties: confirming the factor ends every other session,
+         and the block below is where that shows. -->
+    <account-two-factor-section />
     <account-sessions-section />
     <account-security-history-section />
     <account-settings-section :user="user" />
@@ -35,6 +39,7 @@ import { computed } from "vue";
 import { useAuthStore } from "@/entities/user";
 import AccountInvitationsSection from "./sections/AccountInvitationsSection.vue";
 import AccountSecuritySection from "./sections/AccountSecuritySection.vue";
+import AccountTwoFactorSection from "./sections/AccountTwoFactorSection.vue";
 import AccountSessionsSection from "./sections/AccountSessionsSection.vue";
 import AccountSecurityHistorySection from "./sections/AccountSecurityHistorySection.vue";
 import AccountSettingsSection from "./sections/AccountSettingsSection.vue";

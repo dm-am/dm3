@@ -3,8 +3,8 @@ using DM.Domain.Account.Features.Registration;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Registration;
@@ -12,8 +12,8 @@ namespace DM.Domain.Account.Tests.Features.Registration;
 public class UserFactoryShould : UnitTestBase
 {
     private readonly UserFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public UserFactoryShould()
     {
@@ -21,8 +21,8 @@ public class UserFactoryShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
         _factory = new UserFactory(
-            _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _guidFactory,
+            _dateTimeProvider);
     }
 
     [Fact]
@@ -38,8 +38,8 @@ public class UserFactoryShould : UnitTestBase
             PasswordHashVersion = 1
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(userId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _guidFactory.Create().Returns(userId);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = _factory.CreateFromPending(pending, "TestUser");
 
@@ -66,8 +66,8 @@ public class UserFactoryShould : UnitTestBase
             PasswordHashVersion = 1
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.CreateFromPending(pending, "  TestUser  ");
 
@@ -85,8 +85,8 @@ public class UserFactoryShould : UnitTestBase
             PasswordHashVersion = 1
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.CreateFromPending(pending, "User");
 

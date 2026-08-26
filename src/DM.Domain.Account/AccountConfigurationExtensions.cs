@@ -9,8 +9,8 @@ namespace DM.Domain.Account;
 /// Configuration the account domain reads.
 /// </summary>
 /// <remarks>
-/// Ships next to <see cref="AccountModule"/> for the same reason that module
-/// exists: a host that registers the account types must not be able to leave
+/// Ships next to <see cref="AccountRegistrationExtensions"/> for the same reason
+/// that call exists: a host that registers the account types must not be able to leave
 /// their options unbound. IOptions of an unbound type does not throw — it hands
 /// out a default instance — so the omission surfaces as a wrong answer on the
 /// first request that reaches the type, not as a failure to start.
@@ -47,6 +47,8 @@ public static class AccountConfigurationExtensions
             configuration.GetSection(nameof(TokenConfiguration)).Bind);
         services.Configure<PasswordPolicyConfiguration>(
             configuration.GetSection(nameof(PasswordPolicyConfiguration)).Bind);
+        services.Configure<TwoFactorConfiguration>(
+            configuration.GetSection(nameof(TwoFactorConfiguration)).Bind);
 
         return services;
     }

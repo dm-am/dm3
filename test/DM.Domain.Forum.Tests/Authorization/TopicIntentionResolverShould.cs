@@ -6,7 +6,7 @@ using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Topics;
 using DM.Testing.Dsl;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Forum.Tests.Authorization;

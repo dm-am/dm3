@@ -21,10 +21,10 @@ using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Testing;
 using DM.Testing.Dsl;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
 using Xunit;
 using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 
@@ -42,9 +42,9 @@ namespace DM.Domain.Blog.Tests.Features.Blogs;
 /// </remarks>
 public class BlogPremoderationShould : UnitTestBase
 {
-    private readonly Mock<IBlogRepository> _repository;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IEventProducer> _eventProducer;
+    private readonly IBlogRepository _repository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IEventProducer _eventProducer;
     private readonly BlogService _service;
     private readonly AuthenticatedUser _author;
     private readonly Guid _currentUserId = Guid.NewGuid();
@@ -67,64 +67,63 @@ public class BlogPremoderationShould : UnitTestBase
         _author.QuantityRating = ProbationPolicy.NewbiePostThreshold;
 
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(identity);
+        identityProvider.Current.Returns(identity);
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<BlogIntention>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()));
-        // Every intention says yes by default, which is the same answer the no-op
-        // ThrowIfForbidden above gives. The reads that ask instead of throwing —
-        // the visibility gates of the author's move — have to get that same answer,
-        // or every test here would be reading as a stranger. The ones that mean to
-        // be a stranger call HideEveryBlogFromTheCaller.
+        // Every intention says yes by default: a substituted ThrowIfForbidden returns
+        // void and does nothing, which is the permissive answer. The reads that ask
+        // instead of throwing — the visibility gates of the author's move — have to
+        // get that same answer, or every test here would be reading as a stranger.
+        // The ones that mean to be a stranger call HideEveryBlogFromTheCaller.
         _intentionManager
-            .Setup(m => m.IsAllowed(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()))
-            .Returns(true);
+            .IsAllowed(Arg.Any<BlogIntention>(), Arg.Any<BlogDto>()).Returns(true);
 
         var createBlogValidator = Mock<IValidator<CreateBlog>>();
         createBlogValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateBlog>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreateBlog>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
         var updateBlogValidator = Mock<IValidator<UpdateBlog>>();
         var createRubricValidator = Mock<IValidator<CreateRubric>>();
         var updateRubricValidator = Mock<IValidator<UpdateRubric>>();
 
         var guidFactory = Mock<IGuidFactory>();
-        guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        guidFactory.Create().Returns(Guid.NewGuid());
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(d => d.Now).Returns(_now);
+        dateTimeProvider.Now.Returns(_now);
 
         _eventProducer = Mock<IEventProducer>();
-        _eventProducer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
-        _eventProducer.Setup(p => p.SendAsync(It.IsAny<IEnumerable<EventType>>(), It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
+        _eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
+        _eventProducer.SendAsync(Arg.Any<IEnumerable<EventType>>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
-        _repository.Setup(r => r.CreateBlog(It.IsAny<CreateBlogEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateBlogEntity, CancellationToken>((entity, _) => _capturedCreate = entity)
-            .ReturnsAsync((CreateBlogEntity entity, CancellationToken _) => new BlogDto
+        _repository.CreateBlog(Arg.Any<CreateBlogEntity>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
             {
-                Id = entity.BlogId,
-                Author = new GeneralUser { UserId = entity.OwnerId },
-                PremoderationStatus = entity.PremoderationStatus
-            });
+                var entity = ci.ArgAt<CreateBlogEntity>(0);
+                return new BlogDto
+                {
+                    Id = entity.BlogId,
+                    Author = new GeneralUser { UserId = entity.OwnerId },
+                    PremoderationStatus = entity.PremoderationStatus
+                };
+            })
+            .AndDoes(ci => _capturedCreate = ci.ArgAt<CreateBlogEntity>(0));
 
         _service = new BlogService(
-            _repository.Object,
-            blacklistRepository.Object,
-            userLookupService.Object,
-            subscriptionService.Object,
-            unreadCountersRepository.Object,
-            identityProvider.Object,
-            _intentionManager.Object,
-            createBlogValidator.Object,
-            updateBlogValidator.Object,
-            createRubricValidator.Object,
-            updateRubricValidator.Object,
-            guidFactory.Object,
-            dateTimeProvider.Object,
-            _eventProducer.Object);
+            _repository,
+            blacklistRepository,
+            userLookupService,
+            subscriptionService,
+            unreadCountersRepository,
+            identityProvider,
+            _intentionManager,
+            createBlogValidator,
+            updateBlogValidator,
+            createRubricValidator,
+            updateRubricValidator,
+            guidFactory,
+            dateTimeProvider,
+            _eventProducer);
     }
 
     private Guid SetupBlog(PremoderationStatus premoderationStatus, Guid? ownerId = null)
@@ -137,11 +136,14 @@ public class BlogPremoderationShould : UnitTestBase
             PremoderationStatus = premoderationStatus,
             Author = new GeneralUser { UserId = ownerId ?? _currentUserId }
         };
-        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(blog);
-        _repository.Setup(r => r.UpdateBlog(It.IsAny<UpdateBlogEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<UpdateBlogEntity, CancellationToken>((update, _) => _capturedUpdate = update)
-            .ReturnsAsync(blog);
+        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
+        _repository.UpdateBlog(Arg.Any<UpdateBlogEntity>(), Arg.Any<CancellationToken>())
+            .Returns(blog)
+            .AndDoes(ci =>
+            {
+                var update = ci.ArgAt<UpdateBlogEntity>(0);
+                _capturedUpdate = update;
+            });
         return blogId;
     }
 
@@ -151,8 +153,7 @@ public class BlogPremoderationShould : UnitTestBase
     /// </summary>
     private void HideEveryBlogFromTheCaller() =>
         _intentionManager
-            .Setup(m => m.IsAllowed(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()))
-            .Returns(false);
+            .IsAllowed(Arg.Any<BlogIntention>(), Arg.Any<BlogDto>()).Returns(false);
 
     private async Task<HttpException> RefusedSubmit(Guid blogId)
     {
@@ -177,8 +178,8 @@ public class BlogPremoderationShould : UnitTestBase
         _capturedUpdate!.PremoderationStatus.Should().Be(PremoderationStatus.Approved);
         _capturedUpdate.MentorId.Should().BeNull();
         _capturedUpdate.SetMentorId.Should().BeTrue();
-        _eventProducer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogModeration)), blogId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogModeration)), blogId);
     }
 
     [Theory]
@@ -211,18 +212,15 @@ public class BlogPremoderationShould : UnitTestBase
 
         await _service.ChangePremoderationAsync(blogId.ToString(), transition);
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(BlogIntention.SetStatusModeration), Times.Once);
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(BlogIntention.SubmitForApproval, It.IsAny<BlogDto>()), Times.Never);
+        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.SetStatusModeration);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(BlogIntention.SubmitForApproval, Arg.Any<BlogDto>());
     }
 
     [Fact]
     public async Task RejectAPremoderationMoveOnAMissingBlogWithNotFound()
     {
         var blogId = Guid.NewGuid();
-        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((BlogDto?)null);
+        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlogDto?)null);
 
         var act = async () => await _service.ChangePremoderationAsync(
             blogId.ToString(), ModulePremoderationTransition.SetApproved);
@@ -245,8 +243,8 @@ public class BlogPremoderationShould : UnitTestBase
 
         _capturedUpdate!.PremoderationStatus.Should().Be(PremoderationStatus.AwaitingApproval);
         _capturedUpdate.SetMentorId.Should().BeFalse();
-        _eventProducer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogModeration)), blogId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogModeration)), blogId);
     }
 
     /// <summary>
@@ -262,10 +260,8 @@ public class BlogPremoderationShould : UnitTestBase
         await _service.ChangePremoderationAsync(
             blogId.ToString(), ModulePremoderationTransition.SubmitForApproval);
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(BlogIntention.SubmitForApproval, It.IsAny<BlogDto>()), Times.Once);
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(BlogIntention.SetStatusModeration), Times.Never);
+        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.SubmitForApproval, Arg.Any<BlogDto>());
+        _intentionManager.DidNotReceive().ThrowIfForbidden(BlogIntention.SetStatusModeration);
     }
 
     [Theory]
@@ -295,8 +291,7 @@ public class BlogPremoderationShould : UnitTestBase
             blogId.ToString(), ModulePremoderationTransition.SubmitForApproval);
 
         await act.Should().ThrowAsync<HttpException>();
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(BlogIntention.SubmitForApproval, It.IsAny<BlogDto>()), Times.Never);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(BlogIntention.SubmitForApproval, Arg.Any<BlogDto>());
     }
 
     #endregion
@@ -327,8 +322,7 @@ public class BlogPremoderationShould : UnitTestBase
         HideEveryBlogFromTheCaller();
         var hidden = SetupBlog(current, ownerId: Guid.NewGuid());
         var missing = Guid.NewGuid();
-        _repository.Setup(r => r.Get(missing, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((BlogDto?)null);
+        _repository.Get(missing, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlogDto?)null);
 
         var onHidden = await RefusedSubmit(hidden);
         var onMissing = await RefusedSubmit(missing);
@@ -352,10 +346,8 @@ public class BlogPremoderationShould : UnitTestBase
 
         await RefusedSubmit(blogId);
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(BlogIntention.SubmitForApproval, It.IsAny<BlogDto>()), Times.Never);
-        _repository.Verify(
-            r => r.UpdateBlog(It.IsAny<UpdateBlogEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(BlogIntention.SubmitForApproval, Arg.Any<BlogDto>());
+        await _repository.DidNotReceive().UpdateBlog(Arg.Any<UpdateBlogEntity>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -371,10 +363,8 @@ public class BlogPremoderationShould : UnitTestBase
         await _service.ChangePremoderationAsync(
             blogId.ToString(), ModulePremoderationTransition.SubmitForApproval);
 
-        _intentionManager.Verify(
-            m => m.IsAllowed(BlogIntention.ViewDraft, It.IsAny<BlogDto>()), Times.Once);
-        _intentionManager.Verify(
-            m => m.IsAllowed(BlogIntention.ViewPremoderationPending, It.IsAny<BlogDto>()), Times.Once);
+        _intentionManager.Received(1).IsAllowed(BlogIntention.ViewDraft, Arg.Any<BlogDto>());
+        _intentionManager.Received(1).IsAllowed(BlogIntention.ViewPremoderationPending, Arg.Any<BlogDto>());
     }
 
     /// <summary>
@@ -394,8 +384,7 @@ public class BlogPremoderationShould : UnitTestBase
         await _service.ChangePremoderationAsync(blogId.ToString(), transition);
 
         _capturedUpdate.Should().NotBeNull();
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(BlogIntention.SetStatusModeration), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.SetStatusModeration);
     }
 
     #endregion

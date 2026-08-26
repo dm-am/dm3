@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
@@ -13,23 +11,23 @@ using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using DbPublication = DM.Infrastructure.Persistence.Entities.Blog.Publication;
 
+using DM.Infrastructure.Persistence.Shared.Likes;
+using DM.Infrastructure.Persistence.Shared.Users;
+
 namespace DM.Infrastructure.Persistence.Repositories.Blog;
 
 /// <inheritdoc cref="IPublicationRepository" />
 internal class PublicationRepository : IPublicationRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public PublicationRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -79,7 +77,7 @@ internal class PublicationRepository : IPublicationRepository
         var publications = await query
             .OrderByDescending(p => p.PublishedUtc ?? p.CreatedUtc)
             .Page(paging)
-            .ProjectTo<Publication>(_mapper.ConfigurationProvider)
+            .ProjectToPublication()
             .ToListAsync(ct);
 
         await FillLikes(publications, ct);
@@ -92,7 +90,7 @@ internal class PublicationRepository : IPublicationRepository
         var publication = await _dbContext.Publications
             .TagWith("DM.Blog.GetPublication")
             .Where(p => p.PublicationId == publicationId)
-            .ProjectTo<Publication>(_mapper.ConfigurationProvider)
+            .ProjectToPublication()
             .FirstOrDefaultAsync(ct);
 
         await FillLikes(publication, ct);
@@ -117,7 +115,7 @@ internal class PublicationRepository : IPublicationRepository
             // produce a deterministic result rather than relying on the
             // server's insertion order.
             .ThenByDescending(p => p.PublishedUtc ?? p.CreatedUtc)
-            .ProjectTo<Publication>(_mapper.ConfigurationProvider)
+            .ProjectToPublication()
             .FirstOrDefaultAsync(ct);
 
         await FillLikes(publication, ct);
@@ -226,65 +224,9 @@ internal class PublicationRepository : IPublicationRepository
 
     /// <summary>
     /// Backfill <see cref="Publication.Likes"/> for a page of publications.
-    ///
-    /// The mapping profile ignores Likes — they live in the polymorphic Likes
-    /// table (EntityType + EntityId) with no navigation to project through —
-    /// and nothing filled them afterwards, so every read answered with an
-    /// empty list. That cost more than a zero on a card: the like/unlike path
-    /// asks the very same list whether the viewer has already liked, so a
-    /// repeat like was accepted and an unlike was always refused.
-    ///
-    /// Two batched queries for the whole page instead of a correlated
-    /// subquery per row (PERFORMANCE.md → "Avoid inline aggregations"): the
-    /// (publication, liker) pairs first, then one projection of the distinct
-    /// likers. publicationIds is a List&lt;Guid&gt;, NOT Guid[] — EF Core's
-    /// translator has a Guid[] edge case that throws TypeLoadException on the
-    /// ReadOnlySpan&lt;Guid&gt; interpreter path (see TopicRepository).
     /// </summary>
-    private async Task FillLikes(IReadOnlyCollection<Publication> publications, CancellationToken ct)
-    {
-        if (publications.Count == 0)
-        {
-            return;
-        }
-
-        var publicationIds = publications.Select(p => p.Id).ToList();
-        var pairs = await _dbContext.Likes
-            .TagWith("DM.Blog.PublicationLikes")
-            .AsNoTracking()
-            .Where(l =>
-                !l.IsRemoved &&
-                l.EntityType == Domain.Core.Enums.LikeEntityType.Publication &&
-                publicationIds.Contains(l.EntityId))
-            .Select(l => new { l.EntityId, l.UserId })
-            .ToListAsync(ct);
-
-        if (pairs.Count == 0)
-        {
-            return;
-        }
-
-        var likerIds = pairs.Select(p => p.UserId).Distinct().ToList();
-        var likers = await _dbContext.Users
-            .TagWith("DM.Blog.PublicationLikers")
-            .AsNoTracking()
-            .Where(u => likerIds.Contains(u.UserId))
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
-            .ToDictionaryAsync(u => u.UserId, ct);
-
-        // A liker filtered out by the soft-delete filter has no projection;
-        // their like is dropped rather than crashing the page.
-        var byPublication = pairs
-            .Where(p => likers.ContainsKey(p.UserId))
-            .GroupBy(p => p.EntityId)
-            .ToDictionary(g => g.Key, g => g.Select(p => likers[p.UserId]).ToArray());
-
-        foreach (var publication in publications)
-        {
-            if (byPublication.TryGetValue(publication.Id, out var likes))
-            {
-                publication.Likes = likes;
-            }
-        }
-    }
+    private Task FillLikes(IReadOnlyCollection<Publication> publications, CancellationToken ct) =>
+        LikeBackfill.Fill(_dbContext, publications, Domain.Core.Enums.LikeEntityType.Publication,
+            p => p.Id, (p, likes) => p.Likes = likes,
+            "DM.Blog.PublicationLikes", "DM.Blog.PublicationLikers", ct);
 }

@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Identity;
 
 namespace DM.Workers.NotificationDispatcher.Dispatching;
@@ -26,7 +27,7 @@ namespace DM.Workers.NotificationDispatcher.Dispatching;
 /// no reader here at all, and a path that reaches this is a path that has to be
 /// looked at rather than served.
 /// </remarks>
-internal sealed class NoIdentityProvider : IIdentityProvider
+internal sealed class NoIdentityProvider : IIdentityProvider, IAuthorizationContextProvider
 {
     private static InvalidOperationException NoUser() => new(
         "This host consumes messages and serves no request, so there is no current user. " +
@@ -35,4 +36,12 @@ internal sealed class NoIdentityProvider : IIdentityProvider
 
     /// <inheritdoc />
     public IIdentity Current => throw NoUser();
+
+    /// <summary>
+    /// The authorization face of the same refusal. The domain services this
+    /// host scans in reach the intention manager, whose graph must resolve at
+    /// startup; answering Guest here would be a real answer to a question that
+    /// has no reader behind it.
+    /// </summary>
+    public IAuthorizationSubject CurrentSubject => throw NoUser();
 }

@@ -51,6 +51,8 @@ const ALLOWED: Record<string, string> = {
     "a bullet between two values of the security line, awaiting its replacement by a separator a reader can copy",
   "pages/account/sections/AccountSecurityHistorySection.vue .event-ip &::after":
     "the same bullet, one value further along the same line",
+  "shared/ui/BBCodeEditor/BBCodeEditor.vue .wysiwyg-content :deep(.tiptap) p.is-editor-empty:first-child::before":
+    "the editor placeholder, here for the same reason as the disclosure triangle: it must not reach a copy. A text node would be a node of the document being edited, so it would be typed over, selected and saved as content; and by the time there is anything to copy the hint is already gone",
 };
 
 /** A declaration inside one of these is pseudo content. */

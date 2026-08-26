@@ -2,12 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Infrastructure.Persistence.Repositories.Moderation;
 using DM.Infrastructure.Persistence.Shared.Users;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
@@ -63,12 +62,6 @@ public class WarningEvidenceShould
     private DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()
         .UseInMemoryDatabase(_databaseName)
         .Options);
-
-    private static IMapper Mapper() => new MapperConfiguration(cfg =>
-    {
-        cfg.AddProfile<GeneralUserMappingProfile>();
-        cfg.AddProfile<ModerationMappingProfile>();
-    }).CreateMapper();
 
     private static DbUser NewUser(Guid id, string username) => new()
     {
@@ -239,7 +232,7 @@ public class WarningEvidenceShould
     public async Task KeepTheSnapshotAndRaiseTheMarkWhenTheTextIsRewrittenAfterwards()
     {
         using var context = Seeded();
-        var repository = new WarningRepository(context, Mapper());
+        var repository = new WarningRepository(context);
 
         var snapshot = await Resolver(context).CaptureSnapshot(WarningEntityType.Comment, CommentId);
         await repository.Create(new CreateWarningEntity
@@ -304,7 +297,7 @@ public class WarningEvidenceShould
     public async Task SurviveTheDeletionOfTheObject()
     {
         using var context = Seeded();
-        var repository = new WarningRepository(context, Mapper());
+        var repository = new WarningRepository(context);
 
         var snapshot = await Resolver(context).CaptureSnapshot(WarningEntityType.Comment, CommentId);
         await repository.Create(new CreateWarningEntity

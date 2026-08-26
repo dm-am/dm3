@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.UnreadCounters;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Core.Tests.UnreadCounters;

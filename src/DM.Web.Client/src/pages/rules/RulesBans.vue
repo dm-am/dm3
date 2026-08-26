@@ -3,17 +3,12 @@
  * RulesBans - ban mechanics section
  */
 
-import { onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import {
   ExpandableList,
   type ExpandableItem,
 } from "@/shared/ui/ExpandableList";
-import type { ExpandableListExpose } from "./expandableListRef";
-
-const route = useRoute();
-const listRef = ref<ExpandableListExpose | null>(null);
+import { useExpandOnHash } from "./expandableListRef";
 
 const sections: ExpandableItem[] = [
   {
@@ -60,16 +55,7 @@ const sections: ExpandableItem[] = [
   },
 ];
 
-// Deep-link support: #<item-id> (e.g. "#points") auto-expands the matching
-// row on mount. Scrolling itself is handled globally by the router
-// (router.ts already does document.getElementById(hash) on every
-// navigation) — this only adds the expand-on-arrival behavior.
-onMounted(() => {
-  const id = route.hash.slice(1);
-  if (id && sections.some((section) => section.id === id)) {
-    listRef.value?.expandItem(id);
-  }
-});
+const listRef = useExpandOnHash(sections);
 </script>
 
 <template>

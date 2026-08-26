@@ -169,18 +169,26 @@ public partial class BbParserWrapper : IBbParser
     /// parser.
     /// </summary>
     /// <remarks>
-    /// The whole point of it is that an author cannot produce it. The previous
-    /// spelling — __IMG_0__ — was ordinary text, so restoration could not tell
-    /// the placeholder it had written itself from the same characters typed by
-    /// the author: a post that contained __IMG_0__ alongside any [img] got a
-    /// second copy of that image pasted at that spot, including into places
-    /// where plain text can never become an element — the author line of a
-    /// [quote="..."], the addressee attribute of a [private="..."]. U+0001
-    /// cannot be typed, and <see cref="StripPlaceholderMarkers"/> removes it
-    /// from the input before extraction, so past that point every occurrence in
-    /// the string is one this class put there.
+    /// The whole point of it is that the author's own text can never be mistaken
+    /// for one. The previous spelling — __IMG_0__ — was ordinary text, so
+    /// restoration could not tell the placeholder it had written itself from the
+    /// same characters typed by the author: a post that contained __IMG_0__
+    /// alongside any [img] got a second copy of that image pasted at that spot,
+    /// including into places where plain text can never become an element — the
+    /// author line of a [quote="..."], the addressee attribute of a
+    /// [private="..."]. What holds the guarantee is
+    /// <see cref="StripPlaceholderMarkers"/>, which removes the character from
+    /// the input before extraction: past that line, every occurrence in the
+    /// string is one this class put there, whatever the character is.
+    ///
+    /// It used to be U+0001, and cannot be any longer. BbParser.Parse now
+    /// normalises its input and strips the control characters out of it, and the
+    /// string handed to it is this one, placeholders and all — a sentinel that
+    /// has to survive the parse cannot be a character the parse removes. U+E000
+    /// is in the private use area: it has no meaning of its own anywhere, which
+    /// is what makes it usable as one here.
     /// </remarks>
-    private const char PlaceholderMarker = '';
+    private const char PlaceholderMarker = '\uE000';
 
     /// <summary>Placeholder kind — one letter per extracted tag.</summary>
     private const char ImageKind = 'I';
@@ -219,21 +227,86 @@ public partial class BbParserWrapper : IBbParser
     // EXTRACTION REGEXES
     // ═══════════════════════════════════════════════════════════════════════
 
+    // ───────────────────────────────────────────────────────────────────────
+    // Every pattern below that scans for a closing tag with a lazy [\s\S]*? is
+    // built on the NonBacktracking engine, and the ones that read an attribute
+    // value stop at an opening bracket.
+    //
+    // The reason is cost. A lazy scan with a literal terminator is quadratic on
+    // text that opens a tag and never closes it: each of those openings walks
+    // the whole remainder before failing, so the work grows with the square of
+    // the post. Measured on a post an author can type by hand —
+    // [img][code][link=x][quote=" repeated — 17 KB cost 3.6 s of CPU and 34 KB
+    // cost 16.5 s, on every render, for every reader, because the render is not
+    // cached by design (see PERFORMANCE.md). NonBacktracking simulates all
+    // start positions in one pass, so the same text costs one scan; it matches
+    // exactly what the backtracking engine matched, so no content changes.
+    //
+    // The content classes are not narrowed to "up to the next bracket": a URL may
+    // legitimately carry brackets, [img]http://[::1]/x.png[/img] being the
+    // ordinary case. They are narrowed to what a URL is — see UrlContent, and see
+    // what a lazy scan over [\s\S] cost before it was. Attribute values are the
+    // opposite — the parser itself refuses a bracket inside one, because a bracket
+    // there means the attribute was never closed — so those classes exclude it and
+    // stay linear on the backtracking engine, which the lookahead in
+    // ImgAttributeRegex requires.
+    // ───────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// What may stand between the opening and the closing tag of an [img] or a
+    /// [link]: one URL, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Two rules, both read off what a URL is rather than off what an attack
+    /// looks like. No whitespace, because RFC 3986 gives a URI none — SanitizeUrl
+    /// already refuses one that carries any. And no closing BBCode tag, because
+    /// "[/" is not a sequence an address contains.
+    ///
+    /// Written [\s\S]*? the content was whatever stood before the next [/img],
+    /// so one opening tag the author forgot to close reached across every tag
+    /// between the two and swallowed them all. What it swallowed became the URL:
+    /// a whole [private] block ended up inside a value that never becomes a
+    /// node, so the visibility filter had nothing to hide and the text walk
+    /// handed the block on verbatim — into the stored search text, and from
+    /// there into the preview shown to every reader of the room. The same
+    /// capture then failed SanitizeUrl on the whitespace it carried and the
+    /// display path dropped the image whole, so the author's own paragraph
+    /// disappeared from the page while the index kept it.
+    ///
+    /// A bracket that opens no tag is still an ordinary URL character and stays
+    /// allowed: http://[::1]/x.png is how a literal IPv6 host is spelled, and
+    /// ?filter[name]=x is an ordinary query string. Whitespace AROUND the address
+    /// stays allowed too — an editor leaves newlines around a pasted URL and
+    /// SanitizeUrl trims them — so the padding sits outside this class rather than
+    /// in it, and one token is all that may stand between the two.
+    ///
+    /// What no longer matches is an opening tag reaching past a closing tag that
+    /// is not its own. Such a tag is left where it stands and rendered as the text
+    /// it is, which costs nobody a word — the alternative, refusing the whole
+    /// post, guesses at what the author meant by a tag they did not close and
+    /// takes the rest of the post down with the guess.
+    /// </remarks>
+    private const string UrlContent = @"(?:[^\s\[]|\[[^\s/])*?";
+
     /// <summary>Match [img=WIDTHxHEIGHT alt="text"]URL[/img] or [img=WIDTH alt="text"]URL[/img]</summary>
-    [GeneratedRegex(@"\[img=(\d+)(?:x(\d+))?\s+alt=""([^""]*)""\]([\s\S]*?)\[/img\]", RegexOptions.IgnoreCase)]
-    private static partial Regex ImgWithSizeAndAltRegex();
+    private static readonly Regex ImgWithSizeAndAlt = new(
+        $@"\[img=(\d+)(?:x(\d+))?\s+alt=""([^""]*)""\]\s*({UrlContent})\s*\[/img\]",
+        RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
 
     /// <summary>Match [img=WIDTHxHEIGHT]URL[/img] or [img=WIDTH]URL[/img]</summary>
-    [GeneratedRegex(@"\[img=(\d+)(?:x(\d+))?\]([\s\S]*?)\[/img\]", RegexOptions.IgnoreCase)]
-    private static partial Regex ImgWithSizeRegex();
+    private static readonly Regex ImgWithSize = new(
+        $@"\[img=(\d+)(?:x(\d+))?\]\s*({UrlContent})\s*\[/img\]",
+        RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
 
     /// <summary>Match [img alt="text"]URL[/img]</summary>
-    [GeneratedRegex(@"\[img\s+alt=""([^""]*)""\]([\s\S]*?)\[/img\]", RegexOptions.IgnoreCase)]
-    private static partial Regex ImgWithAltRegex();
+    private static readonly Regex ImgWithAlt = new(
+        $@"\[img\s+alt=""([^""]*)""\]\s*({UrlContent})\s*\[/img\]",
+        RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
 
     /// <summary>Match [img]URL[/img]</summary>
-    [GeneratedRegex(@"\[img\]([\s\S]*?)\[/img\]", RegexOptions.IgnoreCase)]
-    private static partial Regex ImgRegex();
+    private static readonly Regex Img = new(
+        $@"\[img\]\s*({UrlContent})\s*\[/img\]",
+        RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
 
     /// <summary>Match [img="URL"] and [img=URL], the standalone attribute form</summary>
     /// <remarks>
@@ -247,44 +320,75 @@ public partial class BbParserWrapper : IBbParser
     /// Applied after every content form, and the digits-only case is excluded,
     /// so [img=200]…[/img] stays a size rather than becoming an address.
     /// </remarks>
-    [GeneratedRegex(@"\[img=(?!\d+(?:x\d+)?[\]\s])""?([^""\]]+)""?\]", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\[img=(?!\d+(?:x\d+)?[\]\s])""?([^""\[\]]+)""?\]", RegexOptions.IgnoreCase)]
     private static partial Regex ImgAttributeRegex();
 
     /// <summary>Match [link=text]URL[/link]</summary>
-    [GeneratedRegex(@"\[link=([^\]]+)\]([\s\S]*?)\[/link\]", RegexOptions.IgnoreCase)]
-    private static partial Regex LinkWithTextRegex();
+    private static readonly Regex LinkWithText = new(
+        $@"\[link=([^\]]+)\]\s*({UrlContent})\s*\[/link\]",
+        RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
 
     /// <summary>Match [link]URL[/link]</summary>
-    [GeneratedRegex(@"\[link\]([\s\S]*?)\[/link\]", RegexOptions.IgnoreCase)]
-    private static partial Regex LinkSimpleRegex();
+    private static readonly Regex LinkSimple = new(
+        $@"\[link\]\s*({UrlContent})\s*\[/link\]",
+        RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
 
     /// <summary>Match [mention="username"] - standalone tag, no closing tag</summary>
-    [GeneratedRegex(@"\[mention=""([^""]+)""\]", RegexOptions.IgnoreCase)]
-    private static partial Regex MentionRegex();
+    private static readonly Regex Mention = new(
+        @"\[mention=""([^""]+)""\]",
+        RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
 
     /// <summary>Match a [code] or [noparse] block, whose content is shown as written</summary>
-    [GeneratedRegex(@"\[(code|noparse)\][\s\S]*?\[/\1\]", RegexOptions.IgnoreCase)]
-    private static partial Regex VerbatimBlockRegex();
+    /// <remarks>
+    /// The only extraction here whose content is markup on purpose, so it is
+    /// the only one that cannot stop at an opening bracket. Linear time comes
+    /// from the engine instead: NonBacktracking simulates every start position
+    /// in one pass, so an input made of unclosed [code] costs one scan rather
+    /// than one scan per opening. That engine supports no backreference, which
+    /// is why the two tag names are spelled out instead of matched with \1, and
+    /// no Compiled, which is why this is a plain field rather than a generated
+    /// regex.
+    /// </remarks>
+    private static readonly Regex VerbatimBlock = new(
+        @"\[code\][\s\S]*?\[/code\]|\[noparse\][\s\S]*?\[/noparse\]",
+        RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
 
     /// <summary>Match the placeholder that stands in for one extracted verbatim block.</summary>
     private static readonly Regex VerbatimPlaceholder = PlaceholderPattern(VerbatimKind);
 
+    /// <summary>Either half of the tag whose audience the parse decides.</summary>
+    private static readonly Regex PrivilegedMarkup = new(
+        $@"\[/?{PrivateBlockMarkup.TagName}",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Whether a span may be cut out of the text before the parser reads it.
+    /// </summary>
+    /// <remarks>
+    /// One sentence holds the whole of the privacy guarantee on this path:
+    /// nothing removed before the parse may carry a block whose audience the
+    /// parse decides. An extraction files its content in a side list and leaves
+    /// a placeholder behind, so that content never becomes a node, is never
+    /// offered to the visibility filter, and comes back verbatim in whatever
+    /// the tree walk emits — which is exactly what the stored search text is
+    /// built from, and what the plain-text audience of the API returns.
+    ///
+    /// Refusing to extract leaves the tag where it stands. [img] and [link] are
+    /// not in the parser's tag set, so they render as the text they are, and the
+    /// [private] block inside them becomes the node it should have been all
+    /// along — hidden from whoever the filter hides it from, on every surface.
+    ///
+    /// <see cref="UrlContent"/> already makes a well-formed block impossible to
+    /// swallow. This covers the rest of the surface: the alt attribute, which is
+    /// not a URL and admits both halves of the tag, and the spellings a block
+    /// takes when the author never closed it — refused at the save path by
+    /// PrivateBlockMarkup.IsBalanced, which a render path may not depend on.
+    /// </remarks>
+    private static bool MayExtract(Match match) => !PrivilegedMarkup.IsMatch(match.Value);
+
     /// <summary>Match empty spoiler-head anchor (no title text) for post-processing</summary>
     [GeneratedRegex(@"<a href=""#"" class=""spoiler-head""></a>", RegexOptions.IgnoreCase)]
     private static partial Regex EmptySpoilerHeadRegex();
-
-    /// <summary>
-    /// Tag names this wrapper extracts and renders itself. Their attribute
-    /// value never reaches the parser, and it is encoded where the element is
-    /// built (see WrappedNodeTree), so it must not be encoded a second time.
-    /// </summary>
-    /// <remarks>
-    /// The premise holds only because every spelling of both tags is extracted
-    /// above, and for img that took ImgAttributeRegex: until it existed,
-    /// [img="URL"] went to the parser with its value, and this list excused it
-    /// from encoding on the strength of a sentence that was not true of it.
-    /// </remarks>
-    private static readonly string[] SelfRenderedTags = { "img", "link" };
 
     /// <summary>
     /// Match the opening tag of every tag whose attribute value the parser
@@ -292,24 +396,42 @@ public partial class BbParserWrapper : IBbParser
     /// </summary>
     /// <remarks>
     /// Built from the tag set instead of a hard-coded list of names, so a tag
-    /// added later is covered without anyone remembering this file. The value
-    /// ends at the first quote followed by the closing bracket, which is the
-    /// parser's own rule — [quote="a"b"] really does carry the value a"b. The
-    /// name is matched case-sensitively for the same reason: [QUOTE="..."] is
-    /// plain text to the parser, and encoding a value it will never substitute
-    /// would show the entities to the reader.
+    /// added later is covered without anyone remembering this file. There used
+    /// to be an exclusion list here for [img] and [link], which this wrapper
+    /// renders itself; it is gone because those two are no longer in the
+    /// parser's tag set at all (see BbParserProvider), so nothing has to
+    /// remember to exclude them.
+    ///
+    /// The value ends at the first quote followed by the closing bracket, which
+    /// is the parser's own rule — [quote="a"b"] really does carry the value a"b.
+    /// The name is matched case-sensitively for the same reason: [QUOTE="..."]
+    /// is plain text to the parser, and encoding a value it will never
+    /// substitute would show the entities to the reader.
+    ///
+    /// The unquoted alternative is not a convenience — it is what keeps this
+    /// pass equal to the parser after the parser learned to read [quote=Vasya].
+    /// Miss that spelling and the value goes to a tag declared secure: false,
+    /// which substitutes it into its template as written, so
+    /// [quote=&lt;img src=x onerror=alert(1)&gt;] would be a live event handler on
+    /// the page of every reader. Both alternatives stop at an opening bracket,
+    /// exactly as the parser's do, so an unterminated attribute costs one short
+    /// scan instead of a scan of the whole remaining post — and because both
+    /// stop there, the pass has to run on the string the parser will read and
+    /// not on an earlier one (see the call site).
     /// </remarks>
     private static Regex? BuildAttributeTagPattern(IBbParser inner)
     {
         var names = inner.GetTags()
-            .Where(tag => tag.WithAttribute && !SelfRenderedTags.Contains(tag.Name))
+            .Where(tag => tag.WithAttribute)
             .Select(tag => Regex.Escape(tag.Name))
             .Distinct()
             .ToArray();
 
         return names.Length == 0
             ? null
-            : new Regex($@"\[({string.Join("|", names)})=""((?:[^""]|""(?!\]))*)""\]", RegexOptions.Compiled);
+            : new Regex(
+                $@"\[({string.Join("|", names)})=(?:""(?>((?:[^""\[]|""(?!\]))*))""|(?>([^\[\]""\r\n]*)))\]",
+                RegexOptions.Compiled);
     }
 
     /// <summary>
@@ -325,14 +447,20 @@ public partial class BbParserWrapper : IBbParser
     /// [quote="&lt;img src=x onerror=alert(1)&gt;"] put a live event handler into the
     /// page of every reader on every surface.
     ///
-    /// Encoding before the parser is the single point that covers both
-    /// positions the value lands in — element text (the quote author line, the
-    /// addressee line) and attribute value (data-bb-addressees) — and it costs
-    /// the reader nothing, because the browser decodes the entities back for
-    /// display and for getAttribute. Brackets are left alone, so an [img] nested
-    /// inside an attribute still renders as the element it is: harmless once a
-    /// URL can no longer smuggle whitespace (see SanitizeUrl), and visible to
-    /// everyone who sees the post.
+    /// Encoding immediately before the parser is the single point that covers
+    /// both positions the value lands in — element text (the quote author line,
+    /// the addressee line) and attribute value (data-bb-addressees) — and it
+    /// costs the reader nothing, because the browser decodes the entities back
+    /// for display and for getAttribute. Brackets are left alone, so an [img]
+    /// nested inside an attribute still renders as the element it is: harmless
+    /// once a URL can no longer smuggle whitespace (see SanitizeUrl), and
+    /// visible to everyone who sees the post.
+    ///
+    /// "Immediately" is load-bearing and not a figure of speech: this pass and
+    /// the parser both end a value at an opening bracket, and while the pass ran
+    /// earlier in the pipeline the extractions in between deleted brackets, so a
+    /// value this refused to read became one the parser read. The call site
+    /// carries the worked example.
     ///
     /// What it does change is the string the parser then reports as the
     /// attribute value, while the private-addressee snapshot is keyed by the raw
@@ -344,7 +472,13 @@ public partial class BbParserWrapper : IBbParser
         _attributeTagPattern is null
             ? input
             : _attributeTagPattern.Replace(input, match =>
-                $"[{match.Groups[1].Value}=\"{BbAttributeEncoding.Encode(match.Groups[2].Value)}\"]");
+            {
+                // Group 2 is the quoted spelling, group 3 the unquoted one; the
+                // output is quoted either way, so the parser reads one shape and
+                // the encoding covers both.
+                var value = match.Groups[2].Success ? match.Groups[2].Value : match.Groups[3].Value;
+                return $"[{match.Groups[1].Value}=\"{BbAttributeEncoding.Encode(value)}\"]";
+            });
 
     /// <summary>
     /// Create wrapper around existing parser
@@ -376,7 +510,7 @@ public partial class BbParserWrapper : IBbParser
         var linkList = new List<(string? text, string url)>();
         var mentionList = new List<string>();
 
-        // Before anything else, four passes over the raw text, in this order.
+        // Before anything else, three passes over the raw text, in this order.
         // The marker goes first: nothing the author typed may be mistaken for a
         // placeholder written below (see PlaceholderMarker). Then [code] and
         // [noparse] are lifted out whole, because everything after this line
@@ -387,22 +521,26 @@ public partial class BbParserWrapper : IBbParser
         // spelled the way the tag set recognises, or the visitor gets no node to
         // filter and private text is served to everyone (see PrivateBlockMarkup,
         // whose rules the save path keys its addressee snapshot by, so the two
-        // ends cannot drift apart). Encoding comes last, because normalisation is
-        // what turns [private=Name] into the quoted form it looks for (see
-        // EncodeAttributeValues).
+        // ends cannot drift apart), and it has to happen before the extractions
+        // below so that a block they would damage is already downgraded.
+        //
+        // Encoding is not here. It goes last, immediately before the parser —
+        // see the call site for why that position is the whole of its
+        // correctness.
         var verbatimList = new List<string>();
-        var processed = VerbatimBlockRegex().Replace(StripPlaceholderMarkers(input), match =>
+        var processed = VerbatimBlock.Replace(StripPlaceholderMarkers(input), match =>
         {
             var index = verbatimList.Count;
             verbatimList.Add(match.Value);
             return Placeholder(VerbatimKind, index);
         });
 
-        processed = EncodeAttributeValues(PrivateBlockMarkup.Normalise(processed));
+        processed = PrivateBlockMarkup.Normalise(processed);
 
         // Extract [img=WxH alt="text"]URL[/img] or [img=W alt="text"]URL[/img] (MUST be first)
-        processed = ImgWithSizeAndAltRegex().Replace(processed, match =>
+        processed = ImgWithSizeAndAlt.Replace(processed, match =>
         {
+            if (!MayExtract(match)) return match.Value;
             var width = int.TryParse(match.Groups[1].Value, out var w) ? w : (int?)null;
             var height = match.Groups[2].Success && int.TryParse(match.Groups[2].Value, out var h) ? h : (int?)null;
             var alt = match.Groups[3].Value;
@@ -413,8 +551,9 @@ public partial class BbParserWrapper : IBbParser
         });
 
         // Extract [img=WxH]URL[/img] or [img=W]URL[/img] (no alt)
-        processed = ImgWithSizeRegex().Replace(processed, match =>
+        processed = ImgWithSize.Replace(processed, match =>
         {
+            if (!MayExtract(match)) return match.Value;
             var width = int.TryParse(match.Groups[1].Value, out var w) ? w : (int?)null;
             var height = match.Groups[2].Success && int.TryParse(match.Groups[2].Value, out var h) ? h : (int?)null;
             var url = match.Groups[3].Value;
@@ -424,8 +563,9 @@ public partial class BbParserWrapper : IBbParser
         });
 
         // Extract [img alt="text"]URL[/img] (alt only, no size)
-        processed = ImgWithAltRegex().Replace(processed, match =>
+        processed = ImgWithAlt.Replace(processed, match =>
         {
+            if (!MayExtract(match)) return match.Value;
             var alt = match.Groups[1].Value;
             var url = match.Groups[2].Value;
             var index = imgList.Count;
@@ -434,8 +574,9 @@ public partial class BbParserWrapper : IBbParser
         });
 
         // Extract [img]URL[/img] (simple, no size, no alt)
-        processed = ImgRegex().Replace(processed, match =>
+        processed = Img.Replace(processed, match =>
         {
+            if (!MayExtract(match)) return match.Value;
             var url = match.Groups[1].Value;
             var index = imgList.Count;
             imgList.Add((url, null, null, null)); // null = use default max dimensions
@@ -446,6 +587,7 @@ public partial class BbParserWrapper : IBbParser
         // the form that used to reach the inner parser untouched.
         processed = ImgAttributeRegex().Replace(processed, match =>
         {
+            if (!MayExtract(match)) return match.Value;
             var url = match.Groups[1].Value.Trim();
             var index = imgList.Count;
             imgList.Add((url, null, null, null));
@@ -453,8 +595,9 @@ public partial class BbParserWrapper : IBbParser
         });
 
         // Extract [link=text]URL[/link] (MUST be before simple link)
-        processed = LinkWithTextRegex().Replace(processed, match =>
+        processed = LinkWithText.Replace(processed, match =>
         {
+            if (!MayExtract(match)) return match.Value;
             var text = match.Groups[1].Value;
             var url = match.Groups[2].Value;
             var index = linkList.Count;
@@ -463,8 +606,9 @@ public partial class BbParserWrapper : IBbParser
         });
 
         // Extract [link]URL[/link]
-        processed = LinkSimpleRegex().Replace(processed, match =>
+        processed = LinkSimple.Replace(processed, match =>
         {
+            if (!MayExtract(match)) return match.Value;
             var url = match.Groups[1].Value;
             var index = linkList.Count;
             linkList.Add((null, url)); // null text = simple link
@@ -472,13 +616,41 @@ public partial class BbParserWrapper : IBbParser
         });
 
         // Extract [mention="username"] - standalone tag
-        processed = MentionRegex().Replace(processed, match =>
+        processed = Mention.Replace(processed, match =>
         {
+            if (!MayExtract(match)) return match.Value;
             var username = match.Groups[1].Value;
             var index = mentionList.Count;
             mentionList.Add(username);
             return Placeholder(MentionKind, index);
         });
+
+        // Encode the attribute values the parser will substitute into markup —
+        // here, on the exact string the parser is about to be handed, and
+        // nowhere earlier.
+        //
+        // The position is the correctness. Both this pass and the parser stop an
+        // attribute value at an opening bracket, which reads like agreement, and
+        // it was agreement — on two different strings. Run before the
+        // extractions above, this pass saw
+        //
+        //     [quote=<img src=x onerror=alert(1)>[img]https://ex.com/a.png[/img]]
+        //
+        // gave up at the bracket and rewrote nothing; the extractions then
+        // replaced the inner [img] with a placeholder, which carries no bracket,
+        // and the parser read the value it had just refused. [quote] is declared
+        // secure: false, so that value went into <div class="quote-author"> as
+        // written and the client binds it through v-html: stored XSS on every
+        // surface that renders a quotation. Any tag this wrapper extracts —
+        // [link=x]url[/link], [mention="x"] — works the same way, because all of
+        // them turn brackets into a placeholder that has none.
+        //
+        // With the pass moved here the two patterns read one string, so "the
+        // parser reads a value this did not read" is not a rule anyone has to
+        // maintain — it is unrepresentable. Still before the verbatim blocks come
+        // back, because their content is shown as written and must not be
+        // rewritten.
+        processed = EncodeAttributeValues(processed);
 
         // Put [code] and [noparse] back before the parser: they are its tags, and
         // it is what renders them, verbatim content and all.
@@ -519,9 +691,11 @@ public partial class BbParserWrapper : IBbParser
         private static readonly Regex MentionPlaceholder = PlaceholderPattern(MentionKind);
 
         /// <summary>
-        /// Create wrapped node tree
+        /// Create wrapped node tree. Internal so the blanket assembly scan
+        /// leaves the type alone: the inner tree is handed in by the wrapper,
+        /// and nothing in the container answers for a NodeTree.
         /// </summary>
-        public WrappedNodeTree(NodeTree inner, List<(string url, int? width, int? height, string? alt)> imgList, List<(string? text, string url)> linkList, List<string> mentionList, bool spoilerGatedImages = false)
+        internal WrappedNodeTree(NodeTree inner, List<(string url, int? width, int? height, string? alt)> imgList, List<(string? text, string url)> linkList, List<string> mentionList, bool spoilerGatedImages = false)
             : base(BbParser.SecuritySubstitutions, new Dictionary<string, string>())
         {
             _inner = inner;
@@ -684,26 +858,35 @@ public partial class BbParserWrapper : IBbParser
 
         private string ToTextCore(string text)
         {
-            // Restore images as alt text (if available) or URL
+            // Restore images as alt text (if available) or URL.
+            //
+            // An address the display path refuses answers here the way it answers
+            // there: with nothing. The two walks emit the same content for the
+            // same viewer, and the search text is built from this one - a URL that
+            // no reader is ever shown is a word the index would hold and the page
+            // could not account for.
             text = ImgPlaceholder.Replace(text, match =>
             {
                 var index = int.Parse(match.Groups[1].Value);
                 if (index < _imgList.Count)
                 {
                     var (url, _, _, alt) = _imgList[index];
-                    return !string.IsNullOrEmpty(alt) ? alt : url;
+                    if (!string.IsNullOrEmpty(alt)) return alt;
+                    return SanitizeUrl(url) == "#" ? string.Empty : url;
                 }
                 return match.Value;
             });
 
-            // Restore links as text or URL
+            // Restore links as text or URL, refused addresses dropped for the
+            // reason above - and the text kept, exactly as the HTML walk keeps it.
             text = LinkPlaceholder.Replace(text, match =>
             {
                 var index = int.Parse(match.Groups[1].Value);
                 if (index < _linkList.Count)
                 {
                     var (linkText, url) = _linkList[index];
-                    return linkText ?? url;
+                    if (linkText != null) return linkText;
+                    return SanitizeUrl(url) == "#" ? string.Empty : url;
                 }
                 return match.Value;
             });
@@ -725,38 +908,63 @@ public partial class BbParserWrapper : IBbParser
         /// <summary>
         /// Convert back to BBCode in DM3 format
         /// </summary>
-        public string ToBb()
-        {
-            var bb = _inner.ToBb();
+        public string ToBb() => ToBbCore(_inner.ToBb());
 
-            // Restore images as [img]URL[/img] or [img=WxH]URL[/img] or with alt
+        /// <summary>
+        /// Convert back to BBCode with the permission filter and the attribute
+        /// transform applied during the tree walk. This is the source of a
+        /// quotation; see <see cref="RenderAudience.QuoteSource"/>.
+        /// </summary>
+        public string ToBbFiltered(
+            System.Func<Node, bool> filter,
+            System.Func<Node, string, string> transform)
+            => ToBbCore(_inner.ToBb(filter, transform));
+
+        private string ToBbCore(string bb)
+        {
+            // Restore images as [img]URL[/img] or [img=WxH]URL[/img] or with alt.
+            //
+            // The address is judged by SanitizeUrl and the verdict acted on the
+            // same way ToHtmlCore acts on it: an address the display path refuses
+            // is not written here either. The two paths agreeing is not a
+            // courtesy - it is the invariant that a source never shows a reader
+            // more than the page would have shown the same reader. Written the
+            // other way round, the quotation of a post with [img]javascript:...
+            // handed the address back to whoever pressed the button while the
+            // page it was quoted from showed nothing at all.
             bb = ImgPlaceholder.Replace(bb, match =>
             {
                 var index = int.Parse(match.Groups[1].Value);
                 if (index < _imgList.Count)
                 {
                     var (url, width, height, alt) = _imgList[index];
+                    var safeUrl = SanitizeUrl(url);
+                    if (safeUrl == "#") return ""; // Dropped whole, as on the display path
                     var altPart = !string.IsNullOrEmpty(alt) ? $" alt=\"{alt}\"" : "";
 
                     if (width.HasValue && height.HasValue)
-                        return $"[img={width.Value}x{height.Value}{altPart}]{url}[/img]";
+                        return $"[img={width.Value}x{height.Value}{altPart}]{safeUrl}[/img]";
                     if (width.HasValue)
-                        return $"[img={width.Value}{altPart}]{url}[/img]";
+                        return $"[img={width.Value}{altPart}]{safeUrl}[/img]";
                     if (!string.IsNullOrEmpty(alt))
-                        return $"[img{altPart}]{url}[/img]";
-                    return $"[img]{url}[/img]";
+                        return $"[img{altPart}]{safeUrl}[/img]";
+                    return $"[img]{safeUrl}[/img]";
                 }
                 return match.Value;
             });
 
-            // Restore links as [link]URL[/link] or [link=text]URL[/link]
+            // Restore links as [link]URL[/link] or [link=text]URL[/link]. A
+            // refused address leaves its text and loses its markup, which is
+            // what the display path does with it.
             bb = LinkPlaceholder.Replace(bb, match =>
             {
                 var index = int.Parse(match.Groups[1].Value);
                 if (index < _linkList.Count)
                 {
                     var (text, url) = _linkList[index];
-                    return text != null ? $"[link={text}]{url}[/link]" : $"[link]{url}[/link]";
+                    var safeUrl = SanitizeUrl(url);
+                    if (safeUrl == "#") return text ?? "";
+                    return text != null ? $"[link={text}]{safeUrl}[/link]" : $"[link]{safeUrl}[/link]";
                 }
                 return match.Value;
             });

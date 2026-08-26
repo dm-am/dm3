@@ -1,13 +1,12 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Repositories.Forum;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using Moq;
+using NSubstitute;
 using Xunit;
 using DbBoard = DM.Infrastructure.Persistence.Entities.Forum.Board;
 using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
@@ -44,9 +43,6 @@ public class PinnedTopicOrderShould
     private const int ForeignOrder = 7;
 
     private static readonly DateTimeOffset Created = new(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
-
-    private static readonly IMapper Mapper = new MapperConfiguration(cfg =>
-        cfg.AddMaps(typeof(TopicMappingProfile).Assembly)).CreateMapper();
 
     /// <summary>
     /// Two boards. The first holds three pinned topics and one that is not
@@ -85,7 +81,7 @@ public class PinnedTopicOrderShould
     }
 
     private static TopicRepository RepositoryOver(DmDbContext context) => new(
-        context, Mapper, new Mock<IGuidFactory>().Object, new Mock<IDateTimeProvider>().Object);
+        context, Substitute.For<IGuidFactory>(), Substitute.For<IDateTimeProvider>());
 
     [Fact]
     public async Task ListThePinnedTopicsOfTheBoardItWasAskedAbout()

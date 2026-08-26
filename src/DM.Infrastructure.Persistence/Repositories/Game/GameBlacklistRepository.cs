@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Game.Features.Blacklists;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
 using Microsoft.EntityFrameworkCore;
+
+using DM.Infrastructure.Persistence.Shared.Users;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
@@ -17,19 +17,16 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 internal class GameBlacklistRepository : IGameBlacklistRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
 
     /// <inheritdoc />
     public GameBlacklistRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IDateTimeProvider dateTimeProvider,
         IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
         _guidFactory = guidFactory;
     }
@@ -38,7 +35,7 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
     public async Task<IEnumerable<GeneralUser>> Get(Guid gameId) => await _dbContext.GameBlacklists
         .Where(b => b.GameId == gameId)
         .Select(b => b.BlockedUser)
-        .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+        .ProjectToGeneralUser()
         .ToArrayAsync();
 
     /// <inheritdoc />
@@ -96,7 +93,7 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
         return await _dbContext.GameBlacklists
             .Where(b => b.EntryId == blacklistEntry.EntryId)
             .Select(b => b.BlockedUser)
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ProjectToGeneralUser()
             .FirstAsync();
     }
 

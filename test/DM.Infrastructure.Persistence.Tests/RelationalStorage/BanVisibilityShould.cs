@@ -1,4 +1,4 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -39,7 +39,7 @@ public class BanVisibilityShould
     [Fact]
     public void CarryNoQueryFilterOfItsOwn()
     {
-        Model().FindEntityType(typeof(DbBan))!.GetQueryFilter().Should().BeNull(
+        Model().FindEntityType(typeof(DbBan))!.GetDeclaredQueryFilters().Should().BeEmpty(
             "a lifted ban is the moderation history, and a filter that hides it hides the history");
     }
 
@@ -53,7 +53,7 @@ public class BanVisibilityShould
     [Fact]
     public void LeaveTheWarningSoftDeletable()
     {
-        Model().FindEntityType(typeof(DbWarning))!.GetQueryFilter().Should().NotBeNull(
+        Model().FindEntityType(typeof(DbWarning))!.GetDeclaredQueryFilters().Should().NotBeEmpty(
             "removing a warning is a removal, and that is what the global filter is for");
     }
 }

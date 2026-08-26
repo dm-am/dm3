@@ -58,11 +58,13 @@ describe("SvgIcon", () => {
 
   it("is not widened again by a consumer", () => {
     // EmptyState used to take `icon?: string`, which handed the hole straight
-    // back to its own callers.
+    // back to its own callers. It carries no icon at all any more — the empty
+    // state is a sentence now — so the guard moved to the consumer that still
+    // names one: the address block picks its mark out of the same registry.
     const source = readFileSync(
-      join(CLIENT_SRC, "shared/ui/EmptyState/EmptyState.vue"),
+      join(CLIENT_SRC, "shared/config/site.ts"),
       "utf8",
     );
-    expect(source).toMatch(/icon\?:\s*IconName;/);
+    expect(source).toMatch(/icon:\s*IconName\s*\}/);
   });
 });

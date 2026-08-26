@@ -16,27 +16,27 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
-using DM.Domain.Account.Features.Authentication;
 using DM.Testing;
-using FluentAssertions;
+using DM.Domain.Account.Features.Authentication;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Comments;
 
 public class BlogCommentServiceShould : UnitTestBase
 {
-    private readonly Mock<IValidator<CreateComment>> _createValidator;
-    private readonly Mock<IValidator<UpdateComment>> _updateValidator;
-    private readonly Mock<IBlogService> _blogService;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IBlogCommentRepository> _repository;
-    private readonly Mock<IUnreadCountersRepository> _countersRepository;
-    private readonly Mock<IEventProducer> _eventProducer;
+    private readonly IValidator<CreateComment> _createValidator;
+    private readonly IValidator<UpdateComment> _updateValidator;
+    private readonly IBlogService _blogService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IBlogCommentRepository _repository;
+    private readonly IUnreadCountersRepository _countersRepository;
+    private readonly IEventProducer _eventProducer;
     private readonly BlogCommentService _service;
 
     public BlogCommentServiceShould()
@@ -51,26 +51,26 @@ public class BlogCommentServiceShould : UnitTestBase
         _countersRepository = Mock<IUnreadCountersRepository>();
         _eventProducer = Mock<IEventProducer>();
 
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _identityProvider.Current.Returns(Identity.Guest());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _createValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateComment>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreateComment>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
         _updateValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateComment>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<UpdateComment>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _service = new BlogCommentService(
-            _createValidator.Object,
-            _updateValidator.Object,
-            _blogService.Object,
-            _intentionManager.Object,
-            _identityProvider.Object,
-            _dateTimeProvider.Object,
-            _repository.Object,
-            _countersRepository.Object,
-            _eventProducer.Object);
+            _createValidator,
+            _updateValidator,
+            _blogService,
+            _intentionManager,
+            _identityProvider,
+            _dateTimeProvider,
+            _repository,
+            _countersRepository,
+            _eventProducer);
     }
 
     [Fact]
@@ -81,16 +81,16 @@ public class BlogCommentServiceShould : UnitTestBase
         var commentId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, BlacklistedUserIds = new HashSet<Guid>() };
         var createComment = new CreateComment { EntityId = blogId, Text = "Test comment" };
-        var identity = CreateAuthenticatedIdentity(userId);
+        var identity = AuthenticatedIdentities.Of(userId);
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _repository.Setup(r => r.Create(It.IsAny<CreateComment>(), userId, blogId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new Comment { Id = commentId }, commentId));
+        _identityProvider.Current.Returns(identity);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _repository.Create(Arg.Any<CreateComment>(), userId, blogId, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns((new Comment { Id = commentId }, commentId));
 
         await _service.CreateAsync(createComment);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.CreateComment, blog), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.CreateComment, blog);
     }
 
     [Fact]
@@ -101,23 +101,23 @@ public class BlogCommentServiceShould : UnitTestBase
         var commentId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, BlacklistedUserIds = new HashSet<Guid>() };
         var createComment = new CreateComment { EntityId = blogId, Text = "Test comment" };
-        var identity = CreateAuthenticatedIdentity(userId);
+        var identity = AuthenticatedIdentities.Of(userId);
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _repository.Setup(r => r.Create(It.IsAny<CreateComment>(), userId, blogId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new Comment { Id = commentId }, commentId));
+        _identityProvider.Current.Returns(identity);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _repository.Create(Arg.Any<CreateComment>(), userId, blogId, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns((new Comment { Id = commentId }, commentId));
 
         await _service.CreateAsync(createComment);
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.NewBlogComment, commentId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.NewBlogComment, commentId);
     }
 
     [Fact]
     public async Task ThrowWhenCommentNotFound()
     {
         var commentId = Guid.NewGuid();
-        _repository.Setup(r => r.Get(commentId, default)).ReturnsAsync((Comment?)null);
+        _repository.Get(commentId, default).Returns((Comment?)null);
 
         var act = async () => await _service.GetAsync(commentId);
 
@@ -132,12 +132,12 @@ public class BlogCommentServiceShould : UnitTestBase
         var comment = new Comment { Id = commentId, Text = "Original text" };
         var updateComment = new UpdateComment { CommentId = commentId, Text = "Updated text" };
 
-        _repository.Setup(r => r.Get(commentId, default)).ReturnsAsync(comment);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateBlogCommentEntity>(), default)).ReturnsAsync(comment);
+        _repository.Get(commentId, default).Returns(comment);
+        _repository.Update(Arg.Any<UpdateBlogCommentEntity>(), default).Returns(comment);
 
         await _service.UpdateAsync(updateComment);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(CommentIntention.Edit, comment), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Edit, comment);
     }
 
     [Fact]
@@ -147,12 +147,13 @@ public class BlogCommentServiceShould : UnitTestBase
         var comment = new Comment { Id = commentId, Text = "Same text" };
         var updateComment = new UpdateComment { CommentId = commentId, Text = "Same text" };
 
-        _repository.Setup(r => r.Get(commentId, default)).ReturnsAsync(comment);
+        _repository.Get(commentId, default).Returns(comment);
 
         var result = await _service.UpdateAsync(updateComment);
 
         result.Should().Be(comment);
-        _repository.Verify(r => r.Update(It.IsAny<UpdateBlogCommentEntity>(), default), Times.Never);
+        await _repository.DidNotReceive().Update(
+            Arg.Any<UpdateBlogCommentEntity>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -169,21 +170,21 @@ public class BlogCommentServiceShould : UnitTestBase
             BlogCommentCount = 5,
             CreatedUtc = DateTimeOffset.UtcNow
         };
-        var identity = CreateAuthenticatedIdentity(userId);
+        var identity = AuthenticatedIdentities.Of(userId);
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _repository.Setup(r => r.GetForDelete(commentId, default)).ReturnsAsync(comment);
+        _identityProvider.Current.Returns(identity);
+        _repository.GetForDelete(commentId, default).Returns(comment);
 
         await _service.DeleteAsync(commentId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(CommentIntention.Delete, It.IsAny<Comment>()), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Delete, Arg.Any<Comment>());
     }
 
     [Fact]
     public async Task ThrowWhenDeletingNonExistentComment()
     {
         var commentId = Guid.NewGuid();
-        _repository.Setup(r => r.GetForDelete(commentId, default)).ReturnsAsync((BlogCommentToDelete?)null);
+        _repository.GetForDelete(commentId, default).Returns((BlogCommentToDelete?)null);
 
         var act = async () => await _service.DeleteAsync(commentId);
 
@@ -191,10 +192,4 @@ public class BlogCommentServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
-    private static IIdentity CreateAuthenticatedIdentity(Guid userId)
-    {
-        var user = new AuthenticatedUser { UserId = userId, Username = "testuser" };
-        var session = new Session();
-        return Identity.Success(user, session, UserSettings.Default, "token");
-    }
 }

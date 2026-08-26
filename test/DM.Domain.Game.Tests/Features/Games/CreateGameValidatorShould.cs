@@ -8,7 +8,7 @@ using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
@@ -16,12 +16,12 @@ namespace DM.Domain.Game.Tests.Features.Games;
 public class CreateGameValidatorShould : UnitTestBase
 {
     private readonly CreateGameValidator validator;
-    private readonly Mock<IUserLookupService> userLookupServiceMock;
+    private readonly IUserLookupService userLookupServiceMock;
 
     public CreateGameValidatorShould()
     {
         userLookupServiceMock = Mock<IUserLookupService>();
-        validator = new CreateGameValidator(userLookupServiceMock.Object);
+        validator = new CreateGameValidator(userLookupServiceMock);
     }
 
     [Fact]
@@ -217,8 +217,7 @@ public class CreateGameValidatorShould : UnitTestBase
     public async Task FailWhenAssistantUsernameDoesNotExist()
     {
         userLookupServiceMock
-            .Setup(s => s.UsernameExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .UsernameExistsAsync("nonexistent", Arg.Any<CancellationToken>()).Returns(false);
 
         var input = new CreateGame
         {
@@ -238,8 +237,7 @@ public class CreateGameValidatorShould : UnitTestBase
     public async Task PassWhenAssistantUsernameExists()
     {
         userLookupServiceMock
-            .Setup(s => s.UsernameExistsAsync("validassistant", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .UsernameExistsAsync("validassistant", Arg.Any<CancellationToken>()).Returns(true);
 
         var input = new CreateGame
         {

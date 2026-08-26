@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using DM.Domain.Community.Features.Statistics;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
@@ -165,6 +165,55 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
             .Which.Score.Should().Be(3, "all three posts are that player's");
     }
 
+    /// <summary>
+    /// The volume board counts the text a reader of the room got, not the
+    /// characters the author typed to produce it.
+    /// </summary>
+    /// <remarks>
+    /// It used to count the source, which put two kinds of character into a
+    /// public score: the markup, which nobody reads, and the contents of
+    /// [private], which the room is not allowed to read. The second one is the
+    /// reason this is not merely inaccurate - a player could take the top place
+    /// with text that no reader could see and no reader could tell had been
+    /// counted.
+    ///
+    /// The two posts below are built so the answer inverts: the padded one is
+    /// four times the plain one as source and a fifth of it as text. On the old
+    /// query the padded author heads the board.
+    /// </remarks>
+    [Fact]
+    public async Task CountTheVisibleTextOfAPostAndNotItsSource()
+    {
+        var start = WeekOf(4);
+        var end = start.AddDays(7);
+
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<ICommunityStatsRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var plainWriter = await AddUserAsync(dbContext);
+        var paddedWriter = await AddUserAsync(dbContext);
+        var game = await AddGameWithRoomAsync(dbContext, plainWriter);
+
+        var plainText = new string('я', 100);
+        var padded = "[b]" + new string('я', 20) + "[/b]" +
+                     "[private=\"" + new string('и', 40) + "\"]" + new string('я', 300) + "[/private]";
+
+        await AddPostAsync(dbContext, game, plainWriter, start.AddDays(1), plainText);
+        await AddPostAsync(dbContext, game, paddedWriter, start.AddDays(2), padded);
+
+        var boards = await repository.GetLeaderboards(start, end);
+
+        var byVolume = boards.TopPlayersByVolume;
+        byVolume.Should().HaveCount(2);
+        byVolume[0].EntityId.Should().Be(plainWriter,
+            "a hundred characters a reader can see beat twenty a reader can see");
+        byVolume[0].Score.Should().Be(plainText.Length);
+        byVolume[1].EntityId.Should().Be(paddedWriter);
+        byVolume[1].Score.Should().Be(20,
+            "neither the tags nor the hidden block are text anybody was shown");
+    }
+
     private sealed record GameContext(Guid GameId, Guid RoomId, Guid CharacterId, string Title);
 
     /// <summary>
@@ -212,7 +261,11 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
     }
 
     private static async Task<Guid> AddPostAsync(
-        DmDbContext dbContext, GameContext game, Guid authorId, DateTimeOffset createdUtc)
+        DmDbContext dbContext,
+        GameContext game,
+        Guid authorId,
+        DateTimeOffset createdUtc,
+        string gameText = "text")
     {
         var postId = Guid.NewGuid();
         dbContext.Posts.Add(new DbPost
@@ -221,7 +274,7 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
             RoomId = game.RoomId,
             CharacterId = game.CharacterId,
             AuthorId = authorId,
-            GameText = "text",
+            GameText = gameText,
             CreatedUtc = createdUtc,
         });
 

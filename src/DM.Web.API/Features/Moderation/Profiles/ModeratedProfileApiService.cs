@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Account.Features.Authentication;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Moderation.Features.Profiles;
@@ -32,8 +30,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
     private readonly DM.Web.API.Features.Moderation.Bans.IBanApiService _banApiService;
     private readonly IModeratedProfileNoteApiService _moderatorNoteApiService;
     private readonly IUserProfileNoteService _personalNoteService;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IMapper _mapper;
+    private readonly UserMapper _mapper;
 
     /// <inheritdoc />
     public ModeratedProfileApiService(
@@ -44,8 +41,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
         DM.Web.API.Features.Moderation.Bans.IBanApiService banApiService,
         IModeratedProfileNoteApiService moderatorNoteApiService,
         IUserProfileNoteService personalNoteService,
-        IDateTimeProvider dateTimeProvider,
-        IMapper mapper)
+        UserMapper mapper)
     {
         _identityProvider = identityProvider;
         _moderatedProfileService = moderatedProfileService;
@@ -54,7 +50,6 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
         _banApiService = banApiService;
         _moderatorNoteApiService = moderatorNoteApiService;
         _personalNoteService = personalNoteService;
-        _dateTimeProvider = dateTimeProvider;
         _mapper = mapper;
     }
 
@@ -86,8 +81,14 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
             ? MapLoginHistory(await _loginRecordService.GetHistory(user.UserId, new PagingQuery { Take = 50 }))
             : null;
 
-        // Map base UserProfile fields using AutoMapper, then add moderation-specific fields
-        var profile = _mapper.Map<ModeratedProfile>(user);
+        // Map the base UserProfile fields (Mapperly), then add the
+        // moderation-specific facts. Info and Contacts stay unmapped on
+        // purpose: the moderation panel renders inside the regular profile
+        // page, whose community endpoint already carries the bio and the
+        // contacts (CommunityUserApiService fills both, envelope included),
+        // and the panel itself reads only the moderation members - a copy
+        // here would be a second, unread answer to the same question.
+        var profile = _mapper.ToModeratedProfile(user);
 
         // Admin-only fields (null for non-admin callers)
         profile.Email = isAdmin ? user.Email : null;
@@ -101,13 +102,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
         // Personal note (caller's own note about this user)
         if (personalNote != null)
         {
-            profile.PersonalNote = new PersonalNote
-            {
-                Id = personalNote.Id,
-                Text = personalNote.Text,
-                CreatedUtc = personalNote.CreatedUtc,
-                ModifiedUtc = personalNote.ModifiedUtc
-            };
+            profile.PersonalNote = _mapper.ToPersonalNote(personalNote);
         }
 
         profile.Violations = new ViolationSummary
@@ -141,7 +136,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
     public async Task<UserProfile> ModerateUserProfile(string username, ModerateProfile profile)
     {
         var updatedUser = await _moderatedProfileService.ModerateProfile(username, profile.Info ?? string.Empty);
-        return _mapper.Map<UserProfile>(updatedUser);
+        return _mapper.ToUserProfile(updatedUser);
     }
 
     /// <inheritdoc />
@@ -163,7 +158,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
     {
         await _moderatedProfileService.SetUserRole(username, role);
         var user = await _moderatedProfileService.GetProfile(username);
-        return _mapper.Map<UserProfile>(user);
+        return _mapper.ToUserProfile(user);
     }
 
     private static IReadOnlyList<ApiUserIpInfo> MapIpAddresses(IReadOnlyList<ServiceUserIpInfo> ips)

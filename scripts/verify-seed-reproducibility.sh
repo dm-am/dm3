@@ -3,7 +3,7 @@
 #
 # This is the proof behind every future pixel baseline: a screenshot is a
 # measurement only if the fixture under it is the same fixture twice. It is not
-# an xUnit test because seeding writes to PostgreSQL, MongoDB and object storage
+# an xUnit test because seeding writes to PostgreSQL and object storage
 # at once, so the thing being proved does not exist until the stack is up. The
 # regression guard is the test, and it runs on every build:
 # test/DM.Architecture.Tests/SeedDeterminismShould.cs.
@@ -28,7 +28,7 @@ SEED_EPOCH="${SEED_EPOCH:-2026-06-15T12:00:00Z}"
 SEED_RANDOM="${SEED_RANDOM:-20260730}"
 
 if [ "${1:-}" != "--yes" ]; then
-  echo "This drops and rebuilds the dm3 database in PostgreSQL and in MongoDB."
+  echo "This drops and rebuilds the dm3 database in PostgreSQL."
   read -r -p "Continue? [y/N] " answer
   [ "$answer" = "y" ] || exit 1
 fi
@@ -41,16 +41,16 @@ set +a
 snapshots="$(mktemp -d)"
 trap 'rm -rf "$snapshots"' EXIT
 
+# The account the application connects as, spelled the way compose spells it.
+# The database has to be created owned by it: created without an owner it
+# belongs to postgres, and the migration then dies on "permission denied for
+# schema public" before a single table exists.
+APP_DB_USER="${DB_USER:-dm_app}"
+
 reset_databases() {
   docker compose exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -c 'DROP DATABASE IF EXISTS dm3 WITH (FORCE)' \
-    -c 'CREATE DATABASE dm3' >/dev/null
-
-  # mongo-init.js runs only on an empty data directory, so dropping the database
-  # takes the application user with it and it has to be created again.
-  docker compose exec -T mongo mongosh --quiet \
-    -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" --authenticationDatabase admin \
-    --eval "db.getSiblingDB('dm3').dropDatabase(); db.getSiblingDB('dm3').createUser({user:'${MONGO_USER:-dm}',pwd:'$MONGO_PASSWORD',roles:[{role:'readWrite',db:'dm3'}]})" >/dev/null
+    -c "CREATE DATABASE dm3 OWNER \"$APP_DB_USER\"" >/dev/null
 
   # --force-recreate, because a one-shot service that already exited is
   # "up to date" as far as compose is concerned, and the second run would then
@@ -73,13 +73,9 @@ SQL
     pg_dump -U postgres -d dm3 --data-only --column-inserts \
     | LC_ALL=C sort > "$target.pg"
 
-  docker compose exec -T mongo mongosh --quiet \
-    "mongodb://${MONGO_USER:-dm}:$MONGO_PASSWORD@localhost:27017/dm3?authSource=dm3" \
-    --eval 'db.getCollectionNames().forEach(c => db.getCollection(c).find().forEach(d => print(c + " " + EJSON.stringify(d))))' \
-    | LC_ALL=C sort > "$target.mongo"
 }
 
-docker compose up -d postgres mongo rabbitmq minio >/dev/null
+docker compose up -d postgres rabbitmq minio >/dev/null
 docker compose build migration seeder
 
 for run in 1 2; do
@@ -95,7 +91,7 @@ for run in 1 2; do
 done
 
 status=0
-for store in pg mongo; do
+for store in pg; do
   if diff -u "$snapshots/run1.$store" "$snapshots/run2.$store" > "$snapshots/$store.diff"; then
     echo "OK: $store identical across both runs ($(wc -l < "$snapshots/run1.$store") lines)."
   else

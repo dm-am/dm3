@@ -1,19 +1,20 @@
 using System;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using MongoDB.Bson.Serialization.Attributes;
+using System.ComponentModel.DataAnnotations.Schema;
+using DM.Domain.Account.Features.Security;
 
 namespace DM.Infrastructure.Persistence.Entities.Account;
 
 /// <summary>
-/// DAL model for security audit log entry (stored in MongoDB)
+/// DAL model for security audit log entry: append-only stream, swept by the
+/// retention pass (the log holds addresses and user agents — personal data).
 /// </summary>
-[MongoCollectionName("SecurityAuditLog")]
+[Table("SecurityAuditEntries")]
 public class SecurityAuditEntry
 {
     /// <summary>
     /// Entry identifier
     /// </summary>
-    public Guid Id { get; set; }
+    public Guid SecurityAuditEntryId { get; set; }
 
     /// <summary>
     /// User identifier
@@ -21,14 +22,13 @@ public class SecurityAuditEntry
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Type of security event (stored as int for MongoDB compatibility)
+    /// Type of security event
     /// </summary>
-    public int EventType { get; set; }
+    public SecurityEventType EventType { get; set; }
 
     /// <summary>
     /// When the event occurred (UTC)
     /// </summary>
-    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
     public DateTime TimestampUtc { get; set; }
 
     /// <summary>

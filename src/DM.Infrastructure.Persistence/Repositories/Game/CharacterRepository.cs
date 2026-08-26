@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.AttributeSchemas;
@@ -19,16 +17,14 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 
 /// <inheritdoc />
 /// <remarks>
-/// Relational only. The attribute schema of a game is a Mongo document, and it
-/// is read through the repository that owns that collection rather than through
-/// a second view of it opened here: the class used to derive the Mongo
-/// collection base for one read, which also took the name Update - the one this
-/// repository publishes - away from the driver's builder.
+/// The attribute schema of a game is its own aggregate, and it is read through
+/// the repository that owns it rather than through a second view of it opened
+/// here: the class used to hold a second reading of the schema store for one
+/// read, free to disagree with the owner about what the schema holds.
 /// </remarks>
 internal class CharacterRepository : ICharacterRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IAttributeSchemaRepository _attributeSchemas;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -36,13 +32,11 @@ internal class CharacterRepository : ICharacterRepository
     /// <inheritdoc />
     public CharacterRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IAttributeSchemaRepository attributeSchemas,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _attributeSchemas = attributeSchemas;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
@@ -93,7 +87,7 @@ internal class CharacterRepository : ICharacterRepository
         return await _dbContext.Characters
             .Where(c => !c.IsRemoved && c.GameId == gameId)
             .OrderByDescending(c => c.CreatedUtc)
-            .ProjectTo<Character>(_mapper.ConfigurationProvider)
+            .ProjectToCharacter()
             .ToArrayAsync();
     }
 
@@ -101,7 +95,7 @@ internal class CharacterRepository : ICharacterRepository
     {
         return await _dbContext.Characters
             .Where(c => !c.IsRemoved && c.CharacterId == characterId)
-            .ProjectTo<Character>(_mapper.ConfigurationProvider)
+            .ProjectToCharacter()
             .FirstOrDefaultAsync();
     }
 
@@ -109,7 +103,7 @@ internal class CharacterRepository : ICharacterRepository
     {
         return _dbContext.Characters
             .Where(c => c.CharacterId == characterId)
-            .ProjectTo<CharacterToUpdate>(_mapper.ConfigurationProvider)
+            .ProjectToCharacterToUpdate()
             .FirstOrDefaultAsync<CharacterToUpdate?>();
     }
 
@@ -165,17 +159,8 @@ internal class CharacterRepository : ICharacterRepository
         // Through the strategy because the API host configures EnableRetryOnFailure and
         // a retrying strategy refuses a transaction opened by hand. The entities are
         // built above so their identifiers survive a retry unchanged.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
-
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
             _dbContext.Characters.Add(dbCharacter);
@@ -193,7 +178,7 @@ internal class CharacterRepository : ICharacterRepository
 
         return await _dbContext.Characters
             .Where(c => c.CharacterId == createCharacter.CharacterId)
-            .ProjectTo<Character>(_mapper.ConfigurationProvider)
+            .ProjectToCharacter()
             .FirstAsync();
     }
 
@@ -224,17 +209,8 @@ internal class CharacterRepository : ICharacterRepository
         // Both writes or neither, for the same reason as Create above. The read is
         // inside the block: cleared out of the tracker by a retry, an entity read
         // outside it would take every edit with it.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
-
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
             var character = await _dbContext.Characters.FindAsync(updateCharacter.CharacterId);
@@ -310,7 +286,7 @@ internal class CharacterRepository : ICharacterRepository
 
         return await _dbContext.Characters
             .Where(c => c.CharacterId == updateCharacter.CharacterId)
-            .ProjectTo<Character>(_mapper.ConfigurationProvider)
+            .ProjectToCharacter()
             .FirstAsync();
     }
 

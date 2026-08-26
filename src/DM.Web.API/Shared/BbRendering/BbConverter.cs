@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BBCodeParser;
 using DM.Domain.Core.Authorization;
 using DM.Infrastructure.Core.Parsing;
 using Microsoft.AspNetCore.Http;
@@ -79,20 +81,55 @@ internal class BbConverterFactory : JsonConverterFactory
             }
 
             var parser = SelectParser(bbText, audience);
-            if (parser is not BbParserWrapper wrapper)
+
+            try
             {
-                // Shouldn't happen — every registered parser is a wrapper —
-                // but keep a safe fallback.
-                writer.WriteStringValue(ParseLegacy(parser, raw, audience));
-                return;
+                if (parser is not BbParserWrapper wrapper)
+                {
+                    // Shouldn't happen — every registered parser is a wrapper —
+                    // but keep a safe fallback.
+                    writer.WriteStringValue(ParseLegacy(parser, raw, audience));
+                    return;
+                }
+
+                var rendered = audience == RenderAudience.PlainText
+                    ? wrapper.RenderText(raw, renderContext)
+                    : wrapper.RenderHtml(raw, renderContext);
+
+                writer.WriteStringValue(rendered);
             }
-
-            var rendered = audience == RenderAudience.PlainText
-                ? wrapper.RenderText(raw, renderContext)
-                : wrapper.RenderHtml(raw, renderContext);
-
-            writer.WriteStringValue(rendered);
+            catch (BbParserException)
+            {
+                writer.WriteStringValue(Unrenderable(raw, audience));
+            }
         }
+
+        /// <summary>
+        /// What one piece of content renders as when the parser refuses it.
+        /// </summary>
+        /// <remarks>
+        /// The parser refuses exactly one thing: a tree nested deeper than it
+        /// will build (see BbParser.TreeMaxDepth). Before the tree walk was made
+        /// iterative that input did not raise anything catchable — it exhausted
+        /// the stack and killed the process, which took the whole API down and
+        /// took it down again on every later request that touched the same post.
+        /// Now it arrives here, and it arrives mid-object: this converter runs
+        /// inside a Utf8JsonWriter, so letting it out truncates the response
+        /// body of an otherwise fine page. One field renders as nothing and the
+        /// page is served.
+        ///
+        /// Nothing rather than the source text, because the source is not
+        /// filtered: the visibility filter lives in the tree walk that just
+        /// refused to run, so echoing the raw BBCode would hand every [private]
+        /// block in it to whoever asked. The author is the exception — the
+        /// audience only reaches AuthorEdit after the viewer has been matched
+        /// against the author id — and the author needs the source back, or a
+        /// post that cannot render is also a post that cannot be repaired.
+        /// </remarks>
+        private static string Unrenderable(string raw, RenderAudience audience) =>
+            audience == RenderAudience.AuthorEdit
+                ? WebUtility.HtmlEncode(raw)
+                : string.Empty;
 
         private RenderAudience ReadAudienceHeader()
         {
@@ -138,6 +175,15 @@ internal class BbConverterFactory : JsonConverterFactory
         /// time. Author identity comes from the mapping-populated envelope; a
         /// missing author id is treated as "not the author" and denied.
         /// </summary>
+        /// <remarks>
+        /// Both sides of the comparison have to be a real identity, and neither
+        /// is checked here: the envelope turns an unfilled author id into null
+        /// on the way in, and AnonymousIdentity answers null for a reader who is
+        /// not signed in. Compared raw, an anonymous reader's empty id equalled
+        /// the empty id of any envelope whose author a projection had left
+        /// unset, and the header alone then returned the unfiltered source of
+        /// content on any surface.
+        /// </remarks>
         private static RenderAudience ResolveEffectiveAudience(
             RenderAudience requested,
             IAuthorizationSubject? viewer,
@@ -146,9 +192,9 @@ internal class BbConverterFactory : JsonConverterFactory
             if (requested != RenderAudience.AuthorEdit)
                 return requested;
 
-            if (viewer is not null
+            if (AnonymousIdentity.Of(viewer) is Guid reader
                 && envelope?.PostAuthorUserId is Guid author
-                && viewer.UserId == author)
+                && reader == author)
                 return RenderAudience.AuthorEdit;
 
             return RenderAudience.Display;
@@ -173,6 +219,8 @@ internal class BbConverterFactory : JsonConverterFactory
 
             var privateMap = envelope?.PrivateAddresseeOwnerUserIdsByAttribute
                              ?? new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal);
+            var privateNames = envelope?.PrivateAddresseeNamesByAttribute
+                               ?? new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
 
             return new RenderContext
             {
@@ -182,6 +230,7 @@ internal class BbConverterFactory : JsonConverterFactory
                 PostAuthorUserId = envelope?.PostAuthorUserId,
                 GameId = envelope?.GameId,
                 PrivateAddresseeOwnerUserIdsByAttribute = privateMap,
+                PrivateAddresseeNamesByAttribute = privateNames,
                 GameLeadUserIds = envelope?.GameLeadUserIds ?? Array.Empty<Guid>(),
                 PostSharePrivateWithAll = envelope?.PostSharePrivateWithAll ?? false,
                 RoomViewPrivateText = envelope?.RoomViewPrivateText ?? false

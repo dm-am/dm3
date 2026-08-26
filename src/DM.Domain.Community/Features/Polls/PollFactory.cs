@@ -7,15 +7,11 @@ namespace DM.Domain.Community.Features.Polls;
 internal class PollFactory : IPollFactory
 {
     private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
-    public PollFactory(
-        IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+    public PollFactory(IGuidFactory guidFactory)
     {
         _guidFactory = guidFactory;
-        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />

@@ -223,7 +223,7 @@ watch(characterId, () => load(), { immediate: true });
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Skeleton" as *
 
 .game-character
   min-height: $grid-step * 50

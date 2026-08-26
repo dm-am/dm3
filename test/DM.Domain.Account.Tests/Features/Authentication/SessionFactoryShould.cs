@@ -4,9 +4,9 @@ using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Identity;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Authentication;
@@ -14,8 +14,8 @@ namespace DM.Domain.Account.Tests.Features.Authentication;
 public class SessionFactoryShould : UnitTestBase
 {
     private readonly SessionFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly AuthenticationConfiguration _config;
 
     public SessionFactoryShould()
@@ -29,8 +29,8 @@ public class SessionFactoryShould : UnitTestBase
         };
 
         _factory = new SessionFactory(
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
+            _guidFactory,
+            _dateTimeProvider,
             Options.Create(_config));
     }
 
@@ -39,8 +39,8 @@ public class SessionFactoryShould : UnitTestBase
     {
         var sessionId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
-        _guidFactory.Setup(f => f.Create()).Returns(sessionId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _guidFactory.Create().Returns(sessionId);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = _factory.Create(persistent: false);
 
@@ -56,8 +56,8 @@ public class SessionFactoryShould : UnitTestBase
     {
         var sessionId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
-        _guidFactory.Setup(f => f.Create()).Returns(sessionId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _guidFactory.Create().Returns(sessionId);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = _factory.Create(persistent: true);
 
@@ -77,8 +77,8 @@ public class SessionFactoryShould : UnitTestBase
             IpAddress = "127.0.0.1",
             UserAgent = "Mozilla/5.0"
         };
-        _guidFactory.Setup(f => f.Create()).Returns(sessionId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(sessionId);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(persistent: false, context);
 

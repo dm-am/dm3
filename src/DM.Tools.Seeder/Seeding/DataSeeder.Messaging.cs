@@ -1,53 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using DM.Domain.Account.Features.Security;
-using DM.Domain.Community.Features.Polls;
-using DM.Domain.Core.Dto;
-using DM.Domain.Core.Identity;
-using DM.Domain.Personal.Features.Profiles;
-using DM.Domain.Personal.Authorization;
-using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Uploads;
-using DM.Infrastructure.Core.Storage;
-using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DbUserSettings = DM.Infrastructure.Persistence.Entities.Account.Settings.UserSettings;
 using DM.Infrastructure.Persistence.Entities.Account.Settings;
-using DM.Infrastructure.Persistence.Entities.Blog;
-using DM.Infrastructure.Persistence.Entities.Forum;
-using DM.Infrastructure.Persistence.Entities.Game.Characters;
-using DM.Infrastructure.Persistence.Entities.Game.Links;
-using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DM.Infrastructure.Persistence.Entities.Messaging;
-using DM.Infrastructure.Persistence.Entities.Moderation;
-using DM.Infrastructure.Persistence.Entities.Personal.Notepads;
-using DM.Infrastructure.Persistence.Entities.Shared;
-using DM.Infrastructure.Persistence.Entities.Community;
-using DM.Infrastructure.Persistence.Entities.Subscriptions;
-using Microsoft.Extensions.Options;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
-using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
-using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
-using DbAttributeSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
-using DbStringConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.StringAttributeConstraints;
-using DbBbCodeConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.BbCodeAttributeConstraints;
-using DbListConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeConstraints;
-using DbListValueKind = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListValueKind;
-using DbListAttributeValue = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeValue;
-using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
-using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
-using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
-using DbUsernameHistory = DM.Infrastructure.Persistence.Entities.Account.UsernameHistory;
-using DbUserContact = DM.Infrastructure.Persistence.Entities.Account.UserContact;
-using MongoDB.Driver;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Tools.Seeder.Seeding;
@@ -81,7 +41,6 @@ internal sealed partial class DataSeeder
             (Username: "TestModerator", Channel: "telegram", ExternalId: "710000001"),
         };
 
-        var settings = _mongoClient.GetCollection<DbUserSettings>();
         var connected = 0;
 
         foreach (var (username, channel, externalId) in connections)
@@ -117,18 +76,22 @@ internal sealed partial class DataSeeder
                 }
             };
 
-            var defaults = DbUserSettings.CreateDefault(user.UserId);
-            var update = channel == "discord"
-                ? Builders<DbUserSettings>.Update.Set(s => s.DiscordPreferences, preferences)
-                : Builders<DbUserSettings>.Update.Set(s => s.TelegramPreferences, preferences);
+            var settings = await _dbContext.UserSettings
+                .FirstOrDefaultAsync(s => s.UserId == user.UserId);
+            if (settings == null)
+            {
+                settings = DbUserSettings.CreateDefault(user.UserId);
+                _dbContext.UserSettings.Add(settings);
+            }
 
-            await settings.UpdateOneAsync(
-                Builders<DbUserSettings>.Filter.Eq(s => s.UserId, user.UserId),
-                Builders<DbUserSettings>.Update.Combine(
-                    update,
-                    Builders<DbUserSettings>.Update.SetOnInsert(s => s.Theme, defaults.Theme),
-                    Builders<DbUserSettings>.Update.SetOnInsert(s => s.Paging, defaults.Paging)),
-                new UpdateOptions { IsUpsert = true });
+            if (channel == "discord")
+            {
+                settings.DiscordPreferences = preferences;
+            }
+            else
+            {
+                settings.TelegramPreferences = preferences;
+            }
 
             connected++;
         }

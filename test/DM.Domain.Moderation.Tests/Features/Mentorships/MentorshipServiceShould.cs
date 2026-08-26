@@ -7,16 +7,16 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Moderation.Features.Mentorships;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Mentorships;
 
 public class MentorshipServiceShould : UnitTestBase
 {
-    private readonly Mock<IMentorshipRepository> _repository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
+    private readonly IMentorshipRepository _repository;
+    private readonly IIdentityProvider _identityProvider;
     private readonly MentorshipService _service;
     private readonly Guid _mentorUserId = Guid.NewGuid();
     private readonly Guid _gameId = Guid.NewGuid();
@@ -32,9 +32,9 @@ public class MentorshipServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        _identityProvider.Setup(p => p.Current).Returns(mentorIdentity);
+        _identityProvider.Current.Returns(mentorIdentity);
 
-        _service = new MentorshipService(_repository.Object, _identityProvider.Object);
+        _service = new MentorshipService(_repository, _identityProvider);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class MentorshipServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        _identityProvider.Setup(p => p.Current).Returns(userIdentity);
+        _identityProvider.Current.Returns(userIdentity);
 
         var act = () => _service.AssignGameMentor(_gameId);
 
@@ -56,8 +56,7 @@ public class MentorshipServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenAssigningMentorToNonexistentGame()
     {
-        _repository.Setup(r => r.GameExists(_gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+        _repository.GameExists(_gameId, Arg.Any<CancellationToken>()).Returns(false);
 
         var act = () => _service.AssignGameMentor(_gameId);
 
@@ -68,10 +67,8 @@ public class MentorshipServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenGameAlreadyHasMentor()
     {
-        _repository.Setup(r => r.GameExists(_gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        _repository.Setup(r => r.GetGameMentorId(_gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Guid.NewGuid());
+        _repository.GameExists(_gameId, Arg.Any<CancellationToken>()).Returns(true);
+        _repository.GetGameMentorId(_gameId, Arg.Any<CancellationToken>()).Returns(Guid.NewGuid());
 
         var act = () => _service.AssignGameMentor(_gameId);
 
@@ -82,23 +79,19 @@ public class MentorshipServiceShould : UnitTestBase
     [Fact]
     public async Task AssignGameMentorSuccessfully()
     {
-        _repository.Setup(r => r.GameExists(_gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        _repository.Setup(r => r.GetGameMentorId(_gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid?)null);
+        _repository.GameExists(_gameId, Arg.Any<CancellationToken>()).Returns(true);
+        _repository.GetGameMentorId(_gameId, Arg.Any<CancellationToken>()).Returns((Guid?)null);
 
         await _service.AssignGameMentor(_gameId);
 
-        _repository.Verify(r => r.SetGameMentor(_gameId, _mentorUserId, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).SetGameMentor(_gameId, _mentorUserId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ThrowWhenRemovingMentorFromGameUserIsNotMentorOf()
     {
-        _repository.Setup(r => r.GameExists(_gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        _repository.Setup(r => r.GetGameMentorId(_gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Guid.NewGuid());
+        _repository.GameExists(_gameId, Arg.Any<CancellationToken>()).Returns(true);
+        _repository.GetGameMentorId(_gameId, Arg.Any<CancellationToken>()).Returns(Guid.NewGuid());
 
         var act = () => _service.RemoveGameMentor(_gameId);
 
@@ -109,39 +102,33 @@ public class MentorshipServiceShould : UnitTestBase
     [Fact]
     public async Task RemoveGameMentorSuccessfully()
     {
-        _repository.Setup(r => r.GameExists(_gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        _repository.Setup(r => r.GetGameMentorId(_gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(_mentorUserId);
+        _repository.GameExists(_gameId, Arg.Any<CancellationToken>()).Returns(true);
+        _repository.GetGameMentorId(_gameId, Arg.Any<CancellationToken>()).Returns(_mentorUserId);
 
         await _service.RemoveGameMentor(_gameId);
 
-        _repository.Verify(r => r.SetGameMentor(_gameId, null, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).SetGameMentor(_gameId, null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task AssignBlogMentorSuccessfully()
     {
-        _repository.Setup(r => r.BlogExists(_blogId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        _repository.Setup(r => r.GetBlogMentorId(_blogId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Guid?)null);
+        _repository.BlogExists(_blogId, Arg.Any<CancellationToken>()).Returns(true);
+        _repository.GetBlogMentorId(_blogId, Arg.Any<CancellationToken>()).Returns((Guid?)null);
 
         await _service.AssignBlogMentor(_blogId);
 
-        _repository.Verify(r => r.SetBlogMentor(_blogId, _mentorUserId, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).SetBlogMentor(_blogId, _mentorUserId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task RemoveBlogMentorSuccessfully()
     {
-        _repository.Setup(r => r.BlogExists(_blogId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        _repository.Setup(r => r.GetBlogMentorId(_blogId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(_mentorUserId);
+        _repository.BlogExists(_blogId, Arg.Any<CancellationToken>()).Returns(true);
+        _repository.GetBlogMentorId(_blogId, Arg.Any<CancellationToken>()).Returns(_mentorUserId);
 
         await _service.RemoveBlogMentor(_blogId);
 
-        _repository.Verify(r => r.SetBlogMentor(_blogId, null, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).SetBlogMentor(_blogId, null, Arg.Any<CancellationToken>());
     }
 }

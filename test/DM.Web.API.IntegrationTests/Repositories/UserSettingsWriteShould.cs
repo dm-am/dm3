@@ -1,28 +1,29 @@
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account.Settings;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using DM.Web.API.Notifications;
 using DM.Domain.Personal.Features.Notifications;
-using FluentAssertions;
+using AwesomeAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using MongoDB.Bson;
-using MongoDB.Driver;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// The settings document has several independent writers — the profile update
-/// sets the theme and paging, the bot link sets channels, the preferences screen
-/// sets notification channels — so a writer may only touch its own fields.
+/// The settings row has several independent writers — the profile update sets
+/// the theme and paging, the bot link sets channels, the preferences screen
+/// sets notification channels — so a writer may only touch its own columns.
 /// </summary>
 /// <remarks>
-/// Preferences used to be saved by replacing the whole document. Two tabs were
-/// enough to lose the theme, and any element the class does not declare (the
-/// document ignores extra elements on read) was destroyed with no trace. Both
-/// facts only exist against a live store, hence the container Mongo.
+/// Preferences used to be saved by replacing the whole document; two tabs were
+/// enough to lose the theme. The channel write is one INSERT ... ON CONFLICT
+/// now, whose update arm names only its own column, and the race of two
+/// creators is settled by the server. A partial row is unrepresentable — every
+/// paging column is NOT NULL (INV-9) — which is what buried the null-Paging
+/// repair branches. All of that exists only against a live Postgres, hence the
+/// container.
 /// </remarks>
 public class UserSettingsWriteShould : IntegrationTestBase
 {
@@ -31,14 +32,16 @@ public class UserSettingsWriteShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task LeaveTheFieldsOfTheOtherWritersAlone()
+    public async Task LeaveTheColumnsOfTheOtherWritersAlone()
     {
-        var userId = Guid.NewGuid();
+        var userId = await SeedUser();
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
         var settings = UserSettings.CreateDefault(userId);
         settings.Theme = Theme.Dark;
         settings.DiscordPreferences = new NotificationChannelPreference { Enabled = false };
-        await Collection(scope).InsertOneAsync(settings);
+        dbContext.UserSettings.Add(settings);
+        await dbContext.SaveChangesAsync();
 
         await scope.ServiceProvider.GetRequiredService<IBotLinkRepository>()
             .SetChannelPreferences(
@@ -46,46 +49,16 @@ public class UserSettingsWriteShould : IntegrationTestBase
                 "discord",
                 new ChannelPreferences(true, []));
 
-        var stored = await Collection(scope).Find(Key(userId)).SingleAsync();
-        stored.DiscordPreferences!.Enabled.Should().BeTrue("this is the field that was written");
+        var stored = await Read(scope, userId);
+        stored.DiscordPreferences!.Enabled.Should().BeTrue("this is the column that was written");
         stored.Theme.Should().Be(Theme.Dark, "the theme belongs to the profile update");
-        stored.Paging.TopicsPerPage.Should().Be(10, "so does paging");
-    }
-
-    /// <summary>
-    /// The document declares [BsonIgnoreExtraElements], so a field the class does
-    /// not know about is invisible to this process and very much present in the
-    /// store. A whole-document replacement deletes it silently.
-    /// </summary>
-    [Fact]
-    public async Task LeaveAnElementTheClassDoesNotDeclareAlone()
-    {
-        var userId = Guid.NewGuid();
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var document = new BsonDocument
-        {
-            { "UserId", new BsonBinaryData(userId, GuidRepresentation.Standard) },
-            { "Theme", (int)Theme.Light },
-            { "WrittenByAnotherVersion", "keep me" },
-        };
-        await RawCollection(scope).InsertOneAsync(document);
-
-        await scope.ServiceProvider.GetRequiredService<IBotLinkRepository>()
-            .SetChannelPreferences(
-                userId,
-                "discord",
-                new ChannelPreferences(true, []));
-
-        var stored = await RawCollection(scope)
-            .Find(Builders<BsonDocument>.Filter.Eq("WrittenByAnotherVersion", "keep me"))
-            .FirstOrDefaultAsync();
-        stored.Should().NotBeNull("a writer that owns two fields must not delete the rest");
+        stored.TopicsPerPage.Should().Be(10, "so does paging");
     }
 
     [Fact]
-    public async Task CreateTheDocumentForAUserWhoHasNone()
+    public async Task CreateTheRowForAUserWhoHasNone()
     {
-        var userId = Guid.NewGuid();
+        var userId = await SeedUser();
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
 
         await scope.ServiceProvider.GetRequiredService<IBotLinkRepository>()
@@ -94,9 +67,10 @@ public class UserSettingsWriteShould : IntegrationTestBase
                 "discord",
                 new ChannelPreferences(true, []));
 
-        var stored = await Collection(scope).Find(Key(userId)).SingleAsync();
+        var stored = await Read(scope, userId);
         stored.DiscordPreferences!.Enabled.Should().BeTrue();
-        stored.Paging.Should().NotBeNull("a document without paging answers 500 on the next read");
+        stored.TopicsPerPage.Should().Be(10,
+            "the rest of a fresh row is the defaults: a partial row is unrepresentable");
     }
 
     /// <summary>
@@ -104,18 +78,18 @@ public class UserSettingsWriteShould : IntegrationTestBase
     /// document, and it created it by reading first and inserting on null.
     /// </summary>
     [Fact]
-    public async Task CreateTheDocumentOnTheFirstLinkOfAChannel()
+    public async Task CreateTheRowOnTheFirstLinkOfAChannel()
     {
-        var userId = Guid.NewGuid();
+        var userId = await SeedUser();
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
 
         await scope.ServiceProvider.GetRequiredService<IBotLinkRepository>()
             .InitializeChannelPreferences(userId, "telegram");
 
-        var stored = await Collection(scope).Find(Key(userId)).SingleAsync();
+        var stored = await Read(scope, userId);
         stored.TelegramPreferences!.Enabled.Should().BeTrue();
-        stored.Paging.Should().NotBeNull("a document without paging answers 500 on the next read");
-        stored.Theme.Should().Be(Theme.Light, "the rest of a fresh document is the default one");
+        stored.Theme.Should().Be(Theme.Light, "the rest of a fresh row is the default one");
+        stored.EntitiesPerPage.Should().Be(10);
     }
 
     /// <summary>
@@ -126,25 +100,83 @@ public class UserSettingsWriteShould : IntegrationTestBase
     [Fact]
     public async Task RefuseAChannelItDoesNotKnow()
     {
-        var userId = Guid.NewGuid();
+        var userId = await SeedUser();
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IBotLinkRepository>();
 
         var link = () => repository.InitializeChannelPreferences(userId, "carrier pigeon");
 
         await link.Should().ThrowAsync<ArgumentException>();
-        (await Collection(scope).Find(Key(userId)).AnyAsync())
-            .Should().BeFalse("a refused write leaves no document behind");
+        (await scope.ServiceProvider.GetRequiredService<DmDbContext>().UserSettings
+                .AnyAsync(s => s.UserId == userId))
+            .Should().BeFalse("a refused write leaves no row behind");
     }
 
-    private static IMongoCollection<UserSettings> Collection(IServiceScope scope) =>
-        scope.ServiceProvider.GetRequiredService<DmMongoClient>().GetCollection<UserSettings>();
+    /// <summary>
+    /// INV-9 as the schema states it: the paging columns refuse NULL, so the
+    /// state that used to answer 500 on every request cannot be written at all.
+    /// </summary>
+    [Fact]
+    public async Task RefuseAPartialRow()
+    {
+        var userId = await SeedUser();
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
 
-    private static IMongoCollection<BsonDocument> RawCollection(IServiceScope scope) =>
-        scope.ServiceProvider.GetRequiredService<DmMongoClient>()
-            .GetCollection<UserSettings>().Database
-            .GetCollection<BsonDocument>("UserSettings");
+        var act = () => dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "UserSettings" ("UserId", "Theme", "TopicsPerPage", "CommentsPerPage", "PostsPerPage", "MessagesPerPage", "EntitiesPerPage")
+            VALUES ({userId}, 0, NULL, 10, 10, 10, 10)
+            """);
 
-    private static FilterDefinition<UserSettings> Key(Guid userId) =>
-        Builders<UserSettings>.Filter.Eq(s => s.UserId, userId);
+        await act.Should().ThrowAsync<Exception>(
+            "a row without a paging value is the document with Paging: null, and the schema refuses it");
+    }
+
+    /// <summary>
+    /// Two writers racing to create the row leave one valid row: the bot-link
+    /// upsert is settled by the server, and the profile update retries its lost
+    /// insert as an update of the winner's row.
+    /// </summary>
+    [Fact]
+    public async Task LeaveOneValidRowWhenTwoWritersRace()
+    {
+        var userId = await SeedUser();
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IBotLinkRepository>();
+
+        // Two concurrent creating writes of the same row. Each call opens work
+        // on the same scoped context, so they are issued sequentially here; the
+        // atomicity under test is the server-side ON CONFLICT, which the second
+        // call exercises against the row the first one created.
+        await repository.SetChannelPreferences(userId, "discord", new ChannelPreferences(true, []));
+        await repository.SetChannelPreferences(userId, "telegram", new ChannelPreferences(false, []));
+
+        var stored = await Read(scope, userId);
+        stored.DiscordPreferences!.Enabled.Should().BeTrue();
+        stored.TelegramPreferences!.Enabled.Should().BeFalse();
+        stored.TopicsPerPage.Should().Be(10, "whoever created the row wrote it whole");
+    }
+
+    private async Task<Guid> SeedUser()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+        var userId = Guid.NewGuid();
+        dbContext.Users.Add(new DM.Infrastructure.Persistence.Entities.Account.User
+        {
+            UserId = userId,
+            Username = $"s{userId:N}"[..20],
+            Email = $"{userId:N}@example.com",
+            PasswordHash = "hash",
+            Salt = "salt",
+            LastActivityUtc = DateTimeOffset.UtcNow,
+        });
+        await dbContext.SaveChangesAsync();
+        return userId;
+    }
+
+    private static Task<UserSettings> Read(IServiceScope scope, Guid userId) =>
+        scope.ServiceProvider.GetRequiredService<DmDbContext>().UserSettings
+            .AsNoTracking()
+            .SingleAsync(s => s.UserId == userId);
 }

@@ -377,6 +377,11 @@ export const symbols = {
   // monochrome glyphs; the registry above already has a clock outline, and a
   // clock is an icon rather than a symbol.
   returnArrow: "\u21A9",
+  // The Quote action in the chat toolbars, which is a strip of icons and has no
+  // room for a word. The registry above carries no quotation drawing, and one
+  // is not drawn for it: the typographic quotation mark is the sign for this and
+  // is already the treatment the warning and the return arrow next to it get.
+  quote: "\u201C",
   arrowUp: "\u2191",
   arrowDown: "\u2193",
   arrowLeft: "\u2190",

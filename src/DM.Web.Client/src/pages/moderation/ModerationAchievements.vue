@@ -221,8 +221,8 @@ async function confirmDeleteTier() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/Tables"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Tables" as *
 
 .achievements-admin
   display: flex

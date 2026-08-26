@@ -228,8 +228,8 @@ watch(messageLayout, () => {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/ZIndex"
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/ZIndex" as *
+@use "@/assets/styles/Inputs" as *
 
 .scroll-nav
   position: fixed

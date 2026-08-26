@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
@@ -23,14 +22,14 @@ internal class ChatRoomApiService : IChatRoomApiService
     private readonly IRoomService _roomService;
     private readonly IChatService _chatService;
     private readonly IMessagingApiService _messagingService;
-    private readonly IMapper _mapper;
+    private readonly ChatRoomMapper _mapper;
 
     /// <inheritdoc />
     public ChatRoomApiService(
         IRoomService roomService,
         IChatService chatService,
         IMessagingApiService messagingService,
-        IMapper mapper)
+        ChatRoomMapper mapper)
     {
         _roomService = roomService;
         _chatService = chatService;
@@ -47,7 +46,7 @@ internal class ChatRoomApiService : IChatRoomApiService
         // lists chats to enter, so it keeps to the ones GetChatRoomAsync opens.
         var chatRooms = rooms
             .Where(r => r.Type == RoomType.Chat && r.CanView)
-            .Select(_mapper.Map<ChatRoom>);
+            .Select(_mapper.ToChatRoom);
         return new ListEnvelope<ChatRoom>(chatRooms);
     }
 
@@ -59,7 +58,7 @@ internal class ChatRoomApiService : IChatRoomApiService
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
-        return new Envelope<ChatRoom>(_mapper.Map<ChatRoom>(room));
+        return new Envelope<ChatRoom>(_mapper.ToChatRoom(room));
     }
 
     /// <inheritdoc />
@@ -86,7 +85,7 @@ internal class ChatRoomApiService : IChatRoomApiService
         };
         room = await _roomService.UpdateAsync(updateRoom);
 
-        return new Envelope<ChatRoom>(_mapper.Map<ChatRoom>(room));
+        return new Envelope<ChatRoom>(_mapper.ToChatRoom(room));
     }
 
     /// <inheritdoc />
@@ -106,7 +105,7 @@ internal class ChatRoomApiService : IChatRoomApiService
         };
         room = await _roomService.UpdateAsync(updateRoom);
 
-        return new Envelope<ChatRoom>(_mapper.Map<ChatRoom>(room));
+        return new Envelope<ChatRoom>(_mapper.ToChatRoom(room));
     }
 
     /// <inheritdoc />

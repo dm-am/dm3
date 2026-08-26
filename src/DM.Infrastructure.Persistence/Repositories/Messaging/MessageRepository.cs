@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.Messages;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Shared.Likes;
+using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
 
@@ -19,7 +19,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Messaging;
 internal class MessageRepository : IMessageRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly ICursorService _cursorService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
@@ -27,13 +26,11 @@ internal class MessageRepository : IMessageRepository
     /// <inheritdoc />
     public MessageRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         ICursorService cursorService,
         IDateTimeProvider dateTimeProvider,
         IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _cursorService = cursorService;
         _dateTimeProvider = dateTimeProvider;
         _guidFactory = guidFactory;
@@ -82,11 +79,30 @@ internal class MessageRepository : IMessageRepository
     // ═══ READ ═══
 
     /// <inheritdoc />
-    public Task<Message?> Get(Guid messageId, Guid userId, CancellationToken ct = default) => _dbContext.Messages
-        .Where(m => !m.IsRemoved && m.MessageId == messageId)
-        .Where(m => m.Chat.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId))
-        .ProjectTo<Message>(_mapper.ConfigurationProvider)
-        .FirstOrDefaultAsync(ct);
+    public async Task<Message?> Get(Guid messageId, Guid userId, CancellationToken ct = default)
+    {
+        var message = await _dbContext.Messages
+            .Where(m => !m.IsRemoved && m.MessageId == messageId)
+            .Where(m => m.Chat.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId))
+            .ProjectToMessage()
+            .FirstOrDefaultAsync(ct);
+
+        await FillLikes(message, ct);
+        return message;
+    }
+
+    /// <inheritdoc />
+    public async Task<Message?> GetGlobalChatMessage(Guid messageId, CancellationToken ct = default)
+    {
+        var message = await _dbContext.Messages
+            .Where(m => !m.IsRemoved && m.MessageId == messageId)
+            .Where(m => m.Chat.Type == ChatType.Global)
+            .ProjectToMessage()
+            .FirstOrDefaultAsync(ct);
+
+        await FillLikes(message, ct);
+        return message;
+    }
 
     /// <inheritdoc />
     public async Task<CursorResult<Message>> GetWithCursor(Guid chatId, CursorQuery query, CancellationToken ct = default)
@@ -121,12 +137,12 @@ internal class MessageRepository : IMessageRepository
     {
         var messages = await OldestLast(ChatMessages(chatId))
             .Take(limit + 1) // +1 to check if there are more
-            .ProjectTo<Message>(_mapper.ConfigurationProvider)
+            .ProjectToMessage()
             .ToArrayAsync(ct);
 
         var hasMore = messages.Length > limit;
 
-        return CreateCursorResult(ForDisplay(messages, limit), hasPrev: hasMore, hasNext: false);
+        return await CreateCursorResult(ForDisplay(messages, limit), hasPrev: hasMore, hasNext: false, ct);
     }
 
     // The page arrives newest first and is displayed oldest first. Reversing it
@@ -139,7 +155,7 @@ internal class MessageRepository : IMessageRepository
     {
         var messages = await OldestLast(Older(ChatMessages(chatId), timestampUtc, messageId))
             .Take(limit + 1)
-            .ProjectTo<Message>(_mapper.ConfigurationProvider)
+            .ProjectToMessage()
             .ToArrayAsync(ct);
 
         var hasMore = messages.Length > limit;
@@ -147,14 +163,14 @@ internal class MessageRepository : IMessageRepository
         // Check if there are messages after
         var hasNext = await Newer(ChatMessages(chatId), timestampUtc, messageId).AnyAsync(ct);
 
-        return CreateCursorResult(ForDisplay(messages, limit), hasPrev: hasMore, hasNext: hasNext);
+        return await CreateCursorResult(ForDisplay(messages, limit), hasPrev: hasMore, hasNext: hasNext, ct);
     }
 
     private async Task<CursorResult<Message>> GetAfter(Guid chatId, Guid messageId, DateTimeOffset timestampUtc, int limit, CancellationToken ct)
     {
         var messages = await OldestFirst(Newer(ChatMessages(chatId), timestampUtc, messageId))
             .Take(limit + 1)
-            .ProjectTo<Message>(_mapper.ConfigurationProvider)
+            .ProjectToMessage()
             .ToArrayAsync(ct);
 
         var hasMore = messages.Length > limit;
@@ -163,7 +179,7 @@ internal class MessageRepository : IMessageRepository
         // Check if there are messages before
         var hasPrev = await Older(ChatMessages(chatId), timestampUtc, messageId).AnyAsync(ct);
 
-        return CreateCursorResult(result, hasPrev: hasPrev, hasNext: hasMore);
+        return await CreateCursorResult(result, hasPrev: hasPrev, hasNext: hasMore, ct);
     }
 
     /// <summary>
@@ -175,7 +191,7 @@ internal class MessageRepository : IMessageRepository
 
         if (referenceMessage == null)
         {
-            return CreateCursorResult(Array.Empty<Message>(), false, false);
+            return await CreateCursorResult(Array.Empty<Message>(), false, false, ct);
         }
 
         // The anchor takes one of the limit slots, so the halves share limit - 1.
@@ -192,18 +208,18 @@ internal class MessageRepository : IMessageRepository
         var before = await OldestLast(
                 Older(ChatMessages(chatId), referenceMessage.CreatedUtc, referenceMessage.MessageId))
             .Take(beforeCount + 1)
-            .ProjectTo<Message>(_mapper.ConfigurationProvider)
+            .ProjectToMessage()
             .ToArrayAsync(ct);
 
         var target = await ChatMessages(chatId)
             .Where(m => m.MessageId == messageId)
-            .ProjectTo<Message>(_mapper.ConfigurationProvider)
+            .ProjectToMessage()
             .FirstOrDefaultAsync(ct);
 
         var after = await OldestFirst(
                 Newer(ChatMessages(chatId), referenceMessage.CreatedUtc, referenceMessage.MessageId))
             .Take(afterCount + 1)
-            .ProjectTo<Message>(_mapper.ConfigurationProvider)
+            .ProjectToMessage()
             .ToArrayAsync(ct);
 
         var hasPrev = before.Length > beforeCount;
@@ -214,7 +230,7 @@ internal class MessageRepository : IMessageRepository
         if (target != null) result.Add(target);
         result.AddRange(after.Take(afterCount));
 
-        return CreateCursorResult(result.ToArray(), hasPrev, hasNext);
+        return await CreateCursorResult(result.ToArray(), hasPrev, hasNext, ct);
     }
 
     /// <summary>
@@ -237,14 +253,21 @@ internal class MessageRepository : IMessageRepository
 
         if (nearestMessage == null)
         {
-            return CreateCursorResult(Array.Empty<Message>(), false, false);
+            return await CreateCursorResult(Array.Empty<Message>(), false, false, ct);
         }
 
         return await GetAround(chatId, nearestMessage.Value, limit, ct);
     }
 
-    private CursorResult<Message> CreateCursorResult(Message[] messages, bool hasPrev, bool hasNext)
+    /// <summary>
+    /// The one funnel every paged read returns through, and the one place their
+    /// likes are filled in: a page assembled here is a page the reader sees whole.
+    /// </summary>
+    private async Task<CursorResult<Message>> CreateCursorResult(
+        Message[] messages, bool hasPrev, bool hasNext, CancellationToken ct)
     {
+        await FillLikes(messages, ct);
+
         string? prevCursor = null;
         string? nextCursor = null;
 
@@ -274,6 +297,27 @@ internal class MessageRepository : IMessageRepository
         };
     }
 
+    // ═══ LIKES ═══
+
+    /// <summary>
+    /// Single-message overload of the backfill below.
+    /// </summary>
+    private Task FillLikes(Message? message, CancellationToken ct) =>
+        message is null
+            ? Task.CompletedTask
+            : FillLikes([message], ct);
+
+    /// <summary>
+    /// Backfill <see cref="Message.Likes"/> for a page of messages. What an
+    /// empty list costs here is the heart on the page: the client replaces the
+    /// message it holds with the one the answer brings back, so a like landed in
+    /// the table and went out again on the screen a moment later.
+    /// </summary>
+    private Task FillLikes(IReadOnlyCollection<Message> messages, CancellationToken ct) =>
+        LikeBackfill.Fill(_dbContext, messages, LikeEntityType.Message,
+            m => m.Id, (m, likes) => m.Likes = likes,
+            "DM.Messaging.MessageLikes", "DM.Messaging.MessageLikers", ct);
+
     // ═══ WRITE ═══
 
     /// <inheritdoc />
@@ -301,9 +345,12 @@ internal class MessageRepository : IMessageRepository
 
         await _dbContext.SaveChangesAsync(ct);
 
+        // No backfill of likes here, and it is not an omission: this reads back
+        // the row inserted a line above, and nothing can have liked a message
+        // that did not exist until then. The empty list is the true answer.
         return await _dbContext.Messages
             .Where(m => m.MessageId == message.MessageId)
-            .ProjectTo<Message>(_mapper.ConfigurationProvider)
+            .ProjectToMessage()
             .FirstAsync(ct);
     }
 
@@ -340,11 +387,16 @@ internal class MessageRepository : IMessageRepository
         }
 
         await _dbContext.SaveChangesAsync();
-        return await _dbContext.Messages
+        var updated = await _dbContext.Messages
             .TagWith("DM.Community.UpdatedMessage")
             .Where(m => m.MessageId == update.MessageId)
-            .ProjectTo<Message>(_mapper.ConfigurationProvider)
+            .ProjectToMessage()
             .FirstAsync();
+
+        // An edited message keeps the likes it had, and this answer is what the
+        // page puts in place of the line it was showing.
+        await FillLikes(updated, CancellationToken.None);
+        return updated;
     }
 
     /// <inheritdoc />

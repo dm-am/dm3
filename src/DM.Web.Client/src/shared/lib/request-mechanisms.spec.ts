@@ -200,6 +200,10 @@ const NOT_A_RESPONSE_CACHE: Record<string, string> = {
     "how long the reader spent on the form, which is a bot signal",
   "features/auth/ui/RegistrationForm.vue":
     "how long the reader spent on the form, which is a bot signal",
+  "shared/lib/composables/useAddressPing.ts":
+    "a stopwatch around each reachability probe (the elapsed time IS the " +
+    "datum being measured), and a floor between re-measures on tab focus; " +
+    "no stored answer is ever served back in place of asking",
 };
 
 function collectFiles(dir: string, out: string[] = []): string[] {

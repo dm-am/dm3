@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -34,8 +34,15 @@ public class DocumentedTestTiersShould
         ["npx", "npm", "run", "run-p", "run-s", "cross-env"];
 
     /// <summary>The .NET test frameworks a test project can be built on.</summary>
+    /// <remarks>
+    /// xUnit ships its third major under a package id of its own, xunit.v3, and the
+    /// second id will never see another release. The suffix is matched and dropped
+    /// rather than captured: what the guide names is the runner, and a major bump
+    /// that renames the package is not a tier the reader has to learn to run.
+    /// </remarks>
     private static readonly Regex TestFramework = new(
-        @"PackageReference Include=""(xunit|nunit|mstest)""", RegexOptions.Compiled);
+        @"PackageReference Include=""(?<runner>xunit|nunit|mstest)(?:\.v3)?""",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
@@ -76,7 +83,7 @@ public class DocumentedTestTiersShould
         {
             foreach (Match reference in TestFramework.Matches(File.ReadAllText(project)))
             {
-                runners.Add(reference.Groups[1].Value);
+                runners.Add(reference.Groups["runner"].Value);
             }
         }
 

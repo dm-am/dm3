@@ -56,25 +56,8 @@ internal class GameNotepadService : IGameNotepadService
     }
 
     /// <inheritdoc />
-    public async Task<NotepadEntry> CreateMasterEntry(Guid gameId, CreateNotepadEntry createEntry, CancellationToken ct = default)
-    {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Create, NotepadType.Master, gameId, null, ct);
-
-        var internalDto = new CreateNotepadEntryInternal
-        {
-            EntryId = _guidFactory.Create(),
-            NotepadType = NotepadType.Master,
-            ContainerId = gameId,
-            OwnerId = null,
-            AuthorId = UserId,
-            Title = createEntry.Title,
-            Content = createEntry.Content,
-            SortOrder = 0,
-            CreatedUtc = _dateTimeProvider.Now
-        };
-
-        return await _repository.CreateEntryAsync(internalDto, ct);
-    }
+    public Task<NotepadEntry> CreateMasterEntry(Guid gameId, CreateNotepadEntry createEntry, CancellationToken ct = default) =>
+        CreateEntry(NotepadType.Master, gameId, ownerId: null, createEntry, ct);
 
     #endregion
 
@@ -88,25 +71,8 @@ internal class GameNotepadService : IGameNotepadService
     }
 
     /// <inheritdoc />
-    public async Task<NotepadEntry> CreatePlayerEntry(Guid gameId, Guid characterId, CreateNotepadEntry createEntry, CancellationToken ct = default)
-    {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Create, NotepadType.Player, gameId, characterId, ct);
-
-        var internalDto = new CreateNotepadEntryInternal
-        {
-            EntryId = _guidFactory.Create(),
-            NotepadType = NotepadType.Player,
-            ContainerId = gameId,
-            OwnerId = characterId,
-            AuthorId = UserId,
-            Title = createEntry.Title,
-            Content = createEntry.Content,
-            SortOrder = 0,
-            CreatedUtc = _dateTimeProvider.Now
-        };
-
-        return await _repository.CreateEntryAsync(internalDto, ct);
-    }
+    public Task<NotepadEntry> CreatePlayerEntry(Guid gameId, Guid characterId, CreateNotepadEntry createEntry, CancellationToken ct = default) =>
+        CreateEntry(NotepadType.Player, gameId, characterId, createEntry, ct);
 
     #endregion
 
@@ -120,16 +86,36 @@ internal class GameNotepadService : IGameNotepadService
     }
 
     /// <inheritdoc />
-    public async Task<NotepadEntry> CreateCharacterMasterEntry(Guid gameId, Guid characterId, CreateNotepadEntry createEntry, CancellationToken ct = default)
+    public Task<NotepadEntry> CreateCharacterMasterEntry(Guid gameId, Guid characterId, CreateNotepadEntry createEntry, CancellationToken ct = default) =>
+        CreateEntry(NotepadType.CharacterMaster, gameId, characterId, createEntry, ct);
+
+    #endregion
+
+    #region Common Operations
+
+    /// <summary>
+    /// One notepad entry, whichever of the three notepads it belongs to.
+    /// </summary>
+    /// <remarks>
+    /// The three public methods differed in the notepad type and in whether the
+    /// entry hangs off a character; everything else - the authorization call, the
+    /// nine fields, the write - was the same text three times.
+    /// </remarks>
+    private async Task<NotepadEntry> CreateEntry(
+        NotepadType notepadType,
+        Guid gameId,
+        Guid? ownerId,
+        CreateNotepadEntry createEntry,
+        CancellationToken ct)
     {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Create, NotepadType.CharacterMaster, gameId, characterId, ct);
+        await ThrowIfNotAuthorizedAsync(NotepadIntention.Create, notepadType, gameId, ownerId, ct);
 
         var internalDto = new CreateNotepadEntryInternal
         {
             EntryId = _guidFactory.Create(),
-            NotepadType = NotepadType.CharacterMaster,
+            NotepadType = notepadType,
             ContainerId = gameId,
-            OwnerId = characterId,
+            OwnerId = ownerId,
             AuthorId = UserId,
             Title = createEntry.Title,
             Content = createEntry.Content,
@@ -139,10 +125,6 @@ internal class GameNotepadService : IGameNotepadService
 
         return await _repository.CreateEntryAsync(internalDto, ct);
     }
-
-    #endregion
-
-    #region Common Operations
 
     /// <inheritdoc />
     public async Task<NotepadEntry> GetEntry(Guid entryId, CancellationToken ct = default)
@@ -219,22 +201,21 @@ internal class GameNotepadService : IGameNotepadService
             GameRoles = Array.Empty<GameRole>()
         };
 
-        switch (notepadType)
+        // The condition, and not an unconditional read: a notepad type this
+        // service does not answer for reaches no game and no roles, which is
+        // what the switch this replaced did by having no default branch.
+        if (notepadType is NotepadType.Master or NotepadType.CharacterMaster or NotepadType.Player)
         {
-            case NotepadType.Master:
-            case NotepadType.CharacterMaster:
-                var gameLeads = await _gameService.GetAsync(containerId);
-                context.GameRoles = gameLeads.GetRoles(UserId);
-                break;
-            case NotepadType.Player:
-                var gamePlayer = await _gameService.GetAsync(containerId);
-                context.GameRoles = gamePlayer.GetRoles(UserId);
-                if (ownerId.HasValue)
-                {
-                    var character = await _characterService.GetAsync(ownerId.Value);
-                    context.CharacterOwnerId = character?.Author?.UserId;
-                }
-                break;
+            var game = await _gameService.GetAsync(containerId);
+            context.GameRoles = game.GetRoles(UserId);
+
+            // Only the player notepad hangs off a character, and only then is
+            // there an author of one to ask about.
+            if (notepadType == NotepadType.Player && ownerId.HasValue)
+            {
+                var character = await _characterService.GetAsync(ownerId.Value);
+                context.CharacterOwnerId = character?.Author?.UserId;
+            }
         }
 
         return context;

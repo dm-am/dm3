@@ -2,7 +2,7 @@ using System;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Forum.Features.Topics;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 
@@ -89,5 +89,29 @@ public class CreateTopicValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    /// <summary>
+    /// Hiding markup on a surface that does not declare it.
+    /// </summary>
+    /// <remarks>
+    /// The tag is not markup here, so it hides nothing: the line the author
+    /// wrote for one reader is published with the tag still around it. Refused
+    /// at the save path rather than erased, because a draft is not an attack
+    /// and a paragraph that vanished without a word is looked for instead of
+    /// rewritten.
+    /// </remarks>
+    [Fact]
+    public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
+    {
+        var input = new CreateTopic
+        {
+            Title = "Valid topic title",
+            Text = "до [private=\"Чак\"]СЕКРЕТ[/private] после"
+        };
+
+        var result = validator.TestValidate(input);
+
+        result.ShouldHaveValidationErrorFor(t => t.Text);
     }
 }

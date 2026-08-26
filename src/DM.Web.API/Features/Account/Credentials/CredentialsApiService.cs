@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Identity;
 using DM.Domain.Account.Features.EmailChange;
 using DM.Domain.Account.Features.PasswordChange;
@@ -17,7 +16,8 @@ internal class CredentialsApiService : ICredentialsApiService
     private readonly IEmailChangeService _emailChangeService;
     private readonly IUsernameChangeService _usernameChangeService;
     private readonly IIdentityProvider _identityProvider;
-    private readonly IMapper _mapper;
+    private readonly CredentialsMapper _mapper;
+    private readonly UserMapper _userMapper;
 
     /// <summary>
     /// Creates a new instance of CredentialsApiService
@@ -27,13 +27,15 @@ internal class CredentialsApiService : ICredentialsApiService
         IEmailChangeService emailChangeService,
         IUsernameChangeService usernameChangeService,
         IIdentityProvider identityProvider,
-        IMapper mapper)
+        CredentialsMapper mapper,
+        UserMapper userMapper)
     {
         _passwordChangeService = passwordChangeService;
         _emailChangeService = emailChangeService;
         _usernameChangeService = usernameChangeService;
         _identityProvider = identityProvider;
         _mapper = mapper;
+        _userMapper = userMapper;
     }
 
     /// <inheritdoc />
@@ -45,7 +47,7 @@ internal class CredentialsApiService : ICredentialsApiService
             NewPassword = request.NewPassword
         };
         var user = await _passwordChangeService.Change(passwordChange);
-        return _mapper.Map<User>(user);
+        return _userMapper.ToUser(user);
     }
 
     /// <inheritdoc />
@@ -58,7 +60,7 @@ internal class CredentialsApiService : ICredentialsApiService
             Email = request.Email
         };
         var user = await _emailChangeService.Change(emailChange);
-        return _mapper.Map<User>(user);
+        return _userMapper.ToUser(user);
     }
 
     /// <inheritdoc />
@@ -67,9 +69,9 @@ internal class CredentialsApiService : ICredentialsApiService
     /// <inheritdoc />
     public async Task<UsernameChangeResponse> RequestUsernameChangeAsync(UsernameChangeCreateRequest request)
     {
-        var serviceRequest = _mapper.Map<ServiceCreateUsernameChangeRequest>(request);
+        var serviceRequest = _mapper.ToCreateRequest(request);
         var result = await _usernameChangeService.CreateAsync(serviceRequest);
-        return _mapper.Map<UsernameChangeResponse>(result);
+        return _mapper.ToResponse(result);
     }
 
     /// <inheritdoc />
@@ -77,7 +79,7 @@ internal class CredentialsApiService : ICredentialsApiService
     {
         var result = await _usernameChangeService.GetCurrentUserRequestAsync();
         return result != null
-            ? _mapper.Map<UsernameChangeResponse>(result)
+            ? _mapper.ToResponse(result)
             : null;
     }
 
@@ -98,6 +100,6 @@ internal class CredentialsApiService : ICredentialsApiService
     public async Task<UsernameChangeResponse> CompleteUsernameChangeAsync(Guid token, UsernameChangeCompletionRequest request)
     {
         var result = await _usernameChangeService.CompleteWithTokenAsync(token, request.Username);
-        return _mapper.Map<UsernameChangeResponse>(result);
+        return _mapper.ToResponse(result);
     }
 }

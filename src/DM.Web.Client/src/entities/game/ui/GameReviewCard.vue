@@ -74,13 +74,13 @@ const gameTitle = computed(() => props.review.gameTitle ?? "Игра без на
 </script>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 // The bubble sets pre-wrap for the recommendation's plain text; server-
 // rendered BBCode brings its own markup, and literal whitespace runs would
 // render here differently from every other ContentText surface.
 :deep(.bbcode-content)
   white-space: normal
-
-@import "@/assets/styles/Inputs"
 
 // The second party of the pair recedes so the author stays the primary link,
 // exactly as the recipient does in a recommendation.

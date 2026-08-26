@@ -4,7 +4,7 @@ using DM.Domain.Personal.Features.Notifications;
 using DM.Workers.NotificationDispatcher.Notifiers;
 using DM.Workers.NotificationDispatcher.Notifiers.Game;
 using DM.Workers.NotificationDispatcher.Notifiers.Security;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Workers.NotificationDispatcher.Tests;

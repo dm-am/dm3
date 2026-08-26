@@ -17,8 +17,7 @@
  * empty state in two wordings, and a copied permalink resolved on one page of
  * the three.
  */
-import { computed, nextTick, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { computed, ref, watch } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 import { storeToRefs } from "pinia";
 import type {
@@ -27,6 +26,7 @@ import type {
   Envelope,
   GeneralError,
   PagingInfo,
+  QuoteSource,
 } from "@/shared/api/models/common";
 import type { CommentsQuery } from "@/shared/api";
 import { useUiStore } from "@/shared/stores/ui";
@@ -36,6 +36,9 @@ import Button from "@/shared/ui/Button/Button.vue";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { provideQuoteComposer } from "@/shared/lib/composables/useQuoteComposer";
+import { useCommentHashScroll } from "@/shared/lib/composables/useScrollToElement";
+import { BODY_TEXT_MAX_LENGTH } from "@/shared/lib/constants/content";
 import { useAuthStore, userIsModerator } from "@/entities/user";
 import { CommentItem, useCommentWarnDialog } from "@/features/comment";
 import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
@@ -75,6 +78,11 @@ const props = defineProps<{
   unlike: (id: string) => unknown;
   /** Fetches a comment's raw BBCode source for the edit form. */
   fetchEditSource: (id: string) => Promise<ApiResult<Envelope<Comment>>>;
+  /**
+   * Fetches the markup of a quotation of a comment. Optional: a discussion
+   * nobody may write in shows no Quote button, and there is nothing to fetch.
+   */
+  fetchQuoteSource?: (id: string) => Promise<ApiResult<Envelope<QuoteSource>>>;
   /** Where the paging links point: the discussion's own route. */
   pagingTo: RouteLocationRaw;
   /** Composer draft key, built by composerDraftKey. */
@@ -96,7 +104,6 @@ const emit = defineEmits<{
 /** One sentence for a failed discussion load, wherever it fails. */
 const LOAD_FAILURE = "Не удалось загрузить комментарии";
 
-const route = useRoute();
 const { isCompactLayout } = storeToRefs(useUiStore());
 const { user } = storeToRefs(useAuthStore());
 const { filterState, searchParams, hasActiveFilters } = useCommentsFilter();
@@ -156,37 +163,22 @@ function pagingAnchor(): HTMLElement | null {
   return sectionRef.value;
 }
 
-// Scroll to the comment named by the URL hash (#comment-{id}) once the page
-// holding it has rendered. Backs the permalink the item copies: on the game
-// and the blog that link used to open the page and go nowhere, because the
-// handler lived on the topic alone.
-async function scrollToHashComment() {
-  const hash = route.hash;
-  if (!hash.startsWith("#comment-")) return;
-  if (!props.comments.length) return;
-
-  await nextTick();
-  // Wait for content (avatars, BBCode media) to settle before measuring.
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  const element = document.getElementById(hash.slice(1));
-  if (!element) return;
-  element.scrollIntoView({ behavior: "smooth", block: "center" });
-  element.classList.add("highlight-unread");
-  setTimeout(() => element.classList.remove("highlight-unread"), 2000);
-}
-
-watch(
-  () => [props.comments, route.hash] as const,
-  () => scrollToHashComment(),
-  { immediate: true, flush: "post" },
-);
+useCommentHashScroll(() => props.comments);
 
 // --- Composer ---
 const newComment = ref("");
 const sending = ref(false);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 const isModerator = computed(() => userIsModerator(user.value));
+
+// The composer of the discussion is what the Quote button on each comment
+// writes into, and there is one composer for the whole list, so it is handed
+// down from here rather than reached for from inside an item. Nothing is
+// offered where nobody may write: the button goes with the box.
+provideQuoteComposer({
+  enabled: () => props.canComment,
+  insert: (source) => editorRef.value?.insertBlock(source.text),
+});
 
 async function handleSend() {
   if (!newComment.value.trim() || sending.value) return;
@@ -260,6 +252,7 @@ async function handleSend() {
           :number="commentNumber(index)"
           :search-query="filterState.search"
           :fetch-edit-source="fetchEditSource"
+          :fetch-quote-source="fetchQuoteSource"
           :submit-edit="submitEdit"
           :submit-delete="submitDelete"
           @like="like"
@@ -289,6 +282,7 @@ async function handleSend() {
           :disabled="sending"
           :min-height="100"
           :max-height="300"
+          :max-length="BODY_TEXT_MAX_LENGTH"
           :resizable="true"
           :is-moderator="isModerator"
           @submit="handleSend"

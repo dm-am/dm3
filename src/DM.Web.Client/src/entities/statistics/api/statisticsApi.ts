@@ -6,7 +6,7 @@ import { Api } from "@/shared/api";
 export default new (class StatisticsApi {
   /** Get live community statistics (public endpoint, no auth needed) */
   public getLiveStats() {
-    return Api.get<LiveStats>("stats", undefined, undefined, {
+    return Api.get<Envelope<LiveStats>>("stats", undefined, undefined, {
       skipAuth: true,
     });
   }

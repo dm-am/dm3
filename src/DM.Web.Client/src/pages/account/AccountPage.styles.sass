@@ -1,5 +1,10 @@
-// Shared styles for account page sections
-// Variables are injected globally via vite.config.ts additionalData
+// Shared styles for account page sections.
+//
+// vite.config.ts injects the shared layer into every stylesheet it compiles,
+// but this file is not one of them: it is pulled in by the sections, and a
+// module has to name what it uses itself.
+@use "@/assets/styles/Variables" as *
+@use "@/assets/styles/Themes" as *
 
 .section
   margin-bottom: $big

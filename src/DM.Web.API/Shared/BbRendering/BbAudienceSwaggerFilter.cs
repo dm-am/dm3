@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using DM.Infrastructure.Core.Parsing;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace DM.Web.API.Shared.BbRendering;
@@ -64,13 +64,13 @@ internal class BbAudienceSwaggerFilter : IOperationFilter
             return;
         }
 
-        (operation.Parameters ?? (operation.Parameters = new List<OpenApiParameter>()))
+        (operation.Parameters ?? (operation.Parameters = new List<IOpenApiParameter>()))
             .Add(new OpenApiParameter
             {
                 Name = BbAudienceHeader.HeaderName,
                 In = ParameterLocation.Header,
                 Required = false,
-                Schema = new OpenApiSchema { Type = "string" },
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String },
                 Description =
                     "Rendering audience for BbText-bearing response fields. One of: " +
                     "display (default, permission-filtered view), " +

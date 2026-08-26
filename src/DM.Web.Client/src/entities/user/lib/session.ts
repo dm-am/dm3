@@ -2,6 +2,7 @@ import type {
   LoginCredentials,
   RegisterCredentials,
 } from "@/shared/api/models/account";
+import type { GeneralError } from "@/shared/api/models/common";
 import { useAuthStore } from "@/shared/stores";
 import { notifyFailure } from "@/shared/lib/errors";
 import accountApi from "../api/accountApi";
@@ -32,27 +33,69 @@ export async function register(credentials: RegisterCredentials) {
 }
 
 /**
- * Sign in (cookie-based) and adopt the returned user as the session. Returns
- * the problem document to answer with, or null once the session is in place.
+ * Where a sign-in attempt stopped.
+ *
+ * Three outcomes and not two, because the server has three: a session, a
+ * refusal, and a password that was accepted while the login is not finished.
+ * The third one is a 200 with no viewer in it — the shape a boolean "did it
+ * fail" reads as success — so it has to be a stage of its own here or the
+ * dialog closes over a viewer who never got in.
+ */
+export type SignInOutcome =
+  | { stage: "signedIn" }
+  | { stage: "secondFactor" }
+  | { stage: "refused"; failure: GeneralError };
+
+/**
+ * Sign in (cookie-based) and adopt the returned user as the session.
  *
  * A 403 is the one that mattered: the server refuses a banned, removed or
  * locked-out account by name, and that name is the answer to the form.
  * Reported as success, it closed the dialog over a header that went on
  * offering "Вход | Регистрация".
  */
-export async function signIn(credentials: LoginCredentials) {
+export async function signIn(
+  credentials: LoginCredentials,
+): Promise<SignInOutcome> {
   const { data, error } = await accountApi.signIn(credentials);
 
-  if (error) return error;
+  if (error) return { stage: "refused", failure: error };
+
+  // The password was accepted and the second factor is still owed: no session
+  // exists, no cookie was set, and the viewer is deliberately absent from the
+  // body. The challenge lives in a cookie of its own, so there is nothing to
+  // hold on to here - only a stage to report.
+  if (data?.twoFactorRequired) return { stage: "secondFactor" };
 
   // The viewer arrives wrapped, next to the preferences of the first screen.
   // Stored whole, the envelope stood in the store where the viewer belongs:
   // every field read off it was undefined, the header went on offering
   // "Вход | Регистрация" over a live session, and it stayed that way until the
   // next boot reconciled the store against the server.
-  // No body behind a success is not a session, and the previous line already
-  // ruled out a refusal: nothing to sign in as, so the store stays empty.
+  // No body behind a success is not a session, and the two lines above already
+  // ruled out a refusal and a half-finished login: nothing to sign in as, so
+  // the store stays empty.
   useAuthStore().updateUser(data?.user ?? null);
+  return { stage: "signedIn" };
+}
+
+/**
+ * Finish a login with the code from the device or with a recovery code.
+ * Returns the problem document to answer with, or null once the session is in
+ * place.
+ *
+ * The viewer arrives inside an envelope here, unlike on the first step, which
+ * answers with a bare body. Read the way the first step is read, the envelope
+ * itself would stand in the store where the viewer belongs.
+ */
+export async function completeSecondFactor(
+  code: string,
+): Promise<GeneralError | null> {
+  const { data, error } = await accountApi.completeTwoFactorLogin({ code });
+
+  if (error) return error;
+
+  useAuthStore().updateUser(data?.resource?.user ?? null);
   return null;
 }
 

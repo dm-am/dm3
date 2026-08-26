@@ -30,8 +30,8 @@ import { SupportTicketForm } from "@/features/support-ticket";
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Variables"
-@import "@/assets/styles/Themes"
+@use "@/assets/styles/Variables" as *
+@use "@/assets/styles/Themes" as *
 
 .discord-fallback
   margin-top: $medium

@@ -11,6 +11,7 @@ import type {
   GeneralError,
 } from "@/shared/api/models/common";
 import globalChatApi from "../api/globalChatApi";
+import { unwrapResource } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { NotificationType } from "@/shared/api/models/notifications";
 
@@ -284,7 +285,9 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   ): Promise<GlobalChatMessage | null> {
     try {
       const { data } = await globalChatApi.getMessage(id);
-      return data || null;
+      // The answer is an envelope; returning it as the message handed the
+      // caller an object with no id and no text, typed as if it had both.
+      return unwrapResource<GlobalChatMessage>(data);
     } catch {
       return null;
     }
@@ -305,13 +308,18 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     try {
       const { data, error } = await globalChatApi.sendMessage(text);
       if (error) return { error };
-      if (data) {
+      // Out of the envelope. Taken as it came, one's own line appeared blank
+      // in the chat, and it was keyed in messagesById under undefined, so the
+      // duplicate guard in addMessage no longer recognised the copy the hub
+      // pushed back and the same line arrived twice.
+      const sent = unwrapResource<GlobalChatMessage>(data);
+      if (sent) {
         // If we're not at the latest, jump to latest first
         if (hasMoreAfter.value) {
           await jumpToLatest();
         }
-        messages.value.push(data);
-        messagesById.set(data.id, data);
+        messages.value.push(sent);
+        messagesById.set(sent.id, sent);
       }
     } finally {
       sending.value = false;
@@ -329,11 +337,14 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   /** Returns the error when the edit failed, so the editor can stay open. */
   async function updateMessage(id: string, text: string) {
     const { data, error } = await globalChatApi.updateMessage(id, text);
-    if (!error && data) {
+    // Out of the envelope: the edited line was replaced by the wrapper both on
+    // screen and in the map the jump-to-message link reads.
+    const updated = unwrapResource<GlobalChatMessage>(data);
+    if (!error && updated) {
       const index = messages.value.findIndex((m) => m.id === id);
       if (index !== -1) {
-        messages.value[index] = data;
-        messagesById.set(id, data);
+        messages.value[index] = updated;
+        messagesById.set(id, updated);
       }
     }
     return { error };
@@ -365,11 +376,13 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
 
   async function likeMessage(id: string) {
     const { data } = await globalChatApi.likeMessage(id);
-    if (data) {
+    // Out of the envelope: a like erased the line it was given to.
+    const liked = unwrapResource<GlobalChatMessage>(data);
+    if (liked) {
       const index = messages.value.findIndex((m) => m.id === id);
       if (index !== -1) {
-        messages.value[index] = data;
-        messagesById.set(id, data);
+        messages.value[index] = liked;
+        messagesById.set(id, liked);
       }
     }
   }

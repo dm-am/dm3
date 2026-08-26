@@ -1,5 +1,5 @@
 using DM.Infrastructure.Core.Identifiers;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Identifiers;

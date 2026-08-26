@@ -1,50 +1,17 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using DM.Domain.Account.Features.Security;
-using DM.Domain.Community.Features.Polls;
 using DM.Domain.Community.Features.Statistics;
-using DM.Domain.Core.Dto;
-using DM.Domain.Core.Identity;
-using DM.Domain.Personal.Features.Profiles;
-using DM.Domain.Personal.Authorization;
-using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Uploads;
-using DM.Infrastructure.Core.Storage;
-using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using DM.Infrastructure.Persistence.Entities.Blog;
-using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
-using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
-using DM.Infrastructure.Persistence.Entities.Messaging;
-using DM.Infrastructure.Persistence.Entities.Moderation;
-using DM.Infrastructure.Persistence.Entities.Personal.Notepads;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Community;
-using DM.Infrastructure.Persistence.Entities.Subscriptions;
-using Microsoft.Extensions.Options;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
-using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
-using DbAttributeSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
-using DbStringConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.StringAttributeConstraints;
-using DbBbCodeConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.BbCodeAttributeConstraints;
-using DbListConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeConstraints;
-using DbListValueKind = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListValueKind;
-using DbListAttributeValue = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeValue;
-using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
-using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
-using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
-using DbUsernameHistory = DM.Infrastructure.Persistence.Entities.Account.UsernameHistory;
-using DbUserContact = DM.Infrastructure.Persistence.Entities.Account.UserContact;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Tools.Seeder.Seeding;
@@ -520,6 +487,35 @@ internal sealed partial class DataSeeder
             "[spoiler]Критика: текст сыроват, стоит поработать над стилем.[/spoiler]",
         };
 
+        // The wording is drawn here while the sign and the date are drawn by the
+        // caller: SeedDeterminism pins the fixture to the order the seed asks the
+        // generator for numbers, and moving a draw across that boundary shifts it.
+        void AddReview(Post reviewed, Guid reviewedGameId, DbUser reviewer, ReviewSign sign, DateTimeOffset reviewDate)
+        {
+            var text = sign switch
+            {
+                ReviewSign.Positive => positiveTexts[_random.Next(positiveTexts.Length)],
+                ReviewSign.Negative => negativeTexts[_random.Next(negativeTexts.Length)],
+                _ => neutralTexts[_random.Next(neutralTexts.Length)]
+            };
+
+            _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
+            {
+                PostReviewId = _guidFactory.Create(),
+                AuthorId = reviewer.UserId,
+                PostId = reviewed.PostId,
+                PostAuthorId = reviewed.AuthorId,
+                GameId = reviewedGameId,
+                CreatedUtc = reviewDate,
+                Text = text,
+                SignValue = (short)sign,
+                IsRemoved = false
+            });
+            result.ReviewsCreated++;
+            var postAuthor = users.FirstOrDefault(u => u.UserId == reviewed.AuthorId);
+            if (postAuthor != null) postAuthor.QualityRating += (int)sign;
+        }
+
         // This week posts - 30 posts with 2-4 reviews each (within last 6 days)
         // Enough for 2+ pages of pagination at 20/page
         var thisWeekPosts = posts.Where(p => !processedPostIds.Contains(p.PostId)).Take(30).ToList();
@@ -539,28 +535,7 @@ internal sealed partial class DataSeeder
                 var sign = (ReviewSign)_random.Next(-1, 2);
                 // Within current week: 0-6 days ago
                 var reviewDate = now.AddDays(-_random.Next(0, 6)).AddHours(-_random.Next(1, 24));
-                var text = sign switch
-                {
-                    ReviewSign.Positive => positiveTexts[_random.Next(positiveTexts.Length)],
-                    ReviewSign.Negative => negativeTexts[_random.Next(negativeTexts.Length)],
-                    _ => neutralTexts[_random.Next(neutralTexts.Length)]
-                };
-
-                _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
-                {
-                    PostReviewId = _guidFactory.Create(),
-                    AuthorId = reviewer.UserId,
-                    PostId = post.PostId,
-                    PostAuthorId = post.AuthorId,
-                    GameId = gameId,
-                    CreatedUtc = reviewDate,
-                    Text = text,
-                    SignValue = (short)sign,
-                    IsRemoved = false
-                });
-                result.ReviewsCreated++;
-                var postAuthor = users.FirstOrDefault(u => u.UserId == post.AuthorId);
-                if (postAuthor != null) postAuthor.QualityRating += (int)sign;
+                AddReview(post, gameId, reviewer, sign, reviewDate);
             }
         }
 
@@ -576,28 +551,7 @@ internal sealed partial class DataSeeder
                 var sign = (ReviewSign)_random.Next(-1, 2);
                 // Older: 2-4 weeks ago
                 var reviewDate = now.AddDays(-_random.Next(14, 28)).AddHours(-_random.Next(1, 24));
-                var text = sign switch
-                {
-                    ReviewSign.Positive => positiveTexts[_random.Next(positiveTexts.Length)],
-                    ReviewSign.Negative => negativeTexts[_random.Next(negativeTexts.Length)],
-                    _ => neutralTexts[_random.Next(neutralTexts.Length)]
-                };
-
-                _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
-                {
-                    PostReviewId = _guidFactory.Create(),
-                    AuthorId = reviewer.UserId,
-                    PostId = post.PostId,
-                    PostAuthorId = post.AuthorId,
-                    GameId = gameId,
-                    CreatedUtc = reviewDate,
-                    Text = text,
-                    SignValue = (short)sign,
-                    IsRemoved = false
-                });
-                result.ReviewsCreated++;
-                var postAuthor = users.FirstOrDefault(u => u.UserId == post.AuthorId);
-                if (postAuthor != null) postAuthor.QualityRating += (int)sign;
+                AddReview(post, gameId, reviewer, sign, reviewDate);
             }
         }
 

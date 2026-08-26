@@ -4,7 +4,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Moderation.Authorization;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Authorization;

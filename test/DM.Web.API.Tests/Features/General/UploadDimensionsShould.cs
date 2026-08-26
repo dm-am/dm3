@@ -4,7 +4,6 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Caching;
@@ -18,10 +17,10 @@ using DM.Testing;
 using DM.Testing.Dsl;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.General.Upload;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
@@ -51,8 +50,7 @@ public class UploadDimensionsShould : UnitTestBase
     {
         var written = new List<NewUpload>();
         var repository = Mock<IUploadRepository>();
-        repository.Setup(r => r.AddAsync(Capture.In(written)))
-            .ReturnsAsync(new StoredUpload());
+        repository.AddAsync(Arg.Do<NewUpload>(written.Add)).Returns(new StoredUpload());
 
         var service = Service(repository, ProcessedTo(width: 640, height: 480));
 
@@ -66,7 +64,7 @@ public class UploadDimensionsShould : UnitTestBase
     [Fact]
     public void PublishTheDimensionsOfTheOriginalOnly()
     {
-        var picture = Mapper().Map<UserPicture>(new AvatarPicture
+        var picture = Mapper().ToUserPicture(new AvatarPicture
         {
             SourceObjectKey = "avatars/key.jpg",
             SourceUrl = "https://cdn.example/avatars/key.jpg",
@@ -87,7 +85,7 @@ public class UploadDimensionsShould : UnitTestBase
     [Fact]
     public void SayNothingAboutAPictureNobodyMeasured()
     {
-        var picture = Mapper().Map<UserPicture>(new AvatarPicture
+        var picture = Mapper().ToUserPicture(new AvatarPicture
         {
             SourceObjectKey = "avatars/legacy.jpg",
             SourceUrl = "https://cdn.example/avatars/legacy.jpg",
@@ -99,51 +97,47 @@ public class UploadDimensionsShould : UnitTestBase
     }
 
     /// <summary>
-    /// The mapper as the host builds it, so the registration of the converter is
-    /// part of what these two assert.
+    /// The mapper as the host builds it - imgproxy through the constructor,
+    /// the way the container constructs UserMapper.
     /// </summary>
-    private IMapper Mapper()
+    private UserMapper Mapper()
     {
         var imgproxy = Mock<IImgproxyUrlBuilder>();
-        imgproxy.Setup(b => b.BuildSquareThumbnail(It.IsAny<string>(), It.IsAny<int>()))
-            .Returns("https://cdn.example/thumb");
+        imgproxy.BuildSquareThumbnail(Arg.Any<string>(), Arg.Any<int>()).Returns("https://cdn.example/thumb");
 
-        return new MapperConfiguration(cfg => cfg.AddProfile<UserMappingProfile>())
-            .CreateMapper(type => type == typeof(AvatarPictureConverter)
-                ? new AvatarPictureConverter(imgproxy.Object)
-                : Activator.CreateInstance(type)!);
+        return new UserMapper(imgproxy);
     }
 
-    private Mock<IImageProcessingService> ProcessedTo(int width, int height)
+    private IImageProcessingService ProcessedTo(int width, int height)
     {
         var imageProcessing = Mock<IImageProcessingService>();
         imageProcessing
-            .Setup(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<UploadType>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ProcessedImage(new byte[] { 1, 2, 3 }, "image/png", ".png", width, height));
+            .ProcessAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<UploadType>(), Arg.Any<CancellationToken>())
+            .Returns(new ProcessedImage(new byte[] { 1, 2, 3 }, "image/png", ".png", width, height));
         return imageProcessing;
     }
 
     private UploadApiService Service(
-        Mock<IUploadRepository> repository,
-        Mock<IImageProcessingService> imageProcessing)
+        IUploadRepository repository,
+        IImageProcessingService imageProcessing)
     {
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(Identities.User(_userId));
+        identityProvider.Current.Returns(Identities.User(_userId));
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(p => p.Now).Returns(DateTimeOffset.UtcNow);
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         return new UploadApiService(
-            repository.Object,
-            identityProvider.Object,
-            Mock<IIntentionManager>().Object,
-            Mock<IUserService>().Object,
-            dateTimeProvider.Object,
-            Mock<IObjectStorage>().Object,
-            imageProcessing.Object,
-            Mock<ICache>().Object,
-            Mock<IHttpContextAccessor>().Object,
-            new IUploadTargetAuthorizer[] { new AllowingAuthorizer(UploadType.UserAvatar) },
+            repository,
+            identityProvider,
+            Mock<IIntentionManager>(),
+            Mock<IUserService>(),
+            dateTimeProvider,
+            Mock<IObjectStorage>(),
+            imageProcessing,
+            Mock<ICache>(),
+            Mock<IHttpContextAccessor>(),
+            new IUploadTargetAuthorizer[] { new AllowingUploadAuthorizer(UploadType.UserAvatar) },
             Options.Create(new CdnConfiguration
             {
                 BucketName = "dm-test",
@@ -159,18 +153,5 @@ public class UploadDimensionsShould : UnitTestBase
             Headers = new HeaderDictionary(),
             ContentType = "image/png",
         };
-    }
-
-    private sealed class AllowingAuthorizer : IUploadTargetAuthorizer
-    {
-        public AllowingAuthorizer(UploadType type) => Type = type;
-
-        public UploadType Type { get; }
-
-        public Task EnsureAllowedAsync(Guid targetId) => Task.CompletedTask;
-
-        public Task EnsureReadAllowedAsync(Guid targetId) => Task.CompletedTask;
-
-        public Task<bool> MayDetachAsync(Guid targetId) => Task.FromResult(true);
     }
 }

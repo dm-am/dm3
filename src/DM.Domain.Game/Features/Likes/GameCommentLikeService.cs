@@ -6,6 +6,7 @@ using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.Comments;
 using DM.Domain.Core.Likes;
 using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Games;
@@ -40,32 +41,36 @@ internal class GameCommentLikeService : IGameCommentLikeService
     /// <inheritdoc />
     public async Task<GeneralUser> LikeCommentAsync(Guid commentId)
     {
-        var comment = await _commentService.GetAsync(commentId);
-        _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
-
-        // The blacklist closes writing, and a like is writing.
-        var game = await _gameService.GetAsync(comment.EntityId);
-        if (game.IsBlacklisted(_identityProvider.Current.User.UserId))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
-        }
-
+        var comment = await LikeableComment(commentId);
         return await _likeOperations.LikeAsync(comment, EventType.LikedGameComment);
     }
 
     /// <inheritdoc />
     public async Task UnlikeCommentAsync(Guid commentId)
     {
+        var comment = await LikeableComment(commentId);
+        await _likeOperations.UnlikeAsync(comment);
+    }
+
+    /// <summary>
+    /// The comment, with the caller's right to move a like on it already checked.
+    /// </summary>
+    /// <remarks>
+    /// The blacklist closes writing, and both putting a like on a comment and
+    /// taking one back are writing - a reader shut out of a game does not get to
+    /// change what its discussion shows either way.
+    /// </remarks>
+    private async Task<Comment> LikeableComment(Guid commentId)
+    {
         var comment = await _commentService.GetAsync(commentId);
         _intentionManager.ThrowIfForbidden(CommentIntention.Like, comment);
 
-        // The blacklist closes writing, and taking a like back is writing.
         var game = await _gameService.GetAsync(comment.EntityId);
         if (game.IsBlacklisted(_identityProvider.Current.User.UserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
         }
 
-        await _likeOperations.UnlikeAsync(comment);
+        return comment;
     }
 }

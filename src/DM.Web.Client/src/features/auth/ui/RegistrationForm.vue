@@ -378,7 +378,7 @@ const handleRecovery = () => {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 a
   font-weight: bold
@@ -397,12 +397,15 @@ a
   &
     font-weight: normal
 
+// Info section — the site's bordered notice. Square, because rounding belongs
+// to controls and this is a paragraph; and in the ordinary ink, because what
+// stands here is a rule the reader is required to follow ("создание
+// дополнительных аккаунтов запрещено") and $text-muted says "skip me".
 .registration-info
   margin-bottom: $medium
   padding: $small $medium
   border: 1px solid $border
-  border-radius: $border-radius
-  color: $text-muted
+  color: $text
   font-size: $secondary-font-size
   line-height: 1.5
 

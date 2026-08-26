@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -37,22 +37,31 @@ public class BrokerObservabilityShould
     /// A trace does not end at the broker.
     /// </summary>
     /// <remarks>
-    /// The context travels in the message headers, and the one line that makes a
-    /// consumer continue the trace rather than start a new one is the registration
-    /// of the client's instrumentation. Removed, nothing fails: every worker keeps
-    /// producing traces, and each of them is a root with no parent — so the request
-    /// that caused the work and the work itself stop being one story, which is
-    /// visible only to somebody already looking for the missing half.
+    /// The context travels in the message headers, and the lines that make a
+    /// consumer continue the trace rather than start a new one are the
+    /// subscriptions to the client's two activity sources: the publisher side
+    /// injects the context and the subscriber side parents the deliver span to
+    /// it. Removed, nothing fails: every worker keeps producing traces, and each
+    /// of them is a root with no parent — so the request that caused the work
+    /// and the work itself stop being one story, which is visible only to
+    /// somebody already looking for the missing half.
     ///
     /// Asserted on the composition rather than by running a message through: the
     /// test host removes the one registered consumer, and a listener of the test's
     /// own would go on reporting spans after the line was gone.
     /// </remarks>
     [Fact]
-    public void KeepTheTraceOfARequestAcrossTheBroker() =>
-        Read(Logging).Should().Contain("AddJamqClientInstrumentation",
-            "without it a consumer opens a root span, and the request that sent the message " +
-            "is a separate trace nobody can reach from it");
+    public void KeepTheTraceOfARequestAcrossTheBroker()
+    {
+        var logging = Read(Logging);
+
+        logging.Should().Contain("RabbitMQ.Client.Publisher",
+            "without the publisher source no context is opened around a publish, and the " +
+            "consumer has nothing to continue");
+        logging.Should().Contain("RabbitMQ.Client.Subscriber",
+            "without the subscriber source a consumer opens a root span, and the request " +
+            "that sent the message is a separate trace nobody can reach from it");
+    }
 
     /// <summary>Port the metrics plugin answers on.</summary>
     private const string MetricsPort = "15692";

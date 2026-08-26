@@ -9,9 +9,9 @@ using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence.Repositories.Blog;
 using DM.Infrastructure.Persistence.Repositories.Forum;
 using DM.Infrastructure.Persistence.Repositories.Game;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using Moq;
+using NSubstitute;
 using Xunit;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
@@ -21,7 +21,7 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 /// Editing a comment leaves a trace, in all four discussions.
 /// </summary>
 /// <remarks>
-/// A comment row keeps no modification stamp of its own: CommentMappingProfile
+/// A comment row keeps no modification stamp of its own: CommentProjections
 /// derives ModifiedUtc from the newest entry of the edit history, and the client
 /// draws its "edited" mark from that field. All four repositories saved the new
 /// text and wrote no entry, each under the same comment saying tracking was
@@ -50,6 +50,18 @@ public class CommentEditRecordShould
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
 
+        // The author row exists so the projection the update answers with can
+        // join it - a comment's author is a required navigation.
+        context.Users.Add(new Entities.Account.User
+        {
+            UserId = AuthorId,
+            Username = "author",
+            Email = "author@test.local",
+            Salt = "",
+            PasswordHash = "",
+            CreatedUtc = Created,
+        });
+
         context.Comments.Add(new DbComment
         {
             CommentId = CommentId,
@@ -65,27 +77,17 @@ public class CommentEditRecordShould
 
     private static IGuidFactory Guids()
     {
-        var factory = new Mock<IGuidFactory>();
-        factory.Setup(f => f.Create()).Returns(EditId);
-        return factory.Object;
+        var factory = Substitute.For<IGuidFactory>();
+        factory.Create().Returns(EditId);
+        return factory;
     }
 
     /// <summary>
-    /// The update returns a projected comment, which needs a mapper the in-memory
-    /// provider cannot serve here. The write itself has already happened by then,
-    /// so the projection is allowed to throw and the trace is read from the tracker.
+    /// The update answers with a projected comment; with the author row seeded
+    /// the compile-time projection runs fine on the in-memory provider, so the
+    /// write is simply awaited and the trace is read from the tracker.
     /// </summary>
-    private static async Task WriteAsync(Func<Task> update)
-    {
-        try
-        {
-            await update();
-        }
-        catch (NullReferenceException)
-        {
-            // The mapper is null: the projection, not the write.
-        }
-    }
+    private static Task WriteAsync(Func<Task> update) => update();
 
     [Theory]
     [InlineData("topic")]
@@ -99,7 +101,7 @@ public class CommentEditRecordShould
 
         await WriteAsync(() => discussion switch
         {
-            "topic" => new TopicCommentRepository(context, null!, guids, null!)
+            "topic" => new TopicCommentRepository(context, guids, null!)
                 .Update(new UpdateTopicCommentEntity
                 {
                     CommentId = CommentId,
@@ -107,7 +109,7 @@ public class CommentEditRecordShould
                     LastUpdateUtc = Edited,
                     EditorUserId = EditorId,
                 }),
-            "blog" => new BlogCommentRepository(context, null!, null!, guids)
+            "blog" => new BlogCommentRepository(context, null!, guids)
                 .Update(new UpdateBlogCommentEntity
                 {
                     CommentId = CommentId,
@@ -115,7 +117,7 @@ public class CommentEditRecordShould
                     LastUpdateUtc = Edited,
                     EditorUserId = EditorId,
                 }),
-            "publication" => new PublicationCommentRepository(context, null!, null!, guids)
+            "publication" => new PublicationCommentRepository(context, null!, guids)
                 .Update(new UpdatePublicationCommentEntity
                 {
                     CommentId = CommentId,
@@ -123,7 +125,7 @@ public class CommentEditRecordShould
                     LastUpdateUtc = Edited,
                     EditorUserId = EditorId,
                 }),
-            _ => new GameCommentRepository(context, null!, guids)
+            _ => new GameCommentRepository(context, guids)
                 .Update(new UpdateGameCommentEntity
                 {
                     CommentId = CommentId,
@@ -150,7 +152,7 @@ public class CommentEditRecordShould
     {
         using var context = Context();
 
-        await WriteAsync(() => new BlogCommentRepository(context, null!, null!, Guids())
+        await WriteAsync(() => new BlogCommentRepository(context, null!, Guids())
             .Update(new UpdateBlogCommentEntity
             {
                 CommentId = CommentId,

@@ -1,33 +1,56 @@
 using System;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using MongoDB.Bson.Serialization.Attributes;
+using System.ComponentModel.DataAnnotations.Schema;
 using DM.Domain.Core.Enums;
 
 namespace DM.Infrastructure.Persistence.Entities.Account.Settings;
 
 /// <summary>
-/// DAL model for user settings
+/// DAL model for user settings: one row per user, keyed by the user.
 /// </summary>
-[MongoCollectionName("UserSettings")]
-[BsonIgnoreExtraElements]
+/// <remarks>
+/// The paging numbers are NOT NULL columns rather than a nested document on
+/// purpose: the store used to hold a settings document with <c>Paging: null</c>,
+/// and every request from that user answered 500 until the document was
+/// repaired. Columns make that state unrepresentable — a row either exists whole
+/// or does not exist at all, and absence means <c>UserSettings.Default</c>.
+/// </remarks>
+[Table("UserSettings")]
 public class UserSettings
 {
     /// <summary>
-    /// User identifier. Not the document's _id — the class declares no Id member,
-    /// so the server generates _id, and one settings document per user is held by
-    /// the unique index IX_UserSettings_UserId, not by this property.
+    /// User identifier and primary key: one settings row per user.
     /// </summary>
     public Guid UserId { get; set; }
-
-    /// <summary>
-    /// Paging settings
-    /// </summary>
-    public PagingSettings Paging { get; set; } = null!;
 
     /// <summary>
     /// Website color theme
     /// </summary>
     public Theme Theme { get; set; }
+
+    /// <summary>
+    /// Number of detached topics on a forum page
+    /// </summary>
+    public int TopicsPerPage { get; set; }
+
+    /// <summary>
+    /// Number of comments on a game or a topic page
+    /// </summary>
+    public int CommentsPerPage { get; set; }
+
+    /// <summary>
+    /// Number of posts on a game room page
+    /// </summary>
+    public int PostsPerPage { get; set; }
+
+    /// <summary>
+    /// Number of private messages and conversations on dialogue page
+    /// </summary>
+    public int MessagesPerPage { get; set; }
+
+    /// <summary>
+    /// Number of other entities on a single page
+    /// </summary>
+    public int EntitiesPerPage { get; set; }
 
     /// <summary>
     /// Discord notification channel preferences. Null = channel not connected.
@@ -47,32 +70,21 @@ public class UserSettings
     public NotificationChannelPreference? EmailPreferences { get; set; }
 
     /// <summary>
-    /// A settings document for a user who has none yet, with a complete
-    /// <see cref="Paging"/> sub-document.
+    /// A settings row for a user who has none yet.
     /// </summary>
     /// <remarks>
-    /// The one place that answers "what does a fresh settings document look
-    /// like". Three callers used to build it inline with three different
-    /// answers, and one of them left Paging unset: the store has no schema, so
-    /// the document persisted with <c>Paging: null</c>, after which every
-    /// request from that user answered 500 (a null dereference during
-    /// authentication) and every preferences update answered 500 as well —
-    /// Mongo cannot create a field inside a null element.
-    ///
+    /// The one place that answers "what does a fresh settings row look like".
     /// The numbers mirror <see cref="DM.Domain.Core.Identity.UserSettings.Default"/>,
-    /// the values a caller without a document already sees.
+    /// the values a caller without a row already sees.
     /// </remarks>
     public static UserSettings CreateDefault(Guid userId) => new()
     {
         UserId = userId,
         Theme = Theme.Light,
-        Paging = new PagingSettings
-        {
-            TopicsPerPage = 10,
-            CommentsPerPage = 10,
-            PostsPerPage = 10,
-            MessagesPerPage = 10,
-            EntitiesPerPage = 10
-        }
+        TopicsPerPage = 10,
+        CommentsPerPage = 10,
+        PostsPerPage = 10,
+        MessagesPerPage = 10,
+        EntitiesPerPage = 10
     };
 }

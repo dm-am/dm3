@@ -4,7 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -32,7 +32,19 @@ public class MailSubjectShould
 {
     private const string Prefix = "Dungeon Master: ";
     private const string SiteName = "Dungeon Master";
-    private const string LetterType = "EmailLetter";
+
+    /// <summary>
+    /// What marks a source as one that sends a letter.
+    /// </summary>
+    /// <remarks>
+    /// Constructing the letter is one way; deriving from the account base that
+    /// constructs it for you is the other. The five account senders stopped naming
+    /// EmailLetter when the shared half of them moved into
+    /// <c>AccountMailSender</c>, and this rule went quiet over six of the nine
+    /// subjects it exists to read - caught only because it counts what it matched
+    /// before it judges it. Both spellings are read now.
+    /// </remarks>
+    private static readonly string[] LetterTypes = ["EmailLetter", "AccountMailSender"];
 
     /// <summary>
     /// A subject written as a literal: assigned to the Subject property of a
@@ -50,7 +62,7 @@ public class MailSubjectShould
     {
         var subjects = Subjects();
 
-        subjects.Should().HaveCountGreaterOrEqualTo(5,
+        subjects.Should().HaveCountGreaterThanOrEqualTo(5,
             "a rule that matches nothing passes: the account senders alone write more subjects than that");
 
         var offenders = subjects
@@ -111,10 +123,11 @@ public class MailSubjectShould
         var root = RepositoryRoot;
         var subjects = new List<MailSubject>();
 
-        foreach (var source in SourceFiles(Path.Combine(root, "src")))
+        foreach (var source in RepositoryFiles.CsharpFiles(Path.Combine(root, "src"), SkippedDirectories))
         {
             var lines = File.ReadAllLines(source);
-            if (!lines.Any(line => line.Contains(LetterType, StringComparison.Ordinal)))
+            if (!lines.Any(line => LetterTypes.Any(type =>
+                    line.Contains(type, StringComparison.Ordinal))))
             {
                 continue;
             }
@@ -151,26 +164,6 @@ public class MailSubjectShould
     /// Enumerates the C# sources under a directory, skipping build output and the
     /// client package tree: they hold no senders and are large enough to matter.
     /// </summary>
-    private static IEnumerable<string> SourceFiles(string directory)
-    {
-        foreach (var file in Directory.EnumerateFiles(directory, "*.cs"))
-        {
-            yield return file;
-        }
-
-        foreach (var nested in Directory.EnumerateDirectories(directory))
-        {
-            if (SkippedDirectories.Contains(Path.GetFileName(nested)))
-            {
-                continue;
-            }
-
-            foreach (var file in SourceFiles(nested))
-            {
-                yield return file;
-            }
-        }
-    }
 
     private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 

@@ -97,7 +97,7 @@ run_seed() {
     echo -e "\033[36mSeeding test data...\033[0m"
 
     # The seeder is a console tool, not an HTTP endpoint: it writes straight to
-    # Postgres, Mongo and the object storage, so it must not be reachable over
+    # Postgres and the object storage, so it must not be reachable over
     # the network. It runs under the "tools" compose profile, which never starts
     # with a plain "docker compose up". The API still has to be up: seeding
     # itself does not need it, but the restart at the end of this function does.

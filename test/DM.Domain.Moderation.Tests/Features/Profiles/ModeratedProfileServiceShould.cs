@@ -10,18 +10,18 @@ using DM.Domain.Core.Users;
 using DM.Domain.Moderation.Authorization;
 using DM.Domain.Moderation.Features.Profiles;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Profiles;
 
 public class ModeratedProfileServiceShould : UnitTestBase
 {
-    private readonly Mock<IUserReadRepository> _userRepository;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<ICache> _cache;
-    private readonly Mock<IModeratedProfileRepository> _moderatedProfileRepository;
+    private readonly IUserReadRepository _userRepository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly ICache _cache;
+    private readonly IModeratedProfileRepository _moderatedProfileRepository;
     private readonly ModeratedProfileService _service;
     private readonly Guid _userId = Guid.NewGuid();
 
@@ -33,21 +33,20 @@ public class ModeratedProfileServiceShould : UnitTestBase
         _moderatedProfileRepository = Mock<IModeratedProfileRepository>();
 
         _service = new ModeratedProfileService(
-            _userRepository.Object,
-            _intentionManager.Object,
-            _cache.Object,
-            _moderatedProfileRepository.Object);
+            _userRepository,
+            _intentionManager,
+            _cache,
+            _moderatedProfileRepository);
     }
 
     [Fact]
     public async Task GetProfileFromCache()
     {
         var expectedProfile = new UserDetails { UserId = _userId, Username = "TestUser" };
-        _cache.Setup(c => c.GetOrCreateAsync(
+        _cache.GetOrCreateAsync(
                 "user_details_testuser",
-                It.IsAny<Func<Task<UserDetails?>>>(),
-                It.IsAny<TimeSpan>()))
-            .ReturnsAsync(expectedProfile);
+                Arg.Any<Func<Task<UserDetails?>>>(),
+                Arg.Any<TimeSpan>()).Returns(expectedProfile);
 
         var result = await _service.GetProfile("TestUser");
 
@@ -57,11 +56,10 @@ public class ModeratedProfileServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenProfileNotFound()
     {
-        _cache.Setup(c => c.GetOrCreateAsync(
+        _cache.GetOrCreateAsync(
                 "user_details_testuser",
-                It.IsAny<Func<Task<UserDetails?>>>(),
-                It.IsAny<TimeSpan>()))
-            .ReturnsAsync((UserDetails?)null);
+                Arg.Any<Func<Task<UserDetails?>>>(),
+                Arg.Any<TimeSpan>()).Returns((UserDetails?)null);
 
         var act = () => _service.GetProfile("TestUser");
 
@@ -73,54 +71,52 @@ public class ModeratedProfileServiceShould : UnitTestBase
     public async Task AuthorizeModerateUserProfileWhenModeratingProfile()
     {
         var user = new GeneralUser { UserId = _userId, Username = "TestUser" };
-        _userRepository.Setup(r => r.GetUserAsync("TestUser")).ReturnsAsync(user);
-        _moderatedProfileRepository.Setup(r => r.UpdateUserInfo("TestUser", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _userRepository.GetUserAsync("TestUser").Returns(user);
+        _moderatedProfileRepository.UpdateUserInfo("TestUser", Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         var updatedDetails = new UserDetails { UserId = _userId, Username = "TestUser" };
-        _cache.Setup(c => c.GetOrCreateAsync(
+        _cache.GetOrCreateAsync(
                 "user_details_testuser",
-                It.IsAny<Func<Task<UserDetails?>>>(),
-                It.IsAny<TimeSpan>()))
-            .ReturnsAsync(updatedDetails);
+                Arg.Any<Func<Task<UserDetails?>>>(),
+                Arg.Any<TimeSpan>()).Returns(updatedDetails);
 
         await _service.ModerateProfile("TestUser", "Updated info");
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(ModerationIntention.ModerateUserProfile), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(ModerationIntention.ModerateUserProfile);
     }
 
     [Fact]
     public async Task InvalidateCacheAfterModeratingProfile()
     {
         var user = new GeneralUser { UserId = _userId, Username = "TestUser" };
-        _userRepository.Setup(r => r.GetUserAsync("TestUser")).ReturnsAsync(user);
-        _moderatedProfileRepository.Setup(r => r.UpdateUserInfo("TestUser", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _userRepository.GetUserAsync("TestUser").Returns(user);
+        _moderatedProfileRepository.UpdateUserInfo("TestUser", Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         var updatedDetails = new UserDetails { UserId = _userId, Username = "TestUser" };
-        _cache.Setup(c => c.GetOrCreateAsync(
+        _cache.GetOrCreateAsync(
                 "user_details_testuser",
-                It.IsAny<Func<Task<UserDetails?>>>(),
-                It.IsAny<TimeSpan>()))
-            .ReturnsAsync(updatedDetails);
+                Arg.Any<Func<Task<UserDetails?>>>(),
+                Arg.Any<TimeSpan>()).Returns(updatedDetails);
 
         await _service.ModerateProfile("TestUser", "Updated info");
 
-        _cache.Verify(c => c.InvalidateAsync("user_details_testuser"), Times.Once);
+        await _cache.Received(1).InvalidateAsync("user_details_testuser");
     }
 
     [Fact]
     public async Task AuthorizeSetUserRoleWhenSettingRole()
     {
-        _userRepository.Setup(r => r.GetUserAsync("TestUser"))
-            .ReturnsAsync(new GeneralUser { UserId = _userId, Username = "TestUser", Role = UserRole.RegularUser });
-        _moderatedProfileRepository.Setup(r => r.SetUserRole(It.IsAny<string>(), It.IsAny<UserRole>(), It.IsAny<CancellationToken>()))
+        _userRepository.GetUserAsync("TestUser")
+            .Returns(new GeneralUser { UserId = _userId, Username = "TestUser", Role = UserRole.RegularUser });
+        _moderatedProfileRepository.SetUserRole(Arg.Any<string>(), Arg.Any<UserRole>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
-        _cache.Setup(c => c.InvalidateAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+        _cache.InvalidateAsync(Arg.Any<string>()).Returns(Task.CompletedTask);
 
         await _service.SetUserRole("TestUser", UserRole.Moderator);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(ModerationIntention.SetUserRole), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(ModerationIntention.SetUserRole);
     }
 
     [Fact]
@@ -145,19 +141,19 @@ public class ModeratedProfileServiceShould : UnitTestBase
     [Fact]
     public async Task InvalidateEveryListingASetRoleMovesTheUserBetween()
     {
-        _userRepository.Setup(r => r.GetUserAsync("TestUser"))
-            .ReturnsAsync(new GeneralUser { UserId = _userId, Username = "TestUser", Role = UserRole.RegularUser });
-        _moderatedProfileRepository.Setup(r => r.SetUserRole(It.IsAny<string>(), It.IsAny<UserRole>(), It.IsAny<CancellationToken>()))
+        _userRepository.GetUserAsync("TestUser")
+            .Returns(new GeneralUser { UserId = _userId, Username = "TestUser", Role = UserRole.RegularUser });
+        _moderatedProfileRepository.SetUserRole(Arg.Any<string>(), Arg.Any<UserRole>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         await _service.SetUserRole("TestUser", UserRole.Moderator);
 
-        _cache.Verify(c => c.InvalidateAsync("user_details_testuser"), Times.Once);
-        _cache.Verify(c => c.InvalidateAsync($"user_details_{_userId}"), Times.Once);
-        _cache.Verify(c => c.InvalidateAsync("users_by_role_RegularUser"), Times.Once,
-            "the role being left keeps listing the person until the hour is out");
-        _cache.Verify(c => c.InvalidateAsync("users_by_role_Moderator"), Times.Once,
-            "and the role being taken lists one name short for the same hour");
+        await _cache.Received(1).InvalidateAsync("user_details_testuser");
+        await _cache.Received(1).InvalidateAsync($"user_details_{_userId}");
+        // The role being left keeps listing the person until the hour is out, and the
+        // role being taken lists one name short for the same hour.
+        await _cache.Received(1).InvalidateAsync("users_by_role_RegularUser");
+        await _cache.Received(1).InvalidateAsync("users_by_role_Moderator");
     }
 
     #region Moderation watch
@@ -180,8 +176,7 @@ public class ModeratedProfileServiceShould : UnitTestBase
 
         await _service.SetModerationWatch("TestUser", underWatch);
 
-        _moderatedProfileRepository.Verify(
-            r => r.SetModerationWatch("TestUser", underWatch, It.IsAny<CancellationToken>()), Times.Once);
+        await _moderatedProfileRepository.Received(1).SetModerationWatch("TestUser", underWatch, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -191,8 +186,7 @@ public class ModeratedProfileServiceShould : UnitTestBase
 
         await _service.SetModerationWatch("TestUser", true);
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(ModerationIntention.SetModerationWatch), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(ModerationIntention.SetModerationWatch);
     }
 
     /// <summary>
@@ -209,36 +203,32 @@ public class ModeratedProfileServiceShould : UnitTestBase
 
         await _service.SetModerationWatch("TestUser", true);
 
-        _cache.Verify(c => c.InvalidateAsync("user_details_testuser"), Times.Once);
-        _cache.Verify(c => c.InvalidateAsync($"user_details_{_userId}"), Times.Once);
+        await _cache.Received(1).InvalidateAsync("user_details_testuser");
+        await _cache.Received(1).InvalidateAsync($"user_details_{_userId}");
     }
 
     [Fact]
     public async Task RefuseToMoveTheWatchOfSomebodyWhoIsNotThere()
     {
-        _userRepository.Setup(r => r.GetUserAsync("TestUser")).ReturnsAsync((GeneralUser?)null);
+        _userRepository.GetUserAsync("TestUser").Returns((GeneralUser?)null);
 
         var act = () => _service.SetModerationWatch("TestUser", true);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message.Contains("не найден"));
-        _moderatedProfileRepository.Verify(
-            r => r.SetModerationWatch(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _moderatedProfileRepository.DidNotReceive().SetModerationWatch(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     private void SetupExistingUser()
     {
-        _userRepository.Setup(r => r.GetUserAsync("TestUser"))
-            .ReturnsAsync(new GeneralUser { UserId = _userId, Username = "TestUser" });
+        _userRepository.GetUserAsync("TestUser").Returns(new GeneralUser { UserId = _userId, Username = "TestUser" });
         _moderatedProfileRepository
-            .Setup(r => r.SetModerationWatch(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .SetModerationWatch(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
-        _cache.Setup(c => c.GetOrCreateAsync(
+        _cache.GetOrCreateAsync(
                 "user_details_testuser",
-                It.IsAny<Func<Task<UserDetails?>>>(),
-                It.IsAny<TimeSpan>()))
-            .ReturnsAsync(new UserDetails { UserId = _userId, Username = "TestUser" });
+                Arg.Any<Func<Task<UserDetails?>>>(),
+                Arg.Any<TimeSpan>()).Returns(new UserDetails { UserId = _userId, Username = "TestUser" });
     }
 
     #endregion
@@ -246,15 +236,13 @@ public class ModeratedProfileServiceShould : UnitTestBase
     [Fact]
     public async Task RefuseToSetTheRoleOfSomebodyWhoIsNotThere()
     {
-        _userRepository.Setup(r => r.GetUserAsync("TestUser")).ReturnsAsync((GeneralUser?)null);
+        _userRepository.GetUserAsync("TestUser").Returns((GeneralUser?)null);
 
         var act = () => _service.SetUserRole("TestUser", UserRole.Moderator);
 
         // The repository throws on an unknown name, which the pipeline turns into a
         // 500 on an endpoint whose contract documents a 404.
         await act.Should().ThrowAsync<HttpException>();
-        _moderatedProfileRepository.Verify(
-            r => r.SetUserRole(It.IsAny<string>(), It.IsAny<UserRole>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _moderatedProfileRepository.DidNotReceive().SetUserRole(Arg.Any<string>(), Arg.Any<UserRole>(), Arg.Any<CancellationToken>());
     }
 }

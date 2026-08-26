@@ -3,7 +3,7 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Characters;

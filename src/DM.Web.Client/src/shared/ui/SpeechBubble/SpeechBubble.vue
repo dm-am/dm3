@@ -257,8 +257,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/Animations"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Animations" as *
 
 .bubble-card
   margin: 0

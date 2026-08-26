@@ -72,7 +72,9 @@ internal class PostPendencyService : IPostPendencyService
                 $"Ожидание хода для {createPostPendency.WaitingForUsername} уже есть");
         }
 
-        if (room.Accesses.All(a => a.Character.Author.UserId != waitingForUserId))
+        // An NPC access carries no author, and nobody can be waited on through
+        // one: a missing author simply never matches the named user.
+        if (room.Accesses.All(a => a.Character?.Author?.UserId != waitingForUserId))
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {

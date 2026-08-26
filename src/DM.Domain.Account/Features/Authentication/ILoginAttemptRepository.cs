@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 namespace DM.Domain.Account.Features.Authentication;
 
 /// <summary>
-/// Repository for login attempt tracking (MongoDB-backed for cluster support)
+/// Repository for login attempt tracking
 /// </summary>
 public interface ILoginAttemptRepository
 {

@@ -116,11 +116,11 @@ export default new (class UserApi {
   }
 
   public getUser(username: Username) {
-    return Api.get<User>(`users/${username}`);
+    return Api.get<Envelope<User>>(`users/${username}`);
   }
 
   public getUserProfile(username: Username) {
-    return Api.get<UserProfile>(`users/${username}/profile`);
+    return Api.get<Envelope<UserProfile>>(`users/${username}/profile`);
   }
 
   /** Get personal note about a user (viewer's own note) */

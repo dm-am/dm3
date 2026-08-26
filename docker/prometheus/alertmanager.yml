@@ -18,18 +18,19 @@ global:
 
   # The transport this deployment already has. Whatever host MAIL_HOST names is
   # where registration mail goes, so alerts arrive wherever the mail of this
-  # deployment arrives: MailHog on a stand, the relay on a server. A channel of
+  # deployment arrives: Mailpit on a stand, the relay on a server. A channel of
   # its own would need a token that cannot live in the repository, and a receiver
   # that only works after somebody pastes a secret is how every rule in
   # alerts.yml spent its life undelivered.
   smtp_smarthost: '${ALERT_SMTP_SMARTHOST}'
   smtp_from: '${ALERT_EMAIL_FROM}'
   # An empty username means no authentication attempt at all, which is what both
-  # MailHog and an internal relay want. A relay that asks for credentials gets
+  # Mailpit and an internal relay want. A relay that asks for credentials gets
   # them from the environment, never from here.
   smtp_auth_username: '${ALERT_SMTP_USERNAME}'
   smtp_auth_password: '${ALERT_SMTP_PASSWORD}'
-  # Alertmanager requires STARTTLS by default and MailHog does not offer it, so
+  # Alertmanager requires STARTTLS by default and Mailpit offers it only when it
+  # is given a certificate and a key, which the stand does not have, so
   # the default stand would fail every notification with the rules green and the
   # delivery log the only place saying so.
   smtp_require_tls: ${ALERT_SMTP_REQUIRE_TLS}

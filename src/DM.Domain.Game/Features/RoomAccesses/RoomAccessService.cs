@@ -109,19 +109,7 @@ internal class RoomAccessService : IRoomAccessService
         await _updateValidator.ValidateAndThrowAsync(updateRoomAccess);
 
         var currentUserId = _identityProvider.Current.User.UserId;
-        var oldAccess = await _repository.GetAccess(updateRoomAccess.AccessId, currentUserId);
-        if (oldAccess == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomAccessNotFound);
-        }
-
-        var room = await _roomRepository.GetForUpdate(oldAccess.RoomId, currentUserId);
-        if (room == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
-        }
-
-        _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
+        var (oldAccess, room) = await EditableAccess(updateRoomAccess.AccessId, currentUserId);
 
         var updateEntity = new UpdateRoomAccessEntity
         {
@@ -135,6 +123,34 @@ internal class RoomAccessService : IRoomAccessService
         return result;
     }
 
+    /// <summary>
+    /// The grant and the room it opens, with the caller's right to change both
+    /// already checked.
+    /// </summary>
+    /// <remarks>
+    /// Two reads and one gate, in this order: a grant nobody can see is a 404
+    /// before the room behind it is ever fetched, and the right to edit belongs
+    /// to the game rather than to the room or the grant.
+    /// </remarks>
+    private async Task<(RoomAccess Access, RoomToUpdate Room)> EditableAccess(
+        Guid accessId, Guid currentUserId)
+    {
+        var access = await _repository.GetAccess(accessId, currentUserId);
+        if (access == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomAccessNotFound);
+        }
+
+        var room = await _roomRepository.GetForUpdate(access.RoomId, currentUserId);
+        if (room == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
+        }
+
+        _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
+        return (access, room);
+    }
+
     #endregion
 
     #region Delete
@@ -142,19 +158,7 @@ internal class RoomAccessService : IRoomAccessService
     public async Task DeleteAsync(Guid accessId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var oldAccess = await _repository.GetAccess(accessId, currentUserId);
-        if (oldAccess == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomAccessNotFound);
-        }
-
-        var room = await _roomRepository.GetForUpdate(oldAccess.RoomId, currentUserId);
-        if (room == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
-        }
-
-        _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
+        var (_, room) = await EditableAccess(accessId, currentUserId);
 
         await _repository.Delete(accessId);
         await _producer.SendAsync(EventType.ChangedRoom, room.Id);

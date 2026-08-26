@@ -1,13 +1,8 @@
 using System;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Account.Features.Recovery;
 using DM.Domain.Account.Features.PasswordChange;
-using DM.Domain.Account.Features.Availability;
 using DM.Web.API.Features.Community.Users;
-using DM.Web.API.Features.Account.Availability;
-using ServiceEmailReason = DM.Domain.Account.Features.Availability.EmailUnavailableReason;
-using ApiEmailUnavailableReason = DM.Web.API.Features.Account.Availability.EmailUnavailableReason;
 
 namespace DM.Web.API.Features.Account.Recovery;
 
@@ -16,18 +11,15 @@ internal class RecoveryApiService : IRecoveryApiService
 {
     private readonly IRecoveryService _recoveryService;
     private readonly IPasswordChangeService _passwordChangeService;
-    private readonly IAvailabilityService _availabilityService;
-    private readonly IMapper _mapper;
+    private readonly UserMapper _mapper;
 
     public RecoveryApiService(
         IRecoveryService recoveryService,
         IPasswordChangeService passwordChangeService,
-        IAvailabilityService availabilityService,
-        IMapper mapper)
+        UserMapper mapper)
     {
         _recoveryService = recoveryService;
         _passwordChangeService = passwordChangeService;
-        _availabilityService = availabilityService;
         _mapper = mapper;
     }
 
@@ -36,45 +28,17 @@ internal class RecoveryApiService : IRecoveryApiService
     {
         var result = await _recoveryService.Recover(request.Email);
 
-        return result switch
+        return new RecoveryResponse
         {
-            RecoveryResult.PasswordReset => new RecoveryResponse
+            Status = result switch
             {
-                Status = RecoveryStatus.PasswordResetSent,
-                Email = request.Email
+                RecoveryResult.PasswordReset => RecoveryStatus.PasswordResetSent,
+                RecoveryResult.ActivationResent => RecoveryStatus.ActivationResent,
+                // NotFound is also what an unknown enum value answers with:
+                // recovery never tells the caller whether the address exists.
+                _ => RecoveryStatus.NotFound
             },
-            RecoveryResult.ActivationResent => new RecoveryResponse
-            {
-                Status = RecoveryStatus.ActivationResent,
-                Email = request.Email
-            },
-            RecoveryResult.NotFound => new RecoveryResponse
-            {
-                Status = RecoveryStatus.NotFound,
-                Email = request.Email
-            },
-            _ => new RecoveryResponse
-            {
-                Status = RecoveryStatus.NotFound,
-                Email = request.Email
-            }
-        };
-    }
-
-    /// <inheritdoc />
-    public async Task<EmailAvailabilityResponse> CheckEmailAvailability(string email)
-    {
-        var result = await _availabilityService.CheckEmailAvailability(email);
-
-        return new EmailAvailabilityResponse
-        {
-            IsAvailable = result.IsAvailable,
-            Reason = result.Reason switch
-            {
-                ServiceEmailReason.Taken => ApiEmailUnavailableReason.Taken,
-                ServiceEmailReason.PendingActivation => ApiEmailUnavailableReason.PendingActivation,
-                null => null
-            }
+            Email = request.Email
         };
     }
 
@@ -98,6 +62,6 @@ internal class RecoveryApiService : IRecoveryApiService
         };
 
         var user = await _passwordChangeService.Change(passwordChange);
-        return _mapper.Map<User>(user);
+        return _mapper.ToUser(user);
     }
 }

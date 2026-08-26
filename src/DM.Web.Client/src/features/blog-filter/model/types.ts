@@ -44,24 +44,13 @@ export interface BlogsFilterState {
 }
 
 /**
- * API search parameters for blogs
+ * API search parameters for blogs.
+ *
+ * The store's shape, taken from the entity that owns the query rather than
+ * restated here: the two copies differed only in how strictly they typed the
+ * status, and the strict one is what the filter passes.
  */
-export interface BlogsSearchParams {
-  search?: string;
-  status?: BlogStatus;
-  /** Hosts filter - author (owner) OR assistant (OR logic) */
-  hostUsernames?: string[];
-  createdFromUtc?: string;
-  createdToUtc?: string;
-  activatedFromUtc?: string;
-  activatedToUtc?: string;
-  closedFromUtc?: string;
-  closedToUtc?: string;
-  sortBy?: string;
-  sortOrder?: string;
-  number?: number;
-  size?: number;
-}
+export type { BlogsSearchParams } from "@/entities/blog";
 
 /**
  * Default filter state

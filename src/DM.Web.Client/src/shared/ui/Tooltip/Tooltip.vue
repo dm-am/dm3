@@ -349,7 +349,7 @@ const arrowStyle = computed(() => {
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/ZIndex"
+@use "@/assets/styles/ZIndex" as *
 
 .tooltip-trigger
   // No styles - behaves as inline text

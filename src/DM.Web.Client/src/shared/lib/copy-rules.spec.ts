@@ -65,11 +65,9 @@ const E_WITH_DOTS = ["\u0451", "\u0401"];
 /** U+00AB and U+00BB, the quotes CODE_STYLE reserves for one place. */
 const GUILLEMETS = ["\u00AB", "\u00BB"];
 
-/** That place, and the one file where the pair is not a quote at all. */
+/** That place, and only it. */
 const GUILLEMETS_ALLOWED: Record<string, string> = {
   "pages/about/AboutPage.vue": "the motto, the exception the convention names",
-  "pages/dev/StyleVariantsPage.vue":
-    "prev/next arrows of a calendar in a development-only mockup",
 };
 
 /**
@@ -455,11 +453,11 @@ function emDashCount(file: string, raw: string): number {
  */
 const EM_DASH_BUDGET: { file: string; count: number }[] = [
   // A dictionary of BBCode tags: lemma, separator, gloss.
-  { file: "shared/ui/BBCodeEditor/BBCodeEditor.vue", count: 19 },
-  // Filter chips: the dash sits between the two ends of a range.
-  { file: "features/user-filter/ui/UsersFilter.vue", count: 5 },
-  { file: "features/game-filter/ui/GamesFilter.vue", count: 4 },
-  { file: "features/blog-filter/ui/BlogsFilter.vue", count: 3 },
+  { file: "shared/ui/BBCodeEditor/BBCodeEditor.vue", count: 18 },
+  // Filter chips: the dash sits between the two ends of a range. The date
+  // ranges all draw through formatDateRangeForDisplay, so the separator is
+  // spelled once there; what is left in UsersFilter are the numeric ranges.
+  { file: "features/user-filter/ui/UsersFilter.vue", count: 4 },
   { file: "shared/lib/filters/utils.ts", count: 1 },
   // Credits: a role, the omitted copula, the name that holds it.
   { file: "widgets/footer/Footer.vue", count: 4 },
@@ -480,11 +478,11 @@ const EM_DASH_BUDGET: { file: string; count: number }[] = [
 ];
 
 /**
- * The sum of the budget: 19 glosses, 13 range separators, 4 credit lines,
+ * The sum of the budget: 18 glosses, 5 range separators, 4 credit lines,
  * 41 definitions and one invitation the owner released by name. Spelled out so the number stays a claim someone argued for
  * rather than whatever the tree happens to hold today.
  */
-const EM_DASH_TOTAL = 78;
+const EM_DASH_TOTAL = 69;
 
 /**
  * What draws as a colour pictograph rather than as text.

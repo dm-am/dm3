@@ -6,7 +6,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Shared.Users;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

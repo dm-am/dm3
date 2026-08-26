@@ -59,6 +59,7 @@ import ModerationIpInfo from "./moderation/ModerationIpInfo.vue";
 import ModerationLinkedProfiles from "./moderation/ModerationLinkedProfiles.vue";
 import ModerationNotes from "./moderation/ModerationNotes.vue";
 import ModerationViolations from "./moderation/ModerationViolations.vue";
+import ModerationTwoFactor from "./moderation/ModerationTwoFactor.vue";
 import ModerationWatch from "./moderation/ModerationWatch.vue";
 import { BlockUserDialog } from "@/features/block-user";
 import {
@@ -926,6 +927,10 @@ watch(usernameParam, async () => {
             :target-username="usernameParam"
             @updated="refreshModeration"
           />
+          <ModerationTwoFactor
+            :target-username="usernameParam"
+            @updated="refreshModeration"
+          />
         </div>
       </div>
     </section>
@@ -1073,8 +1078,8 @@ watch(usernameParam, async () => {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/_ZIndex"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/ZIndex" as *
 
 // gap=$small (8) is the base — for the H1→identity and identity→"Контакты" pairs,
 // which perceptually work better tighter. Between "Контакты" and Tabs,

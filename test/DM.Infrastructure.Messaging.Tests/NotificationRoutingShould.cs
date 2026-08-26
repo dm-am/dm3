@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using DM.Domain.Core.Enums;
-using FluentAssertions;
+using DM.Workers.NotificationDispatcher.Notifiers;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Messaging.Tests;
@@ -20,11 +20,10 @@ namespace DM.Infrastructure.Messaging.Tests;
 /// </summary>
 public class NotificationRoutingShould
 {
-    private static Type[] GeneratorTypes => Assembly
-        .Load("DM.Workers.NotificationDispatcher")
+    private static Type[] GeneratorTypes => typeof(INotificationGenerator).Assembly
         .GetTypes()
         .Where(t => t is { IsAbstract: false, IsClass: true })
-        .Where(t => t.GetInterfaces().Any(i => i.Name == "INotificationGenerator"))
+        .Where(typeof(INotificationGenerator).IsAssignableFrom)
         .ToArray();
 
     [Fact]
@@ -90,15 +89,8 @@ public class NotificationRoutingShould
     /// <summary>
     /// Asks a generator the question the dispatcher asks it at startup. The
     /// constructor is not run: it wants a database context, while CanResolve
-    /// reads constants only. The method is reached by name because the interface
-    /// is internal to the worker and this suite is not on its InternalsVisibleTo
-    /// list.
+    /// reads constants only.
     /// </summary>
-    private static bool Answers(Type generatorType, EventType eventType)
-    {
-        var canResolve = generatorType.GetMethod("CanResolve", new[] { typeof(EventType) });
-        canResolve.Should().NotBeNull($"{generatorType.Name} is asked this by the dispatcher");
-        var generator = RuntimeHelpers.GetUninitializedObject(generatorType);
-        return (bool)canResolve!.Invoke(generator, new object[] { eventType })!;
-    }
+    private static bool Answers(Type generatorType, EventType eventType) =>
+        ((INotificationGenerator)RuntimeHelpers.GetUninitializedObject(generatorType)).CanResolve(eventType);
 }

@@ -1,3 +1,4 @@
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Dto;
 using FluentValidation;
@@ -21,6 +22,15 @@ internal class UpdateUserValidator : AbstractValidator<UpdateUser>
         Unless(u => u.Location == null, () =>
             RuleFor(u => u.Location)
                 .MaximumLength(100).WithMessage(ValidationError.Long));
+
+        // The extended information is the one profile field written in BBCode,
+        // and it renders on the Profile surface, which declares neither [mod]
+        // nor [private]. The tag is not markup there, so it hides nothing and
+        // the line is shown on a page anyone may open.
+        Unless(u => u.Info == null, () =>
+            RuleFor(u => u.Info)
+                .Must(info => !PrivateBlockMarkup.ContainsPrivateMarkup(info))
+                .WithMessage(u => PrivateBlockMarkup.DescribeSurfaceRefusal(u.Info)));
 
         Unless(u => u.Contacts == null, () =>
         {

@@ -15,18 +15,18 @@ using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Subscriptions;
 
 public class GameSubscriptionServiceShould : UnitTestBase
 {
-    private readonly Mock<ISubscriptionRepository> _repository;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGameBlacklistRepository> _blacklistRepository;
+    private readonly ISubscriptionRepository _repository;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGameBlacklistRepository _blacklistRepository;
     private readonly GameSubscriptionService _service;
     private readonly Guid _currentUserId;
 
@@ -38,26 +38,26 @@ public class GameSubscriptionServiceShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         var identity = Identities.User(_currentUserId, "testuser");
-        _identityProvider.Setup(p => p.Current).Returns(identity);
+        _identityProvider.Current.Returns(identity);
 
         var guidFactory = Mock<IGuidFactory>();
-        guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        guidFactory.Create().Returns(Guid.NewGuid());
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _blacklistRepository = Mock<IGameBlacklistRepository>();
 
         _service = new GameSubscriptionService(
-            _repository.Object,
-            _userLookupService.Object,
-            _identityProvider.Object,
-            guidFactory.Object,
-            dateTimeProvider.Object,
+            _repository,
+            _userLookupService,
+            _identityProvider,
+            guidFactory,
+            dateTimeProvider,
             // The real guard over the mocked store: the rule under test is the
             // guard's, and the generic subscription endpoint asks the same object,
             // so a stub here would test a copy of it that no caller uses.
-            new GameSubscriptionGuard(_blacklistRepository.Object));
+            new GameSubscriptionGuard(_blacklistRepository));
     }
 
     [Fact]
@@ -65,8 +65,7 @@ public class GameSubscriptionServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         _blacklistRepository
-            .Setup(r => r.IsBlocked(gameId, _currentUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .IsBlocked(gameId, _currentUserId, Arg.Any<CancellationToken>()).Returns(true);
 
         var act = async () => await _service.SubscribeAsync(gameId);
 
@@ -76,9 +75,7 @@ public class GameSubscriptionServiceShould : UnitTestBase
         // first place, the owner has to remove them from the game first.
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        _repository.Verify(
-            r => r.CreateAsync(It.IsAny<CreateSubscription>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _repository.DidNotReceive().CreateAsync(Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -86,19 +83,19 @@ public class GameSubscriptionServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
 
-        _repository.Setup(r => r.FindAsync(_currentUserId, SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Subscription?)null);
-        _repository.Setup(r => r.CreateAsync(It.IsAny<CreateSubscription>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Subscription());
+        _repository.FindAsync(_currentUserId, SubscriptionTargetType.Game, gameId, Arg.Any<CancellationToken>())
+            .Returns((Subscription?)null);
+        _repository.CreateAsync(Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>())
+            .Returns(new Subscription());
 
         await _service.SubscribeAsync(gameId);
 
-        _repository.Verify(r => r.CreateAsync(
-            It.Is<CreateSubscription>(s =>
+        await _repository.Received(1).CreateAsync(
+            Arg.Is<CreateSubscription>(s =>
                 s.SubscriberId == _currentUserId &&
                 s.TargetType == SubscriptionTargetType.Game &&
                 s.TargetId == gameId),
-            It.IsAny<CancellationToken>()), Times.Once);
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -107,13 +104,13 @@ public class GameSubscriptionServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var existingSubscription = new Subscription();
 
-        _repository.Setup(r => r.FindAsync(_currentUserId, SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(existingSubscription);
+        _repository.FindAsync(_currentUserId, SubscriptionTargetType.Game, gameId, Arg.Any<CancellationToken>())
+            .Returns(existingSubscription);
 
         var result = await _service.SubscribeAsync(gameId);
 
         result.Should().Be(existingSubscription);
-        _repository.Verify(r => r.CreateAsync(It.IsAny<CreateSubscription>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _repository.DidNotReceive().CreateAsync(Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -121,12 +118,12 @@ public class GameSubscriptionServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
 
-        _repository.Setup(r => r.DeleteAsync(_currentUserId, SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()))
+        _repository.DeleteAsync(_currentUserId, SubscriptionTargetType.Game, gameId, Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         await _service.UnsubscribeAsync(gameId);
 
-        _repository.Verify(r => r.DeleteAsync(_currentUserId, SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).DeleteAsync(_currentUserId, SubscriptionTargetType.Game, gameId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -136,22 +133,21 @@ public class GameSubscriptionServiceShould : UnitTestBase
         var subscriberIds = new List<Guid> { Guid.NewGuid(), Guid.NewGuid() };
         var users = subscriberIds.Select(id => new UserReference { UserId = id }).ToList();
 
-        _repository.Setup(r => r.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(subscriberIds);
+        _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Game, gameId, Arg.Any<CancellationToken>())
+            .Returns(subscriberIds);
 
         // Asked for all of them at once. One call per subscriber made the page
         // cost as much as it had readers, and the single-user form throws on a
         // user who is no longer there, so one removed reader answered the whole
         // game page with 404.
         _userLookupService
-            .Setup(s => s.GetReferencesAsync(It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(subscriberIds))))
-            .ReturnsAsync(users);
+            .GetReferencesAsync(Arg.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(subscriberIds))).Returns(users);
 
         var result = await _service.GetSubscribersAsync(gameId);
 
         result.Should().HaveCount(2);
         result.Should().Contain(users);
-        _userLookupService.Verify(s => s.GetAsync(It.IsAny<Guid>()), Times.Never);
+        await _userLookupService.DidNotReceive().GetAsync(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -159,8 +155,8 @@ public class GameSubscriptionServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
 
-        _repository.Setup(r => r.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Enumerable.Empty<Guid>());
+        _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Game, gameId, Arg.Any<CancellationToken>())
+            .Returns(Enumerable.Empty<Guid>());
 
         var result = await _service.GetSubscribersAsync(gameId);
 
@@ -173,8 +169,8 @@ public class GameSubscriptionServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
-        _repository.Setup(r => r.FindAsync(userId, SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Subscription());
+        _repository.FindAsync(userId, SubscriptionTargetType.Game, gameId, Arg.Any<CancellationToken>())
+            .Returns(new Subscription());
 
         var result = await _service.IsSubscribedAsync(userId, gameId);
 
@@ -187,8 +183,8 @@ public class GameSubscriptionServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
-        _repository.Setup(r => r.FindAsync(userId, SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Subscription?)null);
+        _repository.FindAsync(userId, SubscriptionTargetType.Game, gameId, Arg.Any<CancellationToken>())
+            .Returns((Subscription?)null);
 
         var result = await _service.IsSubscribedAsync(userId, gameId);
 

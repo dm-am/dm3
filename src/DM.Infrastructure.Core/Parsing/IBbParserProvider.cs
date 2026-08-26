@@ -3,16 +3,16 @@ using BBCodeParser;
 namespace DM.Infrastructure.Core.Parsing;
 
 /// <summary>
-/// BBCode parsers provider. Surfaces are the primary selector; the two
-/// surface-agnostic "Current*" properties are retained only for the search
-/// indexer, which renders text without a per-content surface.
+/// BBCode parsers provider. The surface is the only selector: every caller
+/// names the surface its text came from, the search indexer included.
 /// </summary>
 public interface IBbParserProvider
 {
     /// <summary>
-    /// Return the parser that enforces the correct tag set for the given
-    /// surface. Writing code with an unsupported tag in a surface raises
-    /// a <see cref="BBCodeParser.BbParserException"/> at parse time.
+    /// Return the parser carrying the tag set of the given surface. A tag the
+    /// surface does not allow is not a parse error: the parser does not
+    /// recognise it as a tag at all and leaves it in the output as the text the
+    /// author typed.
     /// </summary>
     IBbParser GetForSurface(BbSurface surface);
 
@@ -26,14 +26,4 @@ public interface IBbParserProvider
     /// can round-trip them back to BBCode on save.
     /// </summary>
     IBbParser GetForAuthorEdit(BbSurface surface);
-
-    /// <summary>
-    /// General parser for every default case
-    /// </summary>
-    IBbParser CurrentCommon { get; }
-
-    /// <summary>
-    /// Parser for game information
-    /// </summary>
-    IBbParser CurrentInfo { get; }
 }

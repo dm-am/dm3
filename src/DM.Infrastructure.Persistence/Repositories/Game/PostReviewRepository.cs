@@ -4,8 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
@@ -21,13 +19,11 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 internal class PostReviewRepository : IPostReviewRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    public PostReviewRepository(DmDbContext dbContext, IMapper mapper, IDateTimeProvider dateTimeProvider)
+    public PostReviewRepository(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -46,14 +42,14 @@ internal class PostReviewRepository : IPostReviewRepository
             .Where(r => r.PostId == postId && !r.IsRemoved)
             .OrderByDescending(r => r.CreatedUtc)
             .Page(paging)
-            .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
+            .ProjectToPostReview()
             .ToArrayAsync();
 
     /// <inheritdoc />
     public Task<PostReview?> GetAsync(Guid id) => _dbContext.PostReviews
         .TagWith("DM.PostReview.GetById")
         .Where(r => !r.IsRemoved && r.PostReviewId == id)
-        .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
+        .ProjectToPostReview()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -62,7 +58,7 @@ internal class PostReviewRepository : IPostReviewRepository
         .Where(r => r.PostId == postId &&
                     r.AuthorId == authorId &&
                     !r.IsRemoved)
-        .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
+        .ProjectToPostReview()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -89,7 +85,7 @@ internal class PostReviewRepository : IPostReviewRepository
         return await query
             .OrderByDescending(r => r.CreatedUtc)
             .Page(paging)
-            .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
+            .ProjectToPostReview()
             .ToArrayAsync();
     }
 
@@ -126,18 +122,8 @@ internal class PostReviewRepository : IPostReviewRepository
             IsRemoved = false
         };
 
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                // A retry replays this block; the review the failed attempt left
-                // tracked would otherwise be inserted twice or not at all.
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
             await MoveQualityRating(entity.PostAuthorId, qualityRatingDelta);
@@ -164,7 +150,7 @@ internal class PostReviewRepository : IPostReviewRepository
         return await _dbContext.PostReviews
             .TagWith("DM.PostReview.Created")
             .Where(r => r.PostReviewId == dbReview.PostReviewId)
-            .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
+            .ProjectToPostReview()
             .FirstAsync();
     }
 
@@ -181,21 +167,8 @@ internal class PostReviewRepository : IPostReviewRepository
     {
         // The strategy wrapper is required because the API host configures
         // EnableRetryOnFailure.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                // A retry replays this block. SaveChanges leaves the review
-                // Unchanged even when the transaction around it rolls back, so
-                // without the clear the second attempt writes no sign at all and
-                // moves the counter all the same.
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
-
             // Read inside the block: the clear above drops the tracked review, so
             // it has to be loaded again. On the first attempt this costs nothing.
             var dbReview = await _dbContext.PostReviews.FindAsync(entity.PostReviewId);
@@ -239,7 +212,7 @@ internal class PostReviewRepository : IPostReviewRepository
             .IgnoreQueryFilters()
             .TagWith("DM.PostReview.Updated")
             .Where(r => r.PostReviewId == entity.PostReviewId)
-            .ProjectTo<PostReview>(_mapper.ConfigurationProvider)
+            .ProjectToPostReview()
             .FirstAsync();
     }
 

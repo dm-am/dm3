@@ -210,7 +210,7 @@ async function unsubscribe() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/_ZIndex"
+@use "@/assets/styles/ZIndex" as *
 
 .user-subscribe
   position: relative

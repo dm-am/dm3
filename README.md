@@ -2,7 +2,7 @@
 
 Платформа для текстовых ролевых игр.
 
-**Стек:** .NET 8, PostgreSQL, MongoDB, RabbitMQ, Vue 3, TypeScript
+**Стек:** .NET 10, PostgreSQL, RabbitMQ, Vue 3, TypeScript
 
 ---
 
@@ -10,12 +10,12 @@
 
 ```powershell
 # Windows
-.\scripts\dm.ps1 start    # Запуск Docker + API
-.\scripts\dm.ps1 seed     # Тестовые данные
-.\scripts\dm.ps1 stop     # Остановка
-.\scripts\dm.ps1 reset    # Сброс БД и перезапуск
-.\scripts\dm.ps1 status   # Статус сервисов
-.\scripts\dm.ps1 logs     # Логи (или logs dm-api)
+powershell -File .\scripts\dm.ps1 start    # Запуск Docker + API
+powershell -File .\scripts\dm.ps1 seed     # Тестовые данные
+powershell -File .\scripts\dm.ps1 stop     # Остановка
+powershell -File .\scripts\dm.ps1 reset    # Сброс БД и перезапуск
+powershell -File .\scripts\dm.ps1 status   # Статус сервисов
+powershell -File .\scripts\dm.ps1 logs     # Логи (или logs dm-api)
 
 # Linux/Mac — те же команды через ./scripts/dm.sh
 
@@ -32,7 +32,7 @@ git config core.hooksPath scripts/hooks
 | API / Swagger | http://localhost:5000 |
 | MinIO | http://localhost:9001 |
 | imgproxy | http://localhost:8080 |
-| MailHog | http://localhost:8025 |
+| Mailpit | http://localhost:8025 |
 
 **Подробнее:** [docs/guides/LOCAL_SETUP.md](./docs/guides/LOCAL_SETUP.md)
 
@@ -58,7 +58,7 @@ git config core.hooksPath scripts/hooks
 | [CODE_STYLE](./docs/conventions/CODE_STYLE.md) | "Какие стандарты кода? Какой чеклист?" |
 | [API_DESIGN](./docs/conventions/API_DESIGN.md) | "Какие принципы API? Какие форматы ответов?" |
 | [SECURITY](./docs/conventions/SECURITY.md) | "Какие требования к безопасности?" |
-| [DATA_STORAGE](./docs/conventions/DATA_STORAGE.md) | "Когда PostgreSQL, когда MongoDB?" |
+| [DATA_STORAGE](./docs/conventions/DATA_STORAGE.md) | "Как организовано хранение данных?" |
 | [USERNAME_POLICY](./docs/conventions/USERNAME_POLICY.md) | "Какие символы разрешены в именах?" |
 | [UI_STANDARDS](./docs/conventions/UI_STANDARDS.md) | "Какие правила верстки, токенов, диалогов?" |
 | [URL_STRUCTURE](./docs/conventions/URL_STRUCTURE.md) | "Как устроены адреса страниц?" |
@@ -107,7 +107,8 @@ git config core.hooksPath scripts/hooks
 
 ```
 dm3/
-├── src/                    # Backend (.NET 8)
+├── src/                    # Backend (.NET 10)
+│   ├── BBCodeParser/       # Завендоренный чужой парсер разметки
 │   ├── DM.Domain.*/        # Доменные сервисы
 │   ├── DM.Infrastructure.*/# Инфраструктура
 │   ├── DM.Web.API/         # REST API

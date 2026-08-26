@@ -3,8 +3,8 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Shared.Likes;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared.Likes;
@@ -12,13 +12,13 @@ namespace DM.Infrastructure.Persistence.Tests.Shared.Likes;
 public class LikeFactoryShould : UnitTestBase
 {
     private readonly LikeFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
+    private readonly IGuidFactory _guidFactory;
 
     public LikeFactoryShould()
     {
         _guidFactory = Mock<IGuidFactory>();
 
-        _factory = new LikeFactory(_guidFactory.Object);
+        _factory = new LikeFactory(_guidFactory);
     }
 
     [Fact]
@@ -28,7 +28,7 @@ public class LikeFactoryShould : UnitTestBase
         var entityId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
-        _guidFactory.Setup(f => f.Create()).Returns(likeId);
+        _guidFactory.Create().Returns(likeId);
 
         var result = _factory.Create(entityId, LikeEntityType.Comment, userId);
 
@@ -45,7 +45,7 @@ public class LikeFactoryShould : UnitTestBase
         var entityId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var result = _factory.Create(entityId, LikeEntityType.Comment, userId);
 
@@ -58,7 +58,7 @@ public class LikeFactoryShould : UnitTestBase
         var entityId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var result = _factory.Create(entityId, LikeEntityType.Post, userId);
 
@@ -71,7 +71,7 @@ public class LikeFactoryShould : UnitTestBase
         var entityId = Guid.NewGuid();
         var userId = Guid.NewGuid();
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var result = _factory.Create(entityId, LikeEntityType.Message, userId);
 
@@ -83,7 +83,7 @@ public class LikeFactoryShould : UnitTestBase
     {
         var userId = Guid.NewGuid();
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var result = _factory.Create(Guid.NewGuid(), LikeEntityType.Comment, userId);
 

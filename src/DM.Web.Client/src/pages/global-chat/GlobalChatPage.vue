@@ -25,6 +25,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { globalChatApi } from "@/entities/global-chat";
+import { unwrapResource } from "@/shared/api";
 import { ChatMessage } from "@/widgets/chat-message";
 import ChatEventsPanel from "./ChatEventsPanel.vue";
 import ChatDateJump from "./ChatDateJump.vue";
@@ -51,6 +52,11 @@ import { NotificationType } from "@/shared/api/models/notifications";
 import type { SignalRNotification } from "@/shared/api/models/notifications";
 import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
 import { useChatComposer } from "@/shared/lib/composables/useChatComposer";
+import {
+  provideQuoteComposer,
+  useQuoteAction,
+} from "@/shared/lib/composables/useQuoteComposer";
+import { BODY_TEXT_MAX_LENGTH } from "@/shared/lib/constants/content";
 import {
   useAnchoredInfiniteScroll,
   LANDING_SCROLL_MS,
@@ -199,6 +205,22 @@ const { newMessage, handleSend, requestDelete, cancelDelete, confirmDelete } =
     confirmingDeleteId,
     scrollToBottom: () => scrollToBottom(),
   });
+
+// Quoting. Both halves live on this page — the toolbar over a message and the
+// composer under the list — but they go through the same provide/inject the
+// other surfaces use, so the rule about when the action exists is written once.
+// The chat is not scrolled to the composer: it is on screen already, and the
+// feed manages its own scrolling.
+provideQuoteComposer({
+  enabled: () => canSendMessages.value,
+  insert: (source) => editorRef.value?.insertBlock(source.text),
+});
+
+const { canQuote, quote } = useQuoteAction();
+
+function quoteMessage(messageId: string) {
+  return quote(() => globalChatApi.getMessageQuote(messageId));
+}
 
 const hoveredMessage = computed(() => {
   if (!hoveredMessageId.value) return null;
@@ -717,7 +739,11 @@ async function startEdit(msg: GlobalChatMessage) {
   // Fetch the original BBCode from the backend — seeds ChatMessage's editor
   // once; further keystrokes stay inside ChatMessage's own local state.
   const { data } = await globalChatApi.getMessageForEdit(msg.id);
-  editText.value = htmlToBbcode(data?.text || "");
+  // Through the envelope: read off the top level the text was always
+  // undefined, and the editor opened empty over a message that has text.
+  editText.value = htmlToBbcode(
+    unwrapResource<GlobalChatMessage>(data)?.text || "",
+  );
 }
 
 function cancelEdit() {
@@ -1154,6 +1180,15 @@ async function retryLoad() {
       </template>
       <!-- Normal mode -->
       <template v-else>
+        <Tooltip v-if="canQuote" text="Цитировать сообщение">
+          <button
+            class="toolbar-btn toolbar-btn-quote"
+            aria-label="Цитировать сообщение"
+            @click="quoteMessage(hoveredMessage.id)"
+          >
+            {{ symbols.quote }}
+          </button>
+        </Tooltip>
         <Tooltip
           v-if="canLikeMessage(hoveredMessage)"
           :text="isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Нравится'"
@@ -1245,6 +1280,7 @@ async function retryLoad() {
           :disabled="sending"
           :min-height="60"
           :max-height="200"
+          :max-length="BODY_TEXT_MAX_LENGTH"
           :resizable="true"
           :is-moderator="isModerator"
           @submit="handleSend"
@@ -1264,9 +1300,9 @@ async function retryLoad() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/BbcodeContent"
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/ZIndex"
+@use "@/assets/styles/BbcodeContent" as *
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/ZIndex" as *
 
 .globalChat-container
   display: flex
@@ -1436,6 +1472,14 @@ async function retryLoad() {
 .toolbar-btn-warn
   font-size: 18px
   line-height: 1
+
+// Quote renders the typographic quotation mark (there is no drawing for it in
+// the icon registry). The mark sits on the cap line of its own em box, so it is
+// nudged down to stand where the icons next to it stand.
+.toolbar-btn-quote
+  font-size: 22px
+  line-height: 1
+  padding-top: 8px
 
 .toolbar-btn
   display: flex

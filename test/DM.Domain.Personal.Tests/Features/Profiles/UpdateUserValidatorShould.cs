@@ -184,4 +184,28 @@ public class UpdateUserValidatorShould : UnitTestBase
         result.ShouldNotHaveValidationErrorFor(u => u.Settings.Paging.CommentsPerPage);
         result.ShouldNotHaveValidationErrorFor(u => u.Settings.Paging.PostsPerPage);
     }
+
+    /// <summary>
+    /// Hiding markup on a surface that does not declare it.
+    /// </summary>
+    /// <remarks>
+    /// The tag is not markup here, so it hides nothing: the line the author
+    /// wrote for one reader is published with the tag still around it. Refused
+    /// at the save path rather than erased, because a draft is not an attack
+    /// and a paragraph that vanished without a word is looked for instead of
+    /// rewritten.
+    /// </remarks>
+    [Fact]
+    public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
+    {
+        var input = new UpdateUser
+        {
+            Info = "до [private=\"Чак\"]СЕКРЕТ[/private] после",
+            Settings = ValidSettings()
+        };
+
+        var result = validator.TestValidate(input);
+
+        result.ShouldHaveValidationErrorFor(u => u.Info);
+    }
 }

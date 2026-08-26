@@ -1,30 +1,29 @@
 using System;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using MongoDB.Bson.Serialization.Attributes;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DM.Infrastructure.Persistence.Entities.Game.Posts;
 
 /// <summary>
 /// DAL model for dice roll
 /// </summary>
-[MongoCollectionName("Dice")]
+[Table("DiceRolls")]
 public class DiceRoll
 {
     /// <summary>
     /// Roll identifier
     /// </summary>
-    public Guid Id { get; set; }
+    public Guid DiceRollId { get; set; }
 
     /// <summary>
-    /// Post identifier
+    /// Post identifier. The foreign key is what makes "rolls without a post"
+    /// unrepresentable: the rolls are written in the post's own transaction.
     /// </summary>
     public Guid PostId { get; set; }
 
     /// <summary>
     /// Creation moment
     /// </summary>
-    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime CreatedUtc { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Is appended flag
@@ -62,15 +61,13 @@ public class DiceRoll
     public int Bonus { get; set; }
 
     /// <summary>
-    /// Roll comment. The stored element keeps its lowercase name: the driver maps
-    /// by member name unless told otherwise, so dropping this mapping would read
-    /// back an empty comment on every existing document without an error.
+    /// Roll comment
     /// </summary>
-    [BsonElement("comment")]
     public string Comment { get; set; } = null!;
 
     /// <summary>
-    /// Result
+    /// Result: an array of outcomes nobody ever queries into, hence one jsonb
+    /// column rather than a table per die.
     /// </summary>
     public RollResult[] Result { get; set; } = null!;
 }

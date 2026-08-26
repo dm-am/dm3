@@ -107,6 +107,24 @@ function eventTitle(type: SecurityEventType): string {
       return "Аккаунт заблокирован";
     case "SuspiciousLogin":
       return "Подозрительный вход";
+    case "TwoFactorEnabled":
+      return "Второй фактор включен";
+    case "TwoFactorDisabled":
+      return "Второй фактор отключен";
+    case "TwoFactorRecoveryCodeUsed":
+      return "Использован резервный код";
+    case "TwoFactorRecoveryCodesReissued":
+      return "Резервные коды перевыпущены";
+    case "TwoFactorRemovalScheduled":
+      return "Назначено снятие второго фактора";
+    case "TwoFactorRemovalRefused":
+      return "Снятие второго фактора отклонено";
+    case "TwoFactorRemovalCancelled":
+      return "Снятие второго фактора отменено";
+    case "TwoFactorRemovedByAdmin":
+      return "Второй фактор снят администратором";
+    case "TwoFactorSetupFailure":
+      return "Неверный код при настройке второго фактора";
     default:
       return "Событие безопасности";
   }
@@ -114,17 +132,34 @@ function eventTitle(type: SecurityEventType): string {
 
 function eventClass(type: SecurityEventType): string {
   switch (type) {
+    // The two-factor entries are grouped by what they cost the reader, not by
+    // whether they succeeded: switching the factor on and reissuing the codes
+    // leave the account better locked than before.
     case "LoginSuccess":
     case "PasswordChange":
     case "PasswordResetComplete":
+    case "TwoFactorEnabled":
+    case "TwoFactorRecoveryCodesReissued":
       return "event-item--success";
+    // A spent recovery code, a mistyped setup code and the three turns of a
+    // removal are not failures. They are the entries a person scanning this
+    // journal for somebody else's hand in their account is looking for.
     case "LoginFailure":
     case "AccountLocked":
     case "SuspiciousLogin":
+    case "TwoFactorRecoveryCodeUsed":
+    case "TwoFactorSetupFailure":
+    case "TwoFactorRemovalScheduled":
+    case "TwoFactorRemovalRefused":
+    case "TwoFactorRemovedByAdmin":
       return "event-item--warning";
+    // Switching the factor off and calling a removal off are the owner's own
+    // doing, and neither leaves anything to look into.
     case "SessionTerminated":
     case "Logout":
     case "LogoutElsewhere":
+    case "TwoFactorDisabled":
+    case "TwoFactorRemovalCancelled":
       return "event-item--neutral";
     default:
       return "";
@@ -133,7 +168,7 @@ function eventClass(type: SecurityEventType): string {
 </script>
 
 <style scoped lang="sass">
-@import "../AccountPage.styles"
+@use "../AccountPage.styles" as *
 
 .security-history-content
   padding: $medium

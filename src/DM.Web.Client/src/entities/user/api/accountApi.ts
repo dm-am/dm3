@@ -1,7 +1,12 @@
-import type { ListEnvelope, User } from "@/shared/api/models/common";
+import type { Envelope, ListEnvelope, User } from "@/shared/api/models/common";
 import type {
   LoginCredentials,
   LoginResponse,
+  TwoFactorLoginRequest,
+  TwoFactorStatus,
+  TwoFactorSetup,
+  TwoFactorConfirmedAction,
+  RecoveryCodes,
   RegisterCredentials,
   ChangeEmailRequest,
   PendingInfo,
@@ -21,6 +26,18 @@ import type {
   SecurityLogType,
 } from "@/shared/api/models/account";
 import { Api, X_DM_ACCOUNT_TOKEN } from "@/shared/api";
+
+/**
+ * A code on its way to the server, with every space taken out of it.
+ *
+ * The server trims the ends and nothing else, and it tells a code from the
+ * device apart from a recovery code by shape: six digits or sixteen symbols. A
+ * value pasted from a password manager as "123 456" is neither, so it goes into
+ * the recovery-code branch and comes back refused - over a code that was right.
+ * Done here rather than at the four call sites, because a call site that
+ * forgets produces exactly that refusal and nothing points at the cause.
+ */
+const withoutSpaces = (code: string) => code.replace(/\s+/g, "");
 
 /**
  * The viewer's own account: how they get in (registration, activation,
@@ -60,7 +77,7 @@ export default new (class AccountApi {
     // activation that had already succeeded.
     request: { username: string; retryEmail?: string },
   ) {
-    return Api.post<User>("account/activation", request, {
+    return Api.post<Envelope<User>>("account/activation", request, {
       headers: { [X_DM_ACCOUNT_TOKEN]: token },
     });
   }
@@ -107,6 +124,27 @@ export default new (class AccountApi {
     return Api.post<LoginResponse>("account/login", credentials, {
       ownsRefusal: true,
     });
+  }
+
+  /**
+   * Finish a sign-in the first step left owing a second factor.
+   *
+   * The challenge is not in this request: it travels in the short-lived
+   * `dm_2fa` cookie the first step set, which the browser sends by itself and
+   * no script can read.
+   *
+   * Enveloped, unlike the first step of the same flow — the bare body there is
+   * inherited debt the server declined to add to. A 403 belongs to the form
+   * for the same reason it does on the first step: the account was banned or
+   * removed in the minutes between the two, and that sentence is the answer to
+   * the submit.
+   */
+  public completeTwoFactorLogin(request: TwoFactorLoginRequest) {
+    return Api.post<Envelope<LoginResponse>>(
+      "account/login/two-factor",
+      { code: withoutSpaces(request.code) },
+      { ownsRefusal: true },
+    );
   }
 
   // Dropping the viewer is the session module's job: updateUser(null) owns the
@@ -288,5 +326,93 @@ export default new (class AccountApi {
       take,
       ...(type ? { type } : {}),
     });
+  }
+
+  // ========== Two-factor authentication ==========
+
+  /** State of the viewer's own second factor. */
+  public getTwoFactorStatus() {
+    return Api.get<Envelope<TwoFactorStatus>>("account/two-factor");
+  }
+
+  /**
+   * Ask for a secret to set the factor up with.
+   *
+   * The password is not a formality: a session lives a year, and without it a
+   * stolen one would be enough to put somebody else's factor on the account.
+   */
+  public setupTwoFactor(password: string) {
+    return Api.post<Envelope<TwoFactorSetup>>("account/two-factor/setup", {
+      password,
+    });
+  }
+
+  /**
+   * Confirm the issued secret with the first code from the device.
+   *
+   * Answers with the recovery codes, which exist in this answer once and never
+   * again, and ends every other session of the account.
+   */
+  public confirmTwoFactor(code: string) {
+    return Api.post<Envelope<RecoveryCodes>>("account/two-factor/confirm", {
+      code: withoutSpaces(code),
+    });
+  }
+
+  /** Switch the factor off. Costs the password and a passed second factor. */
+  public disableTwoFactor(request: TwoFactorConfirmedAction) {
+    return Api.post<void>("account/two-factor/disable", {
+      ...request,
+      code: withoutSpaces(request.code),
+    });
+  }
+
+  /** Reissue the recovery codes. The previous set stops working whole. */
+  public reissueRecoveryCodes(request: TwoFactorConfirmedAction) {
+    return Api.post<Envelope<RecoveryCodes>>(
+      "account/two-factor/recovery-codes",
+      { ...request, code: withoutSpaces(request.code) },
+    );
+  }
+
+  /**
+   * Ask, from the mailbox, for the factor to be taken off.
+   *
+   * Anonymous: the person who needs it cannot sign in. The server answers the
+   * same for every address, so there is one result screen for every case.
+   */
+  public requestTwoFactorRemoval(email: string) {
+    return Api.post<void>("account/two-factor/removal", { email });
+  }
+
+  /**
+   * Follow the link from the letter: schedule the removal.
+   *
+   * Ends every session of the account and starts the waiting period. There is
+   * no "check this token" call to ask first, so a dead link is learnt from the
+   * answer to this one.
+   */
+  public scheduleTwoFactorRemoval(token: string) {
+    return Api.post<void>("account/two-factor/removal/confirm", undefined, {
+      headers: { [X_DM_ACCOUNT_TOKEN]: token },
+    });
+  }
+
+  /** Follow the second link: call the scheduled removal off. */
+  public cancelTwoFactorRemoval(token: string) {
+    return Api.post<void>("account/two-factor/removal/cancel", undefined, {
+      headers: { [X_DM_ACCOUNT_TOKEN]: token },
+    });
+  }
+
+  /**
+   * Take a colleague's factor off, as the second administrator.
+   *
+   * Hands the caller nothing: no session of the other account and none of its
+   * rights, only a way in by password for its owner and the end of every
+   * session it had.
+   */
+  public clearTwoFactorFor(username: string) {
+    return Api.delete(`account/two-factor/users/${username}`);
   }
 })();

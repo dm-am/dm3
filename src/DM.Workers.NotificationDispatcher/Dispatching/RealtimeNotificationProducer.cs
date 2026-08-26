@@ -2,9 +2,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
+using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Messaging.GeneralBus;
-using Jamq.Client.Abstractions.Producing;
-using Jamq.Client.Rabbit.Producing;
 
 namespace DM.Workers.NotificationDispatcher.Dispatching;
 
@@ -24,21 +23,21 @@ internal interface IRealtimeNotificationProducer
 /// <inheritdoc />
 internal class RealtimeNotificationProducer : IRealtimeNotificationProducer, IDisposable
 {
-    private readonly IProducer<string, RealtimeNotification> producer;
+    private readonly IDmProducer<RealtimeNotification> producer;
 
     /// <inheritdoc />
-    public RealtimeNotificationProducer(IProducerBuilder producerBuilder) =>
-        producer = producerBuilder.BuildRabbit<RealtimeNotification>(
-            new RabbitProducerParameters(RealtimeNotificationsTransport.ExchangeName));
+    public RealtimeNotificationProducer(IDmProducerBuilder producerBuilder) =>
+        producer = producerBuilder.Build<RealtimeNotification>(
+            new DmProducerParameters(RealtimeNotificationsTransport.ExchangeName));
 
     /// <inheritdoc />
     public Task SendAsync(RealtimeNotification notification, CancellationToken cancellationToken) =>
         producer.Send(string.Empty, notification, cancellationToken);
 
     /// <summary>
-    /// Returns the AMQP channel this producer took from the pool. Same reasoning as
-    /// InvokedEventProducer and MailSender: the producer leases a channel on its
-    /// first send and gives it back only on Dispose.
+    /// Closes the AMQP channel this producer opened. Same reasoning as
+    /// MailSender: the producer opens a channel on its first send and closes it
+    /// only on Dispose.
     /// </summary>
-    public void Dispose() => (producer as IDisposable)?.Dispose();
+    public void Dispose() => producer.Dispose();
 }

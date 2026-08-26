@@ -3,7 +3,7 @@
 ## Требования
 
 - **Docker Desktop** (с WSL2 на Windows)
-- **Node.js 20+** и **npm**
+- **Node.js 20.19+** и **npm** (в CI — 24; нижнюю границу задают `engines` сборщика и линтера, а не наш выбор)
 - **Git**
 
 ---
@@ -11,9 +11,9 @@
 ## Быстрый старт
 
 ```bash
-# Windows (PowerShell)
-.\scripts\dm.ps1 start                        # Запуск всех сервисов
-.\scripts\dm.ps1 seed                         # Тестовые данные (после запуска API)
+# Windows
+powershell -File .\scripts\dm.ps1 start                        # Запуск всех сервисов
+powershell -File .\scripts\dm.ps1 seed                         # Тестовые данные (после запуска API)
 
 # Linux/Mac
 ./scripts/dm.sh start
@@ -52,11 +52,10 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | Notification Consumer | 5002 | — |
 | Email Consumer | 5003 | — |
 | PostgreSQL | 5432 | из `docker/.env` |
-| MongoDB | 27017 | из `docker/.env` |
 | RabbitMQ | 5672, 15672 | из `docker/.env` |
 | MinIO | 9000, 9001 | из `docker/.env` |
 | imgproxy | 8080 | HMAC key/salt из `docker/.env` |
-| MailHog | 1025, 8025 | — |
+| Mailpit | 1025, 8025 | — |
 | Loki | 3100 | — |
 | Jaeger | 16686 | — |
 | Prometheus | 9090 | — |
@@ -73,19 +72,22 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 ### Справочные данные (автоматически)
 
 При подъеме стека разовый контейнер `migration` применяет миграции, которые создают:
-- **Доски форума** — 11 разделов
-- **Теги игр** — 65 тегов в 8 группах
+- **Доски форума** — все разделы
+- **Теги игр** — весь каталог тегов, разложенный по группам
+
+Сколько их, смотреть в `HasData` модели, а не здесь: число в руководстве расходится
+с моделью молча, и расходилось.
 
 ### Тестовые пользователи
 
 ```bash
-.\scripts\dm.ps1 seed   # Windows
-./scripts/dm.sh seed    # Linux/Mac
+powershell -File .\scripts\dm.ps1 seed   # Windows
+./scripts/dm.sh seed                     # Linux/Mac
 ```
 
 **Требования:** API запущен (порт 5000).
 
-Сид — отдельный консольный инструмент, а не эндпоинт: он пишет напрямую в Postgres, Mongo и объектное хранилище, поэтому по сети он недоступен вовсе. Скрипт запускает его разовым контейнером под compose-профилем `tools`, который не поднимается обычным `docker compose up`. API при этом должен быть запущен: скрипт проверяет `/_health` и после сида перезапускает API, чтобы он пересчитал стартовые проекции; бакет для загрузок создает контейнер `minio-init`.
+Сид — отдельный консольный инструмент, а не эндпоинт: он пишет напрямую в Postgres и объектное хранилище, поэтому по сети он недоступен вовсе. Скрипт запускает его разовым контейнером под compose-профилем `tools`, который не поднимается обычным `docker compose up`. API при этом должен быть запущен: скрипт проверяет `/_health` и после сида перезапускает API, чтобы он пересчитал стартовые проекции; бакет для загрузок создает контейнер `minio-init`.
 
 **Тестовые аккаунты (пароль: `Test123!`):**
 
@@ -130,7 +132,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 ### Ручная регистрация
 
 1. http://localhost:5173 → Регистрация
-2. MailHog: http://localhost:8025 (письмо активации)
+2. Mailpit: http://localhost:8025 (письмо активации)
 
 ---
 
@@ -139,13 +141,13 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 ### CLI-скрипты (рекомендуется)
 
 ```bash
-# Windows (PowerShell)
-.\scripts\dm.ps1 start    # Запуск всех сервисов
-.\scripts\dm.ps1 stop     # Остановка
-.\scripts\dm.ps1 reset    # Сброс БД и перезапуск
-.\scripts\dm.ps1 seed     # Тестовые данные
-.\scripts\dm.ps1 status   # Статус сервисов
-.\scripts\dm.ps1 logs     # Логи (или logs dm-api)
+# Windows
+powershell -File .\scripts\dm.ps1 start    # Запуск всех сервисов
+powershell -File .\scripts\dm.ps1 stop     # Остановка
+powershell -File .\scripts\dm.ps1 reset    # Сброс БД и перезапуск
+powershell -File .\scripts\dm.ps1 seed     # Тестовые данные
+powershell -File .\scripts\dm.ps1 status   # Статус сервисов
+powershell -File .\scripts\dm.ps1 logs     # Логи (или logs dm-api)
 
 # Linux/Mac
 ./scripts/dm.sh start
@@ -194,6 +196,15 @@ dotnet ef migrations remove -p src/DM.Infrastructure.Persistence -s src/DM.Web.A
 dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
 ```
 
+**Ловушка EF 10:** `migrations add` падает с "Sequence contains no elements" — это
+замаскированное обнаружение цикла в сид-данных (Boards.LastTopicId и Topics.BoardId
+ссылаются друг на друга; EF 8 разрывал nullable-ребро сам, EF 10 отказывается —
+[dotnet/efcore#36682](https://github.com/dotnet/efcore/issues/36682)). Обход: временно
+поставить `LastTopicId = null` в сиде досок в `DmDbContext`, сгенерировать, вернуть
+значение в сид и в три сгенерированных файла (InsertData доски "Общий" в миграции,
+`LastTopicId` в блоке HasData снапшота и дизайнера). Тесты `MigrationShould` и
+`SnapshotAgreementShould` проверяют, что три файла сошлись с моделью.
+
 ---
 
 ## Конфигурация
@@ -211,7 +222,7 @@ dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s s
 | Файл | Назначение |
 |------|------------|
 | [`src/DM.Workers.Mail/appsettings.json`](../../src/DM.Workers.Mail/appsettings.json) | Email: SMTP настройки |
-| [`src/DM.Workers.NotificationDispatcher/appsettings.json`](../../src/DM.Workers.NotificationDispatcher/appsettings.json) | Notifications: MongoDB, RabbitMQ |
+| [`src/DM.Workers.NotificationDispatcher/appsettings.json`](../../src/DM.Workers.NotificationDispatcher/appsettings.json) | Notifications: RabbitMQ |
 
 ### Основные секции appsettings.json
 

@@ -40,5 +40,12 @@ public class CursorQuery
     /// <summary>
     /// Get effective limit (clamped to valid range)
     /// </summary>
-    public int EffectiveLimit => Math.Clamp(Limit, 1, MaxLimit);
+    public int EffectiveLimit => Clamp(Limit);
+
+    /// <summary>
+    /// Clamp a requested page size into the valid range. The single formula:
+    /// every paged query answers with the same bounds, whatever shape its own
+    /// query object has.
+    /// </summary>
+    public static int Clamp(int limit) => Math.Clamp(limit, 1, MaxLimit);
 }

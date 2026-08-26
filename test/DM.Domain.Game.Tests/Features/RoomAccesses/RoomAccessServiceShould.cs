@@ -14,75 +14,79 @@ using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Core.Users;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.RoomAccesses;
 
 public class RoomAccessServiceShould : UnitTestBase
 {
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IRoomRepository> _roomRepository;
-    private readonly Mock<IRoomAccessRepository> _repository;
-    private readonly Mock<IEventProducer> _producer;
-    private readonly Mock<IIdentityProvider> _identityProvider;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IRoomRepository _roomRepository;
+    private readonly IRoomAccessRepository _repository;
+    private readonly IEventProducer _producer;
+    private readonly IIdentityProvider _identityProvider;
     private readonly RoomAccessService _service;
 
     public RoomAccessServiceShould()
     {
         var createValidator = Mock<IValidator<CreateRoomAccess>>();
         createValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateRoomAccess>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreateRoomAccess>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         var updateValidator = Mock<IValidator<UpdateRoomAccess>>();
         updateValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateRoomAccess>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<UpdateRoomAccess>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _roomRepository = Mock<IRoomRepository>();
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDto>()));
 
         var factory = Mock<IRoomAccessFactory>();
-        factory.Setup(f => f.CreateForCharacter(It.IsAny<CreateRoomAccess>(), It.IsAny<Guid>()))
-            .Returns((CreateRoomAccess req, Guid _) => new CreateRoomAccessEntity { RoomId = req.RoomId });
-        factory.Setup(f => f.CreateForReader(It.IsAny<CreateRoomAccess>(), It.IsAny<Guid>()))
-            .Returns((CreateRoomAccess req, Guid _) => new CreateRoomAccessEntity { RoomId = req.RoomId });
+        factory.CreateForCharacter(Arg.Any<CreateRoomAccess>(), Arg.Any<Guid>())
+            .Returns(ci =>
+            {
+                var req = ci.ArgAt<CreateRoomAccess>(0);
+                return new CreateRoomAccessEntity { RoomId = req.RoomId };
+            });
+        factory.CreateForReader(Arg.Any<CreateRoomAccess>(), Arg.Any<Guid>())
+            .Returns(ci =>
+            {
+                var req = ci.ArgAt<CreateRoomAccess>(0);
+                return new CreateRoomAccessEntity { RoomId = req.RoomId };
+            });
 
         var characterClaimApprove = Mock<ICharacterClaimApprove>();
-        characterClaimApprove.Setup(c => c.GetCharacterId(It.IsAny<Guid>(), It.IsAny<RoomToUpdate>()))
-            .ReturnsAsync(Guid.NewGuid());
+        characterClaimApprove.GetCharacterId(Arg.Any<Guid>(), Arg.Any<RoomToUpdate>()).Returns(Guid.NewGuid());
 
         var readerClaimApprove = Mock<IReaderClaimApprove>();
-        readerClaimApprove.Setup(r => r.GetReaderUserId(It.IsAny<string>(), It.IsAny<RoomToUpdate>()))
-            .ReturnsAsync(Guid.NewGuid());
+        readerClaimApprove.GetReaderUserId(Arg.Any<string>(), Arg.Any<RoomToUpdate>()).Returns(Guid.NewGuid());
 
         _repository = Mock<IRoomAccessRepository>();
 
         _producer = Mock<IEventProducer>();
-        _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         _identityProvider = Mock<IIdentityProvider>();
         var identity = Identities.User(Guid.NewGuid(), "testuser");
-        _identityProvider.Setup(p => p.Current).Returns(identity);
+        _identityProvider.Current.Returns(identity);
 
         _service = new RoomAccessService(
-            createValidator.Object,
-            updateValidator.Object,
-            _roomRepository.Object,
-            _intentionManager.Object,
-            factory.Object,
-            characterClaimApprove.Object,
-            readerClaimApprove.Object,
-            _repository.Object,
-            _producer.Object,
-            _identityProvider.Object);
+            createValidator,
+            updateValidator,
+            _roomRepository,
+            _intentionManager,
+            factory,
+            characterClaimApprove,
+            readerClaimApprove,
+            _repository,
+            _producer,
+            _identityProvider);
     }
 
     [Fact]
@@ -93,13 +97,12 @@ public class RoomAccessServiceShould : UnitTestBase
         var game = new GameDto();
         var room = new RoomToUpdate { Id = roomId, Game = game };
 
-        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
-        _repository.Setup(r => r.Create(It.IsAny<CreateRoomAccessEntity>()))
-            .ReturnsAsync(new RoomAccess { RoomId = roomId });
+        _roomRepository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(room);
+        _repository.Create(Arg.Any<CreateRoomAccessEntity>()).Returns(new RoomAccess { RoomId = roomId });
 
         await _service.CreateAsync(createAccess);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, game), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Edit, game);
     }
 
     [Fact]
@@ -109,14 +112,13 @@ public class RoomAccessServiceShould : UnitTestBase
         var createAccess = new CreateRoomAccess { RoomId = roomId, CharacterId = Guid.NewGuid() };
         var room = new RoomToUpdate { Id = roomId, Game = new GameDto() };
 
-        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
-        _repository.Setup(r => r.Create(It.IsAny<CreateRoomAccessEntity>()))
-            .ReturnsAsync(new RoomAccess { RoomId = roomId });
+        _roomRepository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(room);
+        _repository.Create(Arg.Any<CreateRoomAccessEntity>()).Returns(new RoomAccess { RoomId = roomId });
 
         await _service.CreateAsync(createAccess);
 
-        _repository.Verify(r => r.Create(It.IsAny<CreateRoomAccessEntity>()), Times.Once);
-        _producer.Verify(p => p.SendAsync(EventType.ChangedRoom, roomId), Times.Once);
+        await _repository.Received(1).Create(Arg.Any<CreateRoomAccessEntity>());
+        await _producer.Received(1).SendAsync(EventType.ChangedRoom, roomId);
     }
 
     [Fact]
@@ -129,14 +131,13 @@ public class RoomAccessServiceShould : UnitTestBase
         var room = new RoomToUpdate { Id = roomId, Game = game };
         var access = new RoomAccess { Id = accessId, RoomId = roomId, Character = new Character() };
 
-        _repository.Setup(r => r.GetAccess(accessId, It.IsAny<Guid>())).ReturnsAsync(access);
-        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateRoomAccessEntity>()))
-            .ReturnsAsync(new RoomAccess { RoomId = roomId });
+        _repository.GetAccess(accessId, Arg.Any<Guid>()).Returns(access);
+        _roomRepository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(room);
+        _repository.Update(Arg.Any<UpdateRoomAccessEntity>()).Returns(new RoomAccess { RoomId = roomId });
 
         await _service.UpdateAsync(updateAccess);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, game), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Edit, game);
     }
 
     [Fact]
@@ -148,15 +149,14 @@ public class RoomAccessServiceShould : UnitTestBase
         var room = new RoomToUpdate { Id = roomId, Game = new GameDto() };
         var access = new RoomAccess { Id = accessId, RoomId = roomId, Character = new Character() };
 
-        _repository.Setup(r => r.GetAccess(accessId, It.IsAny<Guid>())).ReturnsAsync(access);
-        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateRoomAccessEntity>()))
-            .ReturnsAsync(new RoomAccess { RoomId = roomId });
+        _repository.GetAccess(accessId, Arg.Any<Guid>()).Returns(access);
+        _roomRepository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(room);
+        _repository.Update(Arg.Any<UpdateRoomAccessEntity>()).Returns(new RoomAccess { RoomId = roomId });
 
         await _service.UpdateAsync(updateAccess);
 
-        _repository.Verify(r => r.Update(It.IsAny<UpdateRoomAccessEntity>()), Times.Once);
-        _producer.Verify(p => p.SendAsync(EventType.ChangedRoom, roomId), Times.Once);
+        await _repository.Received(1).Update(Arg.Any<UpdateRoomAccessEntity>());
+        await _producer.Received(1).SendAsync(EventType.ChangedRoom, roomId);
     }
 
     /// <summary>
@@ -183,16 +183,13 @@ public class RoomAccessServiceShould : UnitTestBase
             User = new GeneralUser { UserId = Guid.NewGuid() }
         };
 
-        _repository.Setup(r => r.GetAccess(accessId, It.IsAny<Guid>())).ReturnsAsync(access);
-        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateRoomAccessEntity>()))
-            .ReturnsAsync(new RoomAccess { RoomId = roomId });
+        _repository.GetAccess(accessId, Arg.Any<Guid>()).Returns(access);
+        _roomRepository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(room);
+        _repository.Update(Arg.Any<UpdateRoomAccessEntity>()).Returns(new RoomAccess { RoomId = roomId });
 
         await _service.UpdateAsync(updateAccess);
 
-        _repository.Verify(
-            r => r.Update(It.Is<UpdateRoomAccessEntity>(e => e.Policy == RoomAccessPolicy.Full)),
-            Times.Once);
+        await _repository.Received(1).Update(Arg.Is<UpdateRoomAccessEntity>(e => e.Policy == RoomAccessPolicy.Full));
     }
 
     [Fact]
@@ -204,13 +201,13 @@ public class RoomAccessServiceShould : UnitTestBase
         var room = new RoomToUpdate { Id = roomId, Game = game };
         var access = new RoomAccess { Id = accessId, RoomId = roomId };
 
-        _repository.Setup(r => r.GetAccess(accessId, It.IsAny<Guid>())).ReturnsAsync(access);
-        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
-        _repository.Setup(r => r.Delete(accessId)).Returns(Task.CompletedTask);
+        _repository.GetAccess(accessId, Arg.Any<Guid>()).Returns(access);
+        _roomRepository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(room);
+        _repository.Delete(accessId).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(accessId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, game), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Edit, game);
     }
 
     [Fact]
@@ -221,13 +218,13 @@ public class RoomAccessServiceShould : UnitTestBase
         var room = new RoomToUpdate { Id = roomId, Game = new GameDto() };
         var access = new RoomAccess { Id = accessId, RoomId = roomId };
 
-        _repository.Setup(r => r.GetAccess(accessId, It.IsAny<Guid>())).ReturnsAsync(access);
-        _roomRepository.Setup(r => r.GetForUpdate(roomId, It.IsAny<Guid>())).ReturnsAsync(room);
-        _repository.Setup(r => r.Delete(accessId)).Returns(Task.CompletedTask);
+        _repository.GetAccess(accessId, Arg.Any<Guid>()).Returns(access);
+        _roomRepository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(room);
+        _repository.Delete(accessId).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(accessId);
 
-        _repository.Verify(r => r.Delete(accessId), Times.Once);
-        _producer.Verify(p => p.SendAsync(EventType.ChangedRoom, roomId), Times.Once);
+        await _repository.Received(1).Delete(accessId);
+        await _producer.Received(1).SendAsync(EventType.ChangedRoom, roomId);
     }
 }

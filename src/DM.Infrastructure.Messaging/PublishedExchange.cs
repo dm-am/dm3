@@ -14,12 +14,13 @@ namespace DM.Infrastructure.Messaging;
 /// Declaration of the exchanges this host publishes to.
 /// </summary>
 /// <remarks>
-/// Nothing on the publishing side used to declare anything: the client has a
-/// call for it and never makes it, and the exchanges existed only because the
-/// consumers declare what they subscribe to. So on a stand where a worker had
-/// never started, every publish went to an exchange that was not there — and
-/// with no publisher confirms asked for, the broker's refusal reached nobody.
-/// A registration answered 200 with its letter dropped on the floor.
+/// Nothing on the publishing side declares anything by itself: the producer
+/// writes into an exchange by name, and the exchanges would otherwise exist
+/// only because the consumers declare what they subscribe to. So on a stand
+/// where a worker had never started, every publish went to an exchange that
+/// was not there — and with no publisher confirms asked for, the broker's
+/// refusal reached nobody. A registration answered 200 with its letter dropped
+/// on the floor.
 ///
 /// Declared to match, argument for argument, what the consumers declare and what
 /// a running broker reports: a durable topic exchange that is not auto-deleted.
@@ -34,16 +35,19 @@ public static class PublishedExchange
     /// <summary>
     /// Declares the given exchanges, durable and not auto-deleted.
     /// </summary>
-    /// <param name="connectionFactory">Broker connection factory.</param>
+    /// <param name="connection">Broker connection of the host.</param>
     /// <param name="exchangeNames">Exchanges this host publishes to.</param>
-    public static void Declare(IAsyncConnectionFactory connectionFactory, params string[] exchangeNames)
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public static async Task Declare(
+        DmBrokerConnection connection, string[] exchangeNames, CancellationToken cancellationToken)
     {
-        using var connection = connectionFactory.CreateConnection();
-        using var channel = connection.CreateModel();
+        var open = await connection.GetOpenConnection(cancellationToken);
+        await using var channel = await open.CreateChannelAsync(cancellationToken: cancellationToken);
 
         foreach (var exchangeName in exchangeNames)
         {
-            channel.ExchangeDeclare(exchangeName, Type, durable: true, autoDelete: false);
+            await channel.ExchangeDeclareAsync(exchangeName, Type, durable: true, autoDelete: false,
+                cancellationToken: cancellationToken);
         }
     }
 }
@@ -65,20 +69,20 @@ public static class PublishedExchange
 /// </remarks>
 public class PublishedExchangeDeclaration : BackgroundService
 {
-    private readonly IAsyncConnectionFactory _connectionFactory;
+    private readonly DmBrokerConnection _connection;
     private readonly ILogger<PublishedExchangeDeclaration> _logger;
     private readonly string[] _exchangeNames;
 
     /// <inheritdoc cref="PublishedExchangeDeclaration" />
-    /// <param name="connectionFactory">Broker connection factory.</param>
+    /// <param name="connection">Broker connection of the host.</param>
     /// <param name="logger">Logger of the host.</param>
     /// <param name="exchangeNames">Exchanges this host publishes to.</param>
     public PublishedExchangeDeclaration(
-        IAsyncConnectionFactory connectionFactory,
+        DmBrokerConnection connection,
         ILogger<PublishedExchangeDeclaration> logger,
         IEnumerable<string> exchangeNames)
     {
-        _connectionFactory = connectionFactory;
+        _connection = connection;
         _logger = logger;
         _exchangeNames = exchangeNames.ToArray();
     }
@@ -98,11 +102,9 @@ public class PublishedExchangeDeclaration : BackgroundService
 
         try
         {
-            await retry.ExecuteAsync(_ =>
-            {
-                PublishedExchange.Declare(_connectionFactory, _exchangeNames);
-                return Task.CompletedTask;
-            }, stoppingToken);
+            await retry.ExecuteAsync(
+                token => PublishedExchange.Declare(_connection, _exchangeNames, token),
+                stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {

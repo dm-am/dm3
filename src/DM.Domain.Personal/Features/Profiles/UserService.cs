@@ -107,9 +107,8 @@ internal class UserService : IUserService
     /// <inheritdoc />
     public async Task<UserDetails> GetDetailsAsync(string username)
     {
-        var normalizedUsername = username.ToLowerInvariant();
         var user = await _cache.GetOrCreateAsync(
-            CacheKeys.UserDetails(normalizedUsername),
+            CacheKeys.UserDetails(username),
             () => _repository.GetUserDetailsAsync(username),
             CachePolicy.Medium);
 

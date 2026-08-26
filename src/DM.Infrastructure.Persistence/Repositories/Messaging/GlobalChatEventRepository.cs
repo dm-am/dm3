@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
 using Microsoft.EntityFrameworkCore;
@@ -17,15 +15,12 @@ namespace DM.Infrastructure.Persistence.Repositories.Messaging;
 internal class GlobalChatEventRepository : IGlobalChatEventRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public GlobalChatEventRepository(
-        DmDbContext dbContext,
-        IMapper mapper)
+        DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     // ═══ READ ═══
@@ -33,7 +28,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
     /// <inheritdoc />
     public Task<GlobalChatEvent?> Get(Guid eventId) => _dbContext.GlobalChatEvents
         .Where(e => e.GlobalChatEventId == eventId)
-        .ProjectTo<GlobalChatEvent>(_mapper.ConfigurationProvider)
+        .ProjectToGlobalChatEvent()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -41,13 +36,13 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
         await _dbContext.GlobalChatEvents
             .Where(e => statuses.Contains(e.Status))
             .OrderByDescending(e => e.StartsUtc)
-            .ProjectTo<GlobalChatEvent>(_mapper.ConfigurationProvider)
+            .ProjectToGlobalChatEvent()
             .ToArrayAsync().ConfigureAwait(false);
 
     /// <inheritdoc />
     public Task<GlobalChatEvent?> GetActiveEvent() => _dbContext.GlobalChatEvents
         .Where(e => e.Status == GlobalChatEventStatus.Live)
-        .ProjectTo<GlobalChatEvent>(_mapper.ConfigurationProvider)
+        .ProjectToGlobalChatEvent()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -95,7 +90,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
 
         return await _dbContext.GlobalChatEvents
             .Where(e => e.GlobalChatEventId == chatEvent.GlobalChatEventId)
-            .ProjectTo<GlobalChatEvent>(_mapper.ConfigurationProvider)
+            .ProjectToGlobalChatEvent()
             .FirstAsync(ct).ConfigureAwait(false);
     }
 
@@ -175,7 +170,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
 
         return await _dbContext.GlobalChatEvents
             .Where(e => e.GlobalChatEventId == eventId)
-            .ProjectTo<GlobalChatEvent>(_mapper.ConfigurationProvider)
+            .ProjectToGlobalChatEvent()
             .FirstAsync(ct).ConfigureAwait(false);
     }
 
@@ -200,7 +195,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
 
         return await _dbContext.GlobalChatEventParticipants
             .Where(p => p.GlobalChatEventParticipantId == participant.GlobalChatEventParticipantId)
-            .ProjectTo<GlobalChatEventParticipant>(_mapper.ConfigurationProvider)
+            .ProjectToGlobalChatEventParticipant()
             .FirstAsync(ct).ConfigureAwait(false);
     }
 

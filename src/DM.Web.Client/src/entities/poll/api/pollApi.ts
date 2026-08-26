@@ -1,4 +1,8 @@
-import type { ListEnvelope, ApiResult } from "@/shared/api/models/common";
+import type {
+  Envelope,
+  ListEnvelope,
+  ApiResult,
+} from "@/shared/api/models/common";
 import type {
   Poll,
   PollId,
@@ -47,18 +51,22 @@ export default new (class PollApi {
   }
 
   public postPollVote(pollId: PollId, optionId: PollOptionId) {
-    return Api.post<Poll>(`polls/${pollId}/vote?optionId=${optionId}`);
+    return Api.post<Envelope<Poll>>(
+      `polls/${pollId}/vote?optionId=${optionId}`,
+    );
   }
 
   public deletePollVote(pollId: PollId) {
-    return Api.delete(`polls/${pollId}/vote`) as Promise<ApiResult<Poll>>;
+    return Api.delete(`polls/${pollId}/vote`) as Promise<
+      ApiResult<Envelope<Poll>>
+    >;
   }
 
   public postPoll(poll: Post<Poll>) {
-    return Api.post<Poll>("polls", poll);
+    return Api.post<Envelope<Poll>>("polls", poll);
   }
 
   public patchPoll(pollId: PollId, poll: Patch<Poll>) {
-    return Api.patch<Poll>(`polls/${pollId}`, poll);
+    return Api.patch<Envelope<Poll>>(`polls/${pollId}`, poll);
   }
 })();

@@ -16,6 +16,6 @@ internal class UpdateModeratedProfileNoteValidator : AbstractValidator<UpdateMod
         RuleFor(n => n.Text)
             .NotEmpty().WithMessage(ValidationError.Empty)
             // 4000 = ModeratedProfileNote.Text column width.
-            .MaximumLength(4000).WithMessage(ValidationError.Long);
+            .MaximumLength(ProfileNoteFieldLimits.ContentMaxLength).WithMessage(ValidationError.Long);
     }
 }

@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using DM.Domain.Core.Extensions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Blog;

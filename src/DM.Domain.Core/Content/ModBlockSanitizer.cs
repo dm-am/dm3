@@ -30,7 +30,7 @@ public static class ModBlockSanitizer
     /// Returns the input unchanged when it is null, empty, or contains no
     /// [mod] markers.
     /// </summary>
-    public static string StripUnauthorizedModBlocks(string rawBbCode) =>
+    private static string StripUnauthorizedModBlocks(string rawBbCode) =>
         string.IsNullOrEmpty(rawBbCode) ? rawBbCode : ModTagRegex.Replace(rawBbCode, string.Empty);
 
     /// <summary>

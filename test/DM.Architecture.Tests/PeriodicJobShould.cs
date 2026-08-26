@@ -2,8 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -32,7 +31,7 @@ public class PeriodicJobShould
 
     [Fact]
     public void FindThePeriodicJobs() =>
-        Jobs().Should().HaveCountGreaterOrEqualTo(9,
+        Jobs().Should().HaveCountGreaterThanOrEqualTo(9,
             "the API host runs nine of them, and a smaller match means the assemblies were " +
             "never loaded and the rule below checks nothing");
 
@@ -47,7 +46,7 @@ public class PeriodicJobShould
                 "a job that builds its own timer has its own loop around it, and the loop is " +
                 "where the cancellation handling and the scope live");
 
-    private static IReadOnlyCollection<Type> Jobs() => ProductionTypes()
+    private static IReadOnlyCollection<Type> Jobs() => ProductionAssemblies.Types()
         .Where(type => type is { IsAbstract: false, IsClass: true })
         .Where(type => Ancestry(type).Any(ancestor =>
             string.Equals(ancestor.Name, BaseType, StringComparison.Ordinal)))
@@ -58,28 +57,6 @@ public class PeriodicJobShould
         for (var current = type.BaseType; current is not null; current = current.BaseType)
         {
             yield return current;
-        }
-    }
-
-    private static IEnumerable<Type> ProductionTypes() => Directory
-        .EnumerateFiles(AppContext.BaseDirectory, "DM.*.dll", SearchOption.TopDirectoryOnly)
-        .Where(path => !Path.GetFileNameWithoutExtension(path)
-            .EndsWith(".Tests", StringComparison.Ordinal))
-        .SelectMany(TypesOf);
-
-    private static IEnumerable<Type> TypesOf(string assemblyPath)
-    {
-        try
-        {
-            return Assembly.LoadFrom(assemblyPath).GetTypes();
-        }
-        catch (ReflectionTypeLoadException e)
-        {
-            return e.Types.Where(type => type is not null).Select(type => type!);
-        }
-        catch (Exception)
-        {
-            return Array.Empty<Type>();
         }
     }
 

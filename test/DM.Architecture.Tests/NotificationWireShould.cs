@@ -7,7 +7,7 @@ using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
 using DM.Web.API.Features.Personal.Notifications;
 using DM.Web.API.Shared.Configuration;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,9 +25,11 @@ namespace DM.Architecture.Tests;
 /// a push over the hub. They were two contracts. MVC serializes an enum through
 /// JsonStringEnumConverter while the hub sat on the protocol defaults, so the
 /// event arrived as "NewMessage" from one and as 11 from the other. And the
-/// metadata bag arrived camelCase from the bus but PascalCase from Mongo,
-/// because a dictionary key is not touched by PropertyNamingPolicy. A screen can
-/// only be written against one of the two, and both were on the same page.
+/// metadata bag arrived camelCase from the bus but PascalCase from the store,
+/// because a dictionary key is not touched by PropertyNamingPolicy. The store
+/// writes the bus spelling since W1.1 (NotificationRepository.MetadataOptions),
+/// and the dictionary arm below stands in for any writer that still hands the
+/// bag over under CLR member names.
 ///
 /// Nothing in either path fails when they disagree — a title is simply not found
 /// and a link is simply not built — so the agreement has to be asserted rather
@@ -54,8 +56,11 @@ public class NotificationWireShould
             Payload = metadata.RootElement.Clone()
         };
 
-        // What the list is handed: Mongo stores the CLR member names of the same
-        // metadata object, so it comes back PascalCase.
+        // What the list is handed today is a JsonElement parsed back from the
+        // jsonb column, already in the bus spelling — the same shape as the
+        // pushed copy. The dictionary under CLR member names is kept as the
+        // second arm so the converter goes on normalizing a writer that hands
+        // the bag over unserialized.
         var stored = new Notification
         {
             Id = SampleId,

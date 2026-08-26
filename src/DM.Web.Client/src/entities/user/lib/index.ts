@@ -7,4 +7,12 @@ export { useProfileEdit } from "./useProfileEdit";
 
 // Session lifecycle. The session STATE is shared/stores/auth; these are the
 // account calls that move it.
-export { register, signIn, signOut, signOutAll, fetchUser } from "./session";
+export {
+  register,
+  signIn,
+  completeSecondFactor,
+  signOut,
+  signOutAll,
+  fetchUser,
+} from "./session";
+export type { SignInOutcome } from "./session";

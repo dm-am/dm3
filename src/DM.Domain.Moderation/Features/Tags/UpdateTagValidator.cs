@@ -18,10 +18,10 @@ internal class UpdateTagValidator : AbstractValidator<UpdateTag>
 
         RuleFor(t => t.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(100).WithMessage(ValidationError.Long);
+            .MaximumLength(TagFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(t => t.Description)
-            .MaximumLength(500).WithMessage(ValidationError.Long);
+            .MaximumLength(TagFieldLimits.DescriptionMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(t => t.SortOrder)
             .GreaterThanOrEqualTo(0).WithMessage(ValidationError.Invalid);

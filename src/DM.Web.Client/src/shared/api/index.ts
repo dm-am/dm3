@@ -29,6 +29,10 @@ export { unwrapResource } from "./envelope";
 // with nothing, and both halves accumulated real consumers.
 export { default as uploadApi } from "./uploadApi";
 
+// The five notepads of the site behind one set of endpoints; the method that
+// names each one stays with its container's client.
+export { notepadEndpoints } from "./notepadEndpoints";
+
 // Comments query — one shape and one wire conversion for every discussion
 export { toCommentsQueryParams, type CommentsQuery } from "./commentsQuery";
 

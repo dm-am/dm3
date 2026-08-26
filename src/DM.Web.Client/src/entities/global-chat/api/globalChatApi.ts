@@ -2,6 +2,7 @@ import type {
   CursorEnvelope,
   Envelope,
   ListEnvelope,
+  QuoteSource,
 } from "@/shared/api/models/common";
 import type {
   GlobalChatMessage,
@@ -87,57 +88,87 @@ export default new (class GlobalChatApi {
    * Send a message to global chat
    */
   public sendMessage(text: string) {
-    return Api.post<GlobalChatMessage>("global-chat/messages", { text });
+    return Api.post<Envelope<GlobalChatMessage>>("global-chat/messages", {
+      text,
+    });
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Single message operations (via unified messages endpoint)
+  // Single message operations
+  //
+  // Addressed under global-chat, not under the shared messages endpoint.
+  // That one belongs to private correspondence and reads a message only for
+  // a participant of its chat; the global chat has no participants, because
+  // the right to read it belongs to everyone, so every one of these answered
+  // 404 — on the reader's own line included.
   // ─────────────────────────────────────────────────────────────
 
   /**
    * Get a single message by ID
    */
   public getMessage(id: string) {
-    return Api.get<GlobalChatMessage>(`messages/${id}`);
+    return Api.get<Envelope<GlobalChatMessage>>(`global-chat/messages/${id}`);
   }
 
   /**
-   * Get message with BBCode text for editing
+   * Get message with round-trip markup for editing
    */
   public getMessageForEdit(id: string) {
-    return Api.get<GlobalChatMessage>(
-      `messages/${id}`,
+    return Api.get<Envelope<GlobalChatMessage>>(
+      `global-chat/messages/${id}`,
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
   }
 
   /**
+   * Fetch the markup of a quotation of a global chat message.
+   *
+   * The server composes the whole tag, author included, already filtered for
+   * whoever is asking. The client does not build one out of the rendered page:
+   * that conversion is lossy, and the source of somebody else's message is not
+   * something the browser holds.
+   *
+   * Addressed under global-chat, for the reason the neighbours above are: the
+   * private-message endpoint composes the quotation from the read that asks
+   * whether the reader takes part in the chat, and the global chat has no
+   * participants, so it answered 404 to everyone.
+   */
+  public getMessageQuote(id: string) {
+    return Api.get<Envelope<QuoteSource>>(`global-chat/messages/${id}/quote`);
+  }
+
+  /**
    * Update a message
    */
   public updateMessage(id: string, text: string) {
-    return Api.patch<GlobalChatMessage>(`messages/${id}`, { text });
+    return Api.patch<Envelope<GlobalChatMessage>>(
+      `global-chat/messages/${id}`,
+      { text },
+    );
   }
 
   /**
    * Delete a message (soft delete)
    */
   public deleteMessage(id: string) {
-    return Api.delete(`messages/${id}`);
+    return Api.delete(`global-chat/messages/${id}`);
   }
 
   /**
    * Like a message
    */
   public likeMessage(id: string) {
-    return Api.post<GlobalChatMessage>(`messages/${id}/likes`);
+    return Api.post<Envelope<GlobalChatMessage>>(
+      `global-chat/messages/${id}/likes`,
+    );
   }
 
   /**
    * Unlike a message
    */
   public unlikeMessage(id: string) {
-    return Api.delete(`messages/${id}/likes`);
+    return Api.delete(`global-chat/messages/${id}/likes`);
   }
 
   // ─────────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ namespace DM.Infrastructure.Persistence.Repositories.Personal;
 /// Written as a separate class rather than as members of the repository because the
 /// statement it produces is the thing under test: <c>ToQueryString</c> on these
 /// queries is what states that no subquery correlates to the outer row, and reaching
-/// it through the repository would need a Mongo client and a mapper to say nothing
+/// it through the repository would need a mapper to say nothing
 /// extra.
 /// </remarks>
 internal static class UserCountQueries

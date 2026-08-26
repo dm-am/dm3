@@ -7,11 +7,10 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Workers.NotificationDispatcher.Notifiers.Forum;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Workers.NotificationDispatcher.Tests;
@@ -53,8 +52,8 @@ public class ChangedTopicActorShould
         var created = DateTimeOffset.UtcNow.AddDays(-1);
 
         context.Users.AddRange(
-            User(authorId, "author-" + topicNumber, created),
-            User(editorId, "editor-" + topicNumber, created));
+            NotificationSeed.User(authorId, "author-" + topicNumber, created),
+            NotificationSeed.User(editorId, "editor-" + topicNumber, created));
         context.Set<Board>().Add(new Board
         {
             BoardId = boardId,
@@ -99,14 +98,13 @@ public class ChangedTopicActorShould
 
     private async Task<CreateNotification?> ChangedAsync(Guid topicId)
     {
-        var repository = new Mock<ISubscriptionRepository>();
+        var repository = Substitute.For<ISubscriptionRepository>();
         repository
-            .Setup(r => r.GetByTargetWithSettingsAsync(
+            .GetByTargetWithSettingsAsync(
                 SubscriptionTargetType.Topic,
                 topicId,
                 SubscriptionSettings.NewComments,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Subscription>
+                Arg.Any<CancellationToken>()).Returns(new List<Subscription>
             {
                 new()
                 {
@@ -120,7 +118,7 @@ public class ChangedTopicActorShould
 
         await using var context = _fixture.CreateContext();
         var produced = await EveryNotificationGeneratorShould.DrainAsync(
-            new ChangedTopicNotificationGenerator(context, repository.Object), topicId);
+            new ChangedTopicNotificationGenerator(context, repository), topicId);
         return produced.SingleOrDefault();
     }
 
@@ -148,7 +146,7 @@ public class ChangedTopicActorShould
         var secondEditorId = Guid.NewGuid();
         await using (var context = _fixture.CreateContext())
         {
-            context.Users.Add(User(secondEditorId, "editor-9202-second", DateTimeOffset.UtcNow.AddDays(-1)));
+            context.Users.Add(NotificationSeed.User(secondEditorId, "editor-9202-second", DateTimeOffset.UtcNow.AddDays(-1)));
             await context.SaveChangesAsync();
         }
 
@@ -178,22 +176,4 @@ public class ChangedTopicActorShould
         notification!.ActorId.Should().BeNull();
         notification.UsersInterested.Should().Equal(new[] { SubscriberId });
     }
-
-    private static User User(Guid id, string username, DateTimeOffset created) => new()
-    {
-        UserId = id,
-        Username = username,
-        Email = username + "@example.com",
-        PasswordHash = "fakehash",
-        Salt = "fakesalt",
-        PasswordHashVersion = 2,
-        Role = UserRole.RegularUser,
-        CreatedUtc = created,
-        LastActivityUtc = DateTimeOffset.UtcNow,
-        IsRemoved = false,
-        Status = string.Empty,
-        Name = string.Empty,
-        Location = string.Empty,
-        Info = string.Empty
-    };
 }

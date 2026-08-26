@@ -21,7 +21,7 @@ RENDERED="${ALERTMANAGER_CONFIG:-/tmp/alertmanager.yml}"
 # The defaults live here as well as in compose. The container has to be startable
 # on its own - that is what the gate runs - and under "set -u" a variable compose
 # did not pass would take it down instead.
-SMARTHOST="${ALERT_SMTP_SMARTHOST:-dm-mailhog:1025}"
+SMARTHOST="${ALERT_SMTP_SMARTHOST:-dm-mailpit:1025}"
 EMAIL_FROM="${ALERT_EMAIL_FROM:-alertmanager@dm.am}"
 EMAIL_TO="${ALERT_EMAIL_TO:-alerts@dm.am}"
 SMTP_USERNAME="${ALERT_SMTP_USERNAME:-}"

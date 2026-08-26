@@ -18,24 +18,24 @@ using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Invitations;
 
 public class GameInvitationServiceShould : UnitTestBase
 {
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IGameRepository> _gameRepository;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IGameInvitationRepository> _repository;
-    private readonly Mock<IGameSubscriptionService> _subscriptionService;
-    private readonly Mock<IUserBlacklistChecker> _userBlacklistChecker;
-    private readonly Mock<IEventProducer> _producer;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IGameRepository _gameRepository;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IGameInvitationRepository _repository;
+    private readonly IGameSubscriptionService _subscriptionService;
+    private readonly IUserBlacklistChecker _userBlacklistChecker;
+    private readonly IEventProducer _producer;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly GameInvitationService _service;
     private readonly Guid _currentUserId;
 
@@ -43,39 +43,38 @@ public class GameInvitationServiceShould : UnitTestBase
     {
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDto>()));
 
         _gameRepository = Mock<IGameRepository>();
         _userLookupService = Mock<IUserLookupService>();
         _repository = Mock<IGameInvitationRepository>();
         _subscriptionService = Mock<IGameSubscriptionService>();
         _userBlacklistChecker = Mock<IUserBlacklistChecker>();
-        _userBlacklistChecker.Setup(c => c.IsBlockedAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+        _userBlacklistChecker.IsBlockedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(false);
 
         _producer = Mock<IEventProducer>();
-        _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _guidFactory = Mock<IGuidFactory>();
-        _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         _service = new GameInvitationService(
-            _identityProvider.Object,
-            _intentionManager.Object,
-            _gameRepository.Object,
-            _userLookupService.Object,
-            _repository.Object,
-            _subscriptionService.Object,
-            _userBlacklistChecker.Object,
-            _producer.Object,
-            _dateTimeProvider.Object,
-            _guidFactory.Object);
+            _identityProvider,
+            _intentionManager,
+            _gameRepository,
+            _userLookupService,
+            _repository,
+            _subscriptionService,
+            _userBlacklistChecker,
+            _producer,
+            _dateTimeProvider,
+            _guidFactory);
     }
 
     [Fact]
@@ -90,16 +89,16 @@ public class GameInvitationServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = Array.Empty<BlacklistedUser>()
         };
-        _gameRepository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _userLookupService.Setup(u => u.GetAsync(username)).ReturnsAsync(new GeneralUser { UserId = userId });
-        _repository.Setup(r => r.InvalidateAndCreateInvitation(It.IsAny<CreateGameInvitationEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GameInvitationToken { TokenId = Guid.NewGuid() });
-        _repository.Setup(r => r.GetInvitation(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new GameInvitationToken(), new GameInvitation()));
+        _gameRepository.GetGame(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
+        _userLookupService.GetAsync(username).Returns(new GeneralUser { UserId = userId });
+        _repository.InvalidateAndCreateInvitation(Arg.Any<CreateGameInvitationEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new GameInvitationToken { TokenId = Guid.NewGuid() });
+        _repository.GetInvitation(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns((new GameInvitationToken(), new GameInvitation()));
 
         await _service.InvitePlayer(gameId, username);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.InvitePlayer, game), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.InvitePlayer, game);
     }
 
     /// <summary>
@@ -119,14 +118,13 @@ public class GameInvitationServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = Array.Empty<BlacklistedUser>()
         };
-        _gameRepository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _repository.Setup(r => r.GetPendingInvitations(gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<GameInvitation>());
+        _gameRepository.GetGame(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
+        _repository.GetPendingInvitations(gameId, Arg.Any<CancellationToken>()).Returns(Array.Empty<GameInvitation>());
 
         await _service.GetPendingInvitations(gameId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.EditSettings, game), Times.Once);
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, game), Times.Never);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.EditSettings, game);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(GameIntention.Edit, game);
     }
 
     [Fact]
@@ -142,16 +140,16 @@ public class GameInvitationServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = Array.Empty<BlacklistedUser>()
         };
-        _gameRepository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _userLookupService.Setup(u => u.GetAsync(username)).ReturnsAsync(new GeneralUser { UserId = userId });
-        _repository.Setup(r => r.InvalidateAndCreateInvitation(It.IsAny<CreateGameInvitationEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GameInvitationToken { TokenId = tokenId });
-        _repository.Setup(r => r.GetInvitation(tokenId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((new GameInvitationToken(), new GameInvitation()));
+        _gameRepository.GetGame(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
+        _userLookupService.GetAsync(username).Returns(new GeneralUser { UserId = userId });
+        _repository.InvalidateAndCreateInvitation(Arg.Any<CreateGameInvitationEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new GameInvitationToken { TokenId = tokenId });
+        _repository.GetInvitation(tokenId, Arg.Any<CancellationToken>())
+            .Returns((new GameInvitationToken(), new GameInvitation()));
 
         await _service.InvitePlayer(gameId, username);
 
-        _producer.Verify(p => p.SendAsync(EventType.PlayerInvitationCreated, tokenId), Times.Once);
+        await _producer.Received(1).SendAsync(EventType.PlayerInvitationCreated, tokenId);
     }
 
     [Fact]
@@ -166,8 +164,8 @@ public class GameInvitationServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = new[] { new BlacklistedUser { UserId = userId } }
         };
-        _gameRepository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _userLookupService.Setup(u => u.GetAsync(username)).ReturnsAsync(new GeneralUser { UserId = userId });
+        _gameRepository.GetGame(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
+        _userLookupService.GetAsync(username).Returns(new GeneralUser { UserId = userId });
 
         var act = async () => await _service.InvitePlayer(gameId, username);
 
@@ -188,15 +186,13 @@ public class GameInvitationServiceShould : UnitTestBase
             TokenType = TokenType.GamePlayerInvitation,
             CreatedUtc = DateTimeOffset.UtcNow
         };
-        _repository.Setup(r => r.GetInvitation(tokenId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((token, new GameInvitation()));
-        _repository.Setup(r => r.RemoveInvitation(tokenId, It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+        _repository.GetInvitation(tokenId, Arg.Any<CancellationToken>()).Returns((token, new GameInvitation()));
+        _repository.RemoveInvitation(tokenId, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
         await _service.AcceptInvitation(tokenId);
 
-        _repository.Verify(r => r.RemoveInvitation(tokenId, It.IsAny<CancellationToken>()), Times.Once);
-        _producer.Verify(p => p.SendAsync(EventType.PlayerInvitationAccepted, tokenId), Times.Once);
+        await _repository.Received(1).RemoveInvitation(tokenId, Arg.Any<CancellationToken>());
+        await _producer.Received(1).SendAsync(EventType.PlayerInvitationAccepted, tokenId);
     }
 
     [Fact]
@@ -212,25 +208,23 @@ public class GameInvitationServiceShould : UnitTestBase
             TokenType = TokenType.GameReaderInvitation,
             CreatedUtc = DateTimeOffset.UtcNow
         };
-        _repository.Setup(r => r.GetInvitation(tokenId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((token, new GameInvitation()));
-        _repository.Setup(r => r.RemoveInvitation(tokenId, It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-        _subscriptionService.Setup(s => s.SubscribeAsync(gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new DM.Domain.Core.Subscriptions.Subscription());
+        _repository.GetInvitation(tokenId, Arg.Any<CancellationToken>()).Returns((token, new GameInvitation()));
+        _repository.RemoveInvitation(tokenId, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        _subscriptionService.SubscribeAsync(gameId, Arg.Any<CancellationToken>())
+            .Returns(new DM.Domain.Core.Subscriptions.Subscription());
 
         await _service.AcceptInvitation(tokenId);
 
-        _subscriptionService.Verify(s => s.SubscribeAsync(gameId, It.IsAny<CancellationToken>()), Times.Once);
-        _producer.Verify(p => p.SendAsync(EventType.ReaderInvitationAccepted, tokenId), Times.Once);
+        await _subscriptionService.Received(1).SubscribeAsync(gameId, Arg.Any<CancellationToken>());
+        await _producer.Received(1).SendAsync(EventType.ReaderInvitationAccepted, tokenId);
     }
 
     [Fact]
     public async Task ThrowNotFoundWhenInvitationDoesNotExist()
     {
         var tokenId = Guid.NewGuid();
-        _repository.Setup(r => r.GetInvitation(tokenId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((GameInvitationToken?)null, (GameInvitation?)null));
+        _repository.GetInvitation(tokenId, Arg.Any<CancellationToken>())
+            .Returns(((GameInvitationToken?)null, (GameInvitation?)null));
 
         var act = async () => await _service.AcceptInvitation(tokenId);
 

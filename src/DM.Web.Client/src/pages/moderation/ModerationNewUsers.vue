@@ -15,6 +15,7 @@ import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { formatDate } from "@/shared/lib/utils/datetime";
+import { parsePageNumber } from "@/shared/lib/filters";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import { UserLink } from "@/entities/user";
 import { useRoleGate } from "./lib/useRoleGate";
@@ -29,10 +30,7 @@ const paging = ref<PagingModel | null>(null);
 const loading = ref(false);
 const loadError = ref<string | null>(null);
 
-const pageNumber = computed(() => {
-  const n = parseInt(String(route.query.number ?? "1"), 10);
-  return Number.isFinite(n) && n > 0 ? n : 1;
-});
+const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
 const columns: Column[] = [
   { key: "user", label: "Пользователь" },

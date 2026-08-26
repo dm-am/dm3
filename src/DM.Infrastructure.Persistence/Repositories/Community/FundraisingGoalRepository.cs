@@ -1,7 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Community.Features.Fundraising;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,13 +9,11 @@ namespace DM.Infrastructure.Persistence.Repositories.Community;
 internal class FundraisingGoalRepository : IFundraisingGoalRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     /// <inheritdoc />
-    public FundraisingGoalRepository(DmDbContext dbContext, IMapper mapper)
+    public FundraisingGoalRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     // READ
@@ -26,7 +22,7 @@ internal class FundraisingGoalRepository : IFundraisingGoalRepository
     public async Task<FundraisingGoal?> Get()
     {
         return await _dbContext.FundraisingGoals
-            .ProjectTo<FundraisingGoal>(_mapper.ConfigurationProvider)
+            .ProjectToFundraisingGoal()
             .FirstOrDefaultAsync();
     }
 
@@ -49,6 +45,6 @@ internal class FundraisingGoalRepository : IFundraisingGoalRepository
 
         await _dbContext.SaveChangesAsync();
 
-        return _mapper.Map<FundraisingGoal>(dbGoal);
+        return dbGoal.ToFundraisingGoal();
     }
 }

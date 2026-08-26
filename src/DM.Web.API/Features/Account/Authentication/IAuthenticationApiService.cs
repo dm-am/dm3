@@ -19,6 +19,14 @@ public interface IAuthenticationApiService
     Task<LoginResponse> Login(LoginRequest request, HttpContext httpContext);
 
     /// <summary>
+    /// Finish a login the password step left owing a second factor
+    /// </summary>
+    /// <param name="request">Code from the device or a recovery code</param>
+    /// <param name="httpContext">HTTP context</param>
+    /// <returns>Login response with user and preferences</returns>
+    Task<LoginResponse> CompleteTwoFactor(TwoFactorLoginRequest request, HttpContext httpContext);
+
+    /// <summary>
     /// Logout current session
     /// </summary>
     /// <param name="httpContext">HTTP context</param>

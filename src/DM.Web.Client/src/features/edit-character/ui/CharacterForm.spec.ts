@@ -398,9 +398,12 @@ describe("CharacterForm", () => {
     });
 
     it("omits untouched (empty) attributes from the submit payload", async () => {
+      // The answer is the single-resource envelope the server sends, not the
+      // character on its own: the form is what takes the wrapper off.
+      const created = makeCharacter([]);
       const createSpy = vi
         .spyOn(gameApi, "createCharacter")
-        .mockResolvedValue({ data: makeCharacter([]), error: null });
+        .mockResolvedValue({ data: { resource: created }, error: null });
       const wrapper = mount(CharacterForm, {
         props: { schema: makeSchema(), gameId: "game-1" },
       });
@@ -419,8 +422,8 @@ describe("CharacterForm", () => {
       expect(payload.attributes).toEqual([
         { id: "text-spec", value: "Следопыт" },
       ]);
-      // Saved character is emitted back to the caller
-      expect(wrapper.emitted("saved")).toBeTruthy();
+      // Saved character is emitted back to the caller, unwrapped
+      expect(wrapper.emitted("saved")?.[0]).toEqual([created]);
     });
   });
 });

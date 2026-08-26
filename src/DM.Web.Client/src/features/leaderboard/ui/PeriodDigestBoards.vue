@@ -99,7 +99,7 @@ const boardList = computed(() => {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 // The reveal animation lives on the global .expand-zone class (Reset.sass),
 // driven by useExpandableSection.
@@ -116,12 +116,13 @@ const boardList = computed(() => {
   grid-template-columns: repeat(3, 1fr)
   gap: $medium
 
-// Owner-picked board chrome INSIDE a topic: no borders, the subtle overlay
-// (slightly darker than the topic surface; alpha overlays stay correct in
-// both themes). The /statistics page keeps StatBoard's own dashed card.
+// Owner-picked board chrome INSIDE a topic: no borders, the faintest wash of
+// the scale — just enough to tell the board apart from the topic surface it
+// sits on, in both themes (alpha overlays stay correct in either). The
+// /statistics page keeps StatBoard's own dashed card.
 :deep(.stat-board)
   border: none
-  background-color: $overlay-subtle
+  background-color: $overlay-faint
 
 // The shared "... показать полностью" idiom (SSOT mixin in Inputs.sass).
 .digest-expand-button

@@ -137,8 +137,8 @@ async function toggleActive(id: string, isActive: boolean) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/Tables"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Tables" as *
 
 .awards-admin
   display: flex

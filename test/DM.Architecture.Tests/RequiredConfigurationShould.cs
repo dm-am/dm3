@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -31,7 +31,6 @@ public class RequiredConfigurationShould
     private static readonly (string Section, string Key)[] Guarded =
     [
         ("ConnectionStrings", "Rdb"),
-        ("ConnectionStrings", "Mongo"),
         ("CdnConfiguration", "AccessKey"),
         ("CdnConfiguration", "SecretKey"),
     ];
@@ -77,7 +76,7 @@ public class RequiredConfigurationShould
                 StringComparison.Ordinal))
             .ToArray();
 
-        overlays.Should().HaveCountGreaterOrEqualTo(3,
+        overlays.Should().HaveCountGreaterThanOrEqualTo(3,
             "the hosts that are run from sources each carry one, and a walk that finds none " +
             "passes on anything");
 
@@ -92,14 +91,6 @@ public class RequiredConfigurationShould
                     $"{name} connects to the stack the template describes");
                 settings.Should().NotContain("User ID=postgres",
                     $"{name} would hold the server rather than the database of this site");
-            }
-
-            if (settings.Contains("\"Mongo\"", StringComparison.Ordinal))
-            {
-                settings.Should().Contain($"{Declared("MONGO_USER")}:{Declared("MONGO_PASSWORD")}@",
-                    $"{name} reaches a store that requires credentials");
-                settings.Should().Contain("authSource=dm3",
-                    $"{name} authenticates against the database its user was created in");
             }
 
             if (settings.Contains("\"CdnConfiguration\"", StringComparison.Ordinal))

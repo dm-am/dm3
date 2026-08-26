@@ -21,7 +21,7 @@
 
 | Файл | Назначение |
 |------|------------|
-| `docker/.env` | Секреты Docker (пароли БД, Mongo, MinIO, RabbitMQ, ключ шифрования) |
+| `docker/.env` | Секреты Docker (пароли БД, MinIO, RabbitMQ, ключ шифрования) |
 | `src/DM.Web.API/appsettings.json` | Главный конфиг API |
 | `src/DM.Workers.*/appsettings.json` | Конфиги workers |
 | `src/*/appsettings.Development.json` | Учетные данные localhost для запуска из исходников |
@@ -33,7 +33,7 @@
 [SECURITY.md](../conventions/SECURITY.md).
 
 Ключи, без которых хост отказывается стартовать (`ConnectionStrings:Rdb`,
-`ConnectionStrings:Mongo`, `CdnConfiguration:AccessKey` и `SecretKey`), лежат не
+`CdnConfiguration:AccessKey` и `SecretKey`), лежат не
 в `appsettings.json`, а в `appsettings.Development.json`. Хост в Production этот
 файл не читает, и в образ он не попадает, поэтому проверка на старте срабатывает
 там, где она нужна. Запуск из исходников — с явным окружением:
@@ -44,7 +44,6 @@
 | Переменная | Как получить |
 |------------|--------------|
 | `DM_CryptoConfiguration__KeyBase64` | `openssl rand -base64 32`. Одно значение на все экземпляры приложения: им шифруются одноразовые ссылки из писем, а письмо, выданное под одним адресом сайта, открывают по другому, и расшифровать токен обязана принимающая сторона. `dm.ps1` генерирует локальный ключ сам |
-| `MONGO_ROOT_PASSWORD`, `MONGO_PASSWORD` | Задать в `docker/.env`. Меняются только вместе с пересозданием тома Mongo |
 | `IMGPROXY_KEY`, `IMGPROXY_SALT` | `openssl rand -hex 32`, генерирует `init-env.sh` в `docker/.env`. Вся секция `ImageProxyConfiguration` (imgproxy endpoint + URL signing, [UPLOADS.md](../architecture/UPLOADS.md)) приходит в API только переменными `DM_ImageProxyConfiguration__*` из `docker-compose.yml`, в `appsettings.json` ее нет |
 
 **Настройки развертывания, а не кода:**
@@ -110,7 +109,7 @@ Slash-команда `/connect` регистрируется один раз н�
 | Endpoint | Назначение |
 |----------|-----------|
 | `/_health` | Liveness (Docker health check) |
-| `/_ready` | Readiness (PostgreSQL + MongoDB) |
+| `/_ready` | Readiness (PostgreSQL) |
 | `/_health/detail` | Детальная информация |
 | `/metrics` | Метрики в формате Prometheus |
 

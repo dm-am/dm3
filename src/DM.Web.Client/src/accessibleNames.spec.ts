@@ -33,9 +33,6 @@
  * opaque, so `<router-link>{{ topic.title }}</router-link>` passes — and so
  * would Paging's page numbers, which is why Paging.spec.ts renders those and
  * asserts the names there.
- *
- * `pages/dev` is out of scope: the router registers those mockup catalogs
- * under `import.meta.env.DEV` only and rollup drops them from the build.
  */
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "fs";
@@ -47,9 +44,6 @@ import { parse as parseSfc } from "vue/compiler-sfc";
 const CLIENT_SRC = dirname(fileURLToPath(import.meta.url));
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "coverage"]);
-
-/** Mockup catalogs; the router registers them in development builds only. */
-const NOT_SHIPPED = "pages/dev/";
 
 /** @vue/compiler-core NodeTypes — the members a parsed template holds. */
 const ELEMENT = 1;
@@ -186,7 +180,6 @@ describe("every control carries an accessible name", () => {
     const anonymous: string[] = [];
     for (const [file, ast] of templates) {
       const path = where(file);
-      if (path.startsWith(NOT_SHIPPED)) continue;
       const visit = (node: Node): void => {
         if (
           node.type === ELEMENT &&

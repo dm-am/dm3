@@ -1,9 +1,7 @@
-using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -41,7 +39,7 @@ public class CursorEnvelopeShould
     [InlineData("HasNext", "NextCursor")]
     public void OfferACursorForEveryPageItClaimsToHave(string flag, string cursor)
     {
-        var constructions = Sources()
+        var constructions = RepositoryFiles.ProductionSources()
             .SelectMany(path => Construction
                 .Matches(File.ReadAllText(path))
                 .Select(match => (Path: Relative(path), Body: match.Groups["body"].Value)))
@@ -63,12 +61,6 @@ public class CursorEnvelopeShould
                 "ask for that page with, so one without the other is an invitation to a " +
                 "request that cannot be made");
     }
-
-    private static IEnumerable<string> Sources() => Directory
-        .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
-        .Where(path => !path
-            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Any(segment => segment is "obj" or "bin"));
 
     private static string Relative(string path) => Path.GetRelativePath(RepositoryRoot, path);
 

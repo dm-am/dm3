@@ -89,7 +89,7 @@ const {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .toggle-link
   display: inline-block

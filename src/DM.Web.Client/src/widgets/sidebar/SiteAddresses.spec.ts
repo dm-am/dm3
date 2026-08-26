@@ -9,18 +9,29 @@
  * the site's addresses and still draws the lines: the developer has to see what
  * he is changing, and what he sees is what a visitor on the main address sees.
  *
- * These tests moved here from Footer.spec.ts together with the lines
- * themselves — the behaviour is the block's now, not the footer's.
+ * Since W3.9 B1 the block is a state board: every row carries a live signal
+ * scale and a measured round trip beside the link. The measurement itself is
+ * useAddressPing's business and the network has no place in a unit spec, so
+ * the composable is replaced with a reactive record the tests drive by hand.
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
+import { nextTick, reactive } from "vue";
 import { SITE_ADDRESSES } from "@/shared/config/site";
+import type { AddressPing } from "@/shared/lib/composables/useAddressPing";
 import SiteAddresses from "./SiteAddresses.vue";
 
 // useRoute reads an injection rather than $route, so a mocked property on the
 // instance never reaches it. The module is what has to answer.
 const currentRoute = { fullPath: "/" };
 vi.mock("vue-router", () => ({ useRoute: () => currentRoute }));
+
+// The factory closes over the record and hands it out at mount time, long
+// after this module's body has run, so the reference below is never premature.
+const pings = reactive<Record<string, AddressPing>>({});
+vi.mock("@/shared/lib/composables/useAddressPing", () => ({
+  useAddressPing: () => pings,
+}));
 
 const [main, second] = SITE_ADDRESSES;
 
@@ -42,6 +53,22 @@ function links(wrapper: ReturnType<typeof render>) {
   }));
 }
 
+/** The copy a sighted visitor gets: the clipped screen-reader spans excluded. */
+function visibleText(wrapper: ReturnType<typeof render>): string {
+  const root = wrapper.element.cloneNode(true) as HTMLElement;
+  for (const hidden of root.querySelectorAll(".visually-hidden")) {
+    hidden.remove();
+  }
+  return root.textContent ?? "";
+}
+
+beforeEach(() => {
+  // Every address starts unmeasured, the way a fresh mount sees the world.
+  for (const address of SITE_ADDRESSES) {
+    pings[address.host] = { status: "pending", latencyMs: null };
+  }
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -56,20 +83,24 @@ describe("the site address block", () => {
     expect(drawn.map((l) => l.host)).toEqual(SITE_ADDRESSES.map((a) => a.host));
   });
 
-  it("puts the mark of the address inside its link", () => {
-    // The mark names the address just as the words do, so it belongs to the
-    // same click target and takes the same colour. An icon mark is an <svg>
-    // of the set; a label mark is its letters.
+  it("keeps the mark beside the link, not inside it", () => {
+    // The mark is data the way the digits are (owner's call, 2026-08-25):
+    // it shares the lead cell with the anchor for geometry, but neither
+    // looks like a link nor navigates. Only the name is the click target.
     onHost(main.host);
     const wrapper = render("/");
     const anchors = wrapper.findAll("a[href]");
 
     for (const [i, address] of SITE_ADDRESSES.entries()) {
       expect(anchors[i].text()).toContain(address.name);
+      expect(anchors[i].find(".address-mark").exists()).toBe(false);
+      const cell = anchors[i].element.closest(".address-cell")!;
       if ("icon" in address.mark) {
-        expect(anchors[i].find("svg").exists()).toBe(true);
+        expect(cell.querySelector(".address-mark svg")).not.toBeNull();
       } else {
-        expect(anchors[i].text()).toContain(address.mark.label);
+        expect(cell.querySelector(".address-mark")!.textContent).toContain(
+          address.mark.label,
+        );
       }
     }
   });
@@ -95,5 +126,96 @@ describe("the site address block", () => {
     expect(links(render("/")).map((l) => l.host)).toEqual(
       SITE_ADDRESSES.map((a) => a.host),
     );
+  });
+
+  it("lays every row's cells into one grid container", () => {
+    // One grid on the block, not one per row: the columns must land on the
+    // same x in every row, and only shared tracks guarantee that. So the
+    // link, the scale and the ms cell of every row are direct children of
+    // the single board element.
+    onHost(main.host);
+    const board = render("/").find("li.site-addresses");
+    expect(board.exists()).toBe(true);
+
+    const children = Array.from(board.element.children);
+    const of = (selector: string) =>
+      children.filter((child) => child.matches(selector)).length;
+    expect(of("span.address-cell")).toBe(SITE_ADDRESSES.length);
+    expect(of(".signal")).toBe(SITE_ADDRESSES.length);
+    expect(of(".latency")).toBe(SITE_ADDRESSES.length);
+  });
+});
+
+describe("the state board", () => {
+  it("reserves the ms cell with a dash until the first measurement lands", () => {
+    // The track is there from the first render, so nothing jumps when the
+    // number arrives; the dash says "not measured", not "not answering".
+    onHost(main.host);
+    const cells = render("/").findAll(".latency");
+
+    expect(cells).toHaveLength(SITE_ADDRESSES.length);
+    for (const cell of cells) {
+      expect(cell.text()).toBe("-");
+    }
+  });
+
+  it("shows the measured round trip and fills the scale by it", async () => {
+    onHost(main.host);
+    const wrapper = render("/");
+    pings[main.host] = { status: "up", latencyMs: 42 };
+    pings[second.host] = { status: "up", latencyMs: 200 };
+    await nextTick();
+
+    expect(wrapper.findAll(".latency").map((cell) => cell.text())).toEqual([
+      "42 мс",
+      "200 мс",
+    ]);
+
+    // 42 <= 80 fills all four bars; 160 < 200 <= 300 fills two.
+    const signals = wrapper.findAll(".signal");
+    expect(signals[0].findAll(".bar")).toHaveLength(4);
+    expect(signals[0].findAll(".bar.filled")).toHaveLength(4);
+    expect(signals[1].findAll(".bar.filled")).toHaveLength(2);
+    expect(signals[0].attributes("title")).toBe(
+      "отвечает из вашей сети, 42 мс",
+    );
+  });
+
+  it("turns the comb red and keeps the dash for an address that does not answer", async () => {
+    onHost(main.host);
+    const wrapper = render("/");
+    pings[main.host] = { status: "up", latencyMs: 42 };
+    pings[second.host] = { status: "down", latencyMs: null };
+    await nextTick();
+
+    const signal = wrapper.findAll(".signal")[1];
+    expect(signal.classes()).toContain("down");
+    expect(signal.findAll(".bar")).toHaveLength(4);
+    expect(signal.findAll(".bar.filled")).toHaveLength(0);
+    expect(signal.attributes("title")).toBe("не отвечает из вашей сети");
+    expect(wrapper.findAll(".latency")[1].text()).toBe("-");
+  });
+
+  it("says nothing visible about state", async () => {
+    // The numbers say it. The words live only in the scale's title and the
+    // screen-reader span; the visible copy is the names and the figures, and
+    // no row is marked as "the one you are on".
+    onHost(main.host);
+    const wrapper = render("/");
+    pings[main.host] = { status: "up", latencyMs: 42 };
+    pings[second.host] = { status: "down", latencyMs: null };
+    await nextTick();
+
+    const visible = visibleText(wrapper);
+    expect(visible).toContain(main.name);
+    expect(visible).toContain(second.name);
+    expect(visible).not.toContain("отвечает");
+    expect(visible).not.toContain("текущий");
+
+    expect(wrapper.find("strong").exists()).toBe(false);
+    expect(wrapper.find("b").exists()).toBe(false);
+    for (const titled of wrapper.findAll("[title]")) {
+      expect(titled.classes()).toContain("signal");
+    }
   });
 });

@@ -1,6 +1,5 @@
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Forum.Features.Boards;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
@@ -11,12 +10,12 @@ namespace DM.Web.API.Features.Forum.Moderators;
 internal class BoardModeratorsApiService : IBoardModeratorsApiService
 {
     private readonly IBoardService _boardService;
-    private readonly IMapper _mapper;
+    private readonly UserMapper _mapper;
 
     /// <inheritdoc />
     public BoardModeratorsApiService(
         IBoardService boardService,
-        IMapper mapper)
+        UserMapper mapper)
     {
         _boardService = boardService;
         _mapper = mapper;
@@ -26,14 +25,14 @@ internal class BoardModeratorsApiService : IBoardModeratorsApiService
     public async Task<ListEnvelope<User>> GetModerators(string id)
     {
         var moderators = await _boardService.GetModerators(id);
-        return new ListEnvelope<User>(moderators.Select(_mapper.Map<User>));
+        return new ListEnvelope<User>(moderators.Select(_mapper.ToUser));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<User>> AddModerator(string id, string username)
     {
         var user = await _boardService.AddModerator(id, username);
-        return new Envelope<User>(_mapper.Map<User>(user));
+        return new Envelope<User>(_mapper.ToUser(user));
     }
 
     /// <inheritdoc />

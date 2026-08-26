@@ -10,35 +10,33 @@ using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Domain.Game.Features.Games;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.AttributeSchemas;
 
 public class AttributeSchemaServiceShould : UnitTestBase
 {
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IAttributeSchemaRepository> _repository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IAttributeSchemaRepository _repository;
+    private readonly IIdentityProvider _identityProvider;
     private readonly AttributeSchemaService _service;
 
     public AttributeSchemaServiceShould()
     {
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<AttributeSchemaIntention>(), It.IsAny<AttributeSchema>()));
 
         _repository = Mock<IAttributeSchemaRepository>();
 
         _identityProvider = Mock<IIdentityProvider>();
         var userId = Guid.NewGuid();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
 
         _service = new AttributeSchemaService(
-            _intentionManager.Object,
-            _repository.Object,
-            _identityProvider.Object,
+            _intentionManager,
+            _repository,
+            _identityProvider,
             new CreateAttributeSchemaValidator(),
             new UpdateAttributeSchemaValidator());
     }
@@ -48,35 +46,33 @@ public class AttributeSchemaServiceShould : UnitTestBase
     {
         var createSchema = new CreateAttributeSchema { Title = "Test Schema" };
         var schema = new AttributeSchema { Id = Guid.NewGuid() };
-        _repository.Setup(r => r.Create(It.IsAny<CreateAttributeSchema>(), It.IsAny<Guid>()))
-            .ReturnsAsync(schema);
+        _repository.Create(Arg.Any<CreateAttributeSchema>(), Arg.Any<Guid>()).Returns(schema);
 
         await _service.CreateAsync(createSchema);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Create), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Create);
     }
 
     [Fact]
     public async Task CreateSchemaWithCurrentUser()
     {
         var userId = Guid.NewGuid();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
         var createSchema = new CreateAttributeSchema { Title = "Test Schema" };
         var schema = new AttributeSchema { Id = Guid.NewGuid() };
-        _repository.Setup(r => r.Create(createSchema, userId))
-            .ReturnsAsync(schema);
+        _repository.Create(createSchema, userId).Returns(schema);
 
         var result = await _service.CreateAsync(createSchema);
 
         result.Should().Be(schema);
-        _repository.Verify(r => r.Create(createSchema, userId), Times.Once);
+        await _repository.Received(1).Create(createSchema, userId);
     }
 
     [Fact]
     public async Task ThrowNotFoundWhenSchemaDoesNotExist()
     {
         var schemaId = Guid.NewGuid();
-        _repository.Setup(r => r.GetSchema(schemaId)).ReturnsAsync((AttributeSchema?)null);
+        _repository.GetSchema(schemaId).Returns((AttributeSchema?)null);
 
         var act = async () => await _service.GetAsync(schemaId);
 
@@ -91,12 +87,12 @@ public class AttributeSchemaServiceShould : UnitTestBase
         var updateSchema = new UpdateAttributeSchema { SchemaId = schemaId, Title = "Updated Schema" };
         var oldSchema = new AttributeSchema { Id = schemaId };
         var updatedSchema = new AttributeSchema { Id = schemaId };
-        _repository.Setup(r => r.GetSchema(schemaId)).ReturnsAsync(oldSchema);
-        _repository.Setup(r => r.Update(updateSchema)).ReturnsAsync(updatedSchema);
+        _repository.GetSchema(schemaId).Returns(oldSchema);
+        _repository.Update(updateSchema).Returns(updatedSchema);
 
         await _service.UpdateAsync(updateSchema);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(AttributeSchemaIntention.Edit, oldSchema), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaIntention.Edit, oldSchema);
     }
 
     [Fact]
@@ -104,16 +100,16 @@ public class AttributeSchemaServiceShould : UnitTestBase
     {
         var schemaId = Guid.NewGuid();
         var schema = new AttributeSchema { Id = schemaId };
-        _repository.Setup(r => r.GetSchema(schemaId)).ReturnsAsync(schema);
-        _repository.Setup(r => r.Delete(schemaId)).Returns(Task.CompletedTask);
+        _repository.GetSchema(schemaId).Returns(schema);
+        _repository.Delete(schemaId).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(schemaId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(AttributeSchemaIntention.Delete, schema), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaIntention.Delete, schema);
     }
 
     /// <summary>
-    /// The game row lives in Postgres and the schema in Mongo, so no store can
+    /// A removed schema disappears from the lists a master picks from, so nothing can
     /// refuse this delete: the service is the only place the reference exists.
     /// A public schema is anyone's to build a game on, which makes the game that
     /// breaks somebody else's.
@@ -123,25 +119,25 @@ public class AttributeSchemaServiceShould : UnitTestBase
     {
         var schemaId = Guid.NewGuid();
         var schema = new AttributeSchema { Id = schemaId };
-        _repository.Setup(r => r.GetSchema(schemaId)).ReturnsAsync(schema);
-        _repository.Setup(r => r.IsUsedByAnyGame(schemaId)).ReturnsAsync(true);
+        _repository.GetSchema(schemaId).Returns(schema);
+        _repository.IsUsedByAnyGame(schemaId).Returns(true);
 
         var act = async () => await _service.DeleteAsync(schemaId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
-        _repository.Verify(r => r.Delete(It.IsAny<Guid>()), Times.Never);
+        await _repository.DidNotReceive().Delete(Arg.Any<Guid>());
     }
 
     [Fact]
     public async Task DeleteASchemaNoGameReferences()
     {
         var schemaId = Guid.NewGuid();
-        _repository.Setup(r => r.GetSchema(schemaId)).ReturnsAsync(new AttributeSchema { Id = schemaId });
-        _repository.Setup(r => r.IsUsedByAnyGame(schemaId)).ReturnsAsync(false);
+        _repository.GetSchema(schemaId).Returns(new AttributeSchema { Id = schemaId });
+        _repository.IsUsedByAnyGame(schemaId).Returns(false);
 
         await _service.DeleteAsync(schemaId);
 
-        _repository.Verify(r => r.Delete(schemaId), Times.Once);
+        await _repository.Received(1).Delete(schemaId);
     }
 }

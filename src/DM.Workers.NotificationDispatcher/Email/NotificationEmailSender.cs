@@ -9,12 +9,8 @@ using DM.Domain.Core.Enums;
 using DM.Workers.NotificationDispatcher.Dispatching;
 using DM.Infrastructure.Core.Tracing;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.Entities.Account.Settings;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using DM.Infrastructure.Mail;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using MongoDB.Driver;
 
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Site;
@@ -24,7 +20,7 @@ using Microsoft.Extensions.Options;
 namespace DM.Workers.NotificationDispatcher.Email;
 
 /// <inheritdoc />
-internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>, INotificationEmailSender
+internal class NotificationEmailSender : INotificationEmailSender
 {
     private readonly DmDbContext _dbContext;
     private readonly IMailSender _mailSender;
@@ -33,10 +29,9 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
 
     public NotificationEmailSender(
         DmDbContext dbContext,
-        DmMongoClient mongoClient,
         IMailSender mailSender,
         IOptions<SiteAddressConfiguration> siteAddresses,
-        ILogger<NotificationEmailSender> logger) : base(mongoClient)
+        ILogger<NotificationEmailSender> logger)
     {
         _dbContext = dbContext;
         _mailSender = mailSender;
@@ -60,14 +55,12 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
             return;
         }
 
-        // Get user settings from MongoDB
-        var settingsList = await Collection
-            .Find(Filter.In(s => s.UserId, userIds))
-            .ToListAsync(ct);
+        // Get user settings
+        var settingsDict = await _dbContext.UserSettings
+            .Where(s => userIds.Contains(s.UserId))
+            .ToDictionaryAsync(s => s.UserId, ct);
 
-        var settingsDict = settingsList.ToDictionary(s => s.UserId);
-
-        // Get user emails from PostgreSQL
+        // Get user emails
         var userEmails = await _dbContext.Users
             .Where(u => userIds.Contains(u.UserId))
             .Select(u => new { u.UserId, u.Email })
@@ -82,22 +75,11 @@ internal class NotificationEmailSender : MongoCollectionRepository<UserSettings>
                     continue;
                 }
 
-                // Check if email notifications are enabled for this user
-                if (!settingsDict.TryGetValue(userId, out var settings))
+                // No settings row means the defaults, and email is off by default.
+                settingsDict.TryGetValue(userId, out var settings);
+                if (!NotificationChannels.ShouldSend(settings?.EmailPreferences, category.Value))
                 {
-                    // User has no settings = use defaults (email disabled by default)
                     continue;
-                }
-
-                var emailPrefs = settings.EmailPreferences;
-                if (emailPrefs == null || !emailPrefs.Enabled)
-                {
-                    continue; // Email channel disabled
-                }
-
-                if (!emailPrefs.EnabledCategories.Contains(category.Value))
-                {
-                    continue; // Category not enabled for email
                 }
 
                 // Send the email

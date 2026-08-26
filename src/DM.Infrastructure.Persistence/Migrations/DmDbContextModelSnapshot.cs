@@ -18,14 +18,44 @@ namespace DM.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.8")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.HasSequence<int>("TagShortIds")
-                .StartsAt(66L);
+                .StartsAt(73L);
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.LoginAttempt", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("LastAttemptUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LockoutStartUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("LastAttemptUtc");
+
+                    b.ToTable("LoginAttempts");
+                });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.ModeratedProfileNote", b =>
                 {
@@ -92,12 +122,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
-                    b.Property<DateTimeOffset>("TokenCreatedUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<byte[]>("SecretHash")
                         .IsRequired()
                         .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("TokenCreatedUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("PendingRegistrationId");
 
@@ -113,6 +143,78 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_PendingRegistrations_SecretHash");
 
                     b.ToTable("PendingRegistrations");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.SecurityAuditEntry", b =>
+                {
+                    b.Property<Guid>("SecurityAuditEntryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DeviceInfo")
+                        .HasColumnType("text");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("TimestampUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("SecurityAuditEntryId");
+
+                    b.HasIndex("UserId", "TimestampUtc")
+                        .IsDescending(false, true);
+
+                    b.ToTable("SecurityAuditEntries");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.Settings.UserSettings", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CommentsPerPage")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DiscordPreferences")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("EmailPreferences")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("EntitiesPerPage")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MessagesPerPage")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PostsPerPage")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TelegramPreferences")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("Theme")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TopicsPerPage")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("UserSettings");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.Token", b =>
@@ -196,10 +298,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<string>("PendingEmail")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<int>("Gender")
                         .HasColumnType("integer");
 
@@ -235,6 +333,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("PasswordHashVersion")
                         .HasColumnType("integer");
+
+                    b.Property<string>("PendingEmail")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<int>("QualityRating")
                         .HasColumnType("integer");
@@ -419,6 +521,146 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("UserProfileNotes");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.UserSession", b =>
+                {
+                    b.Property<Guid>("SessionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeviceInfo")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ExpirationUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Persistent")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("SessionId");
+
+                    b.HasIndex("ExpirationUtc");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserSessions");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.TwoFactorChallenge", b =>
+                {
+                    b.Property<Guid>("ChallengeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Account")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Persistent")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ChallengeId");
+
+                    b.HasIndex("CreatedUtc");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("TwoFactorChallenges");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.UserTwoFactor", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ConfirmedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("LastAcceptedStep")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("LastVerifiedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RecoveryCodesIssuedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RemovalDueUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Secret")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("RemovalDueUtc")
+                        .HasFilter("\"RemovalDueUtc\" IS NOT NULL");
+
+                    b.ToTable("UserTwoFactors");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.UserTwoFactorRecoveryCode", b =>
+                {
+                    b.Property<Guid>("RecoveryCodeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("CodeHash")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("IssuedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UsedFromIp")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UsedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("RecoveryCodeId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserTwoFactorRecoveryCodes");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.UsernameChangeRequest", b =>
@@ -622,10 +864,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("BlogAssistantId");
 
+                    b.HasIndex("UserId");
+
                     b.HasIndex("BlogId", "UserId")
                         .IsUnique();
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("BlogAssistants");
                 });
@@ -1789,6 +2031,86 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("PeriodDigestTopics");
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.Poll", b =>
+                {
+                    b.Property<Guid>("PollId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("EndsUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsAnonymous")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("StartsUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("PollId");
+
+                    b.HasIndex("IsRemoved", "EndsUtc");
+
+                    b.HasIndex("IsRemoved", "StartsUtc");
+
+                    b.ToTable("Polls");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.PollOption", b =>
+                {
+                    b.Property<Guid>("PollOptionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PollId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("PollOptionId");
+
+                    b.HasIndex("PollId");
+
+                    b.ToTable("PollOptions");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.PollVote", b =>
+                {
+                    b.Property<Guid>("PollId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PollOptionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("VotedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("PollId", "UserId");
+
+                    b.HasIndex("PollOptionId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PollVotes");
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.UserAchievement", b =>
                 {
                     b.Property<Guid>("UserAchievementId")
@@ -2294,6 +2616,36 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("TopicEdits");
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema", b =>
+                {
+                    b.Property<Guid>("AttributeSchemaId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Specifications")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("AttributeSchemaId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AttributeSchemata");
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute", b =>
                 {
                     b.Property<Guid>("CharacterAttributeId")
@@ -2515,6 +2867,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("GameId");
 
+                    b.HasIndex("AttributeSchemaId");
+
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("MasterId");
@@ -2594,10 +2948,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("GameAssistantId");
 
+                    b.HasIndex("UserId");
+
                     b.HasIndex("GameId", "UserId")
                         .IsUnique();
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("GameAssistants");
                 });
@@ -2801,6 +3155,54 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("PostReviews");
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Posts.DiceRoll", b =>
+                {
+                    b.Property<Guid>("DiceRollId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Bonus")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DiceCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EdgesCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ExplosionCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsAdditional")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsFair")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsHidden")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("DiceRollId");
+
+                    b.HasIndex("PostId");
+
+                    b.ToTable("DiceRolls");
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Posts.Post", b =>
                 {
                     b.Property<Guid>("PostId")
@@ -2863,12 +3265,12 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DeletedByUserId");
 
-                    b.HasIndex("RoomId", "CreatedUtc", "PostId");
-
                     b.HasIndex("SearchVector")
                         .HasDatabaseName("IX_Posts_SearchVector");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
+
+                    b.HasIndex("RoomId", "CreatedUtc", "PostId");
 
                     b.ToTable("Posts");
                 });
@@ -3404,6 +3806,46 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("Warnings");
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Outbox.OutboxEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Attempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("OccurredUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("PublishedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredUtc", "Id")
+                        .HasDatabaseName("IX_OutboxEvents_Pending")
+                        .HasFilter("\"PublishedUtc\" IS NULL");
+
+                    b.ToTable("OutboxEvents");
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadEntry", b =>
                 {
                     b.Property<Guid>("EntryId")
@@ -3459,6 +3901,54 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("NotepadEntries");
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notifications.Notification", b =>
+                {
+                    b.Property<Guid>("NotificationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Metadata")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("NotificationId");
+
+                    b.HasIndex("CreatedUtc");
+
+                    b.HasIndex("EventId", "EventType")
+                        .IsUnique()
+                        .HasFilter("\"EventId\" IS NOT NULL");
+
+                    b.ToTable("Notifications");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notifications.NotificationRecipient", b =>
+                {
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("NotificationId", "UserId");
+
+                    b.HasIndex("UserId", "IsRead");
+
+                    b.ToTable("NotificationRecipients");
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Comment", b =>
                 {
                     b.Property<Guid>("CommentId")
@@ -3503,12 +3993,12 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DeletedByUserId");
 
-                    b.HasIndex("EntityId", "CreatedUtc", "CommentId");
-
                     b.HasIndex("SearchVector")
                         .HasDatabaseName("IX_Comments_SearchVector");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
+
+                    b.HasIndex("EntityId", "CreatedUtc", "CommentId");
 
                     b.ToTable("Comments");
                 });
@@ -3608,28 +4098,73 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasData(
                         new
                         {
+                            TagId = new Guid("00000000-0000-0000-0000-000000000042"),
+                            Description = "Движок Modiphius: пул из двух d20 против характеристики",
+                            ShortId = 66,
+                            SortOrder = 0,
+                            TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
+                            Title = "2d20"
+                        },
+                        new
+                        {
+                            TagId = new Guid("00000000-0000-0000-0000-000000000043"),
+                            Description = "Первая и вторая редакции Dungeons & Dragons",
+                            ShortId = 67,
+                            SortOrder = 1,
+                            TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
+                            Title = "AD&D"
+                        },
+                        new
+                        {
                             TagId = new Guid("00000000-0000-0000-0000-000000000001"),
                             Description = "Простая система с кубиком d6",
                             ShortId = 1,
-                            SortOrder = 0,
+                            SortOrder = 2,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Black Bird Pie"
                         },
                         new
                         {
+                            TagId = new Guid("00000000-0000-0000-0000-000000000044"),
+                            Description = "Движок Monte Cook Games: сложность против броска d20",
+                            ShortId = 68,
+                            SortOrder = 3,
+                            TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
+                            Title = "Cypher"
+                        },
+                        new
+                        {
                             TagId = new Guid("00000000-0000-0000-0000-000000000002"),
-                            Description = "Dungeons & Dragons — все редакции классической ролевой системы",
+                            Description = "Семейство Dungeons & Dragons",
                             ShortId = 2,
-                            SortOrder = 1,
+                            SortOrder = 4,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "D&D"
                         },
                         new
                         {
+                            TagId = new Guid("00000000-0000-0000-0000-000000000045"),
+                            Description = "Третья редакция Dungeons & Dragons, включая 3.0",
+                            ShortId = 69,
+                            SortOrder = 5,
+                            TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
+                            Title = "D&D 3.5"
+                        },
+                        new
+                        {
+                            TagId = new Guid("00000000-0000-0000-0000-000000000046"),
+                            Description = "Четвертая редакция Dungeons & Dragons",
+                            ShortId = 70,
+                            SortOrder = 6,
+                            TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
+                            Title = "D&D 4e"
+                        },
+                        new
+                        {
                             TagId = new Guid("00000000-0000-0000-0000-000000000003"),
-                            Description = "Dungeons & Dragons 5th Edition",
+                            Description = "Пятая редакция Dungeons & Dragons",
                             ShortId = 3,
-                            SortOrder = 2,
+                            SortOrder = 7,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "D&D 5e"
                         },
@@ -3638,16 +4173,16 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000004"),
                             Description = "Системы на основе процентного броска",
                             ShortId = 4,
-                            SortOrder = 3,
+                            SortOrder = 8,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
-                            Title = "D100"
+                            Title = "d100"
                         },
                         new
                         {
                             TagId = new Guid("00000000-0000-0000-0000-000000000005"),
                             Description = "Система для совместного создания мира",
                             ShortId = 5,
-                            SortOrder = 4,
+                            SortOrder = 9,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Dawn of Worlds"
                         },
@@ -3656,7 +4191,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000006"),
                             Description = "Адаптация сеттинга Fallout",
                             ShortId = 6,
-                            SortOrder = 5,
+                            SortOrder = 10,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Fallout"
                         },
@@ -3665,7 +4200,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000007"),
                             Description = "Без комментариев",
                             ShortId = 7,
-                            SortOrder = 6,
+                            SortOrder = 11,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "FATAL"
                         },
@@ -3674,25 +4209,43 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000008"),
                             Description = "Нарративная система с аспектами и фейт-пойнтами",
                             ShortId = 8,
-                            SortOrder = 7,
+                            SortOrder = 12,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Fate"
+                        },
+                        new
+                        {
+                            TagId = new Guid("00000000-0000-0000-0000-000000000047"),
+                            Description = "Forged in the Dark: системы на движке Blades in the Dark",
+                            ShortId = 71,
+                            SortOrder = 13,
+                            TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
+                            Title = "FitD"
                         },
                         new
                         {
                             TagId = new Guid("00000000-0000-0000-0000-000000000009"),
                             Description = "Универсальный движок для реализации практически любого концепта",
                             ShortId = 9,
-                            SortOrder = 8,
+                            SortOrder = 14,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "FUDGE"
+                        },
+                        new
+                        {
+                            TagId = new Guid("00000000-0000-0000-0000-000000000048"),
+                            Description = "Детективный движок Robin Laws: улики не пропускаются на броске",
+                            ShortId = 72,
+                            SortOrder = 15,
+                            TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
+                            Title = "GUMSHOE"
                         },
                         new
                         {
                             TagId = new Guid("00000000-0000-0000-0000-00000000000a"),
                             Description = "Универсальная система на базе броска 3d6 vs Сложность",
                             ShortId = 10,
-                            SortOrder = 9,
+                            SortOrder = 16,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "GURPS"
                         },
@@ -3701,7 +4254,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-00000000000b"),
                             Description = "Система от R. Talsorian Games (Cyberpunk 2020 и другие)",
                             ShortId = 11,
-                            SortOrder = 10,
+                            SortOrder = 17,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Interlock"
                         },
@@ -3710,7 +4263,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-00000000000c"),
                             Description = "Система для создания эпических историй",
                             ShortId = 12,
-                            SortOrder = 11,
+                            SortOrder = 18,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Microscope"
                         },
@@ -3719,7 +4272,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-00000000000d"),
                             Description = "Pathfinder первой редакции",
                             ShortId = 13,
-                            SortOrder = 12,
+                            SortOrder = 19,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Pathfinder 1e"
                         },
@@ -3728,7 +4281,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-00000000000e"),
                             Description = "Pathfinder второй редакции",
                             ShortId = 14,
-                            SortOrder = 13,
+                            SortOrder = 20,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Pathfinder 2e"
                         },
@@ -3737,7 +4290,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-00000000000f"),
                             Description = "Нарративные системы на базе 2d6 vs Сложность",
                             ShortId = 15,
-                            SortOrder = 14,
+                            SortOrder = 21,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "PbtA"
                         },
@@ -3746,7 +4299,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000010"),
                             Description = "Минималистичная комедийная система",
                             ShortId = 16,
-                            SortOrder = 15,
+                            SortOrder = 22,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Risus"
                         },
@@ -3755,7 +4308,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000011"),
                             Description = "Легковесная универсальная система — Fast! Furious! Fun!",
                             ShortId = 17,
-                            SortOrder = 16,
+                            SortOrder = 23,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Savage Worlds"
                         },
@@ -3764,7 +4317,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000012"),
                             Description = "Sci-fi спин-офф Pathfinder",
                             ShortId = 18,
-                            SortOrder = 17,
+                            SortOrder = 24,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Starfinder 1e"
                         },
@@ -3773,7 +4326,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000013"),
                             Description = "Starfinder второй редакции",
                             ShortId = 19,
-                            SortOrder = 18,
+                            SortOrder = 25,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Starfinder 2e"
                         },
@@ -3782,16 +4335,16 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000014"),
                             Description = "Системы по вселенной Warhammer",
                             ShortId = 20,
-                            SortOrder = 19,
+                            SortOrder = 26,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Warhammer"
                         },
                         new
                         {
                             TagId = new Guid("00000000-0000-0000-0000-000000000015"),
-                            Description = "Мир Тьмы — вампиры, оборотни, маги",
+                            Description = "Мир Тьмы: Storyteller, Storytelling и Chronicles of Darkness",
                             ShortId = 21,
-                            SortOrder = 20,
+                            SortOrder = 27,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "World of Darkness"
                         },
@@ -3800,7 +4353,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000016"),
                             Description = "Оригинальная система от мастера игры",
                             ShortId = 22,
-                            SortOrder = 21,
+                            SortOrder = 28,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Авторская"
                         },
@@ -3809,7 +4362,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000017"),
                             Description = "Психологическая детективная командная игра",
                             ShortId = 23,
-                            SortOrder = 22,
+                            SortOrder = 29,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Мафия"
                         },
@@ -3818,7 +4371,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000018"),
                             Description = "Игра без формальной системы правил",
                             ShortId = 24,
-                            SortOrder = 23,
+                            SortOrder = 30,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Словеска"
                         },
@@ -3827,7 +4380,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TagId = new Guid("00000000-0000-0000-0000-000000000019"),
                             Description = "Отечественная система ролевых игр",
                             ShortId = 25,
-                            SortOrder = 24,
+                            SortOrder = 31,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000001"),
                             Title = "Эра Водолея"
                         },
@@ -4280,6 +4833,46 @@ namespace DM.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.UnreadCounter", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("EntryType")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Counter")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("LastReadUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ParentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("RemovedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "EntityId", "EntryType");
+
+                    b.HasIndex("RemovedUtc")
+                        .HasFilter("\"RemovedUtc\" IS NOT NULL");
+
+                    b.HasIndex("EntityId", "EntryType");
+
+                    b.HasIndex("ParentId", "EntryType");
+
+                    b.HasIndex("UserId", "ParentId", "EntryType", "IsRemoved");
+
+                    b.ToTable("UnreadCounters");
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Upload", b =>
                 {
                     b.Property<Guid>("UploadId")
@@ -4356,10 +4949,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasIndex("TargetCharacterId")
                         .HasFilter("\"TargetCharacterId\" IS NOT NULL");
 
-                    b.HasIndex(new[] { "TargetCharacterId" }, "IX_Uploads_TargetCharacterId_Live")
-                        .IsUnique()
-                        .HasFilter("\"Type\" = 2 AND \"IsRemoved\" = false");
-
                     b.HasIndex("TargetPostId")
                         .HasFilter("\"TargetPostId\" IS NOT NULL");
 
@@ -4367,6 +4956,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasFilter("\"TargetUserId\" IS NOT NULL");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex(new[] { "TargetCharacterId" }, "IX_Uploads_TargetCharacterId_Live")
+                        .IsUnique()
+                        .HasFilter("\"Type\" = 2 AND \"IsRemoved\" = false");
 
                     b.ToTable("Uploads", t =>
                         {
@@ -4400,10 +4993,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("SubscriptionId");
 
+                    b.HasIndex("TargetType", "TargetId");
+
                     b.HasIndex("SubscriberId", "TargetType", "TargetId")
                         .IsUnique();
-
-                    b.HasIndex("TargetType", "TargetId");
 
                     b.ToTable("Subscriptions");
                 });
@@ -4425,6 +5018,24 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("Author");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.SecurityAuditEntry", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.Settings.UserSettings", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
+                        .WithOne()
+                        .HasForeignKey("DM.Infrastructure.Persistence.Entities.Account.Settings.UserSettings", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.Token", b =>
@@ -4532,6 +5143,42 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("Owner");
 
                     b.Navigation("SubjectUser");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.UserSession", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.TwoFactorChallenge", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.UserTwoFactor", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
+                        .WithOne()
+                        .HasForeignKey("DM.Infrastructure.Persistence.Entities.Account.UserTwoFactor", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.UserTwoFactorRecoveryCode", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Account.UsernameChangeRequest", b =>
@@ -4729,6 +5376,36 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("UpdatedBy");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.PollOption", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Community.Poll", null)
+                        .WithMany("Options")
+                        .HasForeignKey("PollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.PollVote", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Community.Poll", null)
+                        .WithMany()
+                        .HasForeignKey("PollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Community.PollOption", null)
+                        .WithMany("Votes")
+                        .HasForeignKey("PollOptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.UserAchievement", b =>
@@ -4934,6 +5611,14 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("Topic");
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute", b =>
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Characters.Character", "Character")
@@ -4990,6 +5675,11 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Game", b =>
                 {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema", null)
+                        .WithMany()
+                        .HasForeignKey("AttributeSchemaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
                         .WithMany()
                         .HasForeignKey("DeletedByUserId");
@@ -5212,6 +5902,15 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("Post");
 
                     b.Navigation("PostAuthor");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Posts.DiceRoll", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Posts.Post", null)
+                        .WithMany()
+                        .HasForeignKey("PostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Posts.Post", b =>
@@ -5522,6 +6221,21 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("DeletedBy");
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notifications.NotificationRecipient", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Personal.Notifications.Notification", null)
+                        .WithMany("Recipients")
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Comment", b =>
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
@@ -5743,6 +6457,16 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("Awards");
                 });
 
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.Poll", b =>
+                {
+                    b.Navigation("Options");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Community.PollOption", b =>
+                {
+                    b.Navigation("Votes");
+                });
+
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Forum.Board", b =>
                 {
                     b.Navigation("Moderators");
@@ -5821,6 +6545,11 @@ namespace DM.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Moderation.Ticket", b =>
                 {
                     b.Navigation("Responses");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notifications.Notification", b =>
+                {
+                    b.Navigation("Recipients");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Shared.Comment", b =>

@@ -5,13 +5,11 @@ using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Caching;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Statuses;
 using DM.Domain.Core.UnreadCounters;
@@ -19,7 +17,6 @@ using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Invitations;
-using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Game.Features.Subscriptions;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
@@ -42,14 +39,11 @@ internal class GameService : IGameService
     private readonly IGameUserRepository _userRepository;
     private readonly IGameInvitationService _invitationService;
     private readonly IIdentityProvider _identityProvider;
-    private readonly IUserBlacklistChecker _userBlacklistChecker;
     private readonly IGameBlacklistRepository _gameBlacklistRepository;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IGameSubscriptionService _subscriptionService;
-    private readonly IRoomRepository _roomRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
-    private readonly IGameIntentionConverter _intentionConverter;
     private readonly IEventProducer _producer;
     private readonly ICache _cache;
     private readonly ILogger<GameService> _logger;
@@ -68,14 +62,11 @@ internal class GameService : IGameService
         IGameUserRepository userRepository,
         IGameInvitationService invitationService,
         IIdentityProvider identityProvider,
-        IUserBlacklistChecker userBlacklistChecker,
         IGameBlacklistRepository gameBlacklistRepository,
         IUnreadCountersRepository unreadCountersRepository,
         IGameSubscriptionService subscriptionService,
-        IRoomRepository roomRepository,
         IDateTimeProvider dateTimeProvider,
         IGuidFactory guidFactory,
-        IGameIntentionConverter intentionConverter,
         IEventProducer producer,
         ICache cache,
         ILogger<GameService> logger)
@@ -90,14 +81,11 @@ internal class GameService : IGameService
         _userRepository = userRepository;
         _invitationService = invitationService;
         _identityProvider = identityProvider;
-        _userBlacklistChecker = userBlacklistChecker;
         _gameBlacklistRepository = gameBlacklistRepository;
         _unreadCountersRepository = unreadCountersRepository;
         _subscriptionService = subscriptionService;
-        _roomRepository = roomRepository;
         _dateTimeProvider = dateTimeProvider;
         _guidFactory = guidFactory;
-        _intentionConverter = intentionConverter;
         _producer = producer;
         _cache = cache;
         _logger = logger;
@@ -363,19 +351,8 @@ internal class GameService : IGameService
     public async Task<Game> GetAsync(Guid gameId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var game = await _repository.GetGame(gameId, currentUserId, MayJudgePremoderation);
-        if (game == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
-        }
-
-        _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
-
-        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
-            g => g.Id, g => g.UnreadCommentsCount);
-        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
-            g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
-
+        var game = Readable(await _repository.GetGame(gameId, currentUserId, MayJudgePremoderation));
+        await FillCounters(game, currentUserId);
         return game;
     }
 
@@ -392,70 +369,70 @@ internal class GameService : IGameService
     public async Task<Game> GetByPublicIdAsync(string publicId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var game = await _repository.GetGameByPublicId(publicId, currentUserId, MayJudgePremoderation);
-        if (game == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
-        }
-
-        _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
-
-        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
-            g => g.Id, g => g.UnreadCommentsCount);
-        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
-            g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
-
+        var game = Readable(
+            await _repository.GetGameByPublicId(publicId, currentUserId, MayJudgePremoderation));
+        await FillCounters(game, currentUserId);
         return game;
     }
 
     public async Task<GameDetails> GetDetailsAsync(Guid gameId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var game = await _repository.GetGameDetails(gameId, currentUserId, MayJudgePremoderation);
-        if (game == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
-        }
-
-        _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
-
-        if (game.AttributeSchemaId.HasValue)
-        {
-            game.AttributeSchema = await _schemaService.GetAsync(game.AttributeSchemaId.Value);
-        }
-
-        game.Subscribers = await _subscriptionService.GetSubscribersAsync(gameId);
-        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
-            g => g.Id, g => g.UnreadCommentsCount);
-        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
-            g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
-
+        var game = Readable(
+            await _repository.GetGameDetails(gameId, currentUserId, MayJudgePremoderation));
+        await FillDetails(game, currentUserId);
         return game;
     }
 
     public async Task<GameDetails> GetDetailsByPublicIdAsync(string publicId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var game = await _repository.GetGameDetailsByPublicId(publicId, currentUserId, MayJudgePremoderation);
+        var game = Readable(
+            await _repository.GetGameDetailsByPublicId(publicId, currentUserId, MayJudgePremoderation));
+        await FillDetails(game, currentUserId);
+        return game;
+    }
+
+    /// <summary>
+    /// The row is there, and this reader may see it. A game that is not visible
+    /// to the caller answers the same 404 an identifier that addresses nothing
+    /// does, so a caller cannot tell the two apart.
+    /// </summary>
+    private T Readable<T>(T? game) where T : Game
+    {
         if (game == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
 
         _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
+        return game;
+    }
 
+    /// <summary>
+    /// The two per-viewer counters every read of a game carries.
+    /// </summary>
+    private async Task FillCounters<T>(T game, Guid currentUserId) where T : Game
+    {
+        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
+            g => g.Id, g => g.UnreadCommentsCount);
+        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
+            g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
+    }
+
+    /// <summary>
+    /// What the details read adds on top: the attribute schema the characters are
+    /// described by, and the subscriber list.
+    /// </summary>
+    private async Task FillDetails(GameDetails game, Guid currentUserId)
+    {
         if (game.AttributeSchemaId.HasValue)
         {
             game.AttributeSchema = await _schemaService.GetAsync(game.AttributeSchemaId.Value);
         }
 
         game.Subscribers = await _subscriptionService.GetSubscribersAsync(game.Id);
-        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
-            g => g.Id, g => g.UnreadCommentsCount);
-        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
-            g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
-
-        return game;
+        await FillCounters(game, currentUserId);
     }
 
     #endregion

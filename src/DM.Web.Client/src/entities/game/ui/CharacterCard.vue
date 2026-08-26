@@ -147,7 +147,7 @@ function toggleExpand() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .character-card
   background-color: $bg-element

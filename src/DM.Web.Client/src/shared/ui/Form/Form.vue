@@ -39,7 +39,7 @@ const slots = defineSlots();
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .controls
   display: flex

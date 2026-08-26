@@ -1,15 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-using Autofac;
-using Autofac.Extensions.DependencyInjection;
 using DM.Domain.Account;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Configuration;
 using DM.Infrastructure.Core;
 using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Core.Extensions;
@@ -24,7 +19,7 @@ namespace DM.Tools.Seeder;
 
 /// <summary>
 /// Development data seeder. Lives outside the API on purpose: it writes straight
-/// to Postgres, Mongo and the object storage, so it must never be reachable over
+/// to Postgres and the object storage, so it must never be reachable over
 /// HTTP. Connection strings come from the same DM_* environment variables the
 /// application workloads read.
 /// </summary>
@@ -56,15 +51,6 @@ internal static class Program
             // reject a bare positional argument as an unrecognized switch.
             using var host = CreateHostBuilder().Build();
             await using var scope = host.Services.CreateAsyncScope();
-
-            // The Mongo indexes, before anything is written. A reset drops the
-            // database, and the init script only ever runs on an empty volume, so a
-            // reseeded Mongo held no index at all until somebody happened to start
-            // the API: the sidebar counters the whole site reads went to collection
-            // scans, and a racing pair of upserts had nothing stopping it from
-            // leaving two markers for one thing.
-            await scope.ServiceProvider.GetRequiredService<MongoIndexInitializer>()
-                .StartAsync(CancellationToken.None);
 
             var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
 
@@ -102,58 +88,52 @@ internal static class Program
     /// </remarks>
     internal static IHostBuilder CreateHostBuilder() => Host
         .CreateDefaultBuilder()
-        .UseServiceProviderFactory(new AutofacServiceProviderFactory())
+        // Scope validation only. ValidateOnBuild is deliberately off here,
+        // alone among the executables: the tool scans three domain assemblies
+        // for a handful of internal types - the hashing, the popularity
+        // processors - and the sweep brings in services wired for the API
+        // (mail senders, the HIBP client, the realtime push) that this tool
+        // never resolves and whose dependencies it has no business registering.
+        // What the tool does resolve is guarded twice instead: the composition
+        // rule resolves every constructor dependency of DataSeeder against
+        // this container, and a seeding run is part of the local gates.
+        .UseDefaultServiceProvider(options => options.ValidateScopes = true)
         .WithDmConfiguration()
         .ConfigureServices((context, services) => services
             .AddOptions()
             .AddDmCoreConfiguration(context.Configuration)
-            // The container below scans the whole account assembly, whose types read
+            // The scans below sweep the whole account assembly, whose types read
             // four option sections. IOptions of an unbound type hands out a default
             // rather than throwing, so the encryption key would have been empty at the
             // first call that needed it instead of missing at startup.
             .AddDmAccountConfiguration(context.Configuration)
             .RequireRelationalStorage()
-            .RequireDocumentStorage()
             .RequireObjectStorage()
             .AddDbContext<DmDbContext>(options => options.UseNpgsql(
                 context.Configuration.GetConnectionString(nameof(ConnectionStrings.Rdb)),
-                npgsql => npgsql.CommandTimeout(120))))
-        .ConfigureContainer<ContainerBuilder>(builder =>
-        {
-            builder.RegisterModuleOnce<CoreModule>();
-            builder.RegisterModuleOnce<PersistenceModule>();
-
-            // The Mongo index set, asserted before the seed writes anything. The
-            // hosts take it as a hosted service; the tool has no host to hook, so it
-            // registers the same class and calls it directly.
-            builder.RegisterType<MongoIndexInitializer>().AsSelf().SingleInstance();
-
+                npgsql => npgsql.CommandTimeout(120)))
+            // The DI modules, after everything the tool wires explicitly: their
+            // scans only fill gaps, so the DbContext above must already be on
+            // the collection when they run.
+            .AddDmCore()
+            .AddDmPersistence()
             // Password hashing lives in the Account domain and its implementation is
             // internal, so the assembly scan is what picks it up. The same goes for
             // the two popularity processors: the fixture scores its games and blogs
             // by the site's definition rather than by a copy of it, and the classes
             // that hold that definition are internal to their modules.
-            builder.RegisterDefaultTypes(typeof(ISecurityManager).Assembly);
-            builder.RegisterDefaultTypes(typeof(DM.Domain.Game.Authorization.GameIntention).Assembly);
-            builder.RegisterDefaultTypes(typeof(DM.Domain.Blog.Authorization.BlogIntention).Assembly);
-
-            // Last, and deliberately last: Autofac takes the final registration
-            // as the default, so this is what replaces the infrastructure
-            // Guid.NewGuid() factory for the tool and only for the tool. Single
-            // instances, because a per-dependency generator restarts its stream
-            // on every resolve and hands out the same identifiers twice.
-            builder.RegisterType<SeedDeterminism>()
-                .AsSelf()
-                .SingleInstance();
-
-            builder.RegisterType<SeededGuidFactory>()
-                .As<IGuidFactory>()
-                .SingleInstance();
-
-            builder.RegisterType<DataSeeder>()
-                .AsSelf()
-                .InstancePerLifetimeScope();
-        });
+            .AddDefaultTypes(typeof(ISecurityManager).Assembly)
+            .AddDefaultTypes(typeof(DM.Domain.Game.Authorization.GameIntention).Assembly)
+            .AddDefaultTypes(typeof(DM.Domain.Blog.Authorization.BlogIntention).Assembly)
+            // Last, and deliberately last: MS.DI hands a single resolution to
+            // the final registration, so this is what replaces the
+            // infrastructure Guid.NewGuid() factory for the tool and only for
+            // the tool. Single instances, because a per-dependency generator
+            // restarts its stream on every resolve and hands out the same
+            // identifiers twice.
+            .AddSingleton<SeedDeterminism>()
+            .AddSingleton<IGuidFactory, SeededGuidFactory>()
+            .AddScoped<DataSeeder>());
 
     private static void PrintUsage()
     {
@@ -184,10 +164,7 @@ internal static class Program
             ("skipped", result.Skipped),
         };
 
-        Console.WriteLine($"users: {Summarize(counters
-            .Where(counter => counter.Value > 0)
-            .Select(counter => $"{counter.Value} {counter.Label}")
-            .ToList())}");
+        Console.WriteLine($"users: {Summarize(counters)}");
         if (result.CreatedUsernames.Count > 0)
         {
             Console.WriteLine($"  created: {string.Join(", ", result.CreatedUsernames)}");
@@ -220,19 +197,23 @@ internal static class Program
             ("board moderators", result.BoardModeratorsAssigned),
         };
 
-        var created = counters
-            .Where(counter => counter.Value > 0)
-            .Select(counter => $"{counter.Value} {counter.Label}")
-            .ToList();
-
-        Console.WriteLine($"content: {Summarize(created)}");
+        Console.WriteLine($"content: {Summarize(counters)}");
         foreach (var detail in result.Details)
         {
             Console.WriteLine($"  {detail}");
         }
     }
 
-    private static string Summarize(IReadOnlyCollection<string> created) => created.Count > 0
-        ? string.Join(", ", created)
-        : "nothing new (already seeded)";
+    /// <summary>The counters that moved, joined; the ones that did not are left out.</summary>
+    private static string Summarize(IEnumerable<(string Label, int Value)> counters)
+    {
+        var created = counters
+            .Where(counter => counter.Value > 0)
+            .Select(counter => $"{counter.Value} {counter.Label}")
+            .ToList();
+
+        return created.Count > 0
+            ? string.Join(", ", created)
+            : "nothing new (already seeded)";
+    }
 }

@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Moderation.Features.Warnings;
 using Microsoft.EntityFrameworkCore;
@@ -16,14 +14,12 @@ namespace DM.Infrastructure.Persistence.Repositories.Moderation;
 internal class BanRepository : IBanRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
-    public BanRepository(DmDbContext dbContext, IMapper mapper, IDateTimeProvider dateTimeProvider)
+    public BanRepository(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -33,7 +29,7 @@ internal class BanRepository : IBanRepository
         return await _dbContext.Bans
             .Where(b => b.TargetUserId == userId)
             .OrderByDescending(b => b.StartedUtc)
-            .ProjectTo<Ban>(_mapper.ConfigurationProvider)
+            .ProjectToBan()
             .ToListAsync(ct);
     }
 
@@ -44,7 +40,7 @@ internal class BanRepository : IBanRepository
         return await _dbContext.Bans
             .Where(b => b.TargetUserId == userId && b.LiftedUtc == null && b.StartedUtc <= now && b.EndedUtc > now)
             .OrderByDescending(b => b.EndedUtc)
-            .ProjectTo<Ban>(_mapper.ConfigurationProvider)
+            .ProjectToBan()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -53,7 +49,7 @@ internal class BanRepository : IBanRepository
     {
         return await _dbContext.Bans
             .Where(b => b.BanId == banId)
-            .ProjectTo<Ban>(_mapper.ConfigurationProvider)
+            .ProjectToBan()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -103,7 +99,7 @@ internal class BanRepository : IBanRepository
         return await _dbContext.Bans
             .Where(b => b.LiftedUtc == null && b.StartedUtc <= now && b.EndedUtc > now)
             .OrderByDescending(b => b.StartedUtc)
-            .ProjectTo<Ban>(_mapper.ConfigurationProvider)
+            .ProjectToBan()
             .ToListAsync(ct);
     }
 
@@ -116,7 +112,7 @@ internal class BanRepository : IBanRepository
             .OrderByDescending(b => b.StartedUtc)
             .Skip(skip)
             .Take(take)
-            .ProjectTo<Ban>(_mapper.ConfigurationProvider)
+            .ProjectToBan()
             .ToListAsync(ct);
 
         return (bans, totalCount);

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Reflection;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;

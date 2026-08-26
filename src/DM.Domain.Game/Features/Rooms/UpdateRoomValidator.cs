@@ -15,7 +15,7 @@ internal class UpdateRoomValidator : AbstractValidator<UpdateRoom>
         When(r => r.Title != default, () =>
             RuleFor(r => r.Title)
                 .NotEmpty().WithMessage(ValidationError.Empty)
-                .MaximumLength(100).WithMessage(ValidationError.Long));
+                .MaximumLength(RoomFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long));
 
         // Both columns are read back by comparing against the named members, so
         // an integer outside the enum is stored as a room that is of no known

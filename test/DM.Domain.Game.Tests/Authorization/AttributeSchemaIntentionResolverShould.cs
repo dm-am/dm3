@@ -6,7 +6,7 @@ using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
 using DM.Testing.Dsl;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Authorization;

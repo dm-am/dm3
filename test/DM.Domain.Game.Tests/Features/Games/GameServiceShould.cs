@@ -19,30 +19,30 @@ using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Invitations;
-using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
 
 public class GameServiceShould : UnitTestBase
 {
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IGameCreationDataResolver> _dataResolver;
-    private readonly Mock<IGameRepository> _repository;
-    private Mock<IUnreadCountersRepository> _unreadCountersRepository = null!;
-    private readonly Mock<IEventProducer> _producer;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<ICache> _cache;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IGameCreationDataResolver _dataResolver;
+    private readonly IGameRepository _repository;
+    private IUnreadCountersRepository _unreadCountersRepository = null!;
+    private readonly IEventProducer _producer;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ICache _cache;
     private readonly GameService _service;
     private readonly Guid _currentUserId;
     private readonly DM.Domain.Core.Identity.AuthenticatedUser _author;
@@ -50,24 +50,20 @@ public class GameServiceShould : UnitTestBase
     public GameServiceShould()
     {
         var gamesQueryValidator = Mock<IValidator<GamesQuery>>();
-        gamesQueryValidator.Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<GamesQuery>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        gamesQueryValidator.ValidateAsync(Arg.Any<ValidationContext<GamesQuery>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         var updateGameValidator = Mock<IValidator<UpdateGame>>();
-        updateGameValidator.Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateGame>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        updateGameValidator.ValidateAsync(Arg.Any<ValidationContext<UpdateGame>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         var creationValidator = Mock<IGameCreationValidator>();
-        creationValidator.Setup(v => v.ValidateAndAuthorize(It.IsAny<CreateGame>()))
-            .Returns(Task.CompletedTask);
+        creationValidator.ValidateAndAuthorize(Arg.Any<CreateGame>()).Returns(Task.CompletedTask);
 
         _dataResolver = Mock<IGameCreationDataResolver>();
-        _dataResolver.Setup(r => r.ResolveTagIds(It.IsAny<IEnumerable<int>?>()))
-            .ReturnsAsync(Array.Empty<Guid>());
+        _dataResolver.ResolveTagIds(Arg.Any<IEnumerable<int>?>()).Returns(Array.Empty<Guid>());
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDto>()));
 
         var schemaService = Mock<IAttributeSchemaService>();
 
@@ -84,66 +80,58 @@ public class GameServiceShould : UnitTestBase
         var identity = Identities.User(_currentUserId, UserRole.RegularUser);
         _author = identity.User;
         _author.QuantityRating = DM.Domain.Core.Configuration.ProbationPolicy.NewbiePostThreshold;
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-
-        var userBlacklistChecker = Mock<DM.Domain.Core.Blacklists.IUserBlacklistChecker>();
-        userBlacklistChecker.Setup(c => c.GetBlockedUserIdsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<Guid>());
+        _identityProvider.Current.Returns(identity);
 
         var gameBlacklistRepository = Mock<IGameBlacklistRepository>();
 
         _unreadCountersRepository = Mock<IUnreadCountersRepository>();
         var unreadCountersRepository = _unreadCountersRepository;
-        unreadCountersRepository.Setup(r => r.CreateMarkerAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
+        unreadCountersRepository.CreateMarkerAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>())
             .Returns(Task.CompletedTask);
-        unreadCountersRepository.Setup(r => r.SelectByEntitiesAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
-            .ReturnsAsync((Guid userId, UnreadEntryType type, Guid[] ids) =>
-                ids.ToDictionary(id => id, _ => 0) as IDictionary<Guid, int>);
+        unreadCountersRepository.SelectByEntitiesAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<Guid[]>())
+            .Returns(ci =>
+            {
+                var userId = ci.ArgAt<Guid>(0);
+                var type = ci.ArgAt<UnreadEntryType>(1);
+                var ids = ci.ArgAt<Guid[]>(2);
+                return ids.ToDictionary(id => id, _ => 0) as IDictionary<Guid, int>;
+            });
 
         var subscriptionService = Mock<IGameSubscriptionService>();
 
-        var roomRepository = Mock<IRoomRepository>();
-
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _guidFactory = Mock<IGuidFactory>();
-        _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
-
-        var intentionConverter = Mock<IGameIntentionConverter>();
-        intentionConverter.Setup(c => c.Convert(It.IsAny<ModuleStatus>()))
-            .Returns((GameIntention.Edit, EventType.ChangedGame));
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         _producer = Mock<IEventProducer>();
-        _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
-        _producer.Setup(p => p.SendAsync(It.IsAny<IEnumerable<EventType>>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<IEnumerable<EventType>>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         _cache = Mock<ICache>();
 
         var logger = Mock<ILogger<GameService>>();
 
         _service = new GameService(
-            gamesQueryValidator.Object,
-            updateGameValidator.Object,
-            creationValidator.Object,
-            _dataResolver.Object,
-            _intentionManager.Object,
-            schemaService.Object,
-            _repository.Object,
-            userRepository.Object,
-            invitationService.Object,
-            _identityProvider.Object,
-            userBlacklistChecker.Object,
-            gameBlacklistRepository.Object,
-            unreadCountersRepository.Object,
-            subscriptionService.Object,
-            roomRepository.Object,
-            _dateTimeProvider.Object,
-            _guidFactory.Object,
-            intentionConverter.Object,
-            _producer.Object,
-            _cache.Object,
-            logger.Object);
+            gamesQueryValidator,
+            updateGameValidator,
+            creationValidator,
+            _dataResolver,
+            _intentionManager,
+            schemaService,
+            _repository,
+            userRepository,
+            invitationService,
+            _identityProvider,
+            gameBlacklistRepository,
+            unreadCountersRepository,
+            subscriptionService,
+            _dateTimeProvider,
+            _guidFactory,
+            _producer,
+            _cache,
+            logger);
     }
 
     /// <summary>
@@ -169,12 +157,10 @@ public class GameServiceShould : UnitTestBase
 
         var gameId = Guid.NewGuid();
         var roomId = Guid.NewGuid();
-        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(roomId);
+        _guidFactory.Create().Returns(gameId, roomId);
         CreateGameEntity? captured = null;
-        _repository.Setup(r => r.Create(
-                It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateGameEntity, CreateRoomEntity, CancellationToken>((entity, _, _) => captured = entity)
-            .ReturnsAsync(new GameDetails { Id = gameId, Rooms = new[] { new Room { Id = roomId } } });
+        _repository.Create(
+                Arg.Any<CreateGameEntity>(), Arg.Any<CreateRoomEntity>(), Arg.Any<CancellationToken>()).Returns(new GameDetails { Id = gameId, Rooms = new[] { new Room { Id = roomId } } }).AndDoes(ci => { var entity = ci.ArgAt<CreateGameEntity>(0); captured = entity; });
 
         await _service.CreateAsync(new CreateGame { Title = "Test Game" });
 
@@ -187,28 +173,26 @@ public class GameServiceShould : UnitTestBase
         var createGame = new CreateGame { Title = "Test Game", SystemName = "Test System" };
         var gameId = Guid.NewGuid();
         var game = new GameDetails { Id = gameId, Rooms = new[] { new Room { Id = Guid.NewGuid() } } };
-        _guidFactory.SetupSequence(g => g.Create())
-            .Returns(gameId)
-            .Returns(Guid.NewGuid());
-        _repository.Setup(r => r.Create(It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(game);
+        _guidFactory.Create().Returns(gameId, Guid.NewGuid());
+        _repository.Create(Arg.Any<CreateGameEntity>(), Arg.Any<CreateRoomEntity>(), Arg.Any<CancellationToken>())
+            .Returns(game);
 
         var result = await _service.CreateAsync(createGame);
 
         result.Should().NotBeNull();
-        _producer.Verify(p => p.SendAsync(EventType.NewGame, gameId), Times.Once);
+        await _producer.Received(1).SendAsync(EventType.NewGame, gameId);
     }
 
     /// <summary>
     /// A game that failed to save leaves no counters behind.
     /// </summary>
     /// <remarks>
-    /// There is no transaction across PostgreSQL and MongoDB and no outbox, so
-    /// what a feature living in two stores owes is an explicit order. Written
-    /// after the insert, a failed Mongo call left a committed game whose unread
-    /// counters do not exist and never will — nothing recreates them, and that
-    /// game's badge reads zero for everybody forever. Written first, the same
-    /// failure loses a game nobody has seen yet.
+    /// The counter write is not part of the game's transaction, so what the
+    /// feature owes is an explicit order. Written after the insert, a failed
+    /// counter call left a committed game whose unread counters do not exist
+    /// and never will — nothing recreates them, and that game's badge reads
+    /// zero for everybody forever. Written first, the same failure loses a
+    /// game nobody has seen yet.
     /// </remarks>
     [Fact]
     public async Task LeaveNoCountersBehindWhenTheGameItselfFailsToSave()
@@ -216,16 +200,16 @@ public class GameServiceShould : UnitTestBase
         var createGame = new CreateGame { Title = "Test Game", SystemName = "Test System" };
         var gameId = Guid.NewGuid();
         var roomId = Guid.NewGuid();
-        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(roomId);
-        _repository.Setup(r => r.Create(It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
+        _guidFactory.Create().Returns(gameId, roomId);
+        _repository.Create(Arg.Any<CreateGameEntity>(), Arg.Any<CreateRoomEntity>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("storage refused"));
 
         var act = async () => await _service.CreateAsync(createGame);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
-        _unreadCountersRepository.Verify(r => r.DeleteAsync(roomId, UnreadEntryType.Message), Times.Once);
-        _unreadCountersRepository.Verify(r => r.DeleteAsync(gameId, UnreadEntryType.Message), Times.Once);
-        _unreadCountersRepository.Verify(r => r.DeleteAsync(gameId, UnreadEntryType.Character), Times.Once);
+        await _unreadCountersRepository.Received(1).DeleteAsync(roomId, UnreadEntryType.Message);
+        await _unreadCountersRepository.Received(1).DeleteAsync(gameId, UnreadEntryType.Message);
+        await _unreadCountersRepository.Received(1).DeleteAsync(gameId, UnreadEntryType.Character);
     }
 
     /// <summary>
@@ -238,14 +222,13 @@ public class GameServiceShould : UnitTestBase
         var createGame = new CreateGame { Title = "Test Game", SystemName = "Test System" };
         var gameId = Guid.NewGuid();
         var roomId = Guid.NewGuid();
-        _guidFactory.SetupSequence(g => g.Create()).Returns(gameId).Returns(roomId);
-        _repository.Setup(r => r.Create(It.IsAny<CreateGameEntity>(), It.IsAny<CreateRoomEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GameDetails { Id = gameId, Rooms = new[] { new Room { Id = roomId } } });
+        _guidFactory.Create().Returns(gameId, roomId);
+        _repository.Create(Arg.Any<CreateGameEntity>(), Arg.Any<CreateRoomEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new GameDetails { Id = gameId, Rooms = new[] { new Room { Id = roomId } } });
 
         await _service.CreateAsync(createGame);
 
-        _unreadCountersRepository.Verify(
-            r => r.CreateMarkerAsync(roomId, gameId, UnreadEntryType.Message), Times.Once);
+        await _unreadCountersRepository.Received(1).CreateMarkerAsync(roomId, gameId, UnreadEntryType.Message);
     }
 
     // A committed game not turned into a 500 by the announcement of it used to be
@@ -258,7 +241,8 @@ public class GameServiceShould : UnitTestBase
     public async Task ThrowNotFoundWhenGameDoesNotExist()
     {
         var gameId = Guid.NewGuid();
-        _repository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync((GameDto?)null);
+        _repository.GetGame(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns((GameDto?)null);
 
         var act = async () => await _service.GetAsync(gameId);
 
@@ -275,12 +259,12 @@ public class GameServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         };
-        _repository.Setup(r => r.GetGame(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.GetGame(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
 
         var result = await _service.GetAsync(gameId);
 
         result.Should().BeSameAs(game);
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Read, game), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Read, game);
     }
 
     [Fact]
@@ -289,8 +273,8 @@ public class GameServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var updateGame = new UpdateGame { GameId = gameId, Title = "Updated Game" };
         var game = new GameDetails { Id = gameId, Recruitment = new GameRecruitment() };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.GetGameDetails(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
+        _repository.Update(Arg.Any<UpdateGameEntity>(), Arg.Any<CancellationToken>()).Returns(game);
 
         var result = await _service.UpdateAsync(updateGame);
 
@@ -300,11 +284,11 @@ public class GameServiceShould : UnitTestBase
         // that Edit is never asked keeps the two from being quietly reunited —
         // an extra Edit check here would shut the mentor out again while this
         // test stayed green on the EditSettings half alone.
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.EditSettings, game), Times.Once);
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, game), Times.Never);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.EditSettings, game);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(GameIntention.Edit, game);
         // An edit that changes no status announces exactly the one event
-        _producer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.SequenceEqual(new[] { EventType.ChangedGame })), gameId), Times.Once);
+        await _producer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.SequenceEqual(new[] { EventType.ChangedGame })), gameId);
     }
 
     /// <summary>
@@ -321,16 +305,16 @@ public class GameServiceShould : UnitTestBase
         var fantasy = Guid.NewGuid();
         var slowPaced = Guid.NewGuid();
         var game = new GameDetails { Id = gameId, Recruitment = new GameRecruitment() };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _dataResolver.Setup(r => r.ResolveTagIds(It.Is<IEnumerable<int>?>(ids => ids != null && ids.SequenceEqual(new[] { 3, 7 }))))
-            .ReturnsAsync(new[] { fantasy, slowPaced });
+        _repository.GetGameDetails(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
+        _repository.Update(Arg.Any<UpdateGameEntity>(), Arg.Any<CancellationToken>()).Returns(game);
+        _dataResolver.ResolveTagIds(Arg.Is<IEnumerable<int>?>(ids => ids != null && ids.SequenceEqual(new[] { 3, 7 })))
+            .Returns(new[] { fantasy, slowPaced });
 
         await _service.UpdateAsync(new UpdateGame { GameId = gameId, Tags = new[] { 3, 7 } });
 
-        _repository.Verify(r => r.Update(
-            It.Is<UpdateGameEntity>(e => e.TagIds != null && e.TagIds.SequenceEqual(new[] { fantasy, slowPaced })),
-            It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).Update(
+            Arg.Is<UpdateGameEntity>(e => e.TagIds != null && e.TagIds.SequenceEqual(new[] { fantasy, slowPaced })),
+            Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -346,8 +330,8 @@ public class GameServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         var game = new GameDetails { Id = gameId, Recruitment = new GameRecruitment() };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.GetGameDetails(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
+        _repository.Update(Arg.Any<UpdateGameEntity>(), Arg.Any<CancellationToken>()).Returns(game);
 
         await _service.UpdateAsync(new UpdateGame
         {
@@ -356,9 +340,9 @@ public class GameServiceShould : UnitTestBase
             Tags = clearing ? Array.Empty<int>() : null
         });
 
-        _repository.Verify(r => r.Update(
-            It.Is<UpdateGameEntity>(e => clearing ? e.TagIds != null && !e.TagIds.Any() : e.TagIds == null),
-            It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).Update(
+            Arg.Is<UpdateGameEntity>(e => clearing ? e.TagIds != null && !e.TagIds.Any() : e.TagIds == null),
+            Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -371,16 +355,16 @@ public class GameServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         var game = new GameDetails { Id = gameId, Recruitment = new GameRecruitment() };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
+        _repository.GetGameDetails(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
         _intentionManager
-            .Setup(m => m.ThrowIfForbidden(GameIntention.EditSettings, game))
-            .Throws(new HttpException(HttpStatusCode.Forbidden, "Недостаточно прав"));
+            .When(m => m.ThrowIfForbidden(GameIntention.EditSettings, game))
+            .Throw(new HttpException(HttpStatusCode.Forbidden, "Недостаточно прав"));
 
         var act = async () => await _service.UpdateAsync(new UpdateGame { GameId = gameId, Tags = new[] { 3 } });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        _repository.Verify(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _repository.DidNotReceive().Update(Arg.Any<UpdateGameEntity>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -393,16 +377,16 @@ public class GameServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             Recruitment = new GameRecruitment()
         };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(game);
-        _repository.Setup(r => r.Delete(gameId, _currentUserId, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        _repository.GetGameDetails(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
+        _repository.Delete(gameId, _currentUserId, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(gameId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Delete, game), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Delete, game);
         // The author of the removal travels with it: ISoftDeletable promises who deleted the
         // row, and the column stays empty unless the service hands the identity over.
-        _repository.Verify(r => r.Delete(gameId, _currentUserId, It.IsAny<CancellationToken>()), Times.Once);
-        _producer.Verify(p => p.SendAsync(EventType.DeletedGame, gameId), Times.Once);
+        await _repository.Received(1).Delete(gameId, _currentUserId, Arg.Any<CancellationToken>());
+        await _producer.Received(1).SendAsync(EventType.DeletedGame, gameId);
     }
 
     /// <summary>
@@ -420,16 +404,15 @@ public class GameServiceShould : UnitTestBase
                 Id = Guid.NewGuid(), ShortId = 1, Title = "Fantasy", GroupTitle = "Setting", GamesCount = 3
             }
         };
-        _repository.Setup(r => r.GetTags(It.IsAny<CancellationToken>())).ReturnsAsync(tags);
+        _repository.GetTags(Arg.Any<CancellationToken>()).Returns(tags);
         _cache
-            .Setup(c => c.GetOrCreateAsync(
-                It.IsAny<object>(), It.IsAny<Func<Task<IEnumerable<GameTag>>>>(), It.IsAny<TimeSpan>()))
-            .Returns((object _, Func<Task<IEnumerable<GameTag>>> create, TimeSpan _) => create());
+            .GetOrCreateAsync(
+                Arg.Any<object>(), Arg.Any<Func<Task<IEnumerable<GameTag>>>>(), Arg.Any<TimeSpan>()).Returns(ci => { var create = ci.ArgAt<Func<Task<IEnumerable<GameTag>>>>(1); return create(); });
 
         var result = await _service.GetTagsAsync();
 
         result.Should().BeEquivalentTo(tags);
-        _cache.Verify(c => c.GetOrCreateAsync(
-            It.IsAny<object>(), It.IsAny<Func<Task<IEnumerable<GameTag>>>>(), CachePolicy.Medium), Times.Once);
+        await _cache.Received(1).GetOrCreateAsync(
+            Arg.Any<object>(), Arg.Any<Func<Task<IEnumerable<GameTag>>>>(), CachePolicy.Medium);
     }
 }

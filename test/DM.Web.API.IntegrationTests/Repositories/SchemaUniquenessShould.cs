@@ -5,7 +5,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;

@@ -1,6 +1,6 @@
 using System;
 using DM.Infrastructure.Core.Clock;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Clock;

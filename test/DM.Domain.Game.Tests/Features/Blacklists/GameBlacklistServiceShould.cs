@@ -20,41 +20,40 @@ using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Invitations;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Blacklists;
 
 public class GameBlacklistServiceShould : UnitTestBase
 {
-    private readonly Mock<IGameService> _gameService;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IGameBlacklistRepository> _repository;
-    private readonly Mock<IGameInvitationRepository> _invitationRepository;
-    private readonly Mock<ICharacterRepository> _characterRepository;
-    private readonly Mock<ISubscriptionRepository> _subscriptionRepository;
-    private readonly Mock<IEventProducer> _producer;
+    private readonly IGameService _gameService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IGameBlacklistRepository _repository;
+    private readonly IGameInvitationRepository _invitationRepository;
+    private readonly ICharacterRepository _characterRepository;
+    private readonly ISubscriptionRepository _subscriptionRepository;
+    private readonly IEventProducer _producer;
     private readonly GameBlacklistService _service;
     private readonly Guid _currentUserId;
 
     public GameBlacklistServiceShould()
     {
         var validator = Mock<IValidator<OperateBlacklistLink>>();
-        validator.Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<OperateBlacklistLink>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        validator.ValidateAsync(Arg.Any<ValidationContext<OperateBlacklistLink>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _gameService = Mock<IGameService>();
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDto>()));
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _userLookupService = Mock<IUserLookupService>();
         _repository = Mock<IGameBlacklistRepository>();
@@ -62,19 +61,19 @@ public class GameBlacklistServiceShould : UnitTestBase
         _characterRepository = Mock<ICharacterRepository>();
         _subscriptionRepository = Mock<ISubscriptionRepository>();
         _producer = Mock<IEventProducer>();
-        _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         _service = new GameBlacklistService(
-            validator.Object,
-            _gameService.Object,
-            _intentionManager.Object,
-            _identityProvider.Object,
-            _userLookupService.Object,
-            _repository.Object,
-            _invitationRepository.Object,
-            _characterRepository.Object,
-            _subscriptionRepository.Object,
-            _producer.Object);
+            validator,
+            _gameService,
+            _intentionManager,
+            _identityProvider,
+            _userLookupService,
+            _repository,
+            _invitationRepository,
+            _characterRepository,
+            _subscriptionRepository,
+            _producer);
     }
 
     private static GameDetails CreateGame(Guid gameId, BlacklistedUser[]? blacklistedUsers = null) => new GameDetails
@@ -89,12 +88,12 @@ public class GameBlacklistServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         var game = CreateGame(gameId);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.Get(gameId)).ReturnsAsync(Array.Empty<GeneralUser>());
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.Get(gameId).Returns(Array.Empty<GeneralUser>());
 
         await _service.Get(gameId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, It.Is<GameDto>(g => g.Id == gameId)), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Edit, Arg.Is<GameDto>(g => g.Id == gameId));
     }
 
     [Fact]
@@ -104,16 +103,15 @@ public class GameBlacklistServiceShould : UnitTestBase
         var username = "testuser";
         var userId = Guid.NewGuid();
         var game = CreateGame(gameId);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _userLookupService.Setup(u => u.FindUserIdAsync(username, It.IsAny<CancellationToken>())).ReturnsAsync((true, userId));
-        _repository.Setup(r => r.Add(gameId, userId, _currentUserId))
-            .ReturnsAsync(new GeneralUser { UserId = userId });
-        _invitationRepository.Setup(r => r.CancelInvitationsForUser(gameId, userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<CancelledInvitation>());
+        _gameService.GetAsync(gameId).Returns(game);
+        _userLookupService.FindUserIdAsync(username, Arg.Any<CancellationToken>()).Returns((true, userId));
+        _repository.Add(gameId, userId, _currentUserId).Returns(new GeneralUser { UserId = userId });
+        _invitationRepository.CancelInvitationsForUser(gameId, userId, Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<CancelledInvitation>());
 
         await _service.Add(new OperateBlacklistLink { GameId = gameId, Username = username });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Edit, It.Is<GameDto>(g => g.Id == gameId)), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Edit, Arg.Is<GameDto>(g => g.Id == gameId));
     }
 
     [Fact]
@@ -123,8 +121,8 @@ public class GameBlacklistServiceShould : UnitTestBase
         var username = "testuser";
         var userId = Guid.NewGuid();
         var game = CreateGame(gameId, new[] { new BlacklistedUser { UserId = userId } });
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _userLookupService.Setup(u => u.FindUserIdAsync(username, It.IsAny<CancellationToken>())).ReturnsAsync((true, userId));
+        _gameService.GetAsync(gameId).Returns(game);
+        _userLookupService.FindUserIdAsync(username, Arg.Any<CancellationToken>()).Returns((true, userId));
 
         var act = async () => await _service.Add(new OperateBlacklistLink { GameId = gameId, Username = username });
 
@@ -146,17 +144,17 @@ public class GameBlacklistServiceShould : UnitTestBase
         var username = "reader";
         var userId = Guid.NewGuid();
         var game = CreateGame(gameId);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _userLookupService.Setup(u => u.FindUserIdAsync(username, It.IsAny<CancellationToken>())).ReturnsAsync((true, userId));
+        _gameService.GetAsync(gameId).Returns(game);
+        _userLookupService.FindUserIdAsync(username, Arg.Any<CancellationToken>()).Returns((true, userId));
         _subscriptionRepository
-            .Setup(r => r.FindAsync(userId, SubscriptionTargetType.Game, gameId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Subscription { Id = Guid.NewGuid(), SubscriberId = userId, TargetId = gameId });
+            .FindAsync(userId, SubscriptionTargetType.Game, gameId, Arg.Any<CancellationToken>())
+            .Returns(new Subscription { Id = Guid.NewGuid(), SubscriberId = userId, TargetId = gameId });
 
         var act = async () => await _service.Add(new OperateBlacklistLink { GameId = gameId, Username = username });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
-        _repository.Verify(r => r.Add(gameId, userId, _currentUserId), Times.Never);
+        await _repository.DidNotReceive().Add(gameId, userId, _currentUserId);
     }
 
     [Fact]
@@ -167,17 +165,16 @@ public class GameBlacklistServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var tokenId = Guid.NewGuid();
         var game = CreateGame(gameId);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _userLookupService.Setup(u => u.FindUserIdAsync(username, It.IsAny<CancellationToken>())).ReturnsAsync((true, userId));
-        _repository.Setup(r => r.Add(gameId, userId, _currentUserId))
-            .ReturnsAsync(new GeneralUser { UserId = userId });
-        _invitationRepository.Setup(r => r.CancelInvitationsForUser(gameId, userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { new CancelledInvitation { TokenId = tokenId, TokenType = TokenType.GamePlayerInvitation } });
+        _gameService.GetAsync(gameId).Returns(game);
+        _userLookupService.FindUserIdAsync(username, Arg.Any<CancellationToken>()).Returns((true, userId));
+        _repository.Add(gameId, userId, _currentUserId).Returns(new GeneralUser { UserId = userId });
+        _invitationRepository.CancelInvitationsForUser(gameId, userId, Arg.Any<CancellationToken>())
+            .Returns(new[] { new CancelledInvitation { TokenId = tokenId, TokenType = TokenType.GamePlayerInvitation } });
 
         await _service.Add(new OperateBlacklistLink { GameId = gameId, Username = username });
 
-        _producer.Verify(p => p.SendAsync(EventType.PlayerInvitationCancelled, tokenId), Times.Once);
-        _characterRepository.Verify(r => r.DeclinePendingCharacters(gameId, userId, It.IsAny<CancellationToken>()), Times.Once);
+        await _producer.Received(1).SendAsync(EventType.PlayerInvitationCancelled, tokenId);
+        await _characterRepository.Received(1).DeclinePendingCharacters(gameId, userId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -187,15 +184,14 @@ public class GameBlacklistServiceShould : UnitTestBase
         var username = "testuser";
         var userId = Guid.NewGuid();
         var game = CreateGame(gameId);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _userLookupService.Setup(u => u.FindUserIdAsync(username, It.IsAny<CancellationToken>())).ReturnsAsync((true, userId));
-        _repository.Setup(r => r.Add(gameId, userId, _currentUserId))
-            .ReturnsAsync(new GeneralUser { UserId = userId });
-        _invitationRepository.Setup(r => r.CancelInvitationsForUser(gameId, userId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<CancelledInvitation>());
+        _gameService.GetAsync(gameId).Returns(game);
+        _userLookupService.FindUserIdAsync(username, Arg.Any<CancellationToken>()).Returns((true, userId));
+        _repository.Add(gameId, userId, _currentUserId).Returns(new GeneralUser { UserId = userId });
+        _invitationRepository.CancelInvitationsForUser(gameId, userId, Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<CancelledInvitation>());
 
         await _service.Add(new OperateBlacklistLink { GameId = gameId, Username = username });
 
-        _producer.Verify(p => p.SendAsync(EventType.ChangedGame, gameId), Times.Once);
+        await _producer.Received(1).SendAsync(EventType.ChangedGame, gameId);
     }
 }

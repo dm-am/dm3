@@ -4,7 +4,6 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Identity;
 using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blogs;
@@ -27,7 +26,6 @@ internal class BlogBlacklistService : IBlogBlacklistService
     private readonly IIdentityProvider _identityProvider;
     private readonly IIntentionManager _intentionManager;
     private readonly IEventProducer _producer;
-    private readonly IMapper _mapper;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
     public BlogBlacklistService(
@@ -37,7 +35,6 @@ internal class BlogBlacklistService : IBlogBlacklistService
         IIdentityProvider identityProvider,
         IIntentionManager intentionManager,
         IEventProducer producer,
-        IMapper mapper,
         ISubscriptionRepository subscriptionRepository)
     {
         _repository = repository;
@@ -46,7 +43,6 @@ internal class BlogBlacklistService : IBlogBlacklistService
         _identityProvider = identityProvider;
         _intentionManager = intentionManager;
         _producer = producer;
-        _mapper = mapper;
         _subscriptionRepository = subscriptionRepository;
     }
 
@@ -64,10 +60,6 @@ internal class BlogBlacklistService : IBlogBlacklistService
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
 
         var user = await _userLookupService.GetAsync(username);
-        if (user == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
-        }
 
         // Cannot blacklist Owner
         if (user.UserId == blog.Author.UserId)
@@ -115,7 +107,9 @@ internal class BlogBlacklistService : IBlogBlacklistService
             await _producer.SendAsync(EventType.BlogInvitationCancelled, tokenId);
         }
 
-        return _mapper.Map<GeneralUser>(user);
+        // The lookup already answers the domain shape; the AutoMapper call
+        // here was an identity pass-through (same source and target type).
+        return user;
     }
 
     private async Task RemoveFromBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
@@ -124,10 +118,6 @@ internal class BlogBlacklistService : IBlogBlacklistService
         _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
 
         var user = await _userLookupService.GetAsync(username);
-        if (user == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
-        }
 
         if (!await _repository.IsBlocked(blogId, user.UserId, ct))
         {

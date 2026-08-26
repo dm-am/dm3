@@ -382,7 +382,7 @@ function onCancel() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .character-edit
   max-width: $grid-step * 200

@@ -25,6 +25,19 @@ public record CreateNotification
     public object Metadata { get; set; } = null!;
 
     /// <summary>
+    /// Identity of the bus publication this notification answers, when it has one
+    /// </summary>
+    /// <remarks>
+    /// The key <see cref="INotificationService.CreateAsync"/> deduplicates by:
+    /// a redelivered event carries the id of the rows its first delivery stored,
+    /// and asking to create them again creates nothing. Null means there is
+    /// nothing to deduplicate against — the message predates the key (the
+    /// dispatcher maps <see cref="Guid.Empty"/> here), so the write proceeds the
+    /// way it always had.
+    /// </remarks>
+    public Guid? EventId { get; set; }
+
+    /// <summary>
     /// Who did the thing being reported, when a person did it
     /// </summary>
     /// <remarks>

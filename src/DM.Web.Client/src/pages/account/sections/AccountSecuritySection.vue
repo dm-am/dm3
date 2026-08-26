@@ -198,8 +198,8 @@ const changePassword = () => {
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "../AccountPage.styles"
+@use "@/assets/styles/Inputs" as *
+@use "../AccountPage.styles" as *
 
 .security-content
   display: flex

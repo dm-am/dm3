@@ -8,7 +8,7 @@ namespace DM.Domain.Account.Features.Authentication;
 
 /// <inheritdoc />
 /// <remarks>
-/// Uses MongoDB for cluster-safe storage of login attempts.
+/// Uses the database for cluster-safe storage of login attempts.
 /// All nodes share the same state, enabling proper rate limiting across the cluster.
 /// </remarks>
 internal class LoginAttemptTracker : ILoginAttemptTracker

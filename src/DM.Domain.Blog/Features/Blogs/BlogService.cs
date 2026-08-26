@@ -747,15 +747,16 @@ internal class BlogService : IBlogService
         // Authenticated users: show actual unread counts
         var userId = identity.User.UserId;
 
+        // Sequential on purpose: both fills query the one DmDbContext of this
+        // scope, and a context refuses parallel operations (INV-7).
+
         // UnreadPublicationsCount: count publications with unread comments (parent = blogId)
-        var fillPublicationsTask = _unreadCountersRepository.FillParentCounters(blogs, userId,
+        await _unreadCountersRepository.FillParentCounters(blogs, userId,
             b => b.Id, b => b.UnreadPublicationsCount);
 
         // UnreadCommentsCount: total unread comments across all publications
-        var fillCommentsTask = _unreadCountersRepository.FillTotalUnreadCounters(blogs, userId,
+        await _unreadCountersRepository.FillTotalUnreadCounters(blogs, userId,
             b => b.Id, b => b.UnreadCommentsCount);
-
-        await Task.WhenAll(fillPublicationsTask, fillCommentsTask);
     }
 
     /// <summary>

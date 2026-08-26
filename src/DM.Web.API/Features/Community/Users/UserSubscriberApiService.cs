@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Personal.Features.Subscriptions;
 using DM.Domain.Personal.Features.Profiles;
 using DM.Domain.Core.Enums;
@@ -16,16 +15,19 @@ internal class UserSubscriberApiService : IUserSubscriberApiService
 {
     private readonly IUserService _userService;
     private readonly ISubscriptionService _subscriptionService;
-    private readonly IMapper _mapper;
+    private readonly UserMapper _userMapper;
+    private readonly SubscriptionMapper _subscriptionMapper;
 
     public UserSubscriberApiService(
         IUserService userService,
         ISubscriptionService subscriptionService,
-        IMapper mapper)
+        UserMapper userMapper,
+        SubscriptionMapper subscriptionMapper)
     {
         _userService = userService;
         _subscriptionService = subscriptionService;
-        _mapper = mapper;
+        _userMapper = userMapper;
+        _subscriptionMapper = subscriptionMapper;
     }
 
     /// <inheritdoc />
@@ -50,7 +52,7 @@ internal class UserSubscriberApiService : IUserSubscriberApiService
         var total = await _subscriptionService
             .CountTargetSubscribersAsync(SubscriptionTargetType.User, user.UserId);
         return new ListEnvelope<User>(
-            subscribers.Select(_mapper.Map<User>),
+            subscribers.Select(_userMapper.ToUser),
             new PagingInfo(query.Skip, query.Take, total));
     }
 
@@ -59,7 +61,7 @@ internal class UserSubscriberApiService : IUserSubscriberApiService
     {
         var user = await _userService.GetAsync(username);
         var subscription = await _subscriptionService.SubscribeAsync(SubscriptionTargetType.User, user.UserId);
-        return _mapper.Map<Subscription>(subscription);
+        return _subscriptionMapper.ToSubscription(subscription);
     }
 
     /// <inheritdoc />
@@ -74,6 +76,6 @@ internal class UserSubscriberApiService : IUserSubscriberApiService
     {
         var user = await _userService.GetAsync(username);
         var subscription = await _subscriptionService.GetSubscriptionAsync(SubscriptionTargetType.User, user.UserId);
-        return subscription == null ? null : _mapper.Map<Subscription>(subscription);
+        return subscription == null ? null : _subscriptionMapper.ToSubscription(subscription);
     }
 }

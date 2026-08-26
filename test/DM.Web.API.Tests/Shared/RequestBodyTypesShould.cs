@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Routing;
 using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
@@ -53,12 +52,7 @@ public class RequestBodyTypesShould
     ];
 
     /// <summary>Every controller action in the host.</summary>
-    private static MethodInfo[] Actions() => typeof(Startup).Assembly
-        .GetTypes()
-        .Where(t => t.IsClass && !t.IsAbstract && typeof(ControllerBase).IsAssignableFrom(t))
-        .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
-        .Where(m => m.GetCustomAttributes<HttpMethodAttribute>().Any())
-        .ToArray();
+    private static MethodInfo[] Actions() => ApiSurface.RoutedActions().ToArray();
 
     /// <summary>Types the host declares as a success body anywhere.</summary>
     private static HashSet<Type> ResponseTypes()

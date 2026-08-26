@@ -12,5 +12,14 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+        <!-- The NSubstitute guard belongs here and not next to the library:
+             analyzer assets are private by default, so they never arrive with
+             the transitive NSubstitute the domain suites get through DM.Testing
+             - exactly the projects that hold most of the mocking code. It never
+             ships as a runtime dependency. -->
+        <PackageReference Include="NSubstitute.Analyzers.CSharp">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
     </ItemGroup>
 </Project>

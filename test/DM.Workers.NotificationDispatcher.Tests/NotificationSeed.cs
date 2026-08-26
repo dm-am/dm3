@@ -130,7 +130,8 @@ internal static class NotificationSeed
         await context.SaveChangesAsync();
     }
 
-    private static User User(Guid id, string username, DateTimeOffset created) => new()
+    /// <summary>A registered account, filled in with whatever the columns demand.</summary>
+    public static User User(Guid id, string username, DateTimeOffset created) => new()
     {
         UserId = id,
         Username = username,

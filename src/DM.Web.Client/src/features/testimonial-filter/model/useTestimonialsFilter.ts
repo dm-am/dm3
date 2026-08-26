@@ -6,6 +6,7 @@ import {
   applySortAction,
   parseSortDirection,
   validateSortField,
+  parsePageNumber,
 } from "@/shared/lib/filters";
 import type {
   TestimonialsFilterState,
@@ -171,11 +172,8 @@ export function useTestimonialsFilter(): TestimonialsFilterComposable {
     params.sortOrder = state.sortOrder;
 
     // Page number (from URL query directly)
-    const numberParam = route.query.number;
-    if (numberParam) {
-      const num = parseInt(String(numberParam), 10);
-      if (!isNaN(num) && num > 0) params.number = num;
-    }
+    const pageNumber = parsePageNumber(route.query.number);
+    if (pageNumber) params.number = pageNumber;
 
     params.size = 10; // Testimonials use fixed page size
     return params;

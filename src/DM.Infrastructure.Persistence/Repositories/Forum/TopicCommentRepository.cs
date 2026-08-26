@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
@@ -18,18 +16,15 @@ namespace DM.Infrastructure.Persistence.Repositories.Forum;
 internal class TopicCommentRepository : ITopicCommentRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public TopicCommentRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
     }
@@ -40,11 +35,11 @@ internal class TopicCommentRepository : ITopicCommentRepository
 
     /// <inheritdoc />
     public Task<IEnumerable<Comment>> Get(Guid topicId, CommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null) =>
-        CommentQueries.Page(_dbContext, _mapper, topicId, query, paging, excludeUserIds, "DM.TopicComments.List");
+        CommentQueries.Page(_dbContext, topicId, query, paging, excludeUserIds, "DM.TopicComments.List");
 
     /// <inheritdoc />
     public Task<Comment?> Get(Guid commentId) =>
-        CommentQueries.Single(_dbContext, _mapper, commentId, "DM.TopicComments.Get");
+        CommentQueries.Single(_dbContext, commentId, "DM.TopicComments.Get");
 
     /// <inheritdoc />
     public async Task<FirstUnreadComment?> FindFirstUnread(Guid topicId, DateTimeOffset lastReadUtc,
@@ -135,31 +130,14 @@ internal class TopicCommentRepository : ITopicCommentRepository
         return await _dbContext.Comments
             .TagWith("DM.TopicComments.Created")
             .Where(c => c.CommentId == commentId)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
+            .ProjectToComment()
             .FirstAsync();
     }
 
     /// <inheritdoc />
-    public async Task<Comment> Update(UpdateTopicCommentEntity updateComment)
-    {
-        var dbComment = await _dbContext.Comments.FindAsync(updateComment.CommentId);
-        if (dbComment != null)
-        {
-            dbComment.Text = updateComment.Text;
-            // The comment row keeps no modification stamp: ModifiedUtc is derived
-            // from the newest entry of this history, and the client draws its
-            // "edited" mark from that. Written here rather than at the call site so
-            // the text and its trace go in one SaveChanges.
-            CommentEdits.Record(_dbContext, _guidFactory, updateComment.CommentId, updateComment.EditorUserId, updateComment.LastUpdateUtc);
-            await _dbContext.SaveChangesAsync();
-        }
-
-        return await _dbContext.Comments
-            .TagWith("DM.TopicComments.Updated")
-            .Where(c => c.CommentId == updateComment.CommentId)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .FirstAsync();
-    }
+    public Task<Comment> Update(UpdateTopicCommentEntity updateComment)
+        => CommentWrites.Update(_dbContext, _guidFactory, updateComment.CommentId, updateComment.Text,
+            updateComment.EditorUserId, updateComment.LastUpdateUtc, "DM.TopicComments.Updated");
 
     /// <inheritdoc />
     public async Task<TopicCommentToDelete?> GetForDelete(Guid commentId)
@@ -167,7 +145,7 @@ internal class TopicCommentRepository : ITopicCommentRepository
         var comment = await _dbContext.Comments
             .TagWith("DM.TopicComments.GetForDelete")
             .Where(c => !c.IsRemoved && c.CommentId == commentId)
-            .ProjectTo<TopicCommentToDelete>(_mapper.ConfigurationProvider)
+            .ProjectToTopicCommentToDelete()
             .FirstOrDefaultAsync();
 
         if (comment == null) return null;

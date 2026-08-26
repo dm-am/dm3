@@ -1,53 +1,43 @@
 using System;
-using System.Collections.Generic;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using MongoDB.Bson.Serialization.Attributes;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DM.Infrastructure.Persistence.Entities.Account;
 
 /// <summary>
-/// DAL model for user authentication
+/// DAL model for an authentication session: one row per session.
 /// </summary>
-[MongoCollectionName("UserSessions")]
+/// <remarks>
+/// A lookup always names both halves of the token: the row carries its owner,
+/// and FindUserSession filters by (SessionId, UserId), so a session id that
+/// exists but belongs to somebody else resolves to nothing.
+/// </remarks>
+[Table("UserSessions")]
 public class UserSession
-{
-    /// <summary>
-    /// User identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Authentication sessions
-    /// </summary>
-    public List<Session> Sessions { get; set; } = [];
-}
-
-/// <summary>
-/// DAL model for authentication session
-/// </summary>
-public class Session
 {
     /// <summary>
     /// Session identifier
     /// </summary>
-    public Guid Id { get; set; }
+    public Guid SessionId { get; set; }
+
+    /// <summary>
+    /// Owning user identifier
+    /// </summary>
+    public Guid UserId { get; set; }
+
+    /// <summary>
+    /// Session creation time (UTC)
+    /// </summary>
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Expiration moment (UTC)
     /// </summary>
-    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime ExpirationUtc { get; set; }
+    public DateTimeOffset ExpirationUtc { get; set; }
 
     /// <summary>
     /// Persistence flag
     /// </summary>
     public bool Persistent { get; set; }
-
-    /// <summary>
-    /// Session creation time (UTC)
-    /// </summary>
-    [BsonDateTimeOptions(Kind = DateTimeKind.Utc)]
-    public DateTime CreatedUtc { get; set; }
 
     /// <summary>
     /// Client IP address at session creation

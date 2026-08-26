@@ -400,9 +400,12 @@ export const useBoardsStore = defineStore("boards", () => {
     );
     if (error) return { error };
 
-    // Add the new comment to the list
-    if (data && comments.value) {
-      comments.value.resources.push(data);
+    // Add the new comment to the list. Out of the envelope: pushed as it
+    // came, the answer put an object with no text and no author into the list,
+    // and the comment showed as an empty block until the page was reloaded.
+    const created = unwrapResource<Comment>(data);
+    if (created && comments.value) {
+      comments.value.resources.push(created);
       // Update paging info
       if (comments.value.paging) {
         comments.value.paging.total = (comments.value.paging.total || 0) + 1;
@@ -489,12 +492,16 @@ export const useBoardsStore = defineStore("boards", () => {
 
   async function likeTopic(id: string) {
     const { data } = await forumApi.postTopicLike(id as TopicId);
-    if (data && selectedTopic.value && selectedTopic.value.id === id) {
+    // Out of the envelope. The cast below hid the shape from the compiler, so
+    // the wrapper went into the list of likes and the tooltip beside the
+    // counter read "undefined оценил(а) это" while the number itself moved.
+    const liker = unwrapResource<User>(data);
+    if (liker && selectedTopic.value && selectedTopic.value.id === id) {
       const existingLikes =
         selectedTopic.value.likes || ([] as unknown as Topic["likes"]);
       selectedTopic.value = {
         ...selectedTopic.value,
-        likes: [...existingLikes, data] as Topic["likes"],
+        likes: [...existingLikes, liker] as Topic["likes"],
       };
     }
   }

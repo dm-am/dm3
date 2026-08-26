@@ -8,13 +8,13 @@ using DM.Domain.Core.Identity;
 using DM.Testing;
 using DM.Testing.Dsl;
 using DM.Web.API.Shared.Authentication;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
@@ -50,15 +50,15 @@ public class AnonymousActionsShould : UnitTestBase
     /// </summary>
     private static IAuthorizationFilter Filter(bool authenticated)
     {
-        var identityProvider = new Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(
+        var identityProvider = Substitute.For<IIdentityProvider>();
+        identityProvider.Current.Returns(
             authenticated ? Identities.User(Guid.NewGuid(), "reader") : Identities.Guest());
 
         var type = typeof(AuthenticationRequiredAttribute)
             .GetNestedType("AuthenticationRequiredFilter", BindingFlags.NonPublic);
         type.Should().NotBeNull("the attribute declares the filter it applies");
 
-        return (IAuthorizationFilter)Activator.CreateInstance(type!, identityProvider.Object)!;
+        return (IAuthorizationFilter)Activator.CreateInstance(type!, identityProvider)!;
     }
 
     [Fact]

@@ -5,7 +5,8 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostReviews;
-using FluentAssertions;
+using DM.Web.API.IntegrationTests.Helpers;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -69,25 +70,8 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     /// IgnoreQueryFilters: a row a test here has had removed is hidden by the
     /// global soft-delete filter, and the cleanup would leave it behind.
     /// </summary>
-    private async Task RemoveReview(Guid reviewId)
-    {
-        await using var db = DatabaseFixture.CreateDbContext();
-        await db.PostReviews.IgnoreQueryFilters()
-            .Where(r => r.PostReviewId == reviewId).ExecuteDeleteAsync();
-    }
 
-    private async Task<DbPostReview?> StoredReview(Guid reviewId)
-    {
-        await using var db = DatabaseFixture.CreateDbContext();
-        return await db.PostReviews.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(r => r.PostReviewId == reviewId);
-    }
 
-    private async Task<int> QualityRatingOf(Guid userId)
-    {
-        await using var db = DatabaseFixture.CreateDbContext();
-        return await db.Users.Where(u => u.UserId == userId).Select(u => u.QualityRating).FirstAsync();
-    }
 
     /// <summary>The counter is shared with the rest of the fixture, so put it back.</summary>
     private async Task RestoreQualityRating(Guid userId, int value)
@@ -110,7 +94,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
         var reviewId = await SeedReview(sign: 1);
         try
         {
-            var before = await QualityRatingOf(PostAuthorId);
+            var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
             using var scope = DatabaseFixture.Factory.Services.CreateScope();
 
             // A modifier nobody is: the foreign key refuses the row, and the
@@ -125,14 +109,14 @@ public class PostReviewRepositoryShould : IntegrationTestBase
 
             await act.Should().ThrowAsync<DbUpdateException>();
 
-            (await QualityRatingOf(PostAuthorId)).Should().Be(before,
+            (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before,
                 "the counter is stored and nothing recomputes it, so a delta that " +
                 "outlives the write it belongs to is a drift with nothing to catch it");
-            (await StoredReview(reviewId))!.SignValue.Should().Be(1, "and the sign it was paid for is unchanged");
+            (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.SignValue.Should().Be(1, "and the sign it was paid for is unchanged");
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
         }
     }
 
@@ -143,7 +127,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     public async Task MoveTheCounterWithTheSignItPaysFor()
     {
         var reviewId = await SeedReview(sign: 1);
-        var before = await QualityRatingOf(PostAuthorId);
+        var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
         try
         {
             using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -156,13 +140,13 @@ public class PostReviewRepositoryShould : IntegrationTestBase
                     ModifiedByUserId: RaterId),
                 qualityRatingDelta: -2);
 
-            (await StoredReview(reviewId))!.SignValue.Should().Be(-1);
-            (await QualityRatingOf(PostAuthorId)).Should().Be(before - 2,
+            (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.SignValue.Should().Be(-1);
+            (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before - 2,
                 "the plus taken back and the minus applied, in the write that moved the sign");
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
             await RestoreQualityRating(PostAuthorId, before);
         }
     }
@@ -175,7 +159,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     public async Task GiveTheSignBackWithTheRemovalAndNotBeforeIt()
     {
         var reviewId = await SeedReview(sign: -1);
-        var before = await QualityRatingOf(PostAuthorId);
+        var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
         try
         {
             // A scope apiece, as two requests would have: a context whose
@@ -193,8 +177,8 @@ public class PostReviewRepositoryShould : IntegrationTestBase
                 await refused.Should().ThrowAsync<DbUpdateException>();
             }
 
-            (await QualityRatingOf(PostAuthorId)).Should().Be(before);
-            (await StoredReview(reviewId))!.IsRemoved.Should().BeFalse("the removal was refused, not half-applied");
+            (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before);
+            (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.IsRemoved.Should().BeFalse("the removal was refused, not half-applied");
 
             using (var scope = DatabaseFixture.Factory.Services.CreateScope())
             {
@@ -207,12 +191,12 @@ public class PostReviewRepositoryShould : IntegrationTestBase
                     qualityRatingDelta: 1);
             }
 
-            (await StoredReview(reviewId))!.IsRemoved.Should().BeTrue();
-            (await QualityRatingOf(PostAuthorId)).Should().Be(before + 1);
+            (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.IsRemoved.Should().BeTrue();
+            (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before + 1);
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
             await RestoreQualityRating(PostAuthorId, before);
         }
     }
@@ -233,7 +217,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
         var reviewId = await SeedReview(sign: 1);
         try
         {
-            var before = await QualityRatingOf(PostAuthorId);
+            var before = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
             using var scope = DatabaseFixture.Factory.Services.CreateScope();
 
             var act = async () => await Repository(scope).CreateAsync(
@@ -252,11 +236,11 @@ public class PostReviewRepositoryShould : IntegrationTestBase
 
             await act.Should().ThrowAsync<DuplicateEntityException>();
 
-            (await QualityRatingOf(PostAuthorId)).Should().Be(before);
+            (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(before);
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
         }
     }
 }

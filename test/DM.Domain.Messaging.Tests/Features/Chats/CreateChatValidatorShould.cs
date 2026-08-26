@@ -4,7 +4,7 @@ using System.Linq;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Messaging.Features.Chats;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 

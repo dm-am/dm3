@@ -8,10 +8,10 @@ import type {
   PagingQuery,
   Comment,
   Message,
+  QuoteSource,
   User,
 } from "@/shared/api/models/common";
 import type {
-  NotepadEntry,
   CreateNotepadEntryRequest,
   UpdateNotepadEntryRequest,
 } from "@/shared/api/models/notepads";
@@ -42,7 +42,12 @@ import type {
   GamePremoderationTransition,
 } from "../model/types";
 import type { GameReview } from "@/shared/api/models/game/reviews";
-import { Api, toCommentsQueryParams, type CommentsQuery } from "@/shared/api";
+import {
+  Api,
+  notepadEndpoints,
+  toCommentsQueryParams,
+  type CommentsQuery,
+} from "@/shared/api";
 import { RENDER_AUDIENCE } from "@/shared/api/audience";
 
 /** Request options that put a read past both caches. */
@@ -363,11 +368,23 @@ class GameApi {
    * whole room.
    */
   public getPostForEdit(postId: string) {
-    return Api.get<Post>(
+    return Api.get<Envelope<Post>>(
       `posts/${postId}`,
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
+  }
+
+  /**
+   * Fetch the markup of a quotation of a game post.
+   *
+   * The server composes the whole tag, author included, already filtered for
+   * whoever is asking. The client does not build one out of the rendered page:
+   * that conversion is lossy, and the source of somebody else's message is not
+   * something the browser holds.
+   */
+  public getPostQuote(postId: string) {
+    return Api.get<Envelope<QuoteSource>>(`posts/${postId}/quote`);
   }
 
   /**
@@ -401,7 +418,7 @@ class GameApi {
     postId: string,
     request: { sign: number; text: string },
   ) {
-    return Api.post<PostReview>(`posts/${postId}/reviews`, request);
+    return Api.post<Envelope<PostReview>>(`posts/${postId}/reviews`, request);
   }
 
   public getPostReviews(postId: string, paging?: PagingQuery) {
@@ -467,7 +484,7 @@ class GameApi {
   }
 
   public createGameComment(gameId: string, comment: { text: string }) {
-    return Api.post<Comment>(`games/${gameId}/comments`, comment);
+    return Api.post<Envelope<Comment>>(`games/${gameId}/comments`, comment);
   }
 
   public updateGameComment(id: string, comment: { text: string }) {
@@ -488,6 +505,18 @@ class GameApi {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
+  }
+
+  /**
+   * Fetch the markup of a quotation of a game comment.
+   *
+   * The server composes the whole tag, author included, already filtered for
+   * whoever is asking. The client does not build one out of the rendered page:
+   * that conversion is lossy, and the source of somebody else's message is not
+   * something the browser holds.
+   */
+  public getGameCommentQuote(id: string) {
+    return Api.get<Envelope<QuoteSource>>(`games/comments/${id}/quote`);
   }
 
   public likeGameComment(id: string) {
@@ -515,7 +544,7 @@ class GameApi {
   }
 
   public createGameReview(gameId: string, review: { text: string }) {
-    return Api.post<GameReview>(`games/${gameId}/reviews`, review);
+    return Api.post<Envelope<GameReview>>(`games/${gameId}/reviews`, review);
   }
 
   // Game users
@@ -558,7 +587,7 @@ class GameApi {
   }
 
   public updateSchema(id: string, schema: Partial<AttributeSchema>) {
-    return Api.patch<AttributeSchema>(`schemas/${id}`, schema);
+    return Api.patch<Envelope<AttributeSchema>>(`schemas/${id}`, schema);
   }
 
   public createGame(game: CreateGameInput) {
@@ -571,11 +600,14 @@ class GameApi {
   }
 
   public createCharacter(id: string, character: CharacterInput) {
-    return Api.post<Character>(`games/${id}/characters`, character);
+    return Api.post<Envelope<Character>>(`games/${id}/characters`, character);
   }
 
   public updateCharacter(characterId: string, character: CharacterInput) {
-    return Api.patch<Character>(`characters/${characterId}`, character);
+    return Api.patch<Envelope<Character>>(
+      `characters/${characterId}`,
+      character,
+    );
   }
 
   /**
@@ -606,7 +638,7 @@ class GameApi {
     characterId: string,
     transition: CharacterStatusTransition,
   ) {
-    return Api.post<Character>(`characters/${characterId}/status`, {
+    return Api.post<Envelope<Character>>(`characters/${characterId}/status`, {
       transition,
     });
   }
@@ -681,7 +713,7 @@ class GameApi {
   }
 
   public sendChatMessage(id: string, text: string) {
-    return Api.post<Message>(`chat-rooms/${id}/messages`, { text });
+    return Api.post<Envelope<Message>>(`chat-rooms/${id}/messages`, { text });
   }
 
   public markChatRoomRead(id: string) {
@@ -690,12 +722,16 @@ class GameApi {
 
   // === Notepad of the game itself, "Заметки игры" (GameNotepadController) ===
 
+  private notepadOf(gameId: string) {
+    return notepadEndpoints(`games/${gameId}/notepad`);
+  }
+
   public getNotepad(gameId: string) {
-    return Api.get<ListEnvelope<NotepadEntry>>(`games/${gameId}/notepad`);
+    return this.notepadOf(gameId).list();
   }
 
   public createNote(gameId: string, input: CreateNotepadEntryRequest) {
-    return Api.post<Envelope<NotepadEntry>>(`games/${gameId}/notepad`, input);
+    return this.notepadOf(gameId).create(input);
   }
 
   public updateNote(
@@ -703,14 +739,11 @@ class GameApi {
     entryId: string,
     input: UpdateNotepadEntryRequest,
   ) {
-    return Api.patch<Envelope<NotepadEntry>>(
-      `games/${gameId}/notepad/${entryId}`,
-      input,
-    );
+    return this.notepadOf(gameId).update(entryId, input);
   }
 
   public deleteNote(gameId: string, entryId: string) {
-    return Api.delete(`games/${gameId}/notepad/${entryId}`);
+    return this.notepadOf(gameId).remove(entryId);
   }
 
   // === The two notepads of a character (CharacterController) ===
@@ -721,20 +754,23 @@ class GameApi {
   // open; "Заметки мастера" under /master-notepad belong to the master and the
   // assistants and are closed to that player. Every character has both.
 
+  private characterNotepadOf(characterId: string) {
+    return notepadEndpoints(`characters/${characterId}/notepad`);
+  }
+
+  private characterMasterNotepadOf(characterId: string) {
+    return notepadEndpoints(`characters/${characterId}/master-notepad`);
+  }
+
   public getCharacterNotepad(characterId: string) {
-    return Api.get<ListEnvelope<NotepadEntry>>(
-      `characters/${characterId}/notepad`,
-    );
+    return this.characterNotepadOf(characterId).list();
   }
 
   public createCharacterNote(
     characterId: string,
     input: CreateNotepadEntryRequest,
   ) {
-    return Api.post<Envelope<NotepadEntry>>(
-      `characters/${characterId}/notepad`,
-      input,
-    );
+    return this.characterNotepadOf(characterId).create(input);
   }
 
   public updateCharacterNote(
@@ -742,30 +778,22 @@ class GameApi {
     entryId: string,
     input: UpdateNotepadEntryRequest,
   ) {
-    return Api.patch<Envelope<NotepadEntry>>(
-      `characters/${characterId}/notepad/${entryId}`,
-      input,
-    );
+    return this.characterNotepadOf(characterId).update(entryId, input);
   }
 
   public deleteCharacterNote(characterId: string, entryId: string) {
-    return Api.delete(`characters/${characterId}/notepad/${entryId}`);
+    return this.characterNotepadOf(characterId).remove(entryId);
   }
 
   public getCharacterMasterNotepad(characterId: string) {
-    return Api.get<ListEnvelope<NotepadEntry>>(
-      `characters/${characterId}/master-notepad`,
-    );
+    return this.characterMasterNotepadOf(characterId).list();
   }
 
   public createCharacterMasterNote(
     characterId: string,
     input: CreateNotepadEntryRequest,
   ) {
-    return Api.post<Envelope<NotepadEntry>>(
-      `characters/${characterId}/master-notepad`,
-      input,
-    );
+    return this.characterMasterNotepadOf(characterId).create(input);
   }
 
   public updateCharacterMasterNote(
@@ -773,14 +801,11 @@ class GameApi {
     entryId: string,
     input: UpdateNotepadEntryRequest,
   ) {
-    return Api.patch<Envelope<NotepadEntry>>(
-      `characters/${characterId}/master-notepad/${entryId}`,
-      input,
-    );
+    return this.characterMasterNotepadOf(characterId).update(entryId, input);
   }
 
   public deleteCharacterMasterNote(characterId: string, entryId: string) {
-    return Api.delete(`characters/${characterId}/master-notepad/${entryId}`);
+    return this.characterMasterNotepadOf(characterId).remove(entryId);
   }
 
   // === Game blacklist ===

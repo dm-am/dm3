@@ -10,7 +10,9 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Invitations;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
@@ -36,17 +38,9 @@ internal class GameInvitationRepository : IGameInvitationRepository
         var master = await _dbContext.Games
             .TagWith("DM.GameInvitation.GetMaster")
             .Where(g => g.GameId == gameId && !g.IsRemoved)
-            .Select(g => new GameUser
+            .SelectSpliced(g => new GameUser
             {
-                User = new GeneralUser
-                {
-                    UserId = g.Master.UserId,
-                    Username = g.Master.Username,
-                    Role = g.Master.Role,
-                    Status = g.Master.Status,
-                    LastActivityUtc = g.Master.LastActivityUtc,
-                    Picture = AvatarProjections.From(g.Master.AvatarUpload),
-                },
+                User = GeneralUserProjections.RosterCard.Splice(g.Master),
                 Role = GameRole.Master,
                 JoinedUtc = g.CreatedUtc
             })
@@ -61,17 +55,9 @@ internal class GameInvitationRepository : IGameInvitationRepository
         var mentor = await _dbContext.Games
             .TagWith("DM.GameInvitation.GetMentor")
             .Where(g => g.GameId == gameId && !g.IsRemoved && g.MentorId != null)
-            .Select(g => new GameUser
+            .SelectSpliced(g => new GameUser
             {
-                User = new GeneralUser
-                {
-                    UserId = g.Mentor!.UserId,
-                    Username = g.Mentor.Username,
-                    Role = g.Mentor.Role,
-                    Status = g.Mentor.Status,
-                    LastActivityUtc = g.Mentor.LastActivityUtc,
-                    Picture = AvatarProjections.From(g.Mentor.AvatarUpload),
-                },
+                User = GeneralUserProjections.RosterCard.Splice(g.Mentor!),
                 Role = GameRole.Mentor,
                 JoinedUtc = g.CreatedUtc
             })
@@ -86,17 +72,9 @@ internal class GameInvitationRepository : IGameInvitationRepository
         var assistants = await _dbContext.GameAssistants
             .TagWith("DM.GameInvitation.GetAssistants")
             .Where(ga => ga.GameId == gameId)
-            .Select(ga => new GameUser
+            .SelectSpliced(ga => new GameUser
             {
-                User = new GeneralUser
-                {
-                    UserId = ga.User.UserId,
-                    Username = ga.User.Username,
-                    Role = ga.User.Role,
-                    Status = ga.User.Status,
-                    LastActivityUtc = ga.User.LastActivityUtc,
-                    Picture = AvatarProjections.From(ga.User.AvatarUpload),
-                },
+                User = GeneralUserProjections.RosterCard.Splice(ga.User),
                 Role = GameRole.Assistant,
                 JoinedUtc = ga.JoinedUtc
             })
@@ -108,17 +86,9 @@ internal class GameInvitationRepository : IGameInvitationRepository
         var players = await _dbContext.Characters
             .TagWith("DM.GameInvitation.GetPlayers")
             .Where(c => c.GameId == gameId && !c.IsRemoved && c.Status == CharacterStatus.Active && !c.IsNpc)
-            .Select(c => new GameUser
+            .SelectSpliced(c => new GameUser
             {
-                User = new GeneralUser
-                {
-                    UserId = c.Author!.UserId,
-                    Username = c.Author.Username,
-                    Role = c.Author.Role,
-                    Status = c.Author.Status,
-                    LastActivityUtc = c.Author.LastActivityUtc,
-                    Picture = AvatarProjections.From(c.Author.AvatarUpload),
-                },
+                User = GeneralUserProjections.RosterCard.Splice(c.Author!),
                 Role = GameRole.Player,
                 JoinedUtc = c.CreatedUtc,
                 CharacterId = c.CharacterId,
@@ -133,17 +103,9 @@ internal class GameInvitationRepository : IGameInvitationRepository
         var readers = await _dbContext.Subscriptions
             .TagWith("DM.GameInvitation.GetReaders")
             .Where(s => s.TargetType == SubscriptionTargetType.Game && s.TargetId == gameId)
-            .Select(s => new GameUser
+            .SelectSpliced(s => new GameUser
             {
-                User = new GeneralUser
-                {
-                    UserId = s.Subscriber.UserId,
-                    Username = s.Subscriber.Username,
-                    Role = s.Subscriber.Role,
-                    Status = s.Subscriber.Status,
-                    LastActivityUtc = s.Subscriber.LastActivityUtc,
-                    Picture = AvatarProjections.From(s.Subscriber.AvatarUpload),
-                },
+                User = GeneralUserProjections.RosterCard.Splice(s.Subscriber),
                 Role = GameRole.Reader,
                 JoinedUtc = s.CreatedUtc
             })
@@ -343,17 +305,8 @@ internal class GameInvitationRepository : IGameInvitationRepository
         // Through the strategy because the API host configures EnableRetryOnFailure and
         // a retrying strategy refuses a transaction opened by hand.
         GameInvitationToken created = null!;
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async cancellation =>
+        await RetryableWrite.Run(_dbContext, async cancellation =>
         {
-            if (attempted)
-            {
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
-
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellation);
 
             // Invalidate existing invitations of same type for this user

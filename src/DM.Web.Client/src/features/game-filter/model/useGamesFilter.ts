@@ -9,6 +9,7 @@ import {
   dateToApiStart,
   dateToApiEnd,
   toQueryValue,
+  parsePageNumber,
 } from "@/shared/lib/filters";
 import type {
   GamesFilterState,
@@ -467,11 +468,8 @@ export function useGamesFilter(): GamesFilterComposable {
     params.sortBy = state.sortBy;
     params.sortOrder = state.sortOrder;
 
-    const numberParam = route.query.number;
-    if (numberParam) {
-      const num = parseInt(String(numberParam), 10);
-      if (!isNaN(num) && num > 0) params.number = num;
-    }
+    const pageNumber = parsePageNumber(route.query.number);
+    if (pageNumber) params.number = pageNumber;
 
     params.size = entitiesPerPage.value;
     return params;

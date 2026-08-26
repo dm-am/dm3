@@ -2,7 +2,7 @@ using System;
 using System.Text.Json;
 using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Binding;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.Tests.Shared;

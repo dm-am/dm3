@@ -27,14 +27,6 @@ public interface IUserBlacklistChecker
     Task<bool> IsBlockedAsync(Guid ownerId, Guid blockedUserId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get IDs of users blocked by a specific user
-    /// </summary>
-    /// <param name="ownerId">The user who owns the blacklist</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Collection of blocked user IDs</returns>
-    Task<IEnumerable<Guid>> GetBlockedUserIdsAsync(Guid ownerId, CancellationToken ct = default);
-
-    /// <summary>
     /// Get IDs of users blocked by a specific user, only if the specified flag is enabled.
     /// Returns empty collection if flag is not set.
     /// </summary>

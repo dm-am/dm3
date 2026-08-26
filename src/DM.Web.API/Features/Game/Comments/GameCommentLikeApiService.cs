@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Game.Features.Likes;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.Dto;
@@ -11,12 +10,12 @@ namespace DM.Web.API.Features.Game.Comments;
 internal class GameCommentLikeApiService : IGameCommentLikeApiService
 {
     private readonly IGameCommentLikeService _likeService;
-    private readonly IMapper _mapper;
+    private readonly UserMapper _mapper;
 
     /// <inheritdoc />
     public GameCommentLikeApiService(
         IGameCommentLikeService likeService,
-        IMapper mapper)
+        UserMapper mapper)
     {
         _likeService = likeService;
         _mapper = mapper;
@@ -26,7 +25,7 @@ internal class GameCommentLikeApiService : IGameCommentLikeApiService
     public async Task<Envelope<User>> LikeComment(Guid commentId)
     {
         var user = await _likeService.LikeCommentAsync(commentId);
-        return new Envelope<User>(_mapper.Map<User>(user));
+        return new Envelope<User>(_mapper.ToUser(user));
     }
 
     /// <inheritdoc />

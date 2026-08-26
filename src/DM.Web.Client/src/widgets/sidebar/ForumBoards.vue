@@ -73,7 +73,7 @@ function commentsTooltip(count: number): string {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .muted
   color: $text-muted

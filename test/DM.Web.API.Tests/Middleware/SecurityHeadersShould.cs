@@ -1,11 +1,11 @@
 using System.Threading.Tasks;
 using DM.Testing;
 using DM.Web.API.Middleware;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Web.API.Tests.Middleware;
@@ -91,10 +91,10 @@ public class SecurityHeadersShould : UnitTestBase
     private async Task<IHeaderDictionary> Headers(string environmentName)
     {
         var environment = Mock<IWebHostEnvironment>();
-        environment.Setup(e => e.EnvironmentName).Returns(environmentName);
+        environment.EnvironmentName.Returns(environmentName);
 
         var context = new DefaultHttpContext();
-        var middleware = new SecurityHeadersMiddleware(_ => Task.CompletedTask, environment.Object);
+        var middleware = new SecurityHeadersMiddleware(_ => Task.CompletedTask, environment);
 
         await middleware.InvokeAsync(context);
 

@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Uploads;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -242,11 +242,11 @@ public class DeploymentConfigurationShould
         var cron = File.ReadAllText(Path.Combine(scriptsDirectory, "install-cron.sh"));
         var verify = File.ReadAllText(Path.Combine(scriptsDirectory, "verify-backup.sh"));
 
-        var scheduled = new[] { "postgres", "mongodb", "minio" }
+        var scheduled = new[] { "postgres", "minio" }
             .Where(store => cron.Contains($"backup-{store}.sh", StringComparison.Ordinal))
             .ToList();
 
-        scheduled.Should().HaveCount(3, "the parser must find the scheduled backups");
+        scheduled.Should().HaveCount(2, "the parser must find the scheduled backups");
         foreach (var store in scheduled)
         {
             verify.Should().Contain($"/var/backups/{store}",
@@ -403,7 +403,6 @@ public class DeploymentConfigurationShould
     /// </summary>
     [Theory]
     [InlineData("backup-postgres.sh")]
-    [InlineData("backup-mongodb.sh")]
     [InlineData("backup-minio.sh")]
     [InlineData("verify-backup.sh")]
     public void LoadTheEnvironmentInEveryScheduledScript(string script)
@@ -444,15 +443,13 @@ public class DeploymentConfigurationShould
 
     /// <summary>
     /// Object storage is the one store whose contents nothing can rebuild:
-    /// Postgres and Mongo hold references to uploaded files, the files are the
-    /// data. So the account a workload holds decides what a leaked configuration
-    /// costs.
+    /// Postgres holds references to uploaded files, the files are the data. So
+    /// the account a workload holds decides what a leaked configuration costs.
     /// </summary>
     /// <remarks>
-    /// Mongo already draws this line — mongo-init.js creates an application user
-    /// with readWrite on one database and refuses to start without it — while the
-    /// application, every worker and imgproxy were handed the MinIO root account,
-    /// which can drop the bucket, rewrite its policy and mint further accounts.
+    /// The application, every worker and imgproxy were handed the MinIO root
+    /// account, which can drop the bucket, rewrite its policy and mint further
+    /// accounts.
     /// </remarks>
     [Fact]
     public void GiveNoWorkloadTheObjectStoreRootAccount()
@@ -538,7 +535,7 @@ public class DeploymentConfigurationShould
     /// </summary>
     /// <remarks>
     /// Both guides told the operator to copy .env.example, which carries the
-    /// repository's Postgres, Mongo, MinIO, RabbitMQ and Grafana passwords — onto
+    /// repository's Postgres, MinIO, RabbitMQ and Grafana passwords — onto
     /// a machine in another jurisdiction that runs no application code and
     /// connects to no store. The same command then stopped on interpolation
     /// anyway, demanding the session encryption key, which is the one thing the
@@ -574,7 +571,7 @@ public class DeploymentConfigurationShould
 
         foreach (var required in new[]
                  {
-                     "DM_CryptoConfiguration__KeyBase64", "MONGO_ROOT_PASSWORD", "MONGO_PASSWORD",
+                     "DM_CryptoConfiguration__KeyBase64",
                      "MINIO_APP_PASSWORD", "MINIO_IMGPROXY_PASSWORD", "IMGPROXY_KEY", "IMGPROXY_SALT",
                  })
         {
@@ -669,7 +666,7 @@ public class DeploymentConfigurationShould
     /// A letter sitting in dm.mail.sending is the only record that a registration
     /// confirmation is owed, and the dead-letter queue is the only artefact left of
     /// one that could not be sent. Both queues are declared durable, and the broker
-    /// was the single service with state and no named volume — pg, mongo, loki and
+    /// was the single service with state and no named volume — pg, loki and
     /// minio all had one — so every recreation of the container dropped them.
     ///
     /// The node name is the other half. Mnesia keeps its data under a directory
@@ -786,7 +783,7 @@ public class DeploymentConfigurationShould
     /// </summary>
     /// <remarks>
     /// The file is not in the repository, and compose declares the encryption
-    /// key, both Mongo passwords and both MinIO accounts through ${...:?}, which
+    /// key and both MinIO accounts through ${...:?}, which
     /// rejects an empty value as hard as a missing one. So the last line of the
     /// installer stopped on interpolation, after it had already enabled the
     /// systemd unit and four nightly backup jobs, and what the operator saw was a
@@ -887,7 +884,7 @@ public class DeploymentConfigurationShould
     /// Everything the site says out loud goes through one relay: activation, the
     /// password reset, the warning sent to the old address when the new one is
     /// changed, and every rule of alerts.yml by way of alertmanager. The compose
-    /// default is MailHog, which listens on loopback of the stand and is declared
+    /// default is Mailpit, which listens on loopback of the stand and is declared
     /// restart: "no", so a server installed by the documented command delivered
     /// all of it into a dead end — and the alerting contour looked complete while
     /// reaching nobody. There is no Watchdog rule either, so its silence reads
@@ -926,8 +923,8 @@ public class DeploymentConfigurationShould
     ///
     /// The two are fixed differently on purpose. The environment is read at
     /// startup and bound to nothing, so it is simply set. A password is baked
-    /// into the Mongo and MinIO users at first boot, so rotating it on a live
-    /// stand locks the API out of its own stores — the script refuses instead.
+    /// into the MinIO users at first boot, so rotating it on a live stand locks
+    /// the API out of its own store — the script refuses instead.
     /// </remarks>
     [Fact]
     public void RefuseToApproveAServerFileStillHoldingTheTemplatesSecrets()
@@ -1432,8 +1429,8 @@ public class DeploymentConfigurationShould
     /// </summary>
     /// <remarks>
     /// A profile widens the default set instead of narrowing it, so the
-    /// documented command brought up seventeen services: a local Postgres, Mongo
-    /// and MinIO, a migration container that would have run Migrate() against the
+    /// documented command brought up seventeen services: a local Postgres and
+    /// MinIO, a migration container that would have run Migrate() against the
     /// main database, and no nginx at all — the edge lives only in the overlay,
     /// so the topology the guide drew was produced by no command.
     ///
@@ -1488,7 +1485,7 @@ public class DeploymentConfigurationShould
                 "serving the frontend from the door is the reason it exists: markup, scripts and " +
                 "styles stop crossing the network on every page");
 
-            foreach (var elsewhere in new[] { "dmapi", "postgres", "mongo", "minio", "migration" })
+            foreach (var elsewhere in new[] { "dmapi", "postgres", "minio", "migration" })
             {
                 arguments.Should().NotContain(elsewhere,
                     $"{elsewhere} belongs to the main server, and a door that runs its own holds " +
@@ -1530,7 +1527,7 @@ public class DeploymentConfigurationShould
     /// </summary>
     /// <remarks>
     /// add_header appends rather than replaces what an upstream sent, and the API
-    /// sets the same five on every response of its own, so /v1/ and /whatsup left
+    /// sets the same five on every response of its own, so /v1/ and /hubs/ left
     /// with two copies of each. Two identical copies are not an outage: every one
     /// of these five parses to the same decision while the values agree, which is
     /// why nothing on the stand was ever seen to break. What the rule forbids is
@@ -1943,7 +1940,7 @@ public class DeploymentConfigurationShould
         var jobs = new List<(string, string)>();
 
         var start = Array.FindIndex(lines, line => line.StartsWith("jobs:", StringComparison.Ordinal));
-        start.Should().BeGreaterOrEqualTo(0, $"{Path.GetFileName(workflow)} declares jobs");
+        start.Should().BeGreaterThanOrEqualTo(0, $"{Path.GetFileName(workflow)} declares jobs");
 
         var current = string.Empty;
         var body = new StringBuilder();
@@ -2199,13 +2196,13 @@ public class DeploymentConfigurationShould
     /// A value that lands inside a URI stays a value, not a delimiter.
     /// </summary>
     /// <remarks>
-    /// Two connection strings put a password between the colon and the at sign:
-    /// the Mongo one the API reads, and the one the Postgres exporter scrapes
-    /// with. The template shipped TestP@ss123! for every account, so the driver
-    /// cut the string at that at sign, called it invalid, and the API aborted on
-    /// start with no request ever made. Nothing caught it because init-env.sh
-    /// replaces the passwords only in server mode: the local stand and all three
-    /// CI jobs that copy the template ran on the broken value.
+    /// A connection string puts a password between the colon and the at sign:
+    /// the one the Postgres exporter scrapes with. The template shipped
+    /// TestP@ss123! for every account, so the driver cut the string at that at
+    /// sign, called it invalid, and the consumer aborted on start with no
+    /// request ever made. Nothing caught it because init-env.sh replaces the
+    /// passwords only in server mode: the local stand and all three CI jobs
+    /// that copy the template ran on the broken value.
     ///
     /// The check is on the template because the template is what those jobs and
     /// the documented first run copy. A password chosen by an operator is their
@@ -2218,18 +2215,18 @@ public class DeploymentConfigurationShould
         var template = Read(EnvironmentTemplate);
 
         // The password position of a URI: scheme://user:${VAR}@host. The user
-        // part may itself be a substitution carrying a default, ${MONGO_USER:-dm},
-        // so it is matched as either a whole ${...} or a plain character - a
-        // class that merely excluded the colon skipped the Mongo line, which is
-        // the one line this check exists for.
+        // part may itself be a substitution carrying a default, so it is
+        // matched as either a whole ${...} or a plain character - a class that
+        // merely excluded the colon used to skip exactly the line this check
+        // exists for.
         var embedded = Regex.Matches(compose, @"://(?:\$\{[^}]*\}|[^\s:@/])*:\$\{(?<name>\w+)[^}]*\}@")
             .Select(match => match.Groups["name"].Value)
             .Distinct()
             .ToList();
 
-        embedded.Should().Contain("MONGO_PASSWORD",
-            "the connection string the API reads is the one that put a password between a " +
-            "colon and an at sign, and an extraction that misses it passes on anything");
+        embedded.Should().Contain("DM_EXPORTER_PASSWORD",
+            "the exporter's connection string puts a password between a colon and an at " +
+            "sign, and an extraction that misses it passes on anything");
 
         foreach (var name in embedded)
         {
@@ -2363,17 +2360,10 @@ public class DeploymentConfigurationShould
         .FirstOrDefault(value => !string.IsNullOrEmpty(value));
 
     /// <summary>Directives that are not commented out.</summary>
-    private static string ActiveDirectives(string configuration) =>
-        Directives(configuration, commented: false);
-
-    /// <summary>The commented template, with the comment markers taken off.</summary>
-    private static string CommentedDirectives(string configuration) =>
-        Directives(configuration, commented: true);
-
-    private static string Directives(string configuration, bool commented) => string.Join('\n', configuration
+    private static string ActiveDirectives(string configuration) => string.Join('\n', configuration
         .Split('\n')
         .Select(line => line.Trim())
-        .Where(line => line.StartsWith('#') == commented)
+        .Where(line => !line.StartsWith('#'))
         .Select(line => line.TrimStart('#').Trim()));
 
     /// <summary>

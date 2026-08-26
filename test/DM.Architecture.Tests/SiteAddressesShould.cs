@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -46,7 +46,7 @@ public class SiteAddressesShould
             .Select(match => match.Groups[1].Value)
             .ToList();
 
-        client.Should().HaveCountGreaterOrEqualTo(2,
+        client.Should().HaveCountGreaterThanOrEqualTo(2,
             "the walk has to find the declaration, and a list of one is a site with a single door");
         client.Should().BeEquivalentTo(DM.Domain.Core.Site.SiteAddresses.Hosts,
             "the server names these addresses in every letter and the client draws them in " +
@@ -159,10 +159,10 @@ public class SiteAddressesShould
             RepositoryRoot, "src", "DM.Web.API", "Shared", "Authentication", "ApiCredentialsStorage.cs"));
 
         Regex.Matches(storage, @"new CookieOptions|CookieOptions\s*\(\s*\)|CookieOptions\s*\{")
-            .Count.Should().BeLessOrEqualTo(1,
+            .Count.Should().BeLessThanOrEqualTo(1,
                 "every write of the cookie takes its attributes from the one helper");
 
-        Regex.Matches(storage, @"SessionCookieOptions\(").Count.Should().BeGreaterOrEqualTo(3,
+        Regex.Matches(storage, @"SessionCookieOptions\(").Count.Should().BeGreaterThanOrEqualTo(3,
             "the helper is declared once and used by both the handing out and the clearing");
 
         storage.Should().Contain("SessionCookieConfiguration",

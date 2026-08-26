@@ -3,8 +3,8 @@ using DM.Domain.Account.Features.Tokens;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Tokens;
@@ -12,8 +12,8 @@ namespace DM.Domain.Account.Tests.Features.Tokens;
 public class TokenFactoryShould : UnitTestBase
 {
     private readonly TokenFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public TokenFactoryShould()
     {
@@ -21,8 +21,8 @@ public class TokenFactoryShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
         _factory = new TokenFactory(
-            _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _guidFactory,
+            _dateTimeProvider);
     }
 
     [Fact]
@@ -32,8 +32,8 @@ public class TokenFactoryShould : UnitTestBase
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
-        _guidFactory.Setup(f => f.Create()).Returns(tokenId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _guidFactory.Create().Returns(tokenId);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = _factory.Create(userId, TokenType.Activation);
 
@@ -46,32 +46,11 @@ public class TokenFactoryShould : UnitTestBase
     }
 
     [Fact]
-    public void CreateTokenWithEntityId()
-    {
-        var tokenId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var entityId = Guid.NewGuid();
-        var now = DateTimeOffset.UtcNow;
-
-        _guidFactory.Setup(f => f.Create()).Returns(tokenId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
-
-        var result = _factory.Create(userId, entityId, TokenType.EmailChange);
-
-        result.Should().NotBeNull();
-        result.TokenId.Should().Be(tokenId);
-        result.UserId.Should().Be(userId);
-        result.EntityId.Should().Be(entityId);
-        result.Type.Should().Be(TokenType.EmailChange);
-        result.CreatedUtc.Should().Be(now);
-    }
-
-    [Fact]
     public void CreatePasswordResetToken()
     {
         var userId = Guid.NewGuid();
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(userId, TokenType.PasswordChange);
 
@@ -83,8 +62,8 @@ public class TokenFactoryShould : UnitTestBase
     public void CreateActivationToken()
     {
         var userId = Guid.NewGuid();
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(userId, TokenType.Activation);
 

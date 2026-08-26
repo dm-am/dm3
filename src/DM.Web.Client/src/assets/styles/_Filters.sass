@@ -9,15 +9,16 @@
 //     $selected-overlay (persistent selection indicator — sort, etc.)
 //     Exception: apply buttons (FilterApplyButton) follow the +button state
 //     model (relative $control-bg-overlay base)
-//   - All dropdowns use $bg-element background (=_dropdown-panel)
+//   - All dropdowns use $bg-element background (=dropdown-panel)
 //   - Focus borders use $border-focus (gray, NOT $link)
 //   - $link only for actual links and link-styled buttons ("Сбросить")
 //   - Disabled uses $disabled-opacity, muted icons use $muted-opacity
 // =============================================================================
 
-@import "Themes"
-@import "Variables"
-@import "ZIndex"
+@use "Themes" as *
+@use "Variables" as *
+@use "Breakpoints" as *
+@use "ZIndex" as *
 
 // -----------------------------------------------------------------------------
 // Variables
@@ -155,7 +156,7 @@ $filter-avatar-size: 24px
 
 /// Shared dropdown panel styles — used by FilterDropdown.vue and =filter-dropdown-base.
 /// Single source of truth for dropdown positioning, sizing, and visuals.
-=_dropdown-panel
+=dropdown-panel
   position: absolute
   top: calc(100% + $tiny)
   left: auto
@@ -171,7 +172,7 @@ $filter-avatar-size: 24px
 
 =filter-dropdown-base
   .dropdown
-    +_dropdown-panel
+    +dropdown-panel
 
   .dropdown-nav-header
     display: flex

@@ -48,16 +48,7 @@ internal class BlogNotepadService : IBlogNotepadService
     /// <inheritdoc />
     public async Task<NotepadEntry> GetEntry(Guid entryId, CancellationToken ct = default)
     {
-        var entry = await _repository.GetEntryAsync(entryId, ct);
-        if (entry == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
-        }
-
-        if (entry.NotepadType != NotepadType.Blog)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
-        }
+        var entry = await RequireEntry(entryId, ct);
 
         await EnsureBlogParticipant(entry.ContainerId, ct);
         return entry;
@@ -87,16 +78,7 @@ internal class BlogNotepadService : IBlogNotepadService
     /// <inheritdoc />
     public async Task<NotepadEntry> UpdateEntry(Guid entryId, UpdateNotepadEntry updateEntry, CancellationToken ct = default)
     {
-        var entry = await _repository.GetEntryAsync(entryId, ct);
-        if (entry == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
-        }
-
-        if (entry.NotepadType != NotepadType.Blog)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
-        }
+        var entry = await RequireEntry(entryId, ct);
 
         await EnsureBlogParticipant(entry.ContainerId, ct);
 
@@ -124,15 +106,10 @@ internal class BlogNotepadService : IBlogNotepadService
     /// <inheritdoc />
     public async Task DeleteEntry(Guid entryId, CancellationToken ct = default)
     {
-        var entry = await _repository.GetEntryAsync(entryId, ct);
+        var entry = await FindEntry(entryId, ct);
         if (entry == null)
         {
             return; // Already deleted
-        }
-
-        if (entry.NotepadType != NotepadType.Blog)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
         var blogOwnerId = await EnsureBlogParticipant(entry.ContainerId, ct);
@@ -147,6 +124,36 @@ internal class BlogNotepadService : IBlogNotepadService
 
         await _repository.DeleteEntryAsync(entryId, UserId, ct);
     }
+
+    /// <summary>
+    /// The entry, if it is one of this module's notepads.
+    /// </summary>
+    /// <remarks>
+    /// An entry of another module's notepad is 403 and not 404: it exists, and
+    /// this is simply not the door to it. A missing entry answers null here, and
+    /// what that means is the caller's to decide - deleting what is already gone
+    /// is what the caller asked for, reading it is not.
+    /// </remarks>
+    private async Task<NotepadEntry?> FindEntry(Guid entryId, CancellationToken ct)
+    {
+        var entry = await _repository.GetEntryAsync(entryId, ct);
+        if (entry == null)
+        {
+            return null;
+        }
+
+        if (entry.NotepadType != NotepadType.Blog)
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
+        }
+
+        return entry;
+    }
+
+    /// <inheritdoc cref="FindEntry" />
+    private async Task<NotepadEntry> RequireEntry(Guid entryId, CancellationToken ct) =>
+        await FindEntry(entryId, ct)
+        ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
 
     /// <summary>
     /// Who may open this notepad at all, answered with the owner of the blog.

@@ -4,8 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
@@ -22,17 +20,14 @@ namespace DM.Infrastructure.Persistence.Repositories.Messaging;
 internal class ChatRepository : IChatRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IPublicIdService _publicIdService;
 
     /// <inheritdoc />
     public ChatRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IPublicIdService publicIdService)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _publicIdService = publicIdService;
     }
 
@@ -71,7 +66,7 @@ internal class ChatRepository : IChatRepository
             .Where(Started(userId))
             .OrderByDescending(c => c.LastMessage!.CreatedUtc)
             .Page(paging)
-            .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
+            .ProjectToChat()
             .ToArrayAsync();
 
     /// <inheritdoc />
@@ -79,7 +74,7 @@ internal class ChatRepository : IChatRepository
         .Where(c => c.ChatId == chatId)
         // Global chats are accessible to everyone, others require participation
         .Where(c => c.Type == ChatType.Global || c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId))
-        .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
+        .ProjectToChat()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -88,13 +83,13 @@ internal class ChatRepository : IChatRepository
         .Where(c => c.PublicId == publicId)
         // Global chats are accessible to everyone, others require participation
         .Where(c => c.Type == ChatType.Global || c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId))
-        .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
+        .ProjectToChat()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
     public Task<DtoChat?> GetForUpdate(Guid chatId) => _dbContext.Chats
         .Where(c => c.ChatId == chatId)
-        .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
+        .ProjectToChat()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -113,7 +108,7 @@ internal class ChatRepository : IChatRepository
         .Where(c => c.Type == ChatType.Direct)
         .Where(UserParticipates(userId))
         .Where(UserParticipates(otherUserId))
-        .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
+        .ProjectToChat()
         .FirstOrDefaultAsync();
 
     // ═══ WRITE ═══
@@ -148,7 +143,7 @@ internal class ChatRepository : IChatRepository
 
         return await _dbContext.Chats
             .Where(c => c.ChatId == chat.ChatId)
-            .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
+            .ProjectToChat()
             .FirstAsync();
     }
 
@@ -198,7 +193,7 @@ internal class ChatRepository : IChatRepository
         return await _dbContext.Chats
             .TagWith("DM.Community.UpdatedChat")
             .Where(c => c.ChatId == update.ChatId)
-            .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
+            .ProjectToChat()
             .FirstAsync();
     }
 
@@ -222,7 +217,7 @@ internal class ChatRepository : IChatRepository
 
         return await _dbContext.Chats
             .Where(c => c.ChatId == chat.ChatId)
-            .ProjectTo<DtoChat>(_mapper.ConfigurationProvider)
+            .ProjectToChat()
             .FirstAsync();
     }
 

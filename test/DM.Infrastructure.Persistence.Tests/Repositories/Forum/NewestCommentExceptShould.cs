@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using DM.Infrastructure.Persistence.Repositories.Blog;
 using DM.Infrastructure.Persistence.Repositories.Forum;
 using DM.Infrastructure.Persistence.Repositories.Game;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
@@ -79,13 +79,13 @@ public class NewestCommentExceptShould
     private static Task<Guid?> AskAsync(string discussion, DmDbContext context, Guid deleted) =>
         discussion switch
         {
-            "topic" => new TopicCommentRepository(context, null!, null!, null!)
+            "topic" => new TopicCommentRepository(context, null!, null!)
                 .GetNewestCommentIdExcept(EntityId, deleted),
-            "blog" => new BlogCommentRepository(context, null!, null!, null!)
+            "blog" => new BlogCommentRepository(context, null!, null!)
                 .GetNewestCommentIdExcept(EntityId, deleted),
-            "publication" => new PublicationCommentRepository(context, null!, null!, null!)
+            "publication" => new PublicationCommentRepository(context, null!, null!)
                 .GetNewestCommentIdExcept(EntityId, deleted),
-            _ => new GameCommentRepository(context, null!, null!)
+            _ => new GameCommentRepository(context, null!)
                 .GetNewestCommentIdExcept(EntityId, deleted),
         };
 

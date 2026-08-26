@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 
 ARG PROJECT_NAME
 
@@ -11,6 +11,9 @@ WORKDIR /app
 # developer never sees, and the failure names a source file rather than a
 # missing file.
 COPY DM.sln Directory.Build.props Directory.Packages.props .editorconfig ./
+
+# Vendored third-party sources
+COPY src/BBCodeParser/BBCodeParser.csproj src/BBCodeParser/
 
 # Domain projects
 COPY src/DM.Domain.Core/DM.Domain.Core.csproj src/DM.Domain.Core/
@@ -54,7 +57,7 @@ ARG SOURCE_REVISION
 # without the flag publish does the whole of it a second time on every build.
 RUN dotnet publish src/${PROJECT_NAME}/${PROJECT_NAME}.csproj -c Release -o out --no-restore -p:SourceRevisionId=${SOURCE_REVISION}
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
 ARG PROJECT_NAME
 
@@ -66,7 +69,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN adduser --disabled-password --no-create-home dmuser
+# useradd, not adduser: the Debian 13 base of aspnet:10.0 no longer ships the
+# adduser wrapper in its slim variant, while useradd is part of passwd and stays.
+RUN useradd --no-create-home --shell /usr/sbin/nologin dmuser
 
 COPY --from=build /app/out ./
 USER dmuser

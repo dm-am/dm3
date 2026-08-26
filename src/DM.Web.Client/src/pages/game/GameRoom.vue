@@ -17,6 +17,8 @@ import { symbols } from "@/shared/lib/utils/icons";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
+import { provideQuoteComposer } from "@/shared/lib/composables/useQuoteComposer";
+import { BODY_TEXT_MAX_LENGTH } from "@/shared/lib/constants/content";
 import {
   MAX_POST_ATTACHMENTS,
   POST_ATTACHMENT_ACCEPT,
@@ -172,6 +174,15 @@ const showComposer = computed(
     !!user.value &&
     (myActiveCharacters.value.length > 0 || canManageTurns.value),
 );
+
+// Quoting a post of this room. The composer is the room's, the button is on
+// each post, so the room hands down the one function that puts a quotation into
+// the game-text box — and hands down nothing when there is no box to write in,
+// which is what takes the button off the posts for a reader who is only reading.
+provideQuoteComposer({
+  enabled: () => showComposer.value,
+  insert: (source) => gameEditorRef.value?.insertBlock(source.text),
+});
 
 // "Post as" options: own active characters first, then (for hosts) NPCs and a
 // plain master/assistant post with no character.
@@ -545,6 +556,7 @@ async function dismissPendency(pendencyId: string) {
         :draft-key="composerDraftKey('room', 'post', room?.id)"
         :disabled="submitting"
         :min-height="120"
+        :max-length="BODY_TEXT_MAX_LENGTH"
         :is-moderator="canManageTurns"
       />
 
@@ -558,6 +570,7 @@ async function dismissPendency(pendencyId: string) {
         :disabled="submitting"
         :min-height="60"
         :max-height="200"
+        :max-length="BODY_TEXT_MAX_LENGTH"
         :is-moderator="canManageTurns"
       />
 
@@ -693,7 +706,7 @@ async function dismissPendency(pendencyId: string) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .game-room
   min-height: $grid-step * 50

@@ -1,5 +1,5 @@
 using DM.Domain.Account.Features.Security;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Security;
@@ -28,7 +28,7 @@ public class SaltFactoryShould
 
         var result = _factory.Create(saltLength);
 
-        result.Length.Should().BeGreaterOrEqualTo(saltLength);
+        result.Length.Should().BeGreaterThanOrEqualTo(saltLength);
     }
 
     [Fact]

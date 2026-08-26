@@ -18,81 +18,79 @@ using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
 
 public class CharacterServiceShould : UnitTestBase
 {
-    private readonly Mock<IGameService> _gameService;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<ICharacterRepository> _repository;
-    private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
-    private readonly Mock<IEventProducer> _producer;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IGameService _gameService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly ICharacterRepository _repository;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IEventProducer _producer;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly CharacterService _service;
     private readonly Guid _currentUserId;
 
     public CharacterServiceShould()
     {
         var createValidator = Mock<IValidator<CreateCharacter>>();
-        createValidator.Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateCharacter>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        createValidator.ValidateAsync(Arg.Any<ValidationContext<CreateCharacter>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         var updateValidator = Mock<IValidator<UpdateCharacter>>();
-        updateValidator.Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateCharacter>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        updateValidator.ValidateAsync(Arg.Any<ValidationContext<UpdateCharacter>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _gameService = Mock<IGameService>();
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDto>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<CharacterIntention>(), It.IsAny<CharacterToUpdate>()));
 
         _repository = Mock<ICharacterRepository>();
 
         var attributeValueFiller = Mock<ICharacterAttributeValueFiller>();
-        attributeValueFiller.Setup(f => f.Fill(It.IsAny<IEnumerable<Character>>(), It.IsAny<GameDto>(), It.IsAny<Guid>()))
+        attributeValueFiller.Fill(Arg.Any<IEnumerable<Character>>(), Arg.Any<GameDto>(), Arg.Any<Guid>())
             .Returns(Task.CompletedTask);
 
         _unreadCountersRepository = Mock<IUnreadCountersRepository>();
-        _unreadCountersRepository.Setup(r => r.IncrementAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
+        _unreadCountersRepository.IncrementAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>())
             .Returns(Task.CompletedTask);
 
         var subscriptionService = Mock<IGameSubscriptionService>();
 
         _producer = Mock<IEventProducer>();
-        _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
-        _producer.Setup(p => p.SendAsync(It.IsAny<IEnumerable<EventType>>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<IEnumerable<EventType>>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _guidFactory = Mock<IGuidFactory>();
-        _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _service = new CharacterService(
-            createValidator.Object,
-            updateValidator.Object,
-            _gameService.Object,
-            _intentionManager.Object,
-            _repository.Object,
-            attributeValueFiller.Object,
-            _unreadCountersRepository.Object,
-            subscriptionService.Object,
-            _producer.Object,
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object);
+            createValidator,
+            updateValidator,
+            _gameService,
+            _intentionManager,
+            _repository,
+            attributeValueFiller,
+            _unreadCountersRepository,
+            subscriptionService,
+            _producer,
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider);
     }
 
     [Fact]
@@ -106,13 +104,12 @@ public class CharacterServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = Array.Empty<BlacklistedUser>()
         };
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.Create(It.IsAny<CreateCharacterEntity>()))
-            .ReturnsAsync(new Character { Id = Guid.NewGuid() });
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.Create(Arg.Any<CreateCharacterEntity>()).Returns(new Character { Id = Guid.NewGuid() });
 
         await _service.CreateAsync(createCharacter);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.CreateCharacter, game), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.CreateCharacter, game);
     }
 
     [Fact]
@@ -127,13 +124,12 @@ public class CharacterServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = Array.Empty<BlacklistedUser>()
         };
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _repository.Setup(r => r.Create(It.IsAny<CreateCharacterEntity>()))
-            .ReturnsAsync(new Character { Id = characterId });
+        _gameService.GetAsync(gameId).Returns(game);
+        _repository.Create(Arg.Any<CreateCharacterEntity>()).Returns(new Character { Id = characterId });
 
         await _service.CreateAsync(createCharacter);
 
-        _producer.Verify(p => p.SendAsync(EventType.NewCharacter, characterId), Times.Once);
+        await _producer.Received(1).SendAsync(EventType.NewCharacter, characterId);
     }
 
     [Fact]
@@ -147,7 +143,7 @@ public class CharacterServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = new[] { new BlacklistedUser { UserId = _currentUserId } }
         };
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _gameService.GetAsync(gameId).Returns(game);
 
         var act = async () => await _service.CreateAsync(createCharacter);
 
@@ -159,7 +155,7 @@ public class CharacterServiceShould : UnitTestBase
     public async Task ThrowNotFoundWhenCharacterDoesNotExist()
     {
         var characterId = Guid.NewGuid();
-        _repository.Setup(r => r.FindCharacter(characterId)).ReturnsAsync((Character?)null);
+        _repository.FindCharacter(characterId).Returns((Character?)null);
 
         var act = async () => await _service.GetAsync(characterId);
 
@@ -183,7 +179,7 @@ public class CharacterServiceShould : UnitTestBase
     public async Task AnswerNotFoundWhenTheCharacterIsUnknown(bool deleting)
     {
         var characterId = Guid.NewGuid();
-        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync((CharacterToUpdate?)null);
+        _repository.GetForUpdate(characterId).Returns((CharacterToUpdate?)null);
 
         Func<Task> act = deleting
             ? () => _service.DeleteAsync(characterId)
@@ -199,13 +195,12 @@ public class CharacterServiceShould : UnitTestBase
         var characterId = Guid.NewGuid();
         var updateCharacter = new UpdateCharacter { CharacterId = characterId, Name = "Updated Character" };
         var characterForUpdate = new CharacterToUpdate { Id = characterId };
-        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(characterForUpdate);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .ReturnsAsync(new Character { Id = characterId });
+        _repository.GetForUpdate(characterId).Returns(characterForUpdate);
+        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
         await _service.UpdateAsync(updateCharacter);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(CharacterIntention.Edit, characterForUpdate), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.Edit, characterForUpdate);
     }
 
     [Fact]
@@ -228,7 +223,7 @@ public class CharacterServiceShould : UnitTestBase
             Players = [],
             AttributeSchemaId = Guid.NewGuid()
         };
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _gameService.GetAsync(gameId).Returns(game);
 
         var characterForUpdate = new CharacterToUpdate
         {
@@ -236,12 +231,16 @@ public class CharacterServiceShould : UnitTestBase
             GameId = gameId,
             GameMasterId = _currentUserId
         };
-        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(characterForUpdate);
+        _repository.GetForUpdate(characterId).Returns(characterForUpdate);
 
         UpdateCharacterEntity? captured = null;
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .Callback<UpdateCharacterEntity>(e => captured = e)
-            .ReturnsAsync(new Character { Id = characterId });
+        _repository.Update(Arg.Any<UpdateCharacterEntity>())
+            .Returns(new Character { Id = characterId })
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdateCharacterEntity>(0);
+                captured = e;
+            });
 
         var updateCharacter = new UpdateCharacter
         {
@@ -259,7 +258,7 @@ public class CharacterServiceShould : UnitTestBase
         captured!.Attributes.Should().ContainSingle(a => a.Id == visibleSpecId && a.Value == "visible");
         captured.Attributes.Should().NotContain(a => a.Id == hiddenSpecId);
         // Lead can see hidden values -> no schema/stored lookup needed.
-        _repository.Verify(r => r.GetGameSchema(It.IsAny<Guid>()), Times.Never);
+        await _repository.DidNotReceive().GetGameSchema(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -282,7 +281,7 @@ public class CharacterServiceShould : UnitTestBase
             Players = [],
             AttributeSchemaId = Guid.NewGuid()
         };
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _gameService.GetAsync(gameId).Returns(game);
 
         var characterForUpdate = new CharacterToUpdate
         {
@@ -291,7 +290,7 @@ public class CharacterServiceShould : UnitTestBase
             AuthorId = authorId,
             GameMasterId = game.Master.UserId
         };
-        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(characterForUpdate);
+        _repository.GetForUpdate(characterId).Returns(characterForUpdate);
 
         var schema = new AttributeSchema
         {
@@ -301,9 +300,9 @@ public class CharacterServiceShould : UnitTestBase
                 new AttributeSpecification { Id = hiddenSpecId, Title = "H", IsHidden = true }
             }
         };
-        _repository.Setup(r => r.GetGameSchema(gameId)).ReturnsAsync(schema);
+        _repository.GetGameSchema(gameId).Returns(schema);
 
-        _repository.Setup(r => r.FindCharacter(characterId)).ReturnsAsync(new Character
+        _repository.FindCharacter(characterId).Returns(new Character
         {
             Id = characterId,
             GameId = gameId,
@@ -314,9 +313,13 @@ public class CharacterServiceShould : UnitTestBase
         });
 
         UpdateCharacterEntity? captured = null;
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .Callback<UpdateCharacterEntity>(e => captured = e)
-            .ReturnsAsync(new Character { Id = characterId });
+        _repository.Update(Arg.Any<UpdateCharacterEntity>())
+            .Returns(new Character { Id = characterId })
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdateCharacterEntity>(0);
+                captured = e;
+            });
 
         var updateCharacter = new UpdateCharacter
         {
@@ -342,15 +345,15 @@ public class CharacterServiceShould : UnitTestBase
     {
         var characterId = Guid.NewGuid();
         var character = new CharacterToUpdate { Id = characterId, GameId = Guid.NewGuid() };
-        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(character);
-        _repository.Setup(r => r.Delete(characterId, _currentUserId)).Returns(Task.CompletedTask);
+        _repository.GetForUpdate(characterId).Returns(character);
+        _repository.Delete(characterId, _currentUserId).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(characterId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(CharacterIntention.Delete, character), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.Delete, character);
         // The author of the removal travels with it: ISoftDeletable promises who deleted the
         // row, and the column stays empty unless the service hands the identity over.
-        _repository.Verify(r => r.Delete(characterId, _currentUserId), Times.Once);
+        await _repository.Received(1).Delete(characterId, _currentUserId);
     }
 
     /// <summary>
@@ -366,10 +369,9 @@ public class CharacterServiceShould : UnitTestBase
     public async Task RefuseAnNpcFlagTheCallerMayNotSet()
     {
         var characterId = Guid.NewGuid();
-        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(
+        _repository.GetForUpdate(characterId).Returns(
             new CharacterToUpdate { Id = characterId, GameId = Guid.NewGuid(), IsNpc = false });
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .ReturnsAsync(new Character { Id = characterId });
+        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
         await _service.UpdateAsync(new UpdateCharacter
         {
@@ -378,8 +380,7 @@ public class CharacterServiceShould : UnitTestBase
             IsNpc = true
         });
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(CharacterIntention.EditMasterSettings), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.EditMasterSettings);
     }
 
     /// <summary>
@@ -390,10 +391,9 @@ public class CharacterServiceShould : UnitTestBase
     public async Task NotAskForMasterSettingsWhenTheNpcFlagIsUnchanged()
     {
         var characterId = Guid.NewGuid();
-        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(
+        _repository.GetForUpdate(characterId).Returns(
             new CharacterToUpdate { Id = characterId, GameId = Guid.NewGuid(), IsNpc = true });
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .ReturnsAsync(new Character { Id = characterId });
+        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
         await _service.UpdateAsync(new UpdateCharacter
         {
@@ -402,8 +402,7 @@ public class CharacterServiceShould : UnitTestBase
             IsNpc = true
         });
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(CharacterIntention.EditMasterSettings), Times.Never);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(CharacterIntention.EditMasterSettings);
     }
 
     /// <summary>
@@ -415,15 +414,14 @@ public class CharacterServiceShould : UnitTestBase
     public async Task RefuseAnAccessPolicyTheCallerMayNotSet()
     {
         var characterId = Guid.NewGuid();
-        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(
+        _repository.GetForUpdate(characterId).Returns(
             new CharacterToUpdate
             {
                 Id = characterId,
                 GameId = Guid.NewGuid(),
                 AccessPolicy = CharacterAccessPolicy.NoAccess
             });
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .ReturnsAsync(new Character { Id = characterId });
+        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
         await _service.UpdateAsync(new UpdateCharacter
         {
@@ -432,8 +430,7 @@ public class CharacterServiceShould : UnitTestBase
             AccessPolicy = CharacterAccessPolicy.EditAllowed
         });
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(CharacterIntention.EditPrivacySettings), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.EditPrivacySettings);
     }
 
     /// <summary>
@@ -443,15 +440,14 @@ public class CharacterServiceShould : UnitTestBase
     public async Task NotAskForPrivacySettingsWhenTheAccessPolicyIsUnchanged()
     {
         var characterId = Guid.NewGuid();
-        _repository.Setup(r => r.GetForUpdate(characterId)).ReturnsAsync(
+        _repository.GetForUpdate(characterId).Returns(
             new CharacterToUpdate
             {
                 Id = characterId,
                 GameId = Guid.NewGuid(),
                 AccessPolicy = CharacterAccessPolicy.EditAllowed
             });
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .ReturnsAsync(new Character { Id = characterId });
+        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
         await _service.UpdateAsync(new UpdateCharacter
         {
@@ -460,7 +456,6 @@ public class CharacterServiceShould : UnitTestBase
             AccessPolicy = CharacterAccessPolicy.EditAllowed
         });
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(CharacterIntention.EditPrivacySettings), Times.Never);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(CharacterIntention.EditPrivacySettings);
     }
 }

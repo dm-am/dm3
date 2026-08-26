@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using AutoMapper;
+using System.Linq;
 using DM.Web.API.Features.Community.Achievements;
 using DM.Web.API.Shared.Dto;
 using IAchievementService = DM.Domain.Community.Features.Achievements.IAchievementService;
@@ -14,10 +14,10 @@ namespace DM.Web.API.Features.Moderation.Achievements;
 internal class AchievementCatalogApiService : IAchievementCatalogApiService
 {
     private readonly IAchievementService _achievementService;
-    private readonly IMapper _mapper;
+    private readonly AchievementMapper _mapper;
 
     /// <inheritdoc />
-    public AchievementCatalogApiService(IAchievementService achievementService, IMapper mapper)
+    public AchievementCatalogApiService(IAchievementService achievementService, AchievementMapper mapper)
     {
         _achievementService = achievementService;
         _mapper = mapper;
@@ -28,7 +28,7 @@ internal class AchievementCatalogApiService : IAchievementCatalogApiService
     {
         var categories = await _achievementService.GetCategoriesAsync(includeInactive: true);
         return new ListEnvelope<AchievementCategory>(
-            _mapper.Map<System.Collections.Generic.IEnumerable<AchievementCategory>>(categories));
+            categories.Select(_mapper.ToCategory));
     }
 
     /// <inheritdoc />
@@ -36,34 +36,34 @@ internal class AchievementCatalogApiService : IAchievementCatalogApiService
     {
         var types = await _achievementService.GetTypesAsync(includeInactive: true);
         return new ListEnvelope<AchievementType>(
-            _mapper.Map<System.Collections.Generic.IEnumerable<AchievementType>>(types));
+            types.Select(_mapper.ToType));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<AchievementCategory>> UpdateCategory(
         Guid id, UpdateAchievementCategoryRequest request)
     {
-        var domain = _mapper.Map<DomainUpdateAchievementCategory>(request);
+        var domain = _mapper.ToUpdateCategory(request);
         domain.Id = id;
         var updated = await _achievementService.UpdateCategoryAsync(domain);
-        return new Envelope<AchievementCategory>(_mapper.Map<AchievementCategory>(updated));
+        return new Envelope<AchievementCategory>(_mapper.ToCategory(updated));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<AchievementType>> CreateType(CreateAchievementTypeRequest request)
     {
-        var domain = _mapper.Map<DomainCreateAchievementType>(request);
+        var domain = _mapper.ToCreateType(request);
         var created = await _achievementService.CreateTypeAsync(domain);
-        return new Envelope<AchievementType>(_mapper.Map<AchievementType>(created));
+        return new Envelope<AchievementType>(_mapper.ToType(created));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<AchievementType>> UpdateType(Guid id, UpdateAchievementTypeRequest request)
     {
-        var domain = _mapper.Map<DomainUpdateAchievementType>(request);
+        var domain = _mapper.ToUpdateType(request);
         domain.Id = id;
         var updated = await _achievementService.UpdateTypeAsync(domain);
-        return new Envelope<AchievementType>(_mapper.Map<AchievementType>(updated));
+        return new Envelope<AchievementType>(_mapper.ToType(updated));
     }
 
     /// <inheritdoc />

@@ -1,204 +1,154 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Community.Features.Polls;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.Shared.Queries;
-using MongoDB.Bson;
-using MongoDB.Driver;
-using MongoDB.Driver.Linq;
+using Microsoft.EntityFrameworkCore;
 using DbPoll = DM.Infrastructure.Persistence.Entities.Community.Poll;
 using DbPollOption = DM.Infrastructure.Persistence.Entities.Community.PollOption;
+using DbPollVote = DM.Infrastructure.Persistence.Entities.Community.PollVote;
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
 
 /// <inheritdoc />
-internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollRepository
+internal class PollRepository : IPollRepository
 {
-    private readonly IMapper _mapper;
+    private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public PollRepository(
-        DmMongoClient client,
-        IMapper mapper,
-        IDateTimeProvider dateTimeProvider) : base(client)
+        DmDbContext dbContext,
+        IDateTimeProvider dateTimeProvider)
     {
-        _mapper = mapper;
+        _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
     }
 
     // ═══ READ ═══
 
     /// <inheritdoc />
-    public Task<long> Count(PollsQuery query)
+    public async Task<long> Count(PollsQuery query)
     {
-        return Collection.CountDocumentsAsync(BuildFilter(query));
+        return await BuildFilter(query).CountAsync();
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<Poll>> Get(PollsQuery query, PagingData pagingData)
     {
-        var filter = BuildFilter(query);
-
-        // Status sort requires aggregation to compute status order
-        if (string.Equals(query?.SortBy, "status", StringComparison.OrdinalIgnoreCase))
-        {
-            var dbPolls = await GetWithStatusSort(filter, query!, pagingData);
-            return dbPolls.Select(_mapper.Map<Poll>);
-        }
-
-        var sort = BuildSort(query);
-        var dbPollsSimple = await Collection
-            .Find(filter)
-            .Sort(sort)
+        var dbPolls = await BuildSort(BuildFilter(query), query)
             .Skip(pagingData.Skip)
-            .Limit(pagingData.Take)
+            .Take(pagingData.Take)
+            .Include(p => p.Options)
+            .ThenInclude(o => o.Votes)
+            .AsSplitQuery()
+            .AsNoTracking()
             .ToListAsync();
-        return dbPollsSimple.Select(_mapper.Map<Poll>);
+        return dbPolls.Select(PollMapper.ToPoll);
     }
 
-    /// <summary>
-    /// Get polls with proper status sorting using aggregation.
-    /// Status order: Pending (0) → Active (1) → Closed (2)
-    /// </summary>
-    private async Task<List<DbPoll>> GetWithStatusSort(
-        FilterDefinition<DbPoll> filter,
-        PollsQuery query,
-        PagingData pagingData)
+    private IQueryable<DbPoll> BuildFilter(PollsQuery? query)
     {
-        // Pending/Active/Closed are derived from the current moment, so the one
-        // clock the application agrees on decides it. UtcDateTime because the
-        // value goes into a BsonArray, which has no conversion from DateTimeOffset.
-        var now = _dateTimeProvider.Now.UtcDateTime;
-        var isDesc = string.Equals(query.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
-
-        // Build aggregation pipeline with computed statusOrder field. The window
-        // is Poll.StatusAt in the community domain, restated here for the same
-        // reason as in BuildFilter: the server sorts, so the ladder has to travel
-        // as a document.
-        // Pending: StartsUtc > now → order 0
-        // Active: StartsUtc <= now AND EndsUtc > now → order 1
-        // Closed: EndsUtc <= now → order 2
-        var pipeline = Collection.Aggregate()
-            .Match(filter)
-            .AppendStage<BsonDocument>(new BsonDocument("$addFields", new BsonDocument("statusOrder",
-                new BsonDocument("$cond", new BsonArray
-                {
-                    new BsonDocument("$gt", new BsonArray { "$StartsUtc", now }),
-                    0, // Pending
-                    new BsonDocument("$cond", new BsonArray
-                    {
-                        new BsonDocument("$gt", new BsonArray { "$EndsUtc", now }),
-                        1, // Active
-                        2  // Closed
-                    })
-                }))))
-            .AppendStage<BsonDocument>(new BsonDocument("$sort", isDesc
-                ? new BsonDocument { { "statusOrder", -1 }, { "StartsUtc", -1 } }
-                : new BsonDocument { { "statusOrder", 1 }, { "StartsUtc", -1 } }))
-            .Skip(pagingData.Skip)
-            .Limit(pagingData.Take)
-            // Remove computed field before deserializing to DbPoll
-            .AppendStage<BsonDocument>(new BsonDocument("$unset", "statusOrder"))
-            .As<DbPoll>();
-
-        return await pipeline.ToListAsync();
-    }
-
-    private FilterDefinition<DbPoll> BuildFilter(PollsQuery? query)
-    {
-        var filter = Filter.Eq(p => p.IsRemoved, false);
+        // The global soft-delete filter already hides removed polls; everything
+        // else the caller asked for is composed below.
+        var polls = _dbContext.Polls
+            .TagWith("DM.Community.Polls")
+            .AsQueryable();
 
         if (query == null)
-            return filter;
+            return polls;
 
         // Status is a position relative to now, so it is a comparison on the two
         // dates rather than a stored field. The window is Poll.StatusAt in the
-        // community domain; a Mongo filter is built and shipped rather than
-        // called, so these three arms restate it and have to move with it.
+        // community domain; these three arms restate it and have to move with it.
         // Every member is spelled out and there is no arm for anything else: the
         // binder refuses a word outside the vocabulary, where the string form
         // used to fall past all three comparisons and answer with every poll.
-        var now = _dateTimeProvider.Now.UtcDateTime;
-        filter &= query.Status switch
+        var now = _dateTimeProvider.Now;
+        polls = query.Status switch
         {
-            PollStatus.Pending => Filter.Gt(p => p.StartsUtc, now),
-            PollStatus.Active => Filter.Lte(p => p.StartsUtc, now) & Filter.Gt(p => p.EndsUtc, now),
-            PollStatus.Closed => Filter.Lte(p => p.EndsUtc, now),
-            _ => Filter.Empty
+            PollStatus.Pending => polls.Where(p => p.StartsUtc > now),
+            PollStatus.Active => polls.Where(p => p.StartsUtc <= now && p.EndsUtc > now),
+            PollStatus.Closed => polls.Where(p => p.EndsUtc <= now),
+            _ => polls
         };
 
         // Search filter (Title + Details)
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            // Escape regex special characters for literal search
-            var escapedSearch = Regex.Escape(query.Search);
-            var regex = new MongoDB.Bson.BsonRegularExpression(escapedSearch, "i");
-            filter &= Filter.Or(
-                Filter.Regex(p => p.Title, regex),
-                Filter.Regex(p => p.Details, regex));
+            var pattern = LikePatterns.Contains(query.Search);
+            polls = polls.Where(p =>
+                EF.Functions.ILike(p.Title, pattern, "\\") ||
+                (p.Details != null && EF.Functions.ILike(p.Details, pattern, "\\")));
         }
 
         // Date range filters for StartsUtc
         if (query.StartsFromUtc.HasValue)
         {
-            filter &= Filter.Gte(p => p.StartsUtc, query.StartsFromUtc.Value.UtcDateTime);
+            polls = polls.Where(p => p.StartsUtc >= query.StartsFromUtc.Value);
         }
         if (query.StartsToUtc.HasValue)
         {
-            filter &= DateRangeFilters.AtOrBefore<DbPoll>(p => p.StartsUtc, query.StartsToUtc.Value);
+            polls = polls.WhereAtOrBefore(p => p.StartsUtc, query.StartsToUtc.Value);
         }
 
         // Date range filters for EndsUtc
         if (query.EndsFromUtc.HasValue)
         {
-            filter &= Filter.Gte(p => p.EndsUtc, query.EndsFromUtc.Value.UtcDateTime);
+            polls = polls.Where(p => p.EndsUtc >= query.EndsFromUtc.Value);
         }
         if (query.EndsToUtc.HasValue)
         {
-            filter &= DateRangeFilters.AtOrBefore<DbPoll>(p => p.EndsUtc, query.EndsToUtc.Value);
+            polls = polls.WhereAtOrBefore(p => p.EndsUtc, query.EndsToUtc.Value);
         }
 
         // Anonymous/Public filter
         if (query.IsAnonymous.HasValue)
         {
-            filter &= Filter.Eq(p => p.IsAnonymous, query.IsAnonymous.Value);
+            polls = polls.Where(p => p.IsAnonymous == query.IsAnonymous.Value);
         }
 
-        return filter;
+        return polls;
     }
 
-    private SortDefinition<DbPoll> BuildSort(PollsQuery? query)
+    private IOrderedQueryable<DbPoll> BuildSort(IQueryable<DbPoll> polls, PollsQuery? query)
     {
-        // Note: "status" sort is handled via aggregation
         if (query == null)
-            return Sort.Ascending(p => p.StartsUtc);
+            return polls.OrderBy(p => p.StartsUtc);
 
         var isDesc = string.Equals(query.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
 
+        // Status order is derived from the current moment, the same ladder as
+        // Poll.StatusAt: Pending (0) -> Active (1) -> Closed (2). A CASE
+        // expression in SQL replaces the aggregation pipeline the document
+        // store needed for the same sort.
+        if (string.Equals(query.SortBy, "status", StringComparison.OrdinalIgnoreCase))
+        {
+            var now = _dateTimeProvider.Now;
+            return isDesc
+                ? polls.OrderByDescending(p => p.StartsUtc > now ? 0 : p.EndsUtc > now ? 1 : 2)
+                    .ThenByDescending(p => p.StartsUtc)
+                : polls.OrderBy(p => p.StartsUtc > now ? 0 : p.EndsUtc > now ? 1 : 2)
+                    .ThenByDescending(p => p.StartsUtc);
+        }
+
         return query.SortBy?.ToLowerInvariant() switch
         {
-            "starts" => isDesc ? Sort.Descending(p => p.StartsUtc) : Sort.Ascending(p => p.StartsUtc),
-            "ends" => isDesc ? Sort.Descending(p => p.EndsUtc) : Sort.Ascending(p => p.EndsUtc),
+            "ends" => isDesc ? polls.OrderByDescending(p => p.EndsUtc) : polls.OrderBy(p => p.EndsUtc),
             // Default to StartsUtc
-            _ => isDesc ? Sort.Descending(p => p.StartsUtc) : Sort.Ascending(p => p.StartsUtc),
+            _ => isDesc ? polls.OrderByDescending(p => p.StartsUtc) : polls.OrderBy(p => p.StartsUtc),
         };
     }
 
     /// <inheritdoc />
     public async Task<Poll> Get(Guid id)
     {
-        var dbPoll = await Collection
-            .Find(Filter.Eq(p => p.Id, id) & Filter.Eq(p => p.IsRemoved, false))
-            .FirstOrDefaultAsync();
-        return _mapper.Map<Poll>(dbPoll);
+        var dbPoll = await LoadPoll(id);
+        return dbPoll.ToPoll();
     }
 
     // ═══ WRITE ═══
@@ -208,126 +158,157 @@ internal class PollRepository : MongoCollectionRepository<DbPoll>, IPollReposito
     {
         var dbPoll = new DbPoll
         {
-            Id = poll.Id,
-            StartsUtc = poll.StartsUtc,
-            EndsUtc = poll.EndsUtc,
+            PollId = poll.Id,
+            StartsUtc = new DateTimeOffset(poll.StartsUtc, TimeSpan.Zero),
+            EndsUtc = new DateTimeOffset(poll.EndsUtc, TimeSpan.Zero),
             Title = poll.Title,
             Details = poll.Details,
             IsAnonymous = poll.IsAnonymous,
             IsRemoved = false,
-            Options = poll.Options.Select(o => new DbPollOption
+            // The order of the options used to be the order of the document's
+            // array; the column spells it out.
+            Options = poll.Options.Select((o, index) => new DbPollOption
             {
-                Id = o.Id,
+                PollOptionId = o.Id,
+                PollId = poll.Id,
                 Text = o.Text,
-                UserIds = []
+                Order = index
             }).ToList()
         };
 
-        await Collection.InsertOneAsync(dbPoll);
-        var createdPoll = await Collection.Find(Filter.Eq(p => p.Id, poll.Id))
-            .FirstAsync();
-        return _mapper.Map<Poll>(createdPoll);
+        _dbContext.Polls.Add(dbPoll);
+        await _dbContext.SaveChangesAsync();
+
+        return dbPoll.ToPoll();
     }
 
     /// <inheritdoc />
     public async Task<Poll> Update(Guid pollId, string? title, string? details,
         DateTimeOffset? startDate, DateTimeOffset? endDate, bool? isAnonymous)
     {
-        var currentPoll = await Collection.Find(Filter.Eq(p => p.Id, pollId)).FirstAsync();
-        var update = Builders<DbPoll>.Update;
-        var updates = new List<UpdateDefinition<DbPoll>>();
+        var dbPoll = await LoadPoll(pollId, tracked: true) ?? throw new InvalidOperationException(
+            $"Poll {pollId} does not exist");
 
         if (title != null)
         {
-            updates.Add(update.Set(p => p.Title, title));
+            dbPoll.Title = title;
         }
 
         if (details != null)
         {
-            updates.Add(update.Set(p => p.Details, details == string.Empty ? null : details));
+            dbPoll.Details = details == string.Empty ? null : details;
         }
 
         if (startDate.HasValue)
         {
-            updates.Add(update.Set(p => p.StartsUtc, startDate.Value.UtcDateTime));
+            dbPoll.StartsUtc = startDate.Value.ToUniversalTime();
         }
 
         if (endDate.HasValue)
         {
-            updates.Add(update.Set(p => p.EndsUtc, endDate.Value.UtcDateTime));
+            dbPoll.EndsUtc = endDate.Value.ToUniversalTime();
         }
 
+        var resetsVotes = isAnonymous.HasValue && dbPoll.IsAnonymous && !isAnonymous.Value;
         if (isAnonymous.HasValue)
         {
-            // Reset votes when changing from Anonymous to Public
-            if (currentPoll.IsAnonymous && !isAnonymous.Value)
-            {
-                updates.Add(update.Set(p => p.Options,
-                    currentPoll.Options.Select(o => new DbPollOption
-                    {
-                        Id = o.Id,
-                        Text = o.Text,
-                        UserIds = []
-                    }).ToList()));
-            }
-            updates.Add(update.Set(p => p.IsAnonymous, isAnonymous.Value));
+            dbPoll.IsAnonymous = isAnonymous.Value;
         }
 
-        if (updates.Count > 0)
+        if (resetsVotes)
         {
-            await Collection.UpdateOneAsync(
-                Filter.Eq(p => p.Id, pollId),
-                update.Combine(updates));
+            // Reset votes when changing from Anonymous to Public. ExecuteDelete
+            // by PollId under one transaction with the flag save: deleting the
+            // loaded graph left a window where a vote inserted concurrently by
+            // the raw ON CONFLICT path survived "reset all votes" (review of
+            // W1.1). Server-side delete sees every row, and the transaction
+            // keeps the pair both-or-neither. The tracked modifications survive
+            // a strategy retry as they are - nothing here re-adds entities.
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction =
+                    await _dbContext.Database.BeginTransactionAsync();
+                await _dbContext.PollVotes
+                    .Where(v => v.PollId == pollId)
+                    .ExecuteDeleteAsync();
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+            });
+        }
+        else
+        {
+            await _dbContext.SaveChangesAsync();
         }
 
-        var dbPoll = await Collection.Find(Filter.Eq(p => p.Id, pollId)).FirstAsync();
-        return _mapper.Map<Poll>(dbPoll);
+        return (await LoadPoll(pollId)).ToPoll();
     }
 
     /// <inheritdoc />
     public Task Delete(Guid pollId) =>
-        Collection.UpdateOneAsync(
-            Filter.Eq(p => p.Id, pollId),
-            Builders<DbPoll>.Update.Set(p => p.IsRemoved, true));
+        _dbContext.Polls
+            .Where(p => p.PollId == pollId)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.IsRemoved, true));
 
     // ═══ VOTING ═══
 
     /// <inheritdoc />
     /// <remarks>
-    /// One voter, one option, enforced by the write itself. The condition is part
-    /// of the filter rather than a read before it: two requests arriving together
-    /// both passed a preceding check and both landed, and nothing else in the
-    /// stack looked. A ballot that already carries this voter matches nothing
-    /// here, the update touches no document, and the caller is told.
+    /// One voter, one option, enforced by the write itself: the primary key of
+    /// PollVotes is (PollId, UserId), and the insert is ON CONFLICT DO NOTHING.
+    /// Two requests arriving together both used to pass a preceding check; here
+    /// the server keeps one row and reports the other insert as touching
+    /// nothing, and the caller is told.
     ///
-    /// Changing one's mind goes through Unvote first — the endpoint for it exists —
-    /// because pulling from every option and pushing into one cannot be a single
-    /// update: both address the same array path, and the server refuses that.
+    /// Changing one's mind goes through Unvote first — the endpoint for it
+    /// exists.
     /// </remarks>
     public async Task<Poll?> Vote(Guid pollId, Guid optionId, Guid userId)
     {
-        var dbPoll = await Collection.FindOneAndUpdateAsync(
-            Filter.Eq(p => p.Id, pollId) &
-            Filter.ElemMatch(p => p.Options, o => o.Id == optionId) &
-            Filter.Not(Filter.ElemMatch(p => p.Options, o => o.UserIds.Contains(userId))),
-            Builders<DbPoll>.Update.AddToSet(u => u.Options.FirstMatchingElement().UserIds, userId),
-            new FindOneAndUpdateOptions<DbPoll>
-            {
-                ReturnDocument = ReturnDocument.After
-            });
-        return dbPoll == null ? null : _mapper.Map<Poll>(dbPoll);
+        // The option has to belong to the poll: the key that holds "one voter,
+        // one option" cannot also say which options are on the ballot.
+        var optionExists = await _dbContext.PollOptions
+            .TagWith("DM.Community.Polls.VoteOption")
+            .AnyAsync(o => o.PollOptionId == optionId && o.PollId == pollId);
+        if (!optionExists)
+        {
+            return null;
+        }
+
+        var votedUtc = _dateTimeProvider.Now;
+        var inserted = await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "PollVotes" ("PollId", "UserId", "PollOptionId", "VotedUtc")
+            VALUES ({pollId}, {userId}, {optionId}, {votedUtc})
+            ON CONFLICT ("PollId", "UserId") DO NOTHING
+            """);
+
+        return inserted == 0 ? null : (await LoadPoll(pollId)).ToPoll();
     }
 
     /// <inheritdoc />
     public async Task<Poll> Unvote(Guid pollId, Guid userId)
     {
-        var dbPoll = await Collection.FindOneAndUpdateAsync(
-            Filter.Eq(p => p.Id, pollId),
-            Builders<DbPoll>.Update.PullAll("Options.$[].UserIds", new[] { userId }),
-            new FindOneAndUpdateOptions<DbPoll>
-            {
-                ReturnDocument = ReturnDocument.After
-            });
-        return _mapper.Map<Poll>(dbPoll);
+        await _dbContext.PollVotes
+            .Where(v => v.PollId == pollId && v.UserId == userId)
+            .ExecuteDeleteAsync();
+
+        return (await LoadPoll(pollId)).ToPoll();
+    }
+
+    /// <summary>
+    /// The poll with its ballot. Untracked by default: the vote writes bypass
+    /// the change tracker (raw ON CONFLICT, ExecuteDelete), so a tracked read
+    /// after one of them would merge in stale tracked votes. Only Update, which
+    /// edits through the tracker, asks for the tracked shape.
+    /// </summary>
+    private Task<DbPoll?> LoadPoll(Guid pollId, bool tracked = false)
+    {
+        var polls = _dbContext.Polls
+            .TagWith("DM.Community.Polls.Load")
+            .Where(p => p.PollId == pollId)
+            .Include(p => p.Options)
+            .ThenInclude(o => o.Votes)
+            .AsSplitQuery();
+        return (tracked ? polls : polls.AsNoTracking()).FirstOrDefaultAsync();
     }
 }

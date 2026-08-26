@@ -9,10 +9,11 @@ using DM.Web.API.Middleware;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Configuration;
 using DM.Web.API.Shared.RateLimiting;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
@@ -36,7 +37,7 @@ public class RateLimitPartitioningShould : UnitTestBase
         new(Options.Create(new AuthenticationConfiguration()),
             Options.Create(new SessionCookieConfiguration()));
 
-    private readonly Mock<ISymmetricCryptoService> cryptoService;
+    private readonly ISymmetricCryptoService cryptoService;
 
     public RateLimitPartitioningShould()
     {
@@ -80,7 +81,7 @@ public class RateLimitPartitioningShould : UnitTestBase
     [Fact]
     public async Task CountATokenThisServerDidNotMintAsAGuest()
     {
-        cryptoService.Setup(c => c.Decrypt("forged")).ThrowsAsync(new CryptographicException());
+        cryptoService.Decrypt("forged").ThrowsAsync(new CryptographicException());
 
         var forged = await PartitionKey(Address, "forged");
 
@@ -120,8 +121,7 @@ public class RateLimitPartitioningShould : UnitTestBase
     {
         var token = $"token-of-{userId}";
         cryptoService
-            .Setup(c => c.Decrypt(token))
-            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{Guid.NewGuid()}\"}}");
+            .Decrypt(token).Returns($"{{\"userId\":\"{userId}\",\"sessionId\":\"{Guid.NewGuid()}\"}}");
         return token;
     }
 
@@ -136,7 +136,7 @@ public class RateLimitPartitioningShould : UnitTestBase
         }
 
         var middleware = new RateLimitAccountMiddleware(_ => Task.CompletedTask);
-        await middleware.InvokeAsync(context, CredentialsStorage, cryptoService.Object);
+        await middleware.InvokeAsync(context, CredentialsStorage, cryptoService);
 
         return RateLimitingExtensions.PartitionKey(context, partition);
     }

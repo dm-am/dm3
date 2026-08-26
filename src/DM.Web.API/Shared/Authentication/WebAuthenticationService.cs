@@ -18,14 +18,14 @@ namespace DM.Web.API.Shared.Authentication;
 /// <inheritdoc />
 internal class WebAuthenticationService : IWebAuthenticationService
 {
-    private readonly IAuthenticationService authenticationService;
-    private readonly ICredentialsStorage credentialsStorage;
-    private readonly IIdentitySetter identitySetter;
-    private readonly ISuspiciousLoginDetector suspiciousLoginDetector;
-    private readonly ISuspiciousLoginNotificationSender suspiciousLoginNotificationSender;
-    private readonly ISecurityAuditRepository securityAuditRepository;
-    private readonly IEventProducer eventProducer;
-    private readonly ILogger<WebAuthenticationService> logger;
+    private readonly IAuthenticationService _authenticationService;
+    private readonly ICredentialsStorage _credentialsStorage;
+    private readonly IIdentitySetter _identitySetter;
+    private readonly ISuspiciousLoginDetector _suspiciousLoginDetector;
+    private readonly ISuspiciousLoginNotificationSender _suspiciousLoginNotificationSender;
+    private readonly ISecurityAuditRepository _securityAuditRepository;
+    private readonly IEventProducer _eventProducer;
+    private readonly ILogger<WebAuthenticationService> _logger;
 
     /// <inheritdoc />
     public WebAuthenticationService(
@@ -38,26 +38,29 @@ internal class WebAuthenticationService : IWebAuthenticationService
         IEventProducer eventProducer,
         ILogger<WebAuthenticationService> logger)
     {
-        this.authenticationService = authenticationService;
-        this.credentialsStorage = credentialsStorage;
-        this.identitySetter = identitySetter;
-        this.suspiciousLoginDetector = suspiciousLoginDetector;
-        this.suspiciousLoginNotificationSender = suspiciousLoginNotificationSender;
-        this.securityAuditRepository = securityAuditRepository;
-        this.eventProducer = eventProducer;
-        this.logger = logger;
+        _authenticationService = authenticationService;
+        _credentialsStorage = credentialsStorage;
+        _identitySetter = identitySetter;
+        _suspiciousLoginDetector = suspiciousLoginDetector;
+        _suspiciousLoginNotificationSender = suspiciousLoginNotificationSender;
+        _securityAuditRepository = securityAuditRepository;
+        _eventProducer = eventProducer;
+        _logger = logger;
     }
 
     private async Task<IIdentity> GetAuthenticationResult(AuthCredentials credentials, HttpContext? httpContext) => credentials switch
     {
-        LoginCredentials loginCredentials => await authenticationService.Authenticate(
+        LoginCredentials loginCredentials => await _authenticationService.Authenticate(
             loginCredentials.Email, loginCredentials.Password, loginCredentials.RememberMe,
             ExtractSessionContext(httpContext),
             // The progressive delay of this path is long enough that a reader who
             // gave up leaves a request asleep behind them, holding its connection.
             httpContext?.RequestAborted ?? CancellationToken.None),
-        TokenCredentials tokenCredentials => await authenticationService.Authenticate(tokenCredentials.Token),
-        UnconditionalCredentials unconditionalCredentials => await authenticationService.Authenticate(
+        TokenCredentials tokenCredentials => await _authenticationService.Authenticate(tokenCredentials.Token),
+        SecondFactorCredentials secondFactor => await _authenticationService.CompleteSecondFactor(
+            secondFactor.ChallengeId, secondFactor.Code, ExtractSessionContext(httpContext),
+            httpContext?.RequestAborted ?? CancellationToken.None),
+        UnconditionalCredentials unconditionalCredentials => await _authenticationService.Authenticate(
             unconditionalCredentials.UserId, ExtractSessionContext(httpContext)),
         _ => Identity.Guest()
     };
@@ -77,16 +80,21 @@ internal class WebAuthenticationService : IWebAuthenticationService
     /// <inheritdoc />
     public async Task<IIdentity> Authenticate(AuthCredentials credentials, HttpContext httpContext)
     {
-        var identity = identitySetter.Current = await GetAuthenticationResult(credentials, httpContext);
+        var identity = _identitySetter.Current = await GetAuthenticationResult(credentials, httpContext);
         await TryLoadAuthenticationResult(httpContext, identity);
 
         // Suspicious login detection for successful logins
-        if (identity.User.IsAuthenticated && credentials is LoginCredentials or UnconditionalCredentials)
+        // The second factor is on this list because it is the step that actually
+        // mints the session: for an account with a factor the password step
+        // creates nothing, so a detector reading only that step would never see
+        // a completed login from a new device at all.
+        if (identity.User.IsAuthenticated &&
+            credentials is LoginCredentials or UnconditionalCredentials or SecondFactorCredentials)
         {
             var sessionContext = ExtractSessionContext(httpContext);
             try
             {
-                var isSuspicious = await suspiciousLoginDetector.IsSuspiciousAsync(
+                var isSuspicious = await _suspiciousLoginDetector.IsSuspiciousAsync(
                     identity.User.UserId,
                     sessionContext?.IpAddress,
                     sessionContext?.UserAgent);
@@ -96,7 +104,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
                 // is what the owner of the account reads afterwards.
                 if (isSuspicious)
                 {
-                    await securityAuditRepository.LogAsync(identity.User.UserId, SecurityEventType.SuspiciousLogin,
+                    await _securityAuditRepository.LogAsync(identity.User.UserId, SecurityEventType.SuspiciousLogin,
                         sessionContext?.IpAddress, sessionContext?.UserAgent);
 
                     // The notification on the site, beside the letter below. The
@@ -105,13 +113,13 @@ internal class WebAuthenticationService : IWebAuthenticationService
                     // settings screen offers was one item short of what it promised.
                     // No try/catch here: the producer swallows a refusal and counts
                     // it, which is the trade SYSTEM.md states for every event.
-                    await eventProducer.SendAsync(
+                    await _eventProducer.SendAsync(
                         EventType.SuspiciousLoginActivity, identity.User.UserId);
                 }
 
                 if (isSuspicious && !string.IsNullOrEmpty(identity.User.Email))
                 {
-                    logger.LogInformation(
+                    _logger.LogInformation(
                         "Suspicious login detected for user {UserId} from IP {IpAddress}",
                         identity.User.UserId, sessionContext?.IpAddress);
 
@@ -137,7 +145,7 @@ internal class WebAuthenticationService : IWebAuthenticationService
                     // nine letters of the product at once.
                     try
                     {
-                        await suspiciousLoginNotificationSender.SendAsync(
+                        await _suspiciousLoginNotificationSender.SendAsync(
                             identity.User.Email,
                             identity.User.Username,
                             sessionContext?.IpAddress,
@@ -152,14 +160,14 @@ internal class WebAuthenticationService : IWebAuthenticationService
                         // The identifier, not the address: the address names a
                         // person, and the store keeps a month of whatever is
                         // written to it.
-                        logger.LogWarning(ex,
+                        _logger.LogWarning(ex,
                             "Failed to send suspicious login notification for {UserId}", identity.User.UserId);
                     }
                 }
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to check for suspicious login");
+                _logger.LogWarning(ex, "Failed to check for suspicious login");
             }
         }
 
@@ -169,14 +177,14 @@ internal class WebAuthenticationService : IWebAuthenticationService
     /// <inheritdoc />
     public async Task Logout(HttpContext httpContext)
     {
-        var identity = identitySetter.Current = await authenticationService.Logout();
+        var identity = _identitySetter.Current = await _authenticationService.Logout();
         await TryLoadAuthenticationResult(httpContext, identity);
     }
 
     /// <inheritdoc />
     public async Task<IIdentity> LogoutElsewhere(HttpContext httpContext)
     {
-        var identity = identitySetter.Current = await authenticationService.LogoutElsewhere();
+        var identity = _identitySetter.Current = await _authenticationService.LogoutElsewhere();
         await TryLoadAuthenticationResult(httpContext, identity);
         return identity;
     }
@@ -185,11 +193,11 @@ internal class WebAuthenticationService : IWebAuthenticationService
     {
         if (identity.Error == AuthenticationError.ForgedToken)
         {
-            logger.LogError("Seems like someone is trying to forge the token for {Username}", identity.User.Username);
+            _logger.LogError("Seems like someone is trying to forge the token for {Username}", identity.User.Username);
         }
 
         return identity.Error == AuthenticationError.NoError && identity.User.IsAuthenticated
-            ? credentialsStorage.Load(httpContext, identity)
-            : credentialsStorage.Unload(httpContext);
+            ? _credentialsStorage.Load(httpContext, identity)
+            : _credentialsStorage.Unload(httpContext);
     }
 }

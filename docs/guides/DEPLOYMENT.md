@@ -4,11 +4,11 @@
 
 ```
 Internet → Nginx → Frontend (Vue.js)
-                 → API (.NET 8)
+                 → API (.NET 10)
                  → MinIO (S3-compat, source-файлы)
                  → imgproxy (on-the-fly resize + AVIF/WebP)
                        ↓
-              PostgreSQL / MongoDB / RabbitMQ
+              PostgreSQL / RabbitMQ
                        ↓
               Consumer Services (Email, Notifications)
 ```
@@ -209,13 +209,13 @@ docker compose --env-file .env.pop -f docker-compose.yml -f docker-compose.previ
 
 | Категория | Переменные |
 |-----------|------------|
-| Базы данных | `DM_ConnectionStrings__Rdb`, `DM_ConnectionStrings__Mongo` |
+| Базы данных | `DM_ConnectionStrings__Rdb` |
 | RabbitMQ | `DM_RabbitMqConfiguration__*` |
 | MinIO (source storage) | `DM_CdnConfiguration__*` |
 | imgproxy (transform layer) | `DM_ImageProxyConfiguration__Endpoint/Key/Salt/SourceUrlPrefix` |
 | Email | `DM_EmailConfiguration__*` |
 
-**Production:** `docker/.env` создает `docker/scripts/init-env.sh server` — копирует пример, генерирует крипто-ключ и все секреты (`POSTGRES_PASSWORD`, `DM_APP_PASSWORD`, `DM_EXPORTER_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD`, `MONGO_*_PASSWORD`, `MINIO_APP_PASSWORD`, `MINIO_IMGPROXY_PASSWORD`, `IMGPROXY_KEY`, `IMGPROXY_SALT`, `GF_SECURITY_ADMIN_PASSWORD`), ставит `ASPNETCORE_ENVIRONMENT=Production` и пинит `IMAGE_TAG`. Копия `.env.example` руками оставляет пароли из репозитория и пустой ключ, на котором compose останавливается до старта контейнеров.
+**Production:** `docker/.env` создает `docker/scripts/init-env.sh server` — копирует пример, генерирует крипто-ключ и все секреты (`POSTGRES_PASSWORD`, `DM_APP_PASSWORD`, `DM_EXPORTER_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD`, `MINIO_APP_PASSWORD`, `MINIO_IMGPROXY_PASSWORD`, `IMGPROXY_KEY`, `IMGPROXY_SALT`, `GF_SECURITY_ADMIN_PASSWORD`), ставит `ASPNETCORE_ENVIRONMENT=Production` и пинит `IMAGE_TAG`. Копия `.env.example` руками оставляет пароли из репозитория и пустой ключ, на котором compose останавливается до старта контейнеров.
 
 ---
 
@@ -225,14 +225,12 @@ docker compose --env-file .env.pop -f docker-compose.yml -f docker-compose.previ
 |-------|---------|
 | Docker образ | `IMAGE_TAG=<sha>` в `docker/.env`, затем `sudo systemctl restart dm3` |
 | PostgreSQL | `gunzip -c /var/backups/postgresql/<файл>.sql.gz \| docker exec -i dm-pg psql -U postgres dm3` |
-| MongoDB | `docker exec -i dm-mongo mongorestore --archive --gzip --drop < /var/backups/mongodb/<файл>.archive.gz` |
-| MinIO | `docker run --rm --network host -v /var/backups/minio/<каталог>:/backup --entrypoint sh minio/mc:RELEASE.2024-06-20T14-50-54Z -c 'mc alias set dst "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc mirror /backup dst/dm-uploads'` |
+| MinIO | `docker run --rm --network host -v /var/backups/minio/<каталог>:/backup --entrypoint sh minio/mc:RELEASE.2025-05-21T01-59-54Z -c 'mc alias set dst "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc mirror /backup dst/dm-uploads'` |
 | Git | `git revert HEAD && git push` |
 
-Команды восстановления соответствуют тому, что кладут скрипты бэкапа: PostgreSQL
-и MongoDB сжаты gzip-ом, а MinIO — каталог объектов, а не архив. Прежние команды
-в этой таблице выполниться не могли: psql получал gzip вместо SQL, а mongorestore
-искал архив по пути внутри контейнера, куда он не смонтирован, и без `--gzip`.
+Команды восстановления соответствуют тому, что кладут скрипты бэкапа: дамп
+PostgreSQL сжат gzip-ом, а MinIO — каталог объектов, а не архив. Прежняя команда
+восстановления в этой таблице выполниться не могла: psql получал gzip вместо SQL.
 
 ---
 
@@ -277,7 +275,7 @@ Realtime-пуш этому не мешает, хотя карта соедине
 
 ## Бэкапы
 
-**Скрипты:** `docker/scripts/backup-postgres.sh`, `backup-mongodb.sh`, `backup-minio.sh`
+**Скрипты:** `docker/scripts/backup-postgres.sh`, `backup-minio.sh`
 
 **Проверка:** `docker/scripts/verify-backup.sh` — возраст, размер, целостность gzip
 

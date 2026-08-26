@@ -15,7 +15,7 @@ internal class UpdatePollValidator : AbstractValidator<UpdatePoll>
             .NotEmpty().WithMessage(ValidationError.Empty)
             .When(p => p.Title != null);
         RuleFor(p => p.Details)
-            .MaximumLength(1000).WithMessage(ValidationError.Long)
+            .MaximumLength(PollFieldLimits.DetailsMaxLength).WithMessage(ValidationError.Long)
             .When(p => p.Details != null);
         // Deliberately no "must be in the future" rules here, unlike creation:
         // the moderator edit form sends the dates of the poll being edited, so

@@ -17,27 +17,27 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Publications;
 
 public class PublicationServiceShould : UnitTestBase
 {
-    private readonly Mock<IPublicationRepository> _repository;
-    private readonly Mock<IBlogService> _blogService;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IValidator<CreatePublication>> _createPublicationValidator;
-    private readonly Mock<IValidator<UpdatePublication>> _updatePublicationValidator;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IEventProducer> _eventProducer;
+    private readonly IPublicationRepository _repository;
+    private readonly IBlogService _blogService;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IValidator<CreatePublication> _createPublicationValidator;
+    private readonly IValidator<UpdatePublication> _updatePublicationValidator;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IEventProducer _eventProducer;
     private readonly PublicationService _service;
 
     public PublicationServiceShould()
@@ -54,28 +54,28 @@ public class PublicationServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _eventProducer = Mock<IEventProducer>();
 
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _identityProvider.Current.Returns(Identity.Guest());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _createPublicationValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreatePublication>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreatePublication>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
         _updatePublicationValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdatePublication>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<UpdatePublication>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _service = new PublicationService(
-            _repository.Object,
-            _blogService.Object,
-            _userLookupService.Object,
-            _unreadCountersRepository.Object,
-            _identityProvider.Object,
-            _intentionManager.Object,
-            _createPublicationValidator.Object,
-            _updatePublicationValidator.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
-            _eventProducer.Object);
+            _repository,
+            _blogService,
+            _userLookupService,
+            _unreadCountersRepository,
+            _identityProvider,
+            _intentionManager,
+            _createPublicationValidator,
+            _updatePublicationValidator,
+            _guidFactory,
+            _dateTimeProvider,
+            _eventProducer);
     }
 
     [Fact]
@@ -91,16 +91,15 @@ public class PublicationServiceShould : UnitTestBase
             Content = "Content"
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(publicationId);
-        _blogService.Setup(s => s.GetAsync(blogId, default)).ReturnsAsync(blog);
-        _repository.Setup(r => r.CreatePublication(It.IsAny<CreatePublicationEntity>(), default))
-            .ReturnsAsync(new Publication { Id = publicationId });
-        _eventProducer.Setup(p => p.SendAsync(EventType.NewPublication, publicationId))
-            .Returns(Task.CompletedTask);
+        _guidFactory.Create().Returns(publicationId);
+        _blogService.GetAsync(blogId, default).Returns(blog);
+        _repository.CreatePublication(Arg.Any<CreatePublicationEntity>(), default)
+            .Returns(new Publication { Id = publicationId });
+        _eventProducer.SendAsync(EventType.NewPublication, publicationId).Returns(Task.CompletedTask);
 
         await _service.CreatePublication(createPublication);
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.NewPublication, publicationId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.NewPublication, publicationId);
     }
 
     /// <summary>
@@ -114,10 +113,10 @@ public class PublicationServiceShould : UnitTestBase
         var publicationId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
 
-        _guidFactory.Setup(f => f.Create()).Returns(publicationId);
-        _blogService.Setup(s => s.GetAsync(blogId, default)).ReturnsAsync(blog);
-        _repository.Setup(r => r.CreatePublication(It.IsAny<CreatePublicationEntity>(), default))
-            .ReturnsAsync(new Publication { Id = publicationId });
+        _guidFactory.Create().Returns(publicationId);
+        _blogService.GetAsync(blogId, default).Returns(blog);
+        _repository.CreatePublication(Arg.Any<CreatePublicationEntity>(), default)
+            .Returns(new Publication { Id = publicationId });
 
         await _service.CreatePublication(new CreatePublication
         {
@@ -126,14 +125,14 @@ public class PublicationServiceShould : UnitTestBase
             Content = "Content"
         });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.CreatePublication, blog), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.CreatePublication, blog);
     }
 
     [Fact]
     public async Task AnswerNotFoundForAnUnknownPublication()
     {
         var publicationId = Guid.NewGuid();
-        _repository.Setup(r => r.GetPublication(publicationId, default)).ReturnsAsync((Publication?)null);
+        _repository.GetPublication(publicationId, default).Returns((Publication?)null);
 
         var act = async () => await _service.GetPublication(publicationId);
 
@@ -154,7 +153,7 @@ public class PublicationServiceShould : UnitTestBase
 
         await _service.GetPublication(publicationId);
 
-        _blogService.Verify(s => s.IsVisibleToViewerAsync(blogId, default), Times.Once);
+        await _blogService.Received(1).IsVisibleToViewerAsync(blogId, default);
     }
 
     /// <summary>
@@ -170,7 +169,7 @@ public class PublicationServiceShould : UnitTestBase
         SeesTheBlog(blogId, visible: false);
 
         var missingId = Guid.NewGuid();
-        _repository.Setup(r => r.GetPublication(missingId, default)).ReturnsAsync((Publication?)null);
+        _repository.GetPublication(missingId, default).Returns((Publication?)null);
 
         var onMissing = await Refusal(missingId);
         var onHidden = await Refusal(publicationId);
@@ -227,14 +226,13 @@ public class PublicationServiceShould : UnitTestBase
     {
         var publicationId = Guid.NewGuid();
         var blogId = Guid.NewGuid();
-        _repository.Setup(r => r.GetPublication(publicationId, default))
-            .ReturnsAsync(new Publication
-            {
-                Id = publicationId,
-                BlogId = blogId,
-                IsPublished = isPublished,
-                Author = new GeneralUser { UserId = Guid.NewGuid() }
-            });
+        _repository.GetPublication(publicationId, default).Returns(new Publication
+        {
+            Id = publicationId,
+            BlogId = blogId,
+            IsPublished = isPublished,
+            Author = new GeneralUser { UserId = Guid.NewGuid() }
+        });
         return (publicationId, blogId);
     }
 
@@ -243,21 +241,19 @@ public class PublicationServiceShould : UnitTestBase
         var publicationId = Guid.NewGuid();
         var blogId = Guid.NewGuid();
         var authorId = Guid.NewGuid();
-        _userLookupService.Setup(s => s.GetAsync(username))
-            .ReturnsAsync(new GeneralUser { UserId = authorId, Username = username });
-        _repository.Setup(r => r.GetBestUserPublication(authorId, default))
-            .ReturnsAsync(new Publication
-            {
-                Id = publicationId,
-                BlogId = blogId,
-                IsPublished = true,
-                Author = new GeneralUser { UserId = authorId }
-            });
+        _userLookupService.GetAsync(username).Returns(new GeneralUser { UserId = authorId, Username = username });
+        _repository.GetBestUserPublication(authorId, default).Returns(new Publication
+        {
+            Id = publicationId,
+            BlogId = blogId,
+            IsPublished = true,
+            Author = new GeneralUser { UserId = authorId }
+        });
         return (publicationId, blogId);
     }
 
     private void SeesTheBlog(Guid blogId, bool visible) =>
-        _blogService.Setup(s => s.IsVisibleToViewerAsync(blogId, default)).ReturnsAsync(visible);
+        _blogService.IsVisibleToViewerAsync(blogId, default).Returns(visible);
 
     private async Task<HttpException> Refusal(Guid publicationId)
     {

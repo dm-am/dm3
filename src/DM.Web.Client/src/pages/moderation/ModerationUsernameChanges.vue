@@ -212,7 +212,7 @@ onMounted(() => fetchRequests());
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .username-changes
   h3

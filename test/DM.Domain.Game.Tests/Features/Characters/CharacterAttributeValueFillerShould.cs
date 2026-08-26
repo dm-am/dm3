@@ -9,16 +9,16 @@ using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
 
 public class CharacterAttributeValueFillerShould : UnitTestBase
 {
-    private readonly Mock<IAttributeSchemaService> _schemaService;
-    private readonly Mock<IAttributeValueValidator> _validator;
+    private readonly IAttributeSchemaService _schemaService;
+    private readonly IAttributeValueValidator _validator;
     private readonly CharacterAttributeValueFiller _filler;
 
     private readonly Guid _schemaId = Guid.NewGuid();
@@ -31,10 +31,9 @@ public class CharacterAttributeValueFillerShould : UnitTestBase
     {
         _schemaService = Mock<IAttributeSchemaService>();
         _validator = Mock<IAttributeValueValidator>();
-        _validator.Setup(v => v.Validate(It.IsAny<string>(), It.IsAny<AttributeSpecification>()))
-            .Returns((true, (string?)null));
+        _validator.Validate(Arg.Any<string>(), Arg.Any<AttributeSpecification>()).Returns((true, (string?)null));
 
-        _filler = new CharacterAttributeValueFiller(_schemaService.Object, _validator.Object);
+        _filler = new CharacterAttributeValueFiller(_schemaService, _validator);
     }
 
     private GameDto Game() => new()
@@ -47,8 +46,8 @@ public class CharacterAttributeValueFillerShould : UnitTestBase
     };
 
     private void SetupSchema(params AttributeSpecification[] specifications) =>
-        _schemaService.Setup(s => s.GetAsync(_schemaId))
-            .ReturnsAsync(new AttributeSchema { Id = _schemaId, Specifications = specifications });
+        _schemaService.GetAsync(_schemaId)
+            .Returns(new AttributeSchema { Id = _schemaId, Specifications = specifications });
 
     private Character OwnedCharacter(params CharacterAttribute[] attributes) => new()
     {

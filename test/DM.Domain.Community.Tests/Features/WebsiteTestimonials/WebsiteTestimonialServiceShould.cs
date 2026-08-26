@@ -14,25 +14,26 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.WebsiteTestimonials;
 
 public class WebsiteTestimonialServiceShould : UnitTestBase
 {
-    private readonly Mock<IValidator<CreateWebsiteTestimonial>> _createValidator;
-    private readonly Mock<IValidator<UpdateWebsiteTestimonial>> _updateValidator;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IWebsiteTestimonialRepository> _repository;
-    private readonly Mock<IUserReadRepository> _userRepository;
-    private readonly Mock<IEventProducer> _eventProducer;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IIdentityProvider> _identityProvider;
+    private readonly IValidator<CreateWebsiteTestimonial> _createValidator;
+    private readonly IValidator<UpdateWebsiteTestimonial> _updateValidator;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IWebsiteTestimonialRepository _repository;
+    private readonly IUserReadRepository _userRepository;
+    private readonly IEventProducer _eventProducer;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IIdentityProvider _identityProvider;
     private readonly WebsiteTestimonialService _service;
     private readonly Guid _currentUserId;
 
@@ -50,42 +51,42 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
     public WebsiteTestimonialServiceShould()
     {
         _createValidator = Mock<IValidator<CreateWebsiteTestimonial>>();
-        _createValidator.Setup(v => v.ValidateAsync(It.IsAny<CreateWebsiteTestimonial>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _createValidator.ValidateAsync(Arg.Any<CreateWebsiteTestimonial>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _updateValidator = Mock<IValidator<UpdateWebsiteTestimonial>>();
-        _updateValidator.Setup(v => v.ValidateAsync(It.IsAny<UpdateWebsiteTestimonial>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _updateValidator.ValidateAsync(Arg.Any<UpdateWebsiteTestimonial>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _intentionManager = Mock<IIntentionManager>();
 
         _repository = Mock<IWebsiteTestimonialRepository>();
 
         _userRepository = Mock<IUserReadRepository>();
-        _userRepository.Setup(r => r.FindUserIdAsync(AuthorUsername)).ReturnsAsync(_authorId);
+        _userRepository.FindUserIdAsync(AuthorUsername).Returns(_authorId);
 
         _eventProducer = Mock<IEventProducer>();
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _guidFactory = Mock<IGuidFactory>();
-        _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _service = new WebsiteTestimonialService(
-            _createValidator.Object,
-            _updateValidator.Object,
-            _intentionManager.Object,
-            _repository.Object,
-            _userRepository.Object,
-            _eventProducer.Object,
-            _dateTimeProvider.Object,
-            _guidFactory.Object,
-            _identityProvider.Object);
+            _createValidator,
+            _updateValidator,
+            _intentionManager,
+            _repository,
+            _userRepository,
+            _eventProducer,
+            _dateTimeProvider,
+            _guidFactory,
+            _identityProvider);
     }
 
     #region Create Tests
@@ -94,12 +95,12 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
     public async Task AuthorizeCreateAction()
     {
         var expectedTestimonial = new WebsiteTestimonial { Id = Guid.NewGuid(), Text = "Great website!" };
-        _repository.Setup(r => r.GetByAuthor(_authorId)).ReturnsAsync((WebsiteTestimonial?)null);
-        _repository.Setup(r => r.Create(It.IsAny<CreateWebsiteTestimonialEntity>())).ReturnsAsync(expectedTestimonial);
+        _repository.GetByAuthor(_authorId).Returns((WebsiteTestimonial?)null);
+        _repository.Create(Arg.Any<CreateWebsiteTestimonialEntity>()).Returns(expectedTestimonial);
 
         await _service.CreateAsync(NewTestimonial());
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(WebsiteTestimonialIntention.Create), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(WebsiteTestimonialIntention.Create);
     }
 
     /// <summary>
@@ -110,10 +111,14 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
     public async Task SignTheTestimonialWithTheNamedParticipant()
     {
         CreateWebsiteTestimonialEntity? written = null;
-        _repository.Setup(r => r.GetByAuthor(_authorId)).ReturnsAsync((WebsiteTestimonial?)null);
-        _repository.Setup(r => r.Create(It.IsAny<CreateWebsiteTestimonialEntity>()))
-            .Callback<CreateWebsiteTestimonialEntity>(e => written = e)
-            .ReturnsAsync(new WebsiteTestimonial { Id = Guid.NewGuid(), Text = "Great website!" });
+        _repository.GetByAuthor(_authorId).Returns((WebsiteTestimonial?)null);
+        _repository.Create(Arg.Any<CreateWebsiteTestimonialEntity>())
+            .Returns(new WebsiteTestimonial { Id = Guid.NewGuid(), Text = "Great website!" })
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateWebsiteTestimonialEntity>(0);
+                written = e;
+            });
 
         await _service.CreateAsync(NewTestimonial());
 
@@ -125,14 +130,14 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowNotFoundWhenTheNamedAuthorDoesNotExist()
     {
-        _userRepository.Setup(r => r.FindUserIdAsync("Nobody")).ReturnsAsync((Guid?)null);
+        _userRepository.FindUserIdAsync("Nobody").Returns((Guid?)null);
 
         var act = async () => await _service.CreateAsync(
             new CreateWebsiteTestimonial { AuthorUsername = "Nobody", Text = "Great website!" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
-        _repository.Verify(r => r.Create(It.IsAny<CreateWebsiteTestimonialEntity>()), Times.Never);
+        await _repository.DidNotReceive().Create(Arg.Any<CreateWebsiteTestimonialEntity>());
     }
 
     /// <summary>
@@ -150,7 +155,7 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = _authorId },
             Text = "Existing testimonial"
         };
-        _repository.Setup(r => r.GetByAuthor(_authorId)).ReturnsAsync(existingTestimonial);
+        _repository.GetByAuthor(_authorId).Returns(existingTestimonial);
 
         var act = async () => await _service.CreateAsync(NewTestimonial("New testimonial!"));
 
@@ -167,14 +172,14 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = _currentUserId },
             Text = "The moderator's own entry"
         };
-        _repository.Setup(r => r.GetByAuthor(_currentUserId)).ReturnsAsync(submittersOwn);
-        _repository.Setup(r => r.GetByAuthor(_authorId)).ReturnsAsync((WebsiteTestimonial?)null);
-        _repository.Setup(r => r.Create(It.IsAny<CreateWebsiteTestimonialEntity>()))
-            .ReturnsAsync(new WebsiteTestimonial { Id = Guid.NewGuid(), Text = "Great website!" });
+        _repository.GetByAuthor(_currentUserId).Returns(submittersOwn);
+        _repository.GetByAuthor(_authorId).Returns((WebsiteTestimonial?)null);
+        _repository.Create(Arg.Any<CreateWebsiteTestimonialEntity>())
+            .Returns(new WebsiteTestimonial { Id = Guid.NewGuid(), Text = "Great website!" });
 
         await _service.CreateAsync(NewTestimonial());
 
-        _repository.Verify(r => r.Create(It.IsAny<CreateWebsiteTestimonialEntity>()), Times.Once);
+        await _repository.Received(1).Create(Arg.Any<CreateWebsiteTestimonialEntity>());
     }
 
     [Fact]
@@ -186,13 +191,13 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = _authorId },
             Text = "Great website!"
         };
-        _repository.Setup(r => r.GetByAuthor(_authorId)).ReturnsAsync((WebsiteTestimonial?)null);
-        _repository.Setup(r => r.Create(It.IsAny<CreateWebsiteTestimonialEntity>())).ReturnsAsync(expectedTestimonial);
+        _repository.GetByAuthor(_authorId).Returns((WebsiteTestimonial?)null);
+        _repository.Create(Arg.Any<CreateWebsiteTestimonialEntity>()).Returns(expectedTestimonial);
 
         var result = await _service.CreateAsync(NewTestimonial());
 
         result.Should().Be(expectedTestimonial);
-        _repository.Verify(r => r.Create(It.IsAny<CreateWebsiteTestimonialEntity>()), Times.Once);
+        await _repository.Received(1).Create(Arg.Any<CreateWebsiteTestimonialEntity>());
     }
 
     [Fact]
@@ -200,12 +205,12 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
     {
         var testimonialId = Guid.NewGuid();
         var expectedTestimonial = new WebsiteTestimonial { Id = testimonialId, Text = "Great website!" };
-        _repository.Setup(r => r.GetByAuthor(_authorId)).ReturnsAsync((WebsiteTestimonial?)null);
-        _repository.Setup(r => r.Create(It.IsAny<CreateWebsiteTestimonialEntity>())).ReturnsAsync(expectedTestimonial);
+        _repository.GetByAuthor(_authorId).Returns((WebsiteTestimonial?)null);
+        _repository.Create(Arg.Any<CreateWebsiteTestimonialEntity>()).Returns(expectedTestimonial);
 
         await _service.CreateAsync(NewTestimonial());
 
-        _eventProducer.Verify(e => e.SendAsync(EventType.NewWebsiteTestimonial, testimonialId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.NewWebsiteTestimonial, testimonialId);
     }
 
     #endregion
@@ -216,7 +221,7 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
     public async Task ThrowNotFoundWhenTestimonialDoesNotExist()
     {
         var testimonialId = Guid.NewGuid();
-        _repository.Setup(r => r.Get(testimonialId)).ReturnsAsync((WebsiteTestimonial?)null);
+        _repository.Get(testimonialId).Returns((WebsiteTestimonial?)null);
 
         var act = async () => await _service.GetAsync(testimonialId);
 
@@ -229,7 +234,7 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
     {
         var testimonialId = Guid.NewGuid();
         var testimonial = new WebsiteTestimonial { Id = testimonialId, Text = "Great website!" };
-        _repository.Setup(r => r.Get(testimonialId)).ReturnsAsync(testimonial);
+        _repository.Get(testimonialId).Returns(testimonial);
 
         var result = await _service.GetAsync(testimonialId);
 
@@ -250,12 +255,12 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = _currentUserId },
             Text = "Original text"
         };
-        _repository.Setup(r => r.Get(testimonialId)).ReturnsAsync(testimonial);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateWebsiteTestimonialEntity>())).ReturnsAsync(testimonial);
+        _repository.Get(testimonialId).Returns(testimonial);
+        _repository.Update(Arg.Any<UpdateWebsiteTestimonialEntity>()).Returns(testimonial);
 
         await _service.UpdateAsync(new UpdateWebsiteTestimonial { Id = testimonialId, Text = "Updated text" });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(WebsiteTestimonialIntention.Edit, testimonial), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(WebsiteTestimonialIntention.Edit, testimonial);
     }
 
     /// <summary>
@@ -273,10 +278,10 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = Guid.NewGuid() },
             Text = "Original text"
         };
-        _repository.Setup(r => r.Get(testimonialId)).ReturnsAsync(testimonial);
+        _repository.Get(testimonialId).Returns(testimonial);
         _intentionManager
-            .Setup(m => m.ThrowIfForbidden(WebsiteTestimonialIntention.Edit, testimonial))
-            .Throws(new IntentionManagerException(
+            .When(m => m.ThrowIfForbidden(WebsiteTestimonialIntention.Edit, testimonial))
+            .Throw(new IntentionManagerException(
                 Create.User(Guid.NewGuid()).WithRole(UserRole.Moderator).Please(),
                 WebsiteTestimonialIntention.Edit,
                 testimonial));
@@ -285,7 +290,7 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             new UpdateWebsiteTestimonial { Id = testimonialId, Text = "Updated text" });
 
         await act.Should().ThrowAsync<IntentionManagerException>();
-        _repository.Verify(r => r.Update(It.IsAny<UpdateWebsiteTestimonialEntity>()), Times.Never);
+        await _repository.DidNotReceive().Update(Arg.Any<UpdateWebsiteTestimonialEntity>());
     }
 
     /// <summary>
@@ -304,10 +309,14 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             Text = "Original text"
         };
         UpdateWebsiteTestimonialEntity? written = null;
-        _repository.Setup(r => r.Get(testimonialId)).ReturnsAsync(testimonial);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateWebsiteTestimonialEntity>()))
-            .Callback<UpdateWebsiteTestimonialEntity>(e => written = e)
-            .ReturnsAsync(testimonial);
+        _repository.Get(testimonialId).Returns(testimonial);
+        _repository.Update(Arg.Any<UpdateWebsiteTestimonialEntity>())
+            .Returns(testimonial)
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdateWebsiteTestimonialEntity>(0);
+                written = e;
+            });
 
         await _service.UpdateAsync(new UpdateWebsiteTestimonial { Id = testimonialId, Text = "Updated text" });
 
@@ -332,13 +341,13 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = _currentUserId },
             Text = "Updated text"
         };
-        _repository.Setup(r => r.Get(testimonialId)).ReturnsAsync(existingTestimonial);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateWebsiteTestimonialEntity>())).ReturnsAsync(updatedTestimonial);
+        _repository.Get(testimonialId).Returns(existingTestimonial);
+        _repository.Update(Arg.Any<UpdateWebsiteTestimonialEntity>()).Returns(updatedTestimonial);
 
         var result = await _service.UpdateAsync(new UpdateWebsiteTestimonial { Id = testimonialId, Text = "Updated text" });
 
         result.Should().Be(updatedTestimonial);
-        _repository.Verify(r => r.Update(It.IsAny<UpdateWebsiteTestimonialEntity>()), Times.Once);
+        await _repository.Received(1).Update(Arg.Any<UpdateWebsiteTestimonialEntity>());
     }
 
     #endregion
@@ -355,11 +364,11 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = _currentUserId },
             Text = "Some text"
         };
-        _repository.Setup(r => r.Get(testimonialId)).ReturnsAsync(testimonial);
+        _repository.Get(testimonialId).Returns(testimonial);
 
         await _service.DeleteAsync(testimonialId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(WebsiteTestimonialIntention.Delete, testimonial), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(WebsiteTestimonialIntention.Delete, testimonial);
     }
 
     [Fact]
@@ -372,11 +381,11 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = _currentUserId },
             Text = "Some text"
         };
-        _repository.Setup(r => r.Get(testimonialId)).ReturnsAsync(testimonial);
+        _repository.Get(testimonialId).Returns(testimonial);
 
         await _service.DeleteAsync(testimonialId);
 
-        _repository.Verify(r => r.Delete(testimonialId, _currentUserId), Times.Once);
+        await _repository.Received(1).Delete(testimonialId, _currentUserId);
     }
 
     #endregion

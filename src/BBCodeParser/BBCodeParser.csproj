@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Somebody else's library, kept in this tree instead of restored from NuGet.
+
+    BBCodeParser 1.0.0 is the only release the package ever had (April 2018). It
+    carries no licence expression and no repository link, so the binary on
+    nuget.org is the whole of it: nothing to read, nothing to fix, nothing to
+    build from. The sources are at github.com/quilin/BBCodeParser under MIT, and
+    the author is the previous developer of this project - the package is an
+    artifact of this codebase that happened to be published, which is why its
+    assembly still names dm.am as the company.
+
+    Which state was taken, and why it is not the default branch: the branch does
+    not compile. Two commits of March 2018 changed Tags/Tag.cs to call
+    BbParser.AttributeSecuritySubstitutions, a member the committed BbParser.cs
+    never gained. The shipped 1.0.0 assembly does not contain that member either,
+    and its escape pattern is the one from before those commits, so the state the
+    package was built from is commit c2ccefdf9d - the last commit at which the
+    repository is both complete and equal to the binary this solution was
+    compiling against. Every file here matches the default branch except
+    Tags/Tag.cs, which comes from that commit.
+
+    Its own assembly rather than a folder inside DM.Infrastructure.Core, for two
+    reasons. The container scans that assembly and registers what it finds by
+    implemented interface; BbParser implements IBbParser, which is the interface
+    BbParserProvider hands out, so the scan would have a second answer for it.
+    And the nullable policy below has to be scoped to code nobody here wrote,
+    which a project can do and a folder cannot.
+
+    The assembly name is unchanged on purpose: consumers keep the same using
+    directives and the same fully qualified names, so the move from a package
+    reference to a project reference is the only thing that happened.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!--
+      The solution compiles under nullable annotations; this code predates them
+      by years and expresses "no filter" as a null default on a delegate
+      parameter. Annotating it would be a rewrite of somebody else's library
+      under a policy it never agreed to, and every annotation is a chance to
+      change what the parser does to text that is already stored. Off for this
+      project only - consumers see the same oblivious API the package published,
+      so nothing about their own analysis changes.
+    -->
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+</Project>

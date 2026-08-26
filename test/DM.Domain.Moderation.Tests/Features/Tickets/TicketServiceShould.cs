@@ -14,27 +14,28 @@ using DM.Domain.Core.Users;
 using DM.Domain.Moderation.Features.Tickets;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tickets;
 
 public class TicketServiceShould : UnitTestBase
 {
-    private readonly Mock<IValidator<CreateTicket>> _createValidator;
-    private readonly Mock<IValidator<CreateTicketIntake>> _createIntakeValidator;
-    private readonly Mock<IValidator<ResolveTicket>> _resolveValidator;
-    private readonly Mock<ITicketRepository> _ticketRepository;
-    private readonly Mock<IWarningService> _warningService;
-    private readonly Mock<IBanService> _banService;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IEventProducer> _eventProducer;
+    private readonly IValidator<CreateTicket> _createValidator;
+    private readonly IValidator<CreateTicketIntake> _createIntakeValidator;
+    private readonly IValidator<ResolveTicket> _resolveValidator;
+    private readonly ITicketRepository _ticketRepository;
+    private readonly IWarningService _warningService;
+    private readonly IBanService _banService;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IEventProducer _eventProducer;
     private readonly TicketService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly Guid _targetUserId = Guid.NewGuid();
@@ -44,19 +45,16 @@ public class TicketServiceShould : UnitTestBase
     public TicketServiceShould()
     {
         _createValidator = Mock<IValidator<CreateTicket>>();
-        _createValidator.Setup(v => v.ValidateAsync(
-                It.IsAny<ValidationContext<CreateTicket>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _createValidator.ValidateAsync(
+                Arg.Any<ValidationContext<CreateTicket>>(), Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
         _createIntakeValidator = Mock<IValidator<CreateTicketIntake>>();
-        _createIntakeValidator.Setup(v => v.ValidateAsync(
-                It.IsAny<ValidationContext<CreateTicketIntake>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _createIntakeValidator.ValidateAsync(
+                Arg.Any<ValidationContext<CreateTicketIntake>>(), Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
         _resolveValidator = Mock<IValidator<ResolveTicket>>();
-        _resolveValidator.Setup(v => v.ValidateAsync(
-                It.IsAny<ValidationContext<ResolveTicket>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _resolveValidator.ValidateAsync(
+                Arg.Any<ValidationContext<ResolveTicket>>(), Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
         _ticketRepository = Mock<ITicketRepository>();
         _warningService = Mock<IWarningService>();
@@ -68,21 +66,21 @@ public class TicketServiceShould : UnitTestBase
         _eventProducer = Mock<IEventProducer>();
 
         SetCurrentUser(UserRole.Moderator);
-        _dateTimeProvider.Setup(d => d.Now).Returns(_now);
-        _guidFactory.Setup(g => g.Create()).Returns(_ticketId);
+        _dateTimeProvider.Now.Returns(_now);
+        _guidFactory.Create().Returns(_ticketId);
 
         _service = new TicketService(
-            _createValidator.Object,
-            _createIntakeValidator.Object,
-            _resolveValidator.Object,
-            _ticketRepository.Object,
-            _warningService.Object,
-            _banService.Object,
-            _userLookupService.Object,
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
-            _eventProducer.Object);
+            _createValidator,
+            _createIntakeValidator,
+            _resolveValidator,
+            _ticketRepository,
+            _warningService,
+            _banService,
+            _userLookupService,
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider,
+            _eventProducer);
     }
 
     private void SetCurrentUser(UserRole role)
@@ -92,14 +90,14 @@ public class TicketServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        _identityProvider.Setup(p => p.Current).Returns(identity);
+        _identityProvider.Current.Returns(identity);
     }
 
     [Fact]
     public async Task ThrowWhenUserTriesToReportThemselves()
     {
         var targetUser = new GeneralUser { UserId = _currentUserId, Username = "CurrentUser" };
-        _userLookupService.Setup(s => s.GetAsync("CurrentUser")).ReturnsAsync(targetUser);
+        _userLookupService.GetAsync("CurrentUser").Returns(targetUser);
 
         var createTicket = new CreateTicket { TargetUsername = "CurrentUser", Description = "Bad behavior" };
         var act = () => _service.CreateTicket(createTicket);
@@ -112,12 +110,16 @@ public class TicketServiceShould : UnitTestBase
     public async Task CreateTicketWithCorrectData()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "TargetUser" };
-        _userLookupService.Setup(s => s.GetAsync("TargetUser")).ReturnsAsync(targetUser);
+        _userLookupService.GetAsync("TargetUser").Returns(targetUser);
 
         CreateTicketEntity? capturedEntity = null;
-        _ticketRepository.Setup(r => r.Create(It.IsAny<CreateTicketEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateTicketEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ticket());
+        _ticketRepository.Create(Arg.Any<CreateTicketEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ticket())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateTicketEntity>(0);
+                capturedEntity = e;
+            });
 
         var entityId = Guid.NewGuid();
         var createTicket = new CreateTicket
@@ -144,9 +146,9 @@ public class TicketServiceShould : UnitTestBase
     public async Task AnnounceACreatedTicket()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "TargetUser" };
-        _userLookupService.Setup(s => s.GetAsync("TargetUser")).ReturnsAsync(targetUser);
-        _ticketRepository.Setup(r => r.Create(It.IsAny<CreateTicketEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ticket { TicketId = _ticketId });
+        _userLookupService.GetAsync("TargetUser").Returns(targetUser);
+        _ticketRepository.Create(Arg.Any<CreateTicketEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ticket { TicketId = _ticketId });
 
         await _service.CreateTicket(new CreateTicket
         {
@@ -154,21 +156,19 @@ public class TicketServiceShould : UnitTestBase
             Description = "Spam"
         });
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.TicketCreated, _ticketId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.TicketCreated, _ticketId);
     }
 
     [Fact]
     public async Task ValidateCreateTicketBeforeCreating()
     {
-        _createValidator.Setup(v => v.ValidateAsync(
-                It.IsAny<ValidationContext<CreateTicket>>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new ValidationException("invalid"));
+        _createValidator.ValidateAsync(
+                Arg.Any<ValidationContext<CreateTicket>>(), Arg.Any<CancellationToken>()).ThrowsAsync(new ValidationException("invalid"));
 
         var act = () => _service.CreateTicket(new CreateTicket { TargetUsername = "TargetUser" });
 
         await act.Should().ThrowAsync<ValidationException>();
-        _ticketRepository.Verify(
-            r => r.Create(It.IsAny<CreateTicketEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _ticketRepository.DidNotReceive().Create(Arg.Any<CreateTicketEntity>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -176,12 +176,16 @@ public class TicketServiceShould : UnitTestBase
     {
         SetCurrentUser(UserRole.RegularUser);
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "TargetUser" };
-        _userLookupService.Setup(s => s.GetAsync("TargetUser")).ReturnsAsync(targetUser);
+        _userLookupService.GetAsync("TargetUser").Returns(targetUser);
 
         CreateTicketEntity? capturedEntity = null;
-        _ticketRepository.Setup(r => r.Create(It.IsAny<CreateTicketEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateTicketEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ticket());
+        _ticketRepository.Create(Arg.Any<CreateTicketEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ticket())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateTicketEntity>(0);
+                capturedEntity = e;
+            });
 
         var createTicket = new CreateTicket
         {
@@ -204,12 +208,16 @@ public class TicketServiceShould : UnitTestBase
     {
         SetCurrentUser(UserRole.Moderator);
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "TargetUser" };
-        _userLookupService.Setup(s => s.GetAsync("TargetUser")).ReturnsAsync(targetUser);
+        _userLookupService.GetAsync("TargetUser").Returns(targetUser);
 
         CreateTicketEntity? capturedEntity = null;
-        _ticketRepository.Setup(r => r.Create(It.IsAny<CreateTicketEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateTicketEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ticket());
+        _ticketRepository.Create(Arg.Any<CreateTicketEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ticket())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateTicketEntity>(0);
+                capturedEntity = e;
+            });
 
         var createTicket = new CreateTicket
         {
@@ -227,9 +235,13 @@ public class TicketServiceShould : UnitTestBase
     public async Task CreateIntakeTicketForAuthenticatedUser()
     {
         CreateTicketEntity? capturedEntity = null;
-        _ticketRepository.Setup(r => r.Create(It.IsAny<CreateTicketEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateTicketEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ticket());
+        _ticketRepository.Create(Arg.Any<CreateTicketEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ticket())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateTicketEntity>(0);
+                capturedEntity = e;
+            });
 
         var createTicketIntake = new CreateTicketIntake
         {
@@ -257,12 +269,16 @@ public class TicketServiceShould : UnitTestBase
     [Fact]
     public async Task CreateIntakeTicketForGuestWithGuestEmail()
     {
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Current.Returns(Identity.Guest());
 
         CreateTicketEntity? capturedEntity = null;
-        _ticketRepository.Setup(r => r.Create(It.IsAny<CreateTicketEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateTicketEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ticket());
+        _ticketRepository.Create(Arg.Any<CreateTicketEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ticket())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateTicketEntity>(0);
+                capturedEntity = e;
+            });
 
         var createTicketIntake = new CreateTicketIntake
         {
@@ -284,14 +300,11 @@ public class TicketServiceShould : UnitTestBase
     public async Task FilterTicketSubtypesByCallerRole()
     {
         IReadOnlyCollection<TicketSubtype>? capturedSubtypes = null;
-        _ticketRepository.Setup(r => r.GetTickets(
-                It.IsAny<PagingQuery>(),
-                It.IsAny<TicketStatus?>(),
-                It.IsAny<IReadOnlyCollection<TicketSubtype>?>(),
-                It.IsAny<CancellationToken>()))
-            .Callback<PagingQuery, TicketStatus?, IReadOnlyCollection<TicketSubtype>?, CancellationToken>(
-                (_, _, subtypes, _) => capturedSubtypes = subtypes)
-            .ReturnsAsync((Array.Empty<Ticket>(), PagingResult.Empty(20)));
+        _ticketRepository.GetTickets(
+                Arg.Any<PagingQuery>(),
+                Arg.Any<TicketStatus?>(),
+                Arg.Any<IReadOnlyCollection<TicketSubtype>?>(),
+                Arg.Any<CancellationToken>()).Returns((Array.Empty<Ticket>(), PagingResult.Empty(20))).AndDoes(ci => { var subtypes = ci.ArgAt<IReadOnlyCollection<TicketSubtype>?>(2); capturedSubtypes = subtypes; });
 
         // Junior moderator: user complaints and suggestions only
         SetCurrentUser(UserRole.Moderator);
@@ -323,12 +336,11 @@ public class TicketServiceShould : UnitTestBase
         var (tickets, _) = await _service.GetTickets(new PagingQuery(), subtype: TicketSubtype.Bug);
 
         tickets.Should().BeEmpty();
-        _ticketRepository.Verify(r => r.GetTickets(
-                It.IsAny<PagingQuery>(),
-                It.IsAny<TicketStatus?>(),
-                It.IsAny<IReadOnlyCollection<TicketSubtype>?>(),
-                It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _ticketRepository.DidNotReceive().GetTickets(
+                Arg.Any<PagingQuery>(),
+                Arg.Any<TicketStatus?>(),
+                Arg.Any<IReadOnlyCollection<TicketSubtype>?>(),
+                Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -343,8 +355,7 @@ public class TicketServiceShould : UnitTestBase
             ReporterUserId = _currentUserId,
             Subtype = TicketSubtype.Bug
         };
-        _ticketRepository.Setup(r => r.GetDetails(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.GetDetails(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         var result = await _service.GetTicket(_ticketId);
 
@@ -363,8 +374,7 @@ public class TicketServiceShould : UnitTestBase
             ReporterUserId = Guid.NewGuid(),
             Subtype = TicketSubtype.Bug
         };
-        _ticketRepository.Setup(r => r.GetDetails(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.GetDetails(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         var act = () => _service.GetTicket(_ticketId);
 
@@ -382,8 +392,7 @@ public class TicketServiceShould : UnitTestBase
             ReporterUserId = Guid.NewGuid(),
             Subtype = TicketSubtype.UserComplaint
         };
-        _ticketRepository.Setup(r => r.GetDetails(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.GetDetails(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         var result = await _service.GetTicket(_ticketId);
 
@@ -400,8 +409,7 @@ public class TicketServiceShould : UnitTestBase
             ReporterUserId = Guid.NewGuid(),
             Subtype = TicketSubtype.Bug
         };
-        _ticketRepository.Setup(r => r.GetDetails(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.GetDetails(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         var result = await _service.GetTicket(_ticketId);
 
@@ -411,8 +419,7 @@ public class TicketServiceShould : UnitTestBase
     [Fact]
     public async Task DenyMissingTicketWithNotFound()
     {
-        _ticketRepository.Setup(r => r.GetDetails(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((TicketDetails?)null);
+        _ticketRepository.GetDetails(_ticketId, Arg.Any<CancellationToken>()).Returns((TicketDetails?)null);
 
         var act = () => _service.GetTicket(_ticketId);
 
@@ -423,8 +430,7 @@ public class TicketServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenAssigningNonexistentTicket()
     {
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ticket?)null);
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns((Ticket?)null);
 
         var act = () => _service.AssignToMe(_ticketId);
 
@@ -443,23 +449,20 @@ public class TicketServiceShould : UnitTestBase
             Status = TicketStatus.WaitingForModeration,
             Subtype = TicketSubtype.Bug
         };
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         var act = () => _service.AssignToMe(_ticketId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
-        _ticketRepository.Verify(
-            r => r.Update(It.IsAny<UpdateTicketEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _ticketRepository.DidNotReceive().Update(Arg.Any<UpdateTicketEntity>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ThrowWhenAssigningClosedTicket()
     {
         var ticket = new Ticket { TicketId = _ticketId, Status = TicketStatus.Closed };
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         var act = () => _service.AssignToMe(_ticketId);
 
@@ -471,13 +474,16 @@ public class TicketServiceShould : UnitTestBase
     public async Task AssignTicketToCurrentUser()
     {
         var ticket = new Ticket { TicketId = _ticketId, Status = TicketStatus.WaitingForModeration };
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         UpdateTicketEntity? capturedEntity = null;
-        _ticketRepository.Setup(r => r.Update(It.IsAny<UpdateTicketEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<UpdateTicketEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(ticket);
+        _ticketRepository.Update(Arg.Any<UpdateTicketEntity>(), Arg.Any<CancellationToken>())
+            .Returns(ticket)
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdateTicketEntity>(0);
+                capturedEntity = e;
+            });
 
         await _service.AssignToMe(_ticketId);
 
@@ -490,14 +496,13 @@ public class TicketServiceShould : UnitTestBase
     [Fact]
     public async Task ValidateResolveTicketBeforeResolving()
     {
-        _resolveValidator.Setup(v => v.ValidateAsync(
-                It.IsAny<ValidationContext<ResolveTicket>>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new ValidationException("invalid"));
+        _resolveValidator.ValidateAsync(
+                Arg.Any<ValidationContext<ResolveTicket>>(), Arg.Any<CancellationToken>()).ThrowsAsync(new ValidationException("invalid"));
 
         var act = () => _service.ResolveTicket(_ticketId, new ResolveTicket { Status = TicketStatus.Closed });
 
         await act.Should().ThrowAsync<ValidationException>();
-        _ticketRepository.Verify(r => r.Get(_ticketId, It.IsAny<CancellationToken>()), Times.Never);
+        await _ticketRepository.DidNotReceive().Get(_ticketId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -510,8 +515,7 @@ public class TicketServiceShould : UnitTestBase
             Status = TicketStatus.WaitingForModeration,
             Subtype = TicketSubtype.Bug
         };
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         var act = () => _service.ResolveTicket(_ticketId, new ResolveTicket { Status = TicketStatus.Closed });
 
@@ -523,8 +527,7 @@ public class TicketServiceShould : UnitTestBase
     public async Task ThrowWhenResolvingAlreadyClosedTicket()
     {
         var ticket = new Ticket { TicketId = _ticketId, Status = TicketStatus.Closed };
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         var resolveTicket = new ResolveTicket { Status = TicketStatus.Closed };
         var act = () => _service.ResolveTicket(_ticketId, resolveTicket);
@@ -542,8 +545,7 @@ public class TicketServiceShould : UnitTestBase
             Status = TicketStatus.WaitingForModeration,
             TargetUsername = null
         };
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         var resolveTicket = new ResolveTicket
         {
@@ -568,12 +570,10 @@ public class TicketServiceShould : UnitTestBase
             TargetUsername = "TargetUser"
         };
 
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
-        _warningService.Setup(s => s.CreateWarning(It.IsAny<CreateWarning>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Warning { WarningId = Guid.NewGuid() });
-        _ticketRepository.Setup(r => r.Update(It.IsAny<UpdateTicketEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
+        _warningService.CreateWarning(Arg.Any<CreateWarning>(), Arg.Any<CancellationToken>())
+            .Returns(new Warning { WarningId = Guid.NewGuid() });
+        _ticketRepository.Update(Arg.Any<UpdateTicketEntity>(), Arg.Any<CancellationToken>()).Returns(ticket);
 
         var resolveTicket = new ResolveTicket
         {
@@ -587,9 +587,9 @@ public class TicketServiceShould : UnitTestBase
 
         // Routed through the warning service (which owns the clamp + gate),
         // never straight to the repository.
-        _warningService.Verify(s => s.CreateWarning(
-            It.Is<CreateWarning>(w => w.Username == "TargetUser" && w.Reason == "Warning text" && w.Points == 2),
-            It.IsAny<CancellationToken>()), Times.Once);
+        await _warningService.Received(1).CreateWarning(
+            Arg.Is<CreateWarning>(w => w.Username == "TargetUser" && w.Reason == "Warning text" && w.Points == 2),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -605,8 +605,7 @@ public class TicketServiceShould : UnitTestBase
             Subtype = TicketSubtype.UserComplaint,
             TargetUsername = "TargetUser"
         };
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
 
         var resolveTicket = new ResolveTicket
         {
@@ -619,8 +618,7 @@ public class TicketServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        _banService.Verify(
-            s => s.CreateBan(It.IsAny<CreateBan>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _banService.DidNotReceive().CreateBan(Arg.Any<CreateBan>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -634,12 +632,10 @@ public class TicketServiceShould : UnitTestBase
             Subtype = TicketSubtype.UserComplaint,
             TargetUsername = "TargetUser"
         };
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
-        _banService.Setup(s => s.CreateBan(It.IsAny<CreateBan>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban { BanId = Guid.NewGuid() });
-        _ticketRepository.Setup(r => r.Update(It.IsAny<UpdateTicketEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
+        _banService.CreateBan(Arg.Any<CreateBan>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = Guid.NewGuid() });
+        _ticketRepository.Update(Arg.Any<UpdateTicketEntity>(), Arg.Any<CancellationToken>()).Returns(ticket);
 
         var resolveTicket = new ResolveTicket
         {
@@ -653,9 +649,9 @@ public class TicketServiceShould : UnitTestBase
 
         // Routed through the ban service (which owns the senior-mod gate and the
         // already-banned conflict check), never straight to the repository.
-        _banService.Verify(s => s.CreateBan(
-            It.Is<CreateBan>(b => b.Username == "TargetUser" && b.DurationHours == 24 && !b.IsVoluntary),
-            It.IsAny<CancellationToken>()), Times.Once);
+        await _banService.Received(1).CreateBan(
+            Arg.Is<CreateBan>(b => b.Username == "TargetUser" && b.DurationHours == 24 && !b.IsVoluntary),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -669,9 +665,8 @@ public class TicketServiceShould : UnitTestBase
             Subtype = TicketSubtype.UserComplaint,
             TargetUsername = "TargetUser"
         };
-        _ticketRepository.Setup(r => r.Get(_ticketId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
-        _banService.Setup(s => s.CreateBan(It.IsAny<CreateBan>(), It.IsAny<CancellationToken>()))
+        _ticketRepository.Get(_ticketId, Arg.Any<CancellationToken>()).Returns(ticket);
+        _banService.CreateBan(Arg.Any<CreateBan>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new HttpException(HttpStatusCode.Conflict,
                 "Пользователь TargetUser уже забанен до ..."));
 
@@ -688,8 +683,7 @@ public class TicketServiceShould : UnitTestBase
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict)
             .Where(e => e.Message.Contains("уже забанен"));
-        _ticketRepository.Verify(
-            r => r.Update(It.IsAny<UpdateTicketEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _ticketRepository.DidNotReceive().Update(Arg.Any<UpdateTicketEntity>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -703,18 +697,15 @@ public class TicketServiceShould : UnitTestBase
         PagingQuery? capturedQuery = null;
         TicketStatus? capturedStatus = null;
         TicketSubtype? capturedSubtype = null;
-        _ticketRepository.Setup(r => r.GetUserTickets(
-                It.IsAny<Guid>(), It.IsAny<PagingQuery>(), It.IsAny<TicketStatus?>(), It.IsAny<TicketSubtype?>(),
-                It.IsAny<CancellationToken>()))
-            .Callback<Guid, PagingQuery, TicketStatus?, TicketSubtype?, CancellationToken>(
-                (userId, query, status, subtype, _) =>
+        _ticketRepository.GetUserTickets(
+                Arg.Any<Guid>(), Arg.Any<PagingQuery>(), Arg.Any<TicketStatus?>(), Arg.Any<TicketSubtype?>(),
+                Arg.Any<CancellationToken>()).Returns((Array.Empty<Ticket>(), PagingResult.Empty(20))).AndDoes(ci =>
                 {
-                    capturedUserId = userId;
+                    var userId = ci.ArgAt<Guid>(0); var query = ci.ArgAt<PagingQuery>(1); var status = ci.ArgAt<TicketStatus?>(2); var subtype = ci.ArgAt<TicketSubtype?>(3); capturedUserId = userId;
                     capturedQuery = query;
                     capturedStatus = status;
                     capturedSubtype = subtype;
-                })
-            .ReturnsAsync((Array.Empty<Ticket>(), PagingResult.Empty(20)));
+                });
 
         await _service.GetMyFiledTickets(new PagingQuery { Skip = 40, Take = 20 },
             TicketStatus.Closed, TicketSubtype.Bug);
@@ -735,15 +726,12 @@ public class TicketServiceShould : UnitTestBase
         // much it truncated leaves the caller unable to ask for the rest.
         Guid capturedModeratorId = Guid.Empty;
         PagingQuery? capturedQuery = null;
-        _ticketRepository.Setup(r => r.GetModeratorTickets(
-                It.IsAny<Guid>(), It.IsAny<PagingQuery>(), It.IsAny<CancellationToken>()))
-            .Callback<Guid, PagingQuery, CancellationToken>(
-                (moderatorId, query, _) =>
+        _ticketRepository.GetModeratorTickets(
+                Arg.Any<Guid>(), Arg.Any<PagingQuery>(), Arg.Any<CancellationToken>()).Returns((Array.Empty<Ticket>(), PagingResult.Create(42, 21, 10))).AndDoes(ci =>
                 {
-                    capturedModeratorId = moderatorId;
+                    var moderatorId = ci.ArgAt<Guid>(0); var query = ci.ArgAt<PagingQuery>(1); capturedModeratorId = moderatorId;
                     capturedQuery = query;
-                })
-            .ReturnsAsync((Array.Empty<Ticket>(), PagingResult.Create(42, 21, 10)));
+                });
 
         var (_, paging) = await _service.GetMyAssignedTickets(new PagingQuery { Skip = 20, Take = 10 });
 
@@ -758,10 +746,9 @@ public class TicketServiceShould : UnitTestBase
     {
         // Guest tracking is token-gated: possession of the token returns the
         // ticket regardless of the caller identity.
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Current.Returns(Identity.Guest());
         var ticket = new TicketDetails { TicketId = _ticketId, Status = TicketStatus.WaitingForUser };
-        _ticketRepository.Setup(r => r.GetByTrackingToken("tok123", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ticket);
+        _ticketRepository.GetByTrackingToken("tok123", Arg.Any<CancellationToken>()).Returns(ticket);
 
         var result = await _service.GetTicketByTrackingToken("tok123");
 
@@ -771,8 +758,8 @@ public class TicketServiceShould : UnitTestBase
     [Fact]
     public async Task ReturnNullForUnknownTrackingToken()
     {
-        _ticketRepository.Setup(r => r.GetByTrackingToken(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((TicketDetails?)null);
+        _ticketRepository.GetByTrackingToken(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((TicketDetails?)null);
 
         var result = await _service.GetTicketByTrackingToken("nope");
 
@@ -785,11 +772,15 @@ public class TicketServiceShould : UnitTestBase
         // Guests get an unguessable one-time tracking token; authenticated
         // authors get none (they use "Мои обращения").
         CreateTicketEntity? capturedEntity = null;
-        _ticketRepository.Setup(r => r.Create(It.IsAny<CreateTicketEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateTicketEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ticket());
+        _ticketRepository.Create(Arg.Any<CreateTicketEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ticket())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateTicketEntity>(0);
+                capturedEntity = e;
+            });
 
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Current.Returns(Identity.Guest());
         await _service.CreateIntakeTicket(new CreateTicketIntake
         {
             Subtype = TicketSubtype.Bug,

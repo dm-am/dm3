@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
 using DM.Domain.Personal.Features.Profiles;
 using DM.Web.API.Shared.Dto;
@@ -14,13 +13,13 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
 {
     private readonly IGlobalChatEventService _eventService;
     private readonly IUserService _userService;
-    private readonly IMapper _mapper;
+    private readonly GlobalChatEventMapper _mapper;
 
     /// <inheritdoc />
     public GlobalChatEventApiService(
         IGlobalChatEventService eventService,
         IUserService userService,
-        IMapper mapper)
+        GlobalChatEventMapper mapper)
     {
         _eventService = eventService;
         _userService = userService;
@@ -31,7 +30,7 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
     public async Task<ListEnvelope<GlobalChatEventSummary>> GetList(CancellationToken ct = default)
     {
         var events = await _eventService.GetAllAsync();
-        var summaries = events.Select(_mapper.Map<GlobalChatEventSummary>);
+        var summaries = events.Select(_mapper.ToSummary);
         return new ListEnvelope<GlobalChatEventSummary>(summaries);
     }
 
@@ -39,7 +38,7 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
     public async Task<Envelope<GlobalChatEvent>> Get(Guid id, CancellationToken ct = default)
     {
         var chatEvent = await _eventService.GetAsync(id);
-        return new Envelope<GlobalChatEvent>(_mapper.Map<GlobalChatEvent>(chatEvent));
+        return new Envelope<GlobalChatEvent>(_mapper.ToEvent(chatEvent));
     }
 
     /// <inheritdoc />
@@ -50,15 +49,15 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
         {
             return null;
         }
-        return new Envelope<GlobalChatEventSummary>(_mapper.Map<GlobalChatEventSummary>(chatEvent));
+        return new Envelope<GlobalChatEventSummary>(_mapper.ToSummary(chatEvent));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<GlobalChatEvent>> Create(CreateGlobalChatEventInput input, CancellationToken ct = default)
     {
-        var createDto = _mapper.Map<CreateGlobalChatEvent>(input);
+        var createDto = _mapper.ToCreateEvent(input);
         var chatEvent = await _eventService.CreateAsync(createDto, ct);
-        return new Envelope<GlobalChatEvent>(_mapper.Map<GlobalChatEvent>(chatEvent));
+        return new Envelope<GlobalChatEvent>(_mapper.ToEvent(chatEvent));
     }
 
     /// <inheritdoc />
@@ -74,7 +73,7 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
             IsOpen = input.IsOpen
         };
         var chatEvent = await _eventService.UpdateAsync(updateDto, ct);
-        return new Envelope<GlobalChatEvent>(_mapper.Map<GlobalChatEvent>(chatEvent));
+        return new Envelope<GlobalChatEvent>(_mapper.ToEvent(chatEvent));
     }
 
     /// <inheritdoc />
@@ -87,14 +86,14 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
     public async Task<Envelope<GlobalChatEvent>> Start(Guid id, CancellationToken ct = default)
     {
         var chatEvent = await _eventService.StartAsync(id, ct);
-        return new Envelope<GlobalChatEvent>(_mapper.Map<GlobalChatEvent>(chatEvent));
+        return new Envelope<GlobalChatEvent>(_mapper.ToEvent(chatEvent));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<GlobalChatEvent>> End(Guid id, CancellationToken ct = default)
     {
         var chatEvent = await _eventService.EndAsync(id, ct);
-        return new Envelope<GlobalChatEvent>(_mapper.Map<GlobalChatEvent>(chatEvent));
+        return new Envelope<GlobalChatEvent>(_mapper.ToEvent(chatEvent));
     }
 
     /// <inheritdoc />
@@ -102,7 +101,7 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
     {
         await _eventService.JoinAsync(id, ct);
         var chatEvent = await _eventService.GetAsync(id);
-        return new Envelope<GlobalChatEvent>(_mapper.Map<GlobalChatEvent>(chatEvent));
+        return new Envelope<GlobalChatEvent>(_mapper.ToEvent(chatEvent));
     }
 
     /// <inheritdoc />
@@ -110,7 +109,7 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
     {
         await _eventService.LeaveAsync(id, ct);
         var chatEvent = await _eventService.GetAsync(id);
-        return new Envelope<GlobalChatEvent>(_mapper.Map<GlobalChatEvent>(chatEvent));
+        return new Envelope<GlobalChatEvent>(_mapper.ToEvent(chatEvent));
     }
 
     /// <inheritdoc />
@@ -121,7 +120,7 @@ internal class GlobalChatEventApiService : IGlobalChatEventApiService
 
         await _eventService.AddParticipantAsync(id, user.UserId, ct);
         var chatEvent = await _eventService.GetAsync(id);
-        return new Envelope<GlobalChatEvent>(_mapper.Map<GlobalChatEvent>(chatEvent));
+        return new Envelope<GlobalChatEvent>(_mapper.ToEvent(chatEvent));
     }
 
     /// <inheritdoc />

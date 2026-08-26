@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Personal.Features.Subscriptions;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Users;
@@ -13,12 +12,12 @@ namespace DM.Web.API.Features.Personal.Subscriptions;
 internal class SubscriptionApiService : ISubscriptionApiService
 {
     private readonly ISubscriptionService _subscriptionService;
-    private readonly IMapper _mapper;
+    private readonly SubscriptionMapper _mapper;
 
     /// <inheritdoc />
     public SubscriptionApiService(
         ISubscriptionService subscriptionService,
-        IMapper mapper)
+        SubscriptionMapper mapper)
     {
         _subscriptionService = subscriptionService;
         _mapper = mapper;
@@ -28,28 +27,28 @@ internal class SubscriptionApiService : ISubscriptionApiService
     public async Task<IEnumerable<Subscription>> GetMySubscriptionsAsync()
     {
         var subscriptions = await _subscriptionService.GetMySubscriptionsAsync();
-        return subscriptions.Select(_mapper.Map<Subscription>);
+        return subscriptions.Select(_mapper.ToSubscription);
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<Subscription>> GetMySubscriptionsAsync(SubscriptionTargetType targetType)
     {
         var subscriptions = await _subscriptionService.GetMySubscriptionsAsync(targetType);
-        return subscriptions.Select(_mapper.Map<Subscription>);
+        return subscriptions.Select(_mapper.ToSubscription);
     }
 
     /// <inheritdoc />
     public async Task<Subscription> SubscribeAsync(SubscriptionTargetType targetType, Guid targetId, SubscribeRequest? request)
     {
         var subscription = await _subscriptionService.SubscribeAsync(targetType, targetId, request?.Settings);
-        return _mapper.Map<Subscription>(subscription);
+        return _mapper.ToSubscription(subscription);
     }
 
     /// <inheritdoc />
     public async Task<Subscription> UpdateSettingsAsync(Guid subscriptionId, UpdateSubscriptionRequest request)
     {
         var subscription = await _subscriptionService.UpdateSettingsAsync(subscriptionId, request.Settings);
-        return _mapper.Map<Subscription>(subscription);
+        return _mapper.ToSubscription(subscription);
     }
 
     /// <inheritdoc />
@@ -68,14 +67,14 @@ internal class SubscriptionApiService : ISubscriptionApiService
     public async Task<Subscription?> GetSubscriptionAsync(SubscriptionTargetType targetType, Guid targetId)
     {
         var subscription = await _subscriptionService.GetSubscriptionAsync(targetType, targetId);
-        return subscription == null ? null : _mapper.Map<Subscription>(subscription);
+        return subscription == null ? null : _mapper.ToSubscription(subscription);
     }
 
     /// <inheritdoc />
     public async Task<Subscription?> GetByIdAsync(Guid subscriptionId)
     {
         var subscription = await _subscriptionService.GetByIdAsync(subscriptionId);
-        return subscription == null ? null : _mapper.Map<Subscription>(subscription);
+        return subscription == null ? null : _mapper.ToSubscription(subscription);
     }
 
 }

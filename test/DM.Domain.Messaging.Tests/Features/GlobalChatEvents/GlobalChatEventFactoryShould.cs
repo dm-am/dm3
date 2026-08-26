@@ -3,8 +3,8 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Features.GlobalChatEvents;
@@ -12,8 +12,8 @@ namespace DM.Domain.Messaging.Tests.Features.GlobalChatEvents;
 public class GlobalChatEventFactoryShould : UnitTestBase
 {
     private readonly GlobalChatEventFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public GlobalChatEventFactoryShould()
     {
@@ -21,8 +21,8 @@ public class GlobalChatEventFactoryShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
         _factory = new GlobalChatEventFactory(
-            _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _guidFactory,
+            _dateTimeProvider);
     }
 
     [Fact]
@@ -43,8 +43,8 @@ public class GlobalChatEventFactoryShould : UnitTestBase
             IsOpen = true
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(eventId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _guidFactory.Create().Returns(eventId);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = _factory.Create(createEvent, userId);
 
@@ -71,8 +71,8 @@ public class GlobalChatEventFactoryShould : UnitTestBase
             IsOpen = true
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(createEvent, Guid.NewGuid());
 
@@ -90,8 +90,8 @@ public class GlobalChatEventFactoryShould : UnitTestBase
             IsOpen = true
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(createEvent, Guid.NewGuid());
 
@@ -106,8 +106,8 @@ public class GlobalChatEventFactoryShould : UnitTestBase
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
-        _guidFactory.Setup(f => f.Create()).Returns(participantId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _guidFactory.Create().Returns(participantId);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = _factory.CreateParticipant(eventId, userId, isOrganizer: true);
 
@@ -122,8 +122,8 @@ public class GlobalChatEventFactoryShould : UnitTestBase
     [Fact]
     public void CreateParticipantAsNonOrganizer()
     {
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.CreateParticipant(Guid.NewGuid(), Guid.NewGuid(), isOrganizer: false);
 

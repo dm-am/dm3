@@ -14,20 +14,18 @@ using DM.Domain.Messaging.Features.GlobalChatEvents;
 using DM.Testing;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
-using Moq.Language.Flow;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Features.GlobalChatEvents;
 
 public class GlobalChatEventServiceShould : UnitTestBase
 {
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IGlobalChatEventRepository> _repository;
-    private readonly Mock<IEventProducer> _eventProducer;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly ISetup<IGlobalChatEventFactory, CreateGlobalChatEventEntity> _createEventSetup;
-    private readonly ISetup<IGlobalChatEventFactory, CreateGlobalChatEventParticipantEntity> _createParticipantSetup;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IGlobalChatEventRepository _repository;
+    private readonly IEventProducer _eventProducer;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IGlobalChatEventFactory _factory;
     private readonly GlobalChatEventService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
@@ -36,20 +34,21 @@ public class GlobalChatEventServiceShould : UnitTestBase
     {
         var createValidator = Mock<IValidator<CreateGlobalChatEvent>>();
         createValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateGlobalChatEvent>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreateGlobalChatEvent>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
+
+        var updateValidator = Mock<IValidator<UpdateGlobalChatEvent>>();
+        updateValidator
+            .ValidateAsync(Arg.Any<ValidationContext<UpdateGlobalChatEvent>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GlobalChatEventIntention>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GlobalChatEventIntention>(), It.IsAny<GlobalChatEvent>()));
 
-        var factory = Mock<IGlobalChatEventFactory>();
-        _createEventSetup = factory.Setup(f => f.Create(It.IsAny<CreateGlobalChatEvent>(), It.IsAny<Guid>()));
-        _createParticipantSetup = factory.Setup(f => f.CreateParticipant(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<bool>()));
+        _factory = Mock<IGlobalChatEventFactory>();
 
         _repository = Mock<IGlobalChatEventRepository>();
-        _repository.Setup(r => r.Create(It.IsAny<CreateGlobalChatEventEntity>(), It.IsAny<CreateGlobalChatEventParticipantEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GlobalChatEvent { Id = Guid.NewGuid() });
+        _repository.Create(Arg.Any<CreateGlobalChatEventEntity>(), Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new GlobalChatEvent { Id = Guid.NewGuid() });
 
         var identityProvider = Mock<IIdentityProvider>();
         var identity = Identity.Success(
@@ -57,22 +56,23 @@ public class GlobalChatEventServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        identityProvider.Setup(p => p.Current).Returns(identity);
+        identityProvider.Current.Returns(identity);
 
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(d => d.Now).Returns(_now);
+        _dateTimeProvider.Now.Returns(_now);
 
         _eventProducer = Mock<IEventProducer>();
-        _eventProducer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
+        _eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         _service = new GlobalChatEventService(
-            createValidator.Object,
-            _intentionManager.Object,
-            factory.Object,
-            _repository.Object,
-            identityProvider.Object,
-            _dateTimeProvider.Object,
-            _eventProducer.Object);
+            createValidator,
+            updateValidator,
+            _intentionManager,
+            _factory,
+            _repository,
+            identityProvider,
+            _dateTimeProvider,
+            _eventProducer);
     }
 
     [Fact]
@@ -81,12 +81,12 @@ public class GlobalChatEventServiceShould : UnitTestBase
         var createEvent = new CreateGlobalChatEvent { Title = "Test Event" };
         var eventEntity = new CreateGlobalChatEventEntity { GlobalChatEventId = Guid.NewGuid() };
         var participantEntity = new CreateGlobalChatEventParticipantEntity();
-        _createEventSetup.Returns(eventEntity);
-        _createParticipantSetup.Returns(participantEntity);
+        _factory.Create(Arg.Any<CreateGlobalChatEvent>(), Arg.Any<Guid>()).Returns(eventEntity);
+        _factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
 
         await _service.CreateAsync(createEvent);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GlobalChatEventIntention.Create), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GlobalChatEventIntention.Create);
     }
 
     [Fact]
@@ -95,12 +95,12 @@ public class GlobalChatEventServiceShould : UnitTestBase
         var createEvent = new CreateGlobalChatEvent { Title = "Test Event" };
         var eventEntity = new CreateGlobalChatEventEntity { GlobalChatEventId = Guid.NewGuid() };
         var participantEntity = new CreateGlobalChatEventParticipantEntity();
-        _createEventSetup.Returns(eventEntity);
-        _createParticipantSetup.Returns(participantEntity);
+        _factory.Create(Arg.Any<CreateGlobalChatEvent>(), Arg.Any<Guid>()).Returns(eventEntity);
+        _factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
 
         await _service.CreateAsync(createEvent);
 
-        _repository.Verify(r => r.Create(eventEntity, participantEntity, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).Create(eventEntity, participantEntity, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -108,14 +108,14 @@ public class GlobalChatEventServiceShould : UnitTestBase
     {
         var eventId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Setup(r => r.Get(eventId)).ReturnsAsync(chatEvent);
-        _repository.Setup(r => r.HasActiveEvent()).ReturnsAsync(false);
-        _repository.Setup(r => r.UpdateStatus(It.IsAny<Guid>(), It.IsAny<GlobalChatEventStatus>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(chatEvent);
+        _repository.Get(eventId).Returns(chatEvent);
+        _repository.HasActiveEvent().Returns(false);
+        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(chatEvent);
 
         await _service.StartAsync(eventId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GlobalChatEventIntention.Start, chatEvent), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GlobalChatEventIntention.Start, chatEvent);
     }
 
     [Fact]
@@ -123,14 +123,14 @@ public class GlobalChatEventServiceShould : UnitTestBase
     {
         var eventId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Setup(r => r.Get(eventId)).ReturnsAsync(chatEvent);
-        _repository.Setup(r => r.HasActiveEvent()).ReturnsAsync(false);
-        _repository.Setup(r => r.UpdateStatus(It.IsAny<Guid>(), It.IsAny<GlobalChatEventStatus>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(chatEvent);
+        _repository.Get(eventId).Returns(chatEvent);
+        _repository.HasActiveEvent().Returns(false);
+        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(chatEvent);
 
         await _service.StartAsync(eventId);
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.GlobalChatEventStarted, eventId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.GlobalChatEventStarted, eventId);
     }
 
     /// <summary>
@@ -145,15 +145,15 @@ public class GlobalChatEventServiceShould : UnitTestBase
     {
         var eventId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Setup(r => r.Get(eventId)).ReturnsAsync(chatEvent);
-        _repository.Setup(r => r.HasActiveEvent()).ReturnsAsync(false);
-        _repository.Setup(r => r.UpdateStatus(It.IsAny<Guid>(), It.IsAny<GlobalChatEventStatus>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(chatEvent);
+        _repository.Get(eventId).Returns(chatEvent);
+        _repository.HasActiveEvent().Returns(false);
+        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(chatEvent);
 
         await _service.StartAsync(eventId);
 
-        _repository.Verify(r => r.UpdateStatus(
-            eventId, GlobalChatEventStatus.Live, _now, null, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).UpdateStatus(
+            eventId, GlobalChatEventStatus.Live, _now, null, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -165,14 +165,14 @@ public class GlobalChatEventServiceShould : UnitTestBase
     {
         var eventId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Live };
-        _repository.Setup(r => r.Get(eventId)).ReturnsAsync(chatEvent);
-        _repository.Setup(r => r.UpdateStatus(It.IsAny<Guid>(), It.IsAny<GlobalChatEventStatus>(), It.IsAny<DateTimeOffset?>(), It.IsAny<DateTimeOffset?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(chatEvent);
+        _repository.Get(eventId).Returns(chatEvent);
+        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(chatEvent);
 
         await _service.EndAsync(eventId);
 
-        _repository.Verify(r => r.UpdateStatus(
-            eventId, GlobalChatEventStatus.Ended, null, _now, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).UpdateStatus(
+            eventId, GlobalChatEventStatus.Ended, null, _now, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -181,15 +181,15 @@ public class GlobalChatEventServiceShould : UnitTestBase
         var eventId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
         var participantEntity = new CreateGlobalChatEventParticipantEntity();
-        _repository.Setup(r => r.Get(eventId)).ReturnsAsync(chatEvent);
-        _repository.Setup(r => r.IsParticipant(eventId, _currentUserId)).ReturnsAsync(false);
-        _createParticipantSetup.Returns(participantEntity);
-        _repository.Setup(r => r.AddParticipant(It.IsAny<CreateGlobalChatEventParticipantEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GlobalChatEventParticipant());
+        _repository.Get(eventId).Returns(chatEvent);
+        _repository.IsParticipant(eventId, _currentUserId).Returns(false);
+        _factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
+        _repository.AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new GlobalChatEventParticipant());
 
         await _service.JoinAsync(eventId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GlobalChatEventIntention.Join, chatEvent), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GlobalChatEventIntention.Join, chatEvent);
     }
 
     [Fact]
@@ -198,14 +198,14 @@ public class GlobalChatEventServiceShould : UnitTestBase
         var eventId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
         var participantEntity = new CreateGlobalChatEventParticipantEntity();
-        _repository.Setup(r => r.Get(eventId)).ReturnsAsync(chatEvent);
-        _repository.Setup(r => r.IsParticipant(eventId, _currentUserId)).ReturnsAsync(false);
-        _createParticipantSetup.Returns(participantEntity);
-        _repository.Setup(r => r.AddParticipant(It.IsAny<CreateGlobalChatEventParticipantEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GlobalChatEventParticipant());
+        _repository.Get(eventId).Returns(chatEvent);
+        _repository.IsParticipant(eventId, _currentUserId).Returns(false);
+        _factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
+        _repository.AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new GlobalChatEventParticipant());
 
         await _service.JoinAsync(eventId);
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.GlobalChatEventParticipantJoined, eventId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.GlobalChatEventParticipantJoined, eventId);
     }
 }

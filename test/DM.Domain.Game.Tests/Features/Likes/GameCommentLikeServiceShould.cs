@@ -14,19 +14,19 @@ using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Likes;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Likes;
 
 public class GameCommentLikeServiceShould : UnitTestBase
 {
-    private readonly Mock<IGameCommentService> _commentService;
-    private readonly Mock<IGameService> _gameService;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<ILikeOperations> _likeOperations;
+    private readonly IGameCommentService _commentService;
+    private readonly IGameService _gameService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly ILikeOperations _likeOperations;
     private readonly GameCommentLikeService _service;
     private readonly Guid _currentUserId;
 
@@ -35,24 +35,22 @@ public class GameCommentLikeServiceShould : UnitTestBase
         _commentService = Mock<IGameCommentService>();
         _gameService = Mock<IGameService>();
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<CommentIntention>(), It.IsAny<Comment>()));
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _likeOperations = Mock<ILikeOperations>();
-        _likeOperations.Setup(l => l.LikeAsync(It.IsAny<Comment>(), It.IsAny<EventType>()))
-            .ReturnsAsync(new GeneralUser { UserId = _currentUserId });
-        _likeOperations.Setup(l => l.UnlikeAsync(It.IsAny<Comment>()))
-            .Returns(Task.CompletedTask);
+        _likeOperations.LikeAsync(Arg.Any<Comment>(), Arg.Any<EventType>())
+            .Returns(new GeneralUser { UserId = _currentUserId });
+        _likeOperations.UnlikeAsync(Arg.Any<Comment>()).Returns(Task.CompletedTask);
 
         _service = new GameCommentLikeService(
-            _commentService.Object,
-            _gameService.Object,
-            _intentionManager.Object,
-            _identityProvider.Object,
-            _likeOperations.Object);
+            _commentService,
+            _gameService,
+            _intentionManager,
+            _identityProvider,
+            _likeOperations);
     }
 
     [Fact]
@@ -67,12 +65,12 @@ public class GameCommentLikeServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = Array.Empty<BlacklistedUser>()
         };
-        _commentService.Setup(s => s.GetAsync(commentId)).ReturnsAsync(comment);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _commentService.GetAsync(commentId).Returns(comment);
+        _gameService.GetAsync(gameId).Returns(game);
 
         await _service.LikeCommentAsync(commentId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(CommentIntention.Like, comment), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Like, comment);
     }
 
     [Fact]
@@ -87,12 +85,12 @@ public class GameCommentLikeServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = Array.Empty<BlacklistedUser>()
         };
-        _commentService.Setup(s => s.GetAsync(commentId)).ReturnsAsync(comment);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _commentService.GetAsync(commentId).Returns(comment);
+        _gameService.GetAsync(gameId).Returns(game);
 
         await _service.LikeCommentAsync(commentId);
 
-        _likeOperations.Verify(l => l.LikeAsync(comment, EventType.LikedGameComment), Times.Once);
+        await _likeOperations.Received(1).LikeAsync(comment, EventType.LikedGameComment);
     }
 
     [Fact]
@@ -107,8 +105,8 @@ public class GameCommentLikeServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = new[] { new BlacklistedUser { UserId = _currentUserId } }
         };
-        _commentService.Setup(s => s.GetAsync(commentId)).ReturnsAsync(comment);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _commentService.GetAsync(commentId).Returns(comment);
+        _gameService.GetAsync(gameId).Returns(game);
 
         var act = async () => await _service.LikeCommentAsync(commentId);
 
@@ -128,12 +126,12 @@ public class GameCommentLikeServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = Array.Empty<BlacklistedUser>()
         };
-        _commentService.Setup(s => s.GetAsync(commentId)).ReturnsAsync(comment);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _commentService.GetAsync(commentId).Returns(comment);
+        _gameService.GetAsync(gameId).Returns(game);
 
         await _service.UnlikeCommentAsync(commentId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(CommentIntention.Like, comment), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Like, comment);
     }
 
     [Fact]
@@ -148,11 +146,11 @@ public class GameCommentLikeServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
             BlacklistedUsers = Array.Empty<BlacklistedUser>()
         };
-        _commentService.Setup(s => s.GetAsync(commentId)).ReturnsAsync(comment);
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
+        _commentService.GetAsync(commentId).Returns(comment);
+        _gameService.GetAsync(gameId).Returns(game);
 
         await _service.UnlikeCommentAsync(commentId);
 
-        _likeOperations.Verify(l => l.UnlikeAsync(comment), Times.Once);
+        await _likeOperations.Received(1).UnlikeAsync(comment);
     }
 }

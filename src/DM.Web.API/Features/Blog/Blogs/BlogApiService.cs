@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Dto;
@@ -21,14 +20,14 @@ internal class BlogApiService : IBlogApiService
     private readonly IBlogService _blogService;
     private readonly IPublicationService _publicationService;
     private readonly ISubscriptionService _subscriptionService;
-    private readonly IMapper _mapper;
+    private readonly BlogMapper _mapper;
 
     /// <inheritdoc />
     public BlogApiService(
         IBlogService blogService,
         IPublicationService publicationService,
         ISubscriptionService subscriptionService,
-        IMapper mapper)
+        BlogMapper mapper)
     {
         _blogService = blogService;
         _publicationService = publicationService;
@@ -40,14 +39,14 @@ internal class BlogApiService : IBlogApiService
     public async Task<ListEnvelope<Blog>> GetBlogs(BlogsQuery query)
     {
         var (blogs, paging) = await QueryBlogs(query);
-        return new ListEnvelope<Blog>(blogs.Select(_mapper.Map<Blog>), new PagingInfo(paging));
+        return new ListEnvelope<Blog>(blogs.Select(_mapper.ToBlog), new PagingInfo(paging));
     }
 
     /// <inheritdoc />
     public async Task<ListEnvelope<BlogRef>> GetBlogRefs(BlogsQuery query)
     {
         var (blogs, paging) = await QueryBlogs(query);
-        return new ListEnvelope<BlogRef>(blogs.Select(_mapper.Map<BlogRef>), new PagingInfo(paging));
+        return new ListEnvelope<BlogRef>(blogs.Select(_mapper.ToBlogRef), new PagingInfo(paging));
     }
 
     /// <summary>
@@ -82,28 +81,28 @@ internal class BlogApiService : IBlogApiService
                 PagingResult.Create(allBlogs.Count, skip + 1, take));
         }
 
-        return await _blogService.GetPublicBlogs(query, _mapper.Map<BlogFilter>(query));
+        return await _blogService.GetPublicBlogs(query, _mapper.ToBlogFilter(query));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Blog>> Get(Guid id)
     {
         var blog = await _blogService.GetAsync(id);
-        return new Envelope<Blog>(_mapper.Map<Blog>(blog));
+        return new Envelope<Blog>(_mapper.ToBlog(blog));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Blog>> GetByPublicId(string publicId)
     {
         var blog = await _blogService.GetByPublicIdAsync(publicId);
-        return new Envelope<Blog>(_mapper.Map<Blog>(blog));
+        return new Envelope<Blog>(_mapper.ToBlog(blog));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Blog>> GetByOwnerLogin(string login)
     {
         var blog = await _blogService.GetByOwnerUsernameAsync(login);
-        return new Envelope<Blog>(_mapper.Map<Blog>(blog));
+        return new Envelope<Blog>(_mapper.ToBlog(blog));
     }
 
     /// <inheritdoc />
@@ -115,18 +114,18 @@ internal class BlogApiService : IBlogApiService
     /// <inheritdoc />
     public async Task<Envelope<Blog>> Create(CreateBlogRequest request)
     {
-        var createBlog = _mapper.Map<CreateBlog>(request);
+        var createBlog = _mapper.ToCreateBlog(request);
         var blog = await _blogService.Create(createBlog);
-        return new Envelope<Blog>(_mapper.Map<Blog>(blog));
+        return new Envelope<Blog>(_mapper.ToBlog(blog));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Blog>> Update(Guid id, UpdateBlogRequest request)
     {
-        var updateBlog = _mapper.Map<UpdateBlog>(request);
+        var updateBlog = _mapper.ToUpdateBlog(request);
         updateBlog.BlogId = id;
         var blog = await _blogService.Update(updateBlog);
-        return new Envelope<Blog>(_mapper.Map<Blog>(blog));
+        return new Envelope<Blog>(_mapper.ToBlog(blog));
     }
 
     /// <inheritdoc />
@@ -136,23 +135,23 @@ internal class BlogApiService : IBlogApiService
     public async Task<Envelope<Blog>> ChangePremoderation(string id, BlogPremoderationChangeRequest request)
     {
         var updatedBlog = await _blogService.ChangePremoderationAsync(id, request.Transition);
-        return new Envelope<Blog>(_mapper.Map<Blog>(updatedBlog));
+        return new Envelope<Blog>(_mapper.ToBlog(updatedBlog));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Blog>> ChangeStatus(string id, BlogStatusChangeRequest request)
     {
         var updatedBlog = await _blogService.ChangeStatusAsync(id, request.Transition);
-        return new Envelope<Blog>(_mapper.Map<Blog>(updatedBlog));
+        return new Envelope<Blog>(_mapper.ToBlog(updatedBlog));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Rubric>> CreateRubric(Guid blogId, CreateRubricRequest request)
     {
-        var createRubric = _mapper.Map<CreateRubric>(request);
+        var createRubric = _mapper.ToCreateRubric(request);
         createRubric.BlogId = blogId;
         var rubric = await _blogService.CreateRubric(createRubric);
-        return new Envelope<Rubric>(_mapper.Map<Rubric>(rubric));
+        return new Envelope<Rubric>(_mapper.ToRubric(rubric));
     }
 
     /// <inheritdoc />
@@ -160,14 +159,14 @@ internal class BlogApiService : IBlogApiService
     {
         var rubric = await _blogService.UpdateRubric(
             new UpdateRubric { RubricId = rubricId, Title = request.Title });
-        return new Envelope<Rubric>(_mapper.Map<Rubric>(rubric));
+        return new Envelope<Rubric>(_mapper.ToRubric(rubric));
     }
 
     /// <inheritdoc />
     public async Task<ListEnvelope<Rubric>> ReorderRubrics(Guid blogId, ReorderRubricsRequest request)
     {
         var rubrics = await _blogService.ReorderRubrics(blogId, request.RubricIds);
-        return new ListEnvelope<Rubric>(rubrics.Select(_mapper.Map<Rubric>));
+        return new ListEnvelope<Rubric>(rubrics.Select(_mapper.ToRubric));
     }
 
     /// <inheritdoc />
@@ -177,14 +176,14 @@ internal class BlogApiService : IBlogApiService
     public async Task<ListEnvelope<ApiPublication>> GetPublications(Guid blogId, Guid? rubricId, PagingQuery query)
     {
         var (publications, paging) = await _publicationService.GetPublications(blogId, rubricId, query);
-        return new ListEnvelope<ApiPublication>(publications.Select(_mapper.Map<ApiPublication>), new PagingInfo(paging));
+        return new ListEnvelope<ApiPublication>(publications.Select(_mapper.ToPublication), new PagingInfo(paging));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<ApiPublication>> GetPublication(Guid publicationId)
     {
         var publication = await _publicationService.GetPublication(publicationId);
-        return new Envelope<ApiPublication>(_mapper.Map<ApiPublication>(publication));
+        return new Envelope<ApiPublication>(_mapper.ToPublication(publication));
     }
 
     /// <inheritdoc />
@@ -192,25 +191,25 @@ internal class BlogApiService : IBlogApiService
     {
         var publication = await _publicationService.GetBestUserPublication(username);
         return new Envelope<ApiPublication?>(
-            publication == null ? null : _mapper.Map<ApiPublication>(publication));
+            publication == null ? null : _mapper.ToPublication(publication));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<ApiPublication>> CreatePublication(Guid blogId, ApiCreatePublicationRequest request)
     {
-        var createPublication = _mapper.Map<CreatePublication>(request);
+        var createPublication = _mapper.ToCreatePublication(request);
         createPublication.BlogId = blogId;
         var publication = await _publicationService.CreatePublication(createPublication);
-        return new Envelope<ApiPublication>(_mapper.Map<ApiPublication>(publication));
+        return new Envelope<ApiPublication>(_mapper.ToPublication(publication));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<ApiPublication>> UpdatePublication(Guid publicationId, ApiUpdatePublicationRequest request)
     {
-        var updatePublication = _mapper.Map<UpdatePublication>(request);
+        var updatePublication = _mapper.ToUpdatePublication(request);
         updatePublication.PublicationId = publicationId;
         var publication = await _publicationService.UpdatePublication(updatePublication);
-        return new Envelope<ApiPublication>(_mapper.Map<ApiPublication>(publication));
+        return new Envelope<ApiPublication>(_mapper.ToPublication(publication));
     }
 
     /// <inheritdoc />

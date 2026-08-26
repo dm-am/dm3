@@ -11,7 +11,7 @@ using DM.Domain.Core.Identity;
 using DM.Testing;
 using FluentValidation.TestHelper;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.PasswordChange;
@@ -19,10 +19,10 @@ namespace DM.Domain.Account.Tests.Features.PasswordChange;
 public class UserPasswordChangeValidatorShould : UnitTestBase
 {
     private readonly UserPasswordChangeValidator validator;
-    private readonly Mock<IPasswordChangeRepository> repository;
-    private readonly Mock<IDateTimeProvider> dateTimeProvider;
-    private readonly Mock<IIdentityProvider> identityProvider;
-    private readonly Mock<ISecurityManager> securityManager;
+    private readonly IPasswordChangeRepository repository;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IIdentityProvider identityProvider;
+    private readonly ISecurityManager securityManager;
 
     public UserPasswordChangeValidatorShould()
     {
@@ -32,7 +32,7 @@ public class UserPasswordChangeValidatorShould : UnitTestBase
         securityManager = Mock<ISecurityManager>();
 
         var now = DateTimeOffset.UtcNow;
-        dateTimeProvider.Setup(d => d.Now).Returns(now);
+        dateTimeProvider.Now.Returns(now);
 
         var authenticatedUser = new AuthenticatedUser
         {
@@ -44,15 +44,12 @@ public class UserPasswordChangeValidatorShould : UnitTestBase
             PasswordHash = "hash"
         };
 
-        identityProvider.Setup(p => p.Current).Returns(Identity.Success(authenticatedUser, new Session { Id = Guid.NewGuid() }, UserSettings.Default, "token"));
+        identityProvider.Current.Returns(Identity.Success(authenticatedUser, new Session { Id = Guid.NewGuid() }, UserSettings.Default, "token"));
 
-        securityManager.Setup(s => s.ComparePasswords("correctpassword", "salt", "hash"))
-            .Returns(true);
-        securityManager.Setup(s => s.ComparePasswords(It.Is<string>(p => p != "correctpassword"), "salt", "hash"))
-            .Returns(false);
+        securityManager.ComparePasswords("correctpassword", "salt", "hash").Returns(true);
+        securityManager.ComparePasswords(Arg.Is<string>(p => p != "correctpassword"), "salt", "hash").Returns(false);
 
-        repository.Setup(r => r.TokenValid(It.IsAny<Guid>(), It.IsAny<DateTimeOffset>()))
-            .ReturnsAsync(true);
+        repository.TokenValid(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>()).Returns(true);
 
         var passwordPolicy = Options.Create(new PasswordPolicyConfiguration
         {
@@ -70,10 +67,10 @@ public class UserPasswordChangeValidatorShould : UnitTestBase
         });
 
         validator = new UserPasswordChangeValidator(
-            repository.Object,
-            dateTimeProvider.Object,
-            identityProvider.Object,
-            securityManager.Object,
+            repository,
+            dateTimeProvider,
+            identityProvider,
+            securityManager,
             passwordPolicy,
             tokenConfig);
     }
@@ -170,8 +167,7 @@ public class UserPasswordChangeValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenTokenIsInvalid()
     {
-        repository.Setup(r => r.TokenValid(It.IsAny<Guid>(), It.IsAny<DateTimeOffset>()))
-            .ReturnsAsync(false);
+        repository.TokenValid(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>()).Returns(false);
 
         var input = new UserPasswordChange
         {

@@ -1,3 +1,4 @@
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
@@ -16,7 +17,7 @@ internal class UpdateBlogValidator : AbstractValidator<UpdateBlog>
         {
             RuleFor(x => x.Title)
                 .NotEmpty().WithMessage(ValidationError.Empty)
-                .MaximumLength(200).WithMessage(ValidationError.Long);
+                .MaximumLength(BlogFieldLimits.BlogTitleMaxLength).WithMessage(ValidationError.Long);
         });
 
         // The value decides who sees the drafts, and it is compared against the
@@ -25,5 +26,12 @@ internal class UpdateBlogValidator : AbstractValidator<UpdateBlog>
         // open of the two. Null passes — omitted means "keep what is stored".
         RuleFor(x => x.DraftVisibility)
             .IsInEnum().WithMessage(ValidationError.Invalid);
+
+        // The Comment surface does not declare [private], and an edit is the
+        // other way the tag gets into a stored blog description.
+        When(x => x.Description != null, () =>
+            RuleFor(x => x.Description)
+                .Must(description => !PrivateBlockMarkup.ContainsPrivateMarkup(description))
+                .WithMessage(x => PrivateBlockMarkup.DescribeSurfaceRefusal(x.Description)));
     }
 }

@@ -132,7 +132,7 @@
 
 - [Паттерны](../conventions/PATTERNS.md) — Паттерны, структура проектов, блюпринт
 - [Система](../architecture/SYSTEM.md) — Компоненты, потоки
-- [Хранилища](../conventions/DATA_STORAGE.md) — PostgreSQL vs MongoDB
+- [Хранилища](../conventions/DATA_STORAGE.md) — PostgreSQL и объектное хранилище
 - [Аутентификация](../architecture/AUTHENTICATION.md) — Вход, сессии
 - [Авторизация](../architecture/AUTHORIZATION.md) — Роли, права
 - [Установка](../guides/LOCAL_SETUP.md) — Локальная разработка

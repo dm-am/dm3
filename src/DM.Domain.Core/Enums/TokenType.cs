@@ -27,6 +27,16 @@ public enum TokenType
     /// </summary>
     NotificationBotLink = 7,
 
+    /// <summary>
+    /// Confirmation of a request to take the second factor off by mail
+    /// </summary>
+    TwoFactorRemovalRequest = 9,
+
+    /// <summary>
+    /// Calling off a scheduled removal of the second factor
+    /// </summary>
+    TwoFactorRemovalCancellation = 10,
+
     // === GAME INVITATIONS ===
 
     /// <summary>

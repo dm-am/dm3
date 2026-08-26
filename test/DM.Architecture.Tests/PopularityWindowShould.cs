@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -70,7 +70,7 @@ public class PopularityWindowShould
 
         foreach (var (file, method) in Callers)
         {
-            var body = Between(File.ReadAllText(Path.Combine(root, file)), method, "\n    }");
+            var body = SourceText.Between(File.ReadAllText(Path.Combine(root, file)), method, "\n    }");
 
             if (!body.Contains("PopularityProcessor", StringComparison.Ordinal) &&
                 !body.Contains("UpdateScoresAsync", StringComparison.Ordinal))
@@ -94,12 +94,4 @@ public class PopularityWindowShould
     /// Text between an opening marker and the first terminator after it: enough to
     /// read one method, and loud when the method is gone or renamed.
     /// </summary>
-    private static string Between(string source, string start, string end)
-    {
-        var from = source.IndexOf(start, StringComparison.Ordinal);
-        from.Should().BeGreaterThan(-1, $"the source must still declare {start}");
-        var to = source.IndexOf(end, from + start.Length, StringComparison.Ordinal);
-        to.Should().BeGreaterThan(-1, $"the declaration of {start} must be terminated");
-        return source[from..to];
-    }
 }

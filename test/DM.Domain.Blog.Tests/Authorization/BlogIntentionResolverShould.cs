@@ -7,7 +7,7 @@ using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Authorization;

@@ -38,19 +38,12 @@ internal class SessionCleanupService : PeriodicHostedService
             .GetRequiredService<ISessionCleanupProcessor>()
             .PurgeExpiredAsync(cancellationToken);
 
-        if (purged.UsersTouched > 0)
+        if (purged.SessionsRemoved > 0)
         {
-            _logger.LogInformation("[Session Cleanup] Removed expired sessions from {Count} user(s)",
-                purged.UsersTouched);
+            _logger.LogInformation("[Session Cleanup] Removed {Count} expired session(s)",
+                purged.SessionsRemoved);
         }
-
-        if (purged.EmptyDocumentsRemoved > 0)
-        {
-            _logger.LogInformation("[Session Cleanup] Deleted {Count} UserSession document(s) with no active sessions",
-                purged.EmptyDocumentsRemoved);
-        }
-
-        if (purged.UsersTouched == 0 && purged.EmptyDocumentsRemoved == 0)
+        else
         {
             _logger.LogDebug("[Session Cleanup] No sessions to clean up");
         }

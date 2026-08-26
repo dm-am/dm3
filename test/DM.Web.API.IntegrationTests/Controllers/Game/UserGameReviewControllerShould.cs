@@ -2,7 +2,7 @@ using System.Net;
 using System.Text.Json;
 using DM.Domain.Core.Dto;
 using DM.Domain.Personal.Features.Profiles;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -280,8 +280,8 @@ public class UserGameReviewControllerShould : IntegrationTestBase
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var profile = document.RootElement.GetProperty("resource");
 
-        profile.GetProperty("gameReviewsReceived").GetInt32().Should().BeGreaterOrEqualTo(0);
-        profile.GetProperty("gameReviewsGiven").GetInt32().Should().BeGreaterOrEqualTo(0);
+        profile.GetProperty("gameReviewsReceived").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        profile.GetProperty("gameReviewsGiven").GetInt32().Should().BeGreaterThanOrEqualTo(0);
     }
 
     [Fact]

@@ -3,7 +3,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.UnreadCounters;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Messaging;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;

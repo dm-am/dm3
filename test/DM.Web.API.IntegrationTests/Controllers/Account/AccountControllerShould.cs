@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using DM.Web.API.IntegrationTests.Helpers;
 using DM.Web.API.Shared.Http;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;

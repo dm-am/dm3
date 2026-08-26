@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blacklists;
@@ -18,22 +17,21 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Blacklists;
 
 public class BlogBlacklistServiceShould : UnitTestBase
 {
-    private readonly Mock<IBlogBlacklistRepository> _repository;
-    private readonly Mock<IBlogService> _blogService;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IEventProducer> _producer;
-    private readonly Mock<IMapper> _mapper;
-    private readonly Mock<ISubscriptionRepository> _subscriptionRepository;
+    private readonly IBlogBlacklistRepository _repository;
+    private readonly IBlogService _blogService;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IEventProducer _producer;
+    private readonly ISubscriptionRepository _subscriptionRepository;
     private readonly BlogBlacklistService _service;
 
     public BlogBlacklistServiceShould()
@@ -44,20 +42,18 @@ public class BlogBlacklistServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _intentionManager = Mock<IIntentionManager>();
         _producer = Mock<IEventProducer>();
-        _mapper = Mock<IMapper>();
         _subscriptionRepository = Mock<ISubscriptionRepository>();
 
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Current.Returns(Identity.Guest());
 
         _service = new BlogBlacklistService(
-            _repository.Object,
-            _blogService.Object,
-            _userLookupService.Object,
-            _identityProvider.Object,
-            _intentionManager.Object,
-            _producer.Object,
-            _mapper.Object,
-            _subscriptionRepository.Object);
+            _repository,
+            _blogService,
+            _userLookupService,
+            _identityProvider,
+            _intentionManager,
+            _producer,
+            _subscriptionRepository);
     }
 
     [Fact]
@@ -74,21 +70,18 @@ public class BlogBlacklistServiceShould : UnitTestBase
         };
         var user = new GeneralUser { UserId = userId, Username = "testuser" };
 
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _userLookupService.Setup(s => s.GetAsync("testuser")).ReturnsAsync(user);
-        _repository.Setup(r => r.IsBlocked(blogId, userId, default)).ReturnsAsync(false);
-        _repository.Setup(r => r.Add(blogId, userId, It.IsAny<Guid>(), default)).Returns(Task.CompletedTask);
-        _repository.Setup(r => r.CancelInvitationsForUser(blogId, userId, default))
-            .ReturnsAsync(new List<Guid>());
-        _mapper.Setup(m => m.Map<GeneralUser>(user)).Returns(user);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _userLookupService.GetAsync("testuser").Returns(user);
+        _repository.IsBlocked(blogId, userId, default).Returns(false);
+        _repository.Add(blogId, userId, Arg.Any<Guid>(), default).Returns(Task.CompletedTask);
+        _repository.CancelInvitationsForUser(blogId, userId, default).Returns(new List<Guid>());
 
         await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
         // A blog has no command for removing a reader, so the entry is the one
         // that ends the subscription: left alone, the blacklisted user stayed in
         // the list of readers and on the fan-out of every publication.
-        _subscriptionRepository.Verify(
-            r => r.DeleteAsync(userId, SubscriptionTargetType.Blog, blogId, default), Times.Once);
+        await _subscriptionRepository.Received(1).DeleteAsync(userId, SubscriptionTargetType.Blog, blogId, default);
     }
 
     [Fact]
@@ -96,12 +89,12 @@ public class BlogBlacklistServiceShould : UnitTestBase
     {
         var blogId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId };
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _repository.Setup(r => r.GetBlacklist(blogId, default)).ReturnsAsync(new List<GeneralUser>());
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _repository.GetBlacklist(blogId, default).Returns(new List<GeneralUser>());
 
         await _service.Get(blogId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.Edit, blog), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.Edit, blog);
     }
 
     [Fact]
@@ -118,17 +111,15 @@ public class BlogBlacklistServiceShould : UnitTestBase
         };
         var user = new GeneralUser { UserId = userId, Username = "testuser" };
 
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _userLookupService.Setup(s => s.GetAsync("testuser")).ReturnsAsync(user);
-        _repository.Setup(r => r.IsBlocked(blogId, userId, default)).ReturnsAsync(false);
-        _repository.Setup(r => r.Add(blogId, userId, It.IsAny<Guid>(), default)).Returns(Task.CompletedTask);
-        _repository.Setup(r => r.CancelInvitationsForUser(blogId, userId, default))
-            .ReturnsAsync(new List<Guid>());
-        _mapper.Setup(m => m.Map<GeneralUser>(user)).Returns(user);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _userLookupService.GetAsync("testuser").Returns(user);
+        _repository.IsBlocked(blogId, userId, default).Returns(false);
+        _repository.Add(blogId, userId, Arg.Any<Guid>(), default).Returns(Task.CompletedTask);
+        _repository.CancelInvitationsForUser(blogId, userId, default).Returns(new List<Guid>());
 
         await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.Edit, blog), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.Edit, blog);
     }
 
     [Fact]
@@ -145,8 +136,8 @@ public class BlogBlacklistServiceShould : UnitTestBase
         };
         var user = new GeneralUser { UserId = ownerId, Username = "owner" };
 
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _userLookupService.Setup(s => s.GetAsync("owner")).ReturnsAsync(user);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _userLookupService.GetAsync("owner").Returns(user);
 
         var act = async () => await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "owner" });
 
@@ -169,8 +160,8 @@ public class BlogBlacklistServiceShould : UnitTestBase
         };
         var user = new GeneralUser { UserId = mentorId, Username = "mentor" };
 
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _userLookupService.Setup(s => s.GetAsync("mentor")).ReturnsAsync(user);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _userLookupService.GetAsync("mentor").Returns(user);
 
         var act = async () => await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "mentor" });
 
@@ -194,19 +185,16 @@ public class BlogBlacklistServiceShould : UnitTestBase
         };
         var user = new GeneralUser { UserId = userId, Username = "testuser" };
 
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _userLookupService.Setup(s => s.GetAsync("testuser")).ReturnsAsync(user);
-        _repository.Setup(r => r.IsBlocked(blogId, userId, default)).ReturnsAsync(false);
-        _repository.Setup(r => r.Add(blogId, userId, It.IsAny<Guid>(), default)).Returns(Task.CompletedTask);
-        _repository.Setup(r => r.CancelInvitationsForUser(blogId, userId, default))
-            .ReturnsAsync(new List<Guid> { tokenId1, tokenId2 });
-        _mapper.Setup(m => m.Map<GeneralUser>(user)).Returns(user);
-        _producer.Setup(p => p.SendAsync(EventType.BlogInvitationCancelled, It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _userLookupService.GetAsync("testuser").Returns(user);
+        _repository.IsBlocked(blogId, userId, default).Returns(false);
+        _repository.Add(blogId, userId, Arg.Any<Guid>(), default).Returns(Task.CompletedTask);
+        _repository.CancelInvitationsForUser(blogId, userId, default).Returns(new List<Guid> { tokenId1, tokenId2 });
+        _producer.SendAsync(EventType.BlogInvitationCancelled, Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
-        _producer.Verify(p => p.SendAsync(EventType.BlogInvitationCancelled, tokenId1), Times.Once);
-        _producer.Verify(p => p.SendAsync(EventType.BlogInvitationCancelled, tokenId2), Times.Once);
+        await _producer.Received(1).SendAsync(EventType.BlogInvitationCancelled, tokenId1);
+        await _producer.Received(1).SendAsync(EventType.BlogInvitationCancelled, tokenId2);
     }
 }

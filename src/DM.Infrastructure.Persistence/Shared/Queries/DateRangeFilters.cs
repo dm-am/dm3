@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore.Query;
-using MongoDB.Driver;
 
 namespace DM.Infrastructure.Persistence.Shared.Queries;
 
@@ -52,18 +51,6 @@ public static class DateRangeFilters
             return source.Where(Compose(property, d => d.HasValue && d.Value < bound));
         }
         return source.Where(Compose(property, d => d.HasValue && d.Value <= to));
-    }
-
-    /// <summary>
-    /// Mongo variant of the inclusive "to" bound for UTC date fields
-    /// </summary>
-    public static FilterDefinition<T> AtOrBefore<T>(
-        Expression<Func<T, DateTime>> field,
-        DateTimeOffset to)
-    {
-        return IsWholeDay(to) && CanExtendToNextDay(to)
-            ? Builders<T>.Filter.Lt(field, to.AddDays(1).UtcDateTime)
-            : Builders<T>.Filter.Lte(field, to.UtcDateTime);
     }
 
     /// <summary>

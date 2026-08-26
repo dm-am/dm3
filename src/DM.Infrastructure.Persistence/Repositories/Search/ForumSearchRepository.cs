@@ -20,6 +20,11 @@ namespace DM.Infrastructure.Persistence.Repositories.Search;
 internal class ForumSearchRepository : IForumSearchRepository
 {
     private const string SearchConfig = SearchTextConfiguration.Name;
+
+    // Must match the [private] strip used by the SearchVector generated columns
+    // (DmDbContext) and by the message search - private text is never previewed.
+    private const string PrivateBlockPattern = SearchSnippet.PrivateBlockPattern;
+
     private const string TopicEntityType = "topic";
     private const string CommentEntityType = "comment";
 
@@ -46,6 +51,16 @@ internal class ForumSearchRepository : IForumSearchRepository
     /// never the words that were searched for; and it could not have found them by
     /// looking, because the search matches by lexeme - a query for "странник"
     /// matches "странников", which no substring of the query occurs in.
+    ///
+    /// Both branches cut the private block out, and the branch that builds a
+    /// window has to cut it for a reason the fallback does not: ts_headline reads
+    /// the document it is given rather than the vector, so the strip in the
+    /// generated column protects which rows match and says nothing about what is
+    /// shown. A window opened around any other word in the same body ran straight
+    /// through the block. The forum surface does not declare the tag, so a block
+    /// written there is public text on the page as well - and the preview agrees
+    /// with the message search rather than deciding that for itself, because the
+    /// two answer the same question over one column.
     /// </remarks>
     private async Task Preview(ForumSearchHit[] page, string query, CancellationToken ct)
     {
@@ -79,7 +94,11 @@ internal class ForumSearchRepository : IForumSearchRepository
                 {
                     t.TopicId,
                     Headline = EF.Functions.WebSearchToTsQuery(SearchConfig, query)
-                        .GetResultHeadline(SearchConfig, EF.Property<string>(t, "SearchText"), SearchSnippet.HeadlineOptions),
+                        .GetResultHeadline(
+                            SearchConfig,
+                            DmDbContext.RegexpReplace(
+                                EF.Property<string>(t, "SearchText"), PrivateBlockPattern, " ", "gi"),
+                            SearchSnippet.HeadlineOptions),
                 })
                 .ToArrayAsync(ct))
             {
@@ -95,7 +114,11 @@ internal class ForumSearchRepository : IForumSearchRepository
                 {
                     c.CommentId,
                     Headline = EF.Functions.WebSearchToTsQuery(SearchConfig, query)
-                        .GetResultHeadline(SearchConfig, EF.Property<string>(c, "SearchText"), SearchSnippet.HeadlineOptions),
+                        .GetResultHeadline(
+                            SearchConfig,
+                            DmDbContext.RegexpReplace(
+                                EF.Property<string>(c, "SearchText"), PrivateBlockPattern, " ", "gi"),
+                            SearchSnippet.HeadlineOptions),
                 })
                 .ToArrayAsync(ct))
             {

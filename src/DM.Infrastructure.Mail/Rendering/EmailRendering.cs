@@ -11,7 +11,7 @@ namespace DM.Infrastructure.Mail.Rendering;
 /// Builds the renderer the email templates are rendered by.
 /// </summary>
 /// <remarks>
-/// One place because there are two callers — the Autofac module and the test that
+/// One place because there are two callers — the registration extensions and the test that
 /// guards the templates — and a test rendering through a differently configured
 /// renderer guards nothing.
 /// </remarks>

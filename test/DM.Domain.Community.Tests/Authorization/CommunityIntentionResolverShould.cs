@@ -2,7 +2,7 @@ using DM.Domain.Community.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Testing.Dsl;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Authorization;

@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Game.Features.Popularity;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Popularity;
@@ -31,7 +31,7 @@ public class GamePopularityProcessorShould : UnitTestBase
     private static readonly Guid Read = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid Ignored = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
-    private readonly Mock<IGamePopularityRepository> _repository;
+    private readonly IGamePopularityRepository _repository;
     private readonly GamePopularityProcessor _processor;
 
     private IReadOnlyDictionary<Guid, int>? _written;
@@ -40,24 +40,18 @@ public class GamePopularityProcessorShould : UnitTestBase
     {
         _repository = Mock<IGamePopularityRepository>();
         _repository
-            .Setup(r => r.GetScorableGameIds(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { Played, Read, Ignored });
+            .GetScorableGameIds(Arg.Any<CancellationToken>()).Returns(new[] { Played, Read, Ignored });
         _repository
-            .Setup(r => r.CountActivePlayers(
-                It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<Guid, int> { [Played] = 4, [Read] = 1 });
+            .CountActivePlayers(
+                Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new Dictionary<Guid, int> { [Played] = 4, [Read] = 1 });
         _repository
-            .Setup(r => r.CountActiveReaders(
-                It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Dictionary<Guid, int> { [Played] = 3, [Read] = 9 });
+            .CountActiveReaders(
+                Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new Dictionary<Guid, int> { [Played] = 3, [Read] = 9 });
         _repository
-            .Setup(r => r.ApplyScores(
-                It.IsAny<IReadOnlyDictionary<Guid, int>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .Callback<IReadOnlyDictionary<Guid, int>, DateTimeOffset, CancellationToken>(
-                (scores, _, _) => _written = scores)
-            .ReturnsAsync(2);
+            .ApplyScores(
+                Arg.Any<IReadOnlyDictionary<Guid, int>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(2).AndDoes(ci => { var scores = ci.ArgAt<IReadOnlyDictionary<Guid, int>>(0); _written = scores; });
 
-        _processor = new GamePopularityProcessor(_repository.Object);
+        _processor = new GamePopularityProcessor(_repository);
     }
 
     [Fact]
@@ -92,10 +86,10 @@ public class GamePopularityProcessorShould : UnitTestBase
 
         var expected = Now - ActivityPolicy.ActivePeriod;
 
-        _repository.Verify(r => r.CountActivePlayers(
-            It.IsAny<IReadOnlyCollection<Guid>>(), expected, It.IsAny<CancellationToken>()), Times.Once);
-        _repository.Verify(r => r.CountActiveReaders(
-            It.IsAny<IReadOnlyCollection<Guid>>(), expected, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).CountActivePlayers(
+            Arg.Any<IReadOnlyCollection<Guid>>(), expected, Arg.Any<CancellationToken>());
+        await _repository.Received(1).CountActiveReaders(
+            Arg.Any<IReadOnlyCollection<Guid>>(), expected, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -110,27 +104,25 @@ public class GamePopularityProcessorShould : UnitTestBase
 
         await _processor.UpdateScoresAsync(seedEpoch);
 
-        _repository.Verify(r => r.CountActiveReaders(
-            It.IsAny<IReadOnlyCollection<Guid>>(),
+        await _repository.Received(1).CountActiveReaders(
+            Arg.Any<IReadOnlyCollection<Guid>>(),
             seedEpoch - ActivityPolicy.ActivePeriod,
-            It.IsAny<CancellationToken>()), Times.Once);
-        _repository.Verify(r => r.ApplyScores(
-            It.IsAny<IReadOnlyDictionary<Guid, int>>(), seedEpoch, It.IsAny<CancellationToken>()), Times.Once);
+            Arg.Any<CancellationToken>());
+        await _repository.Received(1).ApplyScores(
+            Arg.Any<IReadOnlyDictionary<Guid, int>>(), seedEpoch, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task CountNothingWhenThereIsNothingToScore()
     {
         _repository
-            .Setup(r => r.GetScorableGameIds(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<Guid>());
+            .GetScorableGameIds(Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
 
         var (updated, total) = await _processor.UpdateScoresAsync(Now);
 
         updated.Should().Be(0);
         total.Should().Be(0);
-        _repository.Verify(r => r.ApplyScores(
-            It.IsAny<IReadOnlyDictionary<Guid, int>>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _repository.DidNotReceive().ApplyScores(
+            Arg.Any<IReadOnlyDictionary<Guid, int>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 }

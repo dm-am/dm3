@@ -9,12 +9,15 @@
  * Emits the chosen year (and month, in month mode) and closes on pick,
  * outside-click, or Esc. Future months/years past max* are disabled;
  * both modes bottom out at minYear.
+ *
+ * The panel itself is MonthYearGrid — shared with the day calendar, which
+ * shows the same two grids above its day grid. What stays here is the part a
+ * grid has no business knowing: the trigger, the stepper pill, the popover
+ * and when it is open.
  */
 import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
-import {
-  RU_MONTHS_CAPITALIZED,
-  RU_MONTHS_SHORT,
-} from "@/shared/lib/utils/months";
+import { RU_MONTHS_CAPITALIZED } from "@/shared/lib/utils/months";
+import MonthYearGrid from "./MonthYearGrid.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -48,7 +51,6 @@ const emit = defineEmits<{
   "update:month": [value: number];
 }>();
 
-const MONTHS_SHORT = RU_MONTHS_SHORT;
 // Capitalized ("Июль 2026"): a trigger label is a standalone label, not
 // mid-sentence Russian — same convention as every other control label and
 // the sibling CalendarGrid header.
@@ -57,8 +59,6 @@ const MONTHS_FULL = RU_MONTHS_CAPITALIZED;
 const isOpen = ref(false);
 const rootRef = ref<HTMLElement | null>(null);
 const triggerRef = ref<HTMLButtonElement | null>(null);
-// Year shown in the popover header while navigating (month mode).
-const navYear = ref(props.year);
 
 const maxY = computed(() => props.maxYear ?? props.year);
 const maxM = computed(() => props.maxMonth ?? 12);
@@ -83,55 +83,7 @@ const sizerLabel = computed(() =>
   props.mode === "year" ? label.value : `${LONGEST_MONTH} ${props.year}`,
 );
 
-// Year mode pagination: fixed 12-year blocks anchored at maxYear, so the
-// grid always mirrors the 12-cell month grid. Block 0 = the latest 12
-// years; each ‹ step shows the 12 preceding years, clamped at minYear
-// (the oldest block may hold fewer than 12).
-const YEARS_PER_BLOCK = 12;
-const yearBlock = ref(0);
-const maxBlock = computed(() =>
-  Math.floor((maxY.value - minY.value) / YEARS_PER_BLOCK),
-);
-const blockNewest = computed(
-  () => maxY.value - yearBlock.value * YEARS_PER_BLOCK,
-);
-const blockOldest = computed(() =>
-  Math.max(minY.value, blockNewest.value - (YEARS_PER_BLOCK - 1)),
-);
-// Ascending within the block (2015, 2016, … 2026) — the same reading
-// order as the month grid ("Янв" → "Дек") and as the block label.
-const years = computed(() => {
-  const arr: number[] = [];
-  for (let y = blockOldest.value; y <= blockNewest.value; y++) arr.push(y);
-  return arr;
-});
-const blockLabel = computed(() =>
-  blockOldest.value === blockNewest.value
-    ? `${blockNewest.value}`
-    : `${blockOldest.value}–${blockNewest.value}`,
-);
-const canPrevBlock = computed(() => yearBlock.value < maxBlock.value);
-const canNextBlock = computed(() => yearBlock.value > 0);
-function prevBlock() {
-  if (canPrevBlock.value) yearBlock.value += 1;
-}
-function nextBlock() {
-  if (canNextBlock.value) yearBlock.value -= 1;
-}
-
-function monthDisabled(m: number): boolean {
-  return navYear.value === maxY.value && m > maxM.value;
-}
-const canNextYear = computed(() => navYear.value < maxY.value);
-const canPrevYear = computed(() => navYear.value > minY.value);
-
 async function open() {
-  navYear.value = props.year;
-  // Open the year grid on the block containing the selected year.
-  yearBlock.value = Math.min(
-    maxBlock.value,
-    Math.max(0, Math.floor((maxY.value - props.year) / YEARS_PER_BLOCK)),
-  );
   isOpen.value = true;
   // Move keyboard focus into the dialog: the selected cell, or the first
   // enabled one. Without this, Tab from the trigger lands behind the popover.
@@ -153,13 +105,6 @@ function close(restoreFocus = false) {
 function toggle() {
   if (isOpen.value) close();
   else open();
-}
-
-function prevNavYear() {
-  if (canPrevYear.value) navYear.value -= 1;
-}
-function nextNavYear() {
-  if (canNextYear.value) navYear.value += 1;
 }
 
 // --- Trigger-side ‹ › stepper (sequential period browsing) ---
@@ -201,14 +146,14 @@ function stepNext() {
     emit("update:month", 1);
   }
 }
-function pickMonth(m: number) {
-  if (monthDisabled(m)) return;
-  if (navYear.value !== props.year) emit("update:year", navYear.value);
-  emit("update:month", m);
+
+function onPickMonth(year: number, month: number) {
+  if (year !== props.year) emit("update:year", year);
+  emit("update:month", month);
   close(true);
 }
-function pickYear(y: number) {
-  emit("update:year", y);
+function onPickYear(year: number) {
+  emit("update:year", year);
   close(true);
 }
 
@@ -291,97 +236,23 @@ onUnmounted(() => {
       role="dialog"
       aria-label="Выбор периода"
     >
-      <!-- Month mode: year nav + month grid. Header is inline flow (not
-           flex) with zero-width spaces so it copies as "‹ 2026 ›". -->
-      <template v-if="mode === 'month'">
-        <div class="myp-header">
-          <button
-            type="button"
-            class="myp-nav"
-            aria-label="Предыдущий год"
-            :disabled="!canPrevYear"
-            @click.stop="prevNavYear"
-          >
-            ‹</button
-          ><span class="copy-space">{{ " " }}</span
-          ><span class="myp-year">{{ navYear }}</span
-          ><span class="copy-space">{{ " " }}</span
-          ><button
-            type="button"
-            class="myp-nav"
-            aria-label="Следующий год"
-            :disabled="!canNextYear"
-            @click.stop="nextNavYear"
-          >
-            ›
-          </button>
-        </div>
-        <div class="myp-grid myp-grid--months">
-          <button
-            v-for="(m, i) in MONTHS_SHORT"
-            :key="m"
-            type="button"
-            class="myp-cell"
-            :class="{
-              selected: navYear === year && i + 1 === month,
-            }"
-            :aria-current="
-              navYear === year && i + 1 === month ? 'date' : undefined
-            "
-            :disabled="monthDisabled(i + 1)"
-            @click.stop="pickMonth(i + 1)"
-          >
-            {{ m }}
-          </button>
-        </div>
-      </template>
-
-      <!-- Year mode: block navigation + 12-year grid (same inline-flow
-           header as month mode). -->
-      <template v-else>
-        <div class="myp-header">
-          <button
-            type="button"
-            class="myp-nav"
-            aria-label="Предыдущие годы"
-            :disabled="!canPrevBlock"
-            @click.stop="prevBlock"
-          >
-            ‹</button
-          ><span class="copy-space">{{ " " }}</span
-          ><span class="myp-year">{{ blockLabel }}</span
-          ><span class="copy-space">{{ " " }}</span
-          ><button
-            type="button"
-            class="myp-nav"
-            aria-label="Следующие годы"
-            :disabled="!canNextBlock"
-            @click.stop="nextBlock"
-          >
-            ›
-          </button>
-        </div>
-        <div class="myp-grid myp-grid--years">
-          <button
-            v-for="y in years"
-            :key="y"
-            type="button"
-            class="myp-cell"
-            :class="{ selected: y === year }"
-            :aria-current="y === year ? 'date' : undefined"
-            @click.stop="pickYear(y)"
-          >
-            {{ y }}
-          </button>
-        </div>
-      </template>
+      <MonthYearGrid
+        :mode="mode"
+        :year="year"
+        :month="month"
+        :min-year="minY"
+        :max-year="maxY"
+        :max-month="maxM"
+        @pick-month="onPickMonth"
+        @pick-year="onPickYear"
+      />
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/ZIndex"
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/ZIndex" as *
+@use "@/assets/styles/Inputs" as *
 
 // Inline-block (not flex): a selection then copies in one line.
 // position: relative stays — the popover anchors to this box. Nothing that
@@ -500,71 +371,4 @@ onUnmounted(() => {
   border-radius: $border-radius
   background-color: $bg-element
   box-shadow: 0 4px 12px var(--shadow-color)
-
-// Inline flow (not flex) so the header copies as "‹ 2026 ›" in one line;
-// the year label stretches between the fixed-width nav buttons and centers
-// its text, reproducing the old space-between geometry.
-.myp-header
-  white-space: nowrap
-  margin-bottom: $small
-
-.myp-year
-  display: inline-block
-  width: calc(100% - 56px)
-  text-align: center
-  vertical-align: middle
-  font-weight: bold
-  color: $text
-
-.myp-nav
-  width: 28px
-  height: 28px
-  border: none
-  border-radius: $border-radius
-  background: transparent
-  color: $link
-  font-size: $font-size
-  cursor: pointer
-  line-height: 1
-  vertical-align: middle
-
-  &:hover:not(:disabled)
-    background-color: $bg-element-accent
-
-  &:disabled
-    color: $text-muted
-    cursor: default
-
-.myp-grid
-  display: grid
-  gap: $tiny
-
-.myp-grid--months
-  grid-template-columns: repeat(3, 1fr)
-
-.myp-grid--years
-  grid-template-columns: repeat(3, 1fr)
-
-.myp-cell
-  padding: $tiny 0
-  border: none
-  border-radius: $border-radius
-  background: transparent
-  color: $text
-  cursor: pointer
-  font: inherit
-  font-size: $secondary-font-size
-
-  &:hover:not(:disabled)
-    background-color: $bg-highlight-blue
-
-  &.selected
-    background-color: $button-bg
-    color: $button-text
-    font-weight: bold
-
-  &:disabled
-    color: $text-muted
-    opacity: 0.4
-    cursor: default
 </style>

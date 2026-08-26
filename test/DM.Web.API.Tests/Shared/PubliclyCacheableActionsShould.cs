@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Xunit;
@@ -48,13 +48,9 @@ public class PubliclyCacheableActionsShould
     /// The action's own attribute wins over the controller's, the way MVC resolves
     /// it.
     /// </summary>
-    private static (string Name, ResponseCacheAttribute? Policy)[] Actions() => typeof(Startup).Assembly
-        .GetTypes()
-        .Where(t => t.IsClass && !t.IsAbstract && typeof(ControllerBase).IsAssignableFrom(t))
-        .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
-        .Where(m => m.GetCustomAttributes<HttpMethodAttribute>().Any())
+    private static (string Name, ResponseCacheAttribute? Policy)[] Actions() => ApiSurface.RoutedActions()
         .Select(m => (
-            Name: $"{m.DeclaringType!.Name}.{m.Name}",
+            Name: ApiSurface.Named(m),
             Policy: m.GetCustomAttribute<ResponseCacheAttribute>()
                     ?? m.DeclaringType!.GetCustomAttribute<ResponseCacheAttribute>()))
         .ToArray();

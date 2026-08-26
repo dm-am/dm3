@@ -2,8 +2,6 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Personal.Features.ProfileNotes;
 using Microsoft.EntityFrameworkCore;
 using DbUserProfileNote = DM.Infrastructure.Persistence.Entities.Account.UserProfileNote;
@@ -14,13 +12,11 @@ namespace DM.Infrastructure.Persistence.Repositories.Personal;
 internal class UserProfileNoteRepository : IUserProfileNoteRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     /// <inheritdoc />
-    public UserProfileNoteRepository(DmDbContext dbContext, IMapper mapper)
+    public UserProfileNoteRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -28,7 +24,7 @@ internal class UserProfileNoteRepository : IUserProfileNoteRepository
     {
         return _dbContext.UserProfileNotes
             .Where(n => n.OwnerId == ownerId && n.SubjectUserId == subjectUserId)
-            .ProjectTo<UserProfileNote>(_mapper.ConfigurationProvider)
+            .ProjectToUserProfileNote()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -37,7 +33,7 @@ internal class UserProfileNoteRepository : IUserProfileNoteRepository
     {
         return _dbContext.UserProfileNotes
             .Where(n => n.UserProfileNoteId == noteId)
-            .ProjectTo<UserProfileNote>(_mapper.ConfigurationProvider)
+            .ProjectToUserProfileNote()
             .FirstOrDefaultAsync(ct);
     }
 

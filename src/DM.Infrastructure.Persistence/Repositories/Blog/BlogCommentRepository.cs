@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Comments;
@@ -21,18 +19,15 @@ namespace DM.Infrastructure.Persistence.Repositories.Blog;
 internal class BlogCommentRepository : IBlogCommentRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
 
     public BlogCommentRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IDateTimeProvider dateTimeProvider,
         IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
         _guidFactory = guidFactory;
     }
@@ -43,11 +38,11 @@ internal class BlogCommentRepository : IBlogCommentRepository
 
     /// <inheritdoc />
     public Task<IEnumerable<Comment>> Get(Guid blogId, CommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default) =>
-        CommentQueries.Page(_dbContext, _mapper, blogId, query, paging, excludeUserIds, "DM.BlogComments.List", ct);
+        CommentQueries.Page(_dbContext, blogId, query, paging, excludeUserIds, "DM.BlogComments.List", ct);
 
     /// <inheritdoc />
     public Task<Comment?> Get(Guid commentId, CancellationToken ct = default) =>
-        CommentQueries.Single(_dbContext, _mapper, commentId, "DM.BlogComments.Get", ct);
+        CommentQueries.Single(_dbContext, commentId, "DM.BlogComments.Get", ct);
 
     /// <inheritdoc />
     public async Task<(Comment comment, Guid commentId)> Create(CreateComment createComment, Guid authorId, Guid blogId, int newCommentCount, CancellationToken ct = default)
@@ -80,33 +75,16 @@ internal class BlogCommentRepository : IBlogCommentRepository
         var comment = await _dbContext.Comments
             .TagWith("DM.BlogComments.Created")
             .Where(c => c.CommentId == commentId)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
+            .ProjectToComment()
             .FirstAsync(ct);
 
         return (comment, commentId);
     }
 
     /// <inheritdoc />
-    public async Task<Comment> Update(UpdateBlogCommentEntity entity, CancellationToken ct = default)
-    {
-        var dbComment = await _dbContext.Comments.FindAsync([entity.CommentId], ct);
-        if (dbComment != null)
-        {
-            dbComment.Text = entity.Text;
-            // The comment row keeps no modification stamp: ModifiedUtc is derived
-            // from the newest entry of this history, and the client draws its
-            // "edited" mark from that. Written here rather than at the call site so
-            // the text and its trace go in one SaveChanges.
-            CommentEdits.Record(_dbContext, _guidFactory, entity.CommentId, entity.EditorUserId, entity.LastUpdateUtc);
-            await _dbContext.SaveChangesAsync(ct);
-        }
-
-        return await _dbContext.Comments
-            .TagWith("DM.BlogComments.Updated")
-            .Where(c => c.CommentId == entity.CommentId)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .FirstAsync(ct);
-    }
+    public Task<Comment> Update(UpdateBlogCommentEntity entity, CancellationToken ct = default)
+        => CommentWrites.Update(_dbContext, _guidFactory, entity.CommentId, entity.Text,
+            entity.EditorUserId, entity.LastUpdateUtc, "DM.BlogComments.Updated", ct);
 
     /// <inheritdoc />
     public async Task<BlogCommentToDelete?> GetForDelete(Guid commentId, CancellationToken ct = default)
@@ -114,7 +92,7 @@ internal class BlogCommentRepository : IBlogCommentRepository
         var comment = await _dbContext.Comments
             .TagWith("DM.BlogComments.GetForDelete")
             .Where(c => !c.IsRemoved && c.CommentId == commentId)
-            .ProjectTo<BlogCommentToDelete>(_mapper.ConfigurationProvider)
+            .ProjectToBlogCommentToDelete()
             .FirstOrDefaultAsync(ct);
 
         if (comment == null) return null;

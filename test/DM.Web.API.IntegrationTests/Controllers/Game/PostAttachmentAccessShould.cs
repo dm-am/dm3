@@ -4,7 +4,7 @@ using System.Text.Json;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using Microsoft.EntityFrameworkCore;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
@@ -91,7 +91,7 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
     /// game is approved and active on purpose: the only thing closing the room is
     /// its own access type, so a refusal below cannot be the game being invisible.
     /// </summary>
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         // Seeded before the guard below returns. The object store is a static
         // dictionary that outlives one run while the database does not, so the
@@ -194,7 +194,7 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     /// <summary>
     /// Nothing in the body is an address the bytes can be fetched from without
@@ -407,6 +407,8 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         attachment.GetProperty("url").GetString().Should().Be(ContentUrl);
         attachment.GetProperty("fileName").GetString().Should().Be("karta.png");
         attachment.GetProperty("sizeBytes").GetInt64().Should().Be(FileBytes.LongLength);
+        attachment.GetProperty("width").GetInt32().Should().Be(1600);
+        attachment.GetProperty("height").GetInt32().Should().Be(1200);
     }
 
     /// <summary>

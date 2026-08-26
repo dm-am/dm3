@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Chat = DM.Web.API.Features.Messaging.Chats.Chat;
 using CreateChat = DM.Web.API.Features.Messaging.Chats.CreateChat;
@@ -123,6 +124,13 @@ public interface IMessagingApiService
     Task<Envelope<Message>> GetMessageAsync(Guid messageId);
 
     /// <summary>
+    /// Get the markup of a quotation of a message
+    /// </summary>
+    /// <param name="messageId">Message identifier</param>
+    /// <returns>Envelope containing the quotation source</returns>
+    Task<Envelope<QuoteSource>> GetMessageQuoteAsync(Guid messageId);
+
+    /// <summary>
     /// Update existing message
     /// </summary>
     /// <param name="messageId">Message identifier</param>
@@ -170,6 +178,59 @@ public interface IMessagingApiService
     /// Create a message in global chat
     /// </summary>
     Task<Envelope<Message>> CreateGlobalChatMessageAsync(Message message);
+
+    /// <summary>
+    /// Get a single global chat message
+    /// </summary>
+    /// <remarks>
+    /// The global chat has routes of its own for one of its lines because the
+    /// rule it is read by is its own: whoever the chat is open to may read any
+    /// line of it. Reaching the same line through the private-message routes
+    /// asked whether the reader takes part in the conversation, which the global
+    /// chat has no answer to.
+    /// </remarks>
+    /// <param name="messageId">Message identifier</param>
+    /// <returns>Message details wrapped in envelope</returns>
+    Task<Envelope<Message>> GetGlobalChatMessageAsync(Guid messageId);
+
+    /// <summary>
+    /// Get the markup of a quotation of a global chat message
+    /// </summary>
+    /// <remarks>
+    /// Here for the reason the read above is, and composed from that very read:
+    /// whoever may read the line may quote it, and the quotation of a line of the
+    /// global chat cannot be composed from a read that asks about participation.
+    /// </remarks>
+    /// <param name="messageId">Message identifier</param>
+    /// <returns>Envelope containing the quotation source</returns>
+    Task<Envelope<QuoteSource>> GetGlobalChatMessageQuoteAsync(Guid messageId);
+
+    /// <summary>
+    /// Update an existing global chat message
+    /// </summary>
+    /// <param name="messageId">Message identifier</param>
+    /// <param name="message">Message data</param>
+    /// <returns>Updated message wrapped in envelope</returns>
+    Task<Envelope<Message>> UpdateGlobalChatMessageAsync(Guid messageId, Message message);
+
+    /// <summary>
+    /// Delete a global chat message
+    /// </summary>
+    /// <param name="messageId">Message identifier</param>
+    Task DeleteGlobalChatMessageAsync(Guid messageId);
+
+    /// <summary>
+    /// Like a global chat message
+    /// </summary>
+    /// <param name="messageId">Message identifier</param>
+    /// <returns>Updated message with like information wrapped in envelope</returns>
+    Task<Envelope<Message>> LikeGlobalChatMessageAsync(Guid messageId);
+
+    /// <summary>
+    /// Unlike a global chat message
+    /// </summary>
+    /// <param name="messageId">Message identifier</param>
+    Task UnlikeGlobalChatMessageAsync(Guid messageId);
 
     /// <summary>
     /// Mark global chat messages as read

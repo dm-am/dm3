@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Community.Features.Awards;
 using DM.Domain.Core.Abstractions;
 using DM.Infrastructure.Persistence.RelationalStorage;
@@ -19,14 +17,12 @@ namespace DM.Infrastructure.Persistence.Repositories.Community;
 internal class AwardRepository : IAwardRepository
 {
     private readonly DmDbContext _db;
-    private readonly IMapper _mapper;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _clock;
 
-    public AwardRepository(DmDbContext db, IMapper mapper, IGuidFactory guidFactory, IDateTimeProvider clock)
+    public AwardRepository(DmDbContext db, IGuidFactory guidFactory, IDateTimeProvider clock)
     {
         _db = db;
-        _mapper = mapper;
         _guidFactory = guidFactory;
         _clock = clock;
     }
@@ -40,7 +36,7 @@ internal class AwardRepository : IAwardRepository
         return await query
             .OrderBy(t => t.SortOrder)
             .ThenBy(t => t.Title)
-            .ProjectTo<AwardType>(_mapper.ConfigurationProvider)
+            .ProjectToAwardType()
             .ToListAsync(ct);
     }
 
@@ -48,14 +44,14 @@ internal class AwardRepository : IAwardRepository
         await _db.AwardTypes
             .AsNoTracking()
             .Where(t => t.AwardTypeId == id)
-            .ProjectTo<AwardType>(_mapper.ConfigurationProvider)
+            .ProjectToAwardType()
             .FirstOrDefaultAsync(ct);
 
     public async Task<AwardType?> GetTypeByCodeAsync(string code, CancellationToken ct = default) =>
         await _db.AwardTypes
             .AsNoTracking()
             .Where(t => t.Code == code)
-            .ProjectTo<AwardType>(_mapper.ConfigurationProvider)
+            .ProjectToAwardType()
             .FirstOrDefaultAsync(ct);
 
     public async Task<AwardType> CreateTypeAsync(CreateAwardType create, CancellationToken ct = default)
@@ -73,7 +69,7 @@ internal class AwardRepository : IAwardRepository
         };
         _db.AwardTypes.Add(entity);
         await _db.SaveChangesAsync(ct);
-        return _mapper.Map<AwardType>(entity);
+        return entity.ToAwardType();
     }
 
     public async Task<AwardType> UpdateTypeAsync(UpdateAwardType update, CancellationToken ct = default)
@@ -86,7 +82,7 @@ internal class AwardRepository : IAwardRepository
         if (update.SortOrder.HasValue) entity.SortOrder = update.SortOrder.Value;
         if (update.IsActive.HasValue) entity.IsActive = update.IsActive.Value;
         await _db.SaveChangesAsync(ct);
-        return _mapper.Map<AwardType>(entity);
+        return entity.ToAwardType();
     }
 
     // ---- ContestSeries ----
@@ -99,7 +95,7 @@ internal class AwardRepository : IAwardRepository
             .OrderByDescending(s => s.Year)
             .ThenBy(s => s.ContestType)
             .ThenByDescending(s => s.Number)
-            .ProjectTo<ContestSeries>(_mapper.ConfigurationProvider)
+            .ProjectToContestSeries()
             .ToListAsync(ct);
     }
 
@@ -107,7 +103,7 @@ internal class AwardRepository : IAwardRepository
         await _db.ContestSeries
             .AsNoTracking()
             .Where(s => s.ContestSeriesId == id)
-            .ProjectTo<ContestSeries>(_mapper.ConfigurationProvider)
+            .ProjectToContestSeries()
             .FirstOrDefaultAsync(ct);
 
     public async Task<ContestSeries> CreateSeriesAsync(CreateContestSeries create, CancellationToken ct = default)
@@ -123,7 +119,7 @@ internal class AwardRepository : IAwardRepository
         };
         _db.ContestSeries.Add(entity);
         await _db.SaveChangesAsync(ct);
-        return _mapper.Map<ContestSeries>(entity);
+        return entity.ToContestSeries();
     }
 
     public async Task<ContestSeries> UpdateSeriesAsync(UpdateContestSeries update, CancellationToken ct = default)
@@ -135,7 +131,7 @@ internal class AwardRepository : IAwardRepository
         if (update.TopicUrl != null) entity.TopicUrl = string.IsNullOrWhiteSpace(update.TopicUrl) ? null : update.TopicUrl.Trim();
         if (update.IsActive.HasValue) entity.IsActive = update.IsActive.Value;
         await _db.SaveChangesAsync(ct);
-        return _mapper.Map<ContestSeries>(entity);
+        return entity.ToContestSeries();
     }
 
     // ---- UserAward ----
@@ -151,7 +147,7 @@ internal class AwardRepository : IAwardRepository
             .Where(a => a.UserId == userId && !a.IsRemoved)
             .OrderBy(a => a.AwardedUtc)
             .ThenBy(a => a.AwardType.SortOrder)
-            .ProjectTo<UserAward>(_mapper.ConfigurationProvider)
+            .ProjectToUserAward()
             .ToListAsync(ct);
 
     // Ordered by award type first: a contest reads as a podium (1st, 2nd, 3rd,
@@ -162,14 +158,14 @@ internal class AwardRepository : IAwardRepository
             .Where(a => a.ContestSeriesId == seriesId && !a.IsRemoved)
             .OrderBy(a => a.AwardType.SortOrder)
             .ThenBy(a => a.AwardedUtc)
-            .ProjectTo<UserAward>(_mapper.ConfigurationProvider)
+            .ProjectToUserAward()
             .ToListAsync(ct);
 
     public async Task<UserAward?> GetAsync(Guid id, CancellationToken ct = default) =>
         await _db.UserAwards
             .AsNoTracking()
             .Where(a => a.UserAwardId == id)
-            .ProjectTo<UserAward>(_mapper.ConfigurationProvider)
+            .ProjectToUserAward()
             .FirstOrDefaultAsync(ct);
 
     public async Task<UserAward> CreateAsync(CreateUserAward create, Guid awardedByUserId, CancellationToken ct = default)

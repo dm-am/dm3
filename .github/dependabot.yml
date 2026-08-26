@@ -20,9 +20,10 @@ updates:
       test-stack:
         patterns:
           - "xunit*"
-          - "Moq"
-          - "FluentAssertions"
+          - "NSubstitute*"
+          - "AwesomeAssertions"
           - "Testcontainers*"
+          - "TngTech.ArchUnitNET*"
           - "Microsoft.NET.Test.Sdk"
 
   - package-ecosystem: npm

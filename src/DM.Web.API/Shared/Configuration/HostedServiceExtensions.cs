@@ -2,7 +2,6 @@ using DM.Infrastructure.Core.Storage;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Messaging.GeneralBus;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Web.API.HostedServices;
 using DM.Web.API.Realtime;
@@ -37,17 +36,19 @@ internal static class HostedServiceExtensions
         services.AddHostedService<RealtimeNotificationConsumer>();
         services.AddHostedService<WarmupService>();
 
-        // Asserts the Mongo index set. docker/mongo-init.js only runs on the first
-        // start of an empty volume, so this is what keeps deployed databases indexed.
-        services.AddHostedService<MongoIndexInitializer>();
-
         // Asserts the relational indexes EF cannot express in the model. Keeping
         // them out of the migration is what lets the migration stay generated.
         services.AddHostedService<ExpressionIndexInitializer>();
 
+        // The transport half of the event outbox: requests of this host write
+        // the rows, so the relay lives and dies with the writer.
+        services.AddHostedService<OutboxRelayService>();
+
         services.AddHostedService<TokenCleanupService>();
         services.AddHostedService<SessionCleanupService>();
+        services.AddHostedService<RetentionSweepService>();
         services.AddHostedService<PendingRegistrationCleanupService>();
+        services.AddHostedService<TwoFactorMaintenanceService>();
         services.AddHostedService<PeriodDigestService>();
         services.AddHostedService<UsernameChangeCleanupService>();
         services.AddHostedService<PendencyReminderService>();

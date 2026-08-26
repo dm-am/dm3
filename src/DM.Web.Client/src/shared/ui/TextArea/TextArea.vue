@@ -63,7 +63,7 @@ onMounted(adjustHeight);
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 textarea
   +input()

@@ -167,7 +167,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Tables"
+@use "@/assets/styles/Tables" as *
 
 // Table metrics are the module's, not this component's: _Tables.sass declares
 // $table-cell-padding-v/-h and $table-gap, and the mixins that size a desktop

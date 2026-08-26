@@ -7,7 +7,8 @@ using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
@@ -15,17 +16,17 @@ namespace DM.Domain.Game.Tests.Features.Characters;
 public class UpdateCharacterValidatorShould : UnitTestBase
 {
     private readonly UpdateCharacterValidator validator;
-    private readonly Mock<ICharacterRepository> characterRepository;
-    private readonly Mock<IAttributeValueValidator> attributeValueValidator;
+    private readonly ICharacterRepository characterRepository;
+    private readonly IAttributeValueValidator attributeValueValidator;
 
     public UpdateCharacterValidatorShould()
     {
-        // The mocks, not just their objects: Mock<T>() hands out a new mock on
-        // every call, so a setup written through a second call would configure
-        // an instance the validator never saw.
+        // Held in fields: Mock<T>() hands out a new substitute on every call, so
+        // a stub written through a second call would configure an instance the
+        // validator never saw.
         characterRepository = Mock<ICharacterRepository>();
         attributeValueValidator = Mock<IAttributeValueValidator>();
-        validator = new UpdateCharacterValidator(characterRepository.Object, attributeValueValidator.Object);
+        validator = new UpdateCharacterValidator(characterRepository, attributeValueValidator);
     }
 
     [Fact]
@@ -92,11 +93,10 @@ public class UpdateCharacterValidatorShould : UnitTestBase
     public async Task SkipTheSchemaRulesWhenTheGameHasNoSchema()
     {
         characterRepository
-            .Setup(r => r.CharacterRequiresAttributes(
-                It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
-            .ReturnsAsync(false);
+            .CharacterRequiresAttributes(
+                Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(false);
         characterRepository
-            .Setup(r => r.GetCharacterSchema(It.IsAny<Guid>()))
+            .GetCharacterSchema(Arg.Any<Guid>())
             .ThrowsAsync(new InvalidOperationException("Nullable object must have a value."));
 
         var input = new UpdateCharacter
@@ -123,12 +123,10 @@ public class UpdateCharacterValidatorShould : UnitTestBase
     {
         var specificationId = Guid.NewGuid();
         characterRepository
-            .Setup(r => r.CharacterRequiresAttributes(
-                It.IsAny<Guid>(), It.IsAny<System.Threading.CancellationToken>()))
-            .ReturnsAsync(true);
+            .CharacterRequiresAttributes(
+                Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(true);
         characterRepository
-            .Setup(r => r.GetCharacterSchema(It.IsAny<Guid>()))
-            .ReturnsAsync(new AttributeSchema
+            .GetCharacterSchema(Arg.Any<Guid>()).Returns(new AttributeSchema
             {
                 Id = Guid.NewGuid(),
                 Specifications =
@@ -140,8 +138,7 @@ public class UpdateCharacterValidatorShould : UnitTestBase
                 ]
             });
         attributeValueValidator
-            .Setup(v => v.Validate(It.IsAny<string>(), It.IsAny<AttributeSpecification>()))
-            .Returns((true, (string?)null));
+            .Validate(Arg.Any<string>(), Arg.Any<AttributeSpecification>()).Returns((true, (string?)null));
 
         var input = new UpdateCharacter
         {

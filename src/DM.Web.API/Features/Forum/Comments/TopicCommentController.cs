@@ -3,6 +3,7 @@ using DM.Domain.Core.Comments;
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Forum.Features.Comments;
+using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Forum.Likes;
@@ -127,6 +128,26 @@ public class TopicCommentController : ControllerBase
     [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTopicComment(Guid id) => Ok(await _commentApiService.Get(id));
+
+    /// <summary>
+    /// Get quotation source of a comment
+    /// </summary>
+    /// <remarks>
+    /// Returns the BBCode a reader's composer is filled with when they quote the
+    /// comment: its text, wrapped in a quotation attributed to its author.
+    /// Whoever cannot read the comment cannot read its quotation - the same
+    /// refusal, from the same read.
+    /// </remarks>
+    /// <param name="id">Comment identifier (GUID)</param>
+    /// <response code="200">Returns the quotation source</response>
+    /// <response code="400">Comment text could not be parsed</response>
+    /// <response code="404">Comment not found</response>
+    [HttpGet("{id}/quote", Name = nameof(GetTopicCommentQuote))]
+    [ProducesResponseType(typeof(Envelope<QuoteSource>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetTopicCommentQuote(Guid id) =>
+        Ok(await _commentApiService.GetQuote(id));
 
     /// <summary>
     /// Update topic comment

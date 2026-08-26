@@ -29,7 +29,7 @@
  * alice@example.com, an account the seeder does not create, and then asserted
  * against a signed-out page. Accounts live in e2e/fixtures/auth.ts and nowhere
  * else, and the fixture's defaults have to be accounts DM.Tools.Seeder writes —
- * so this file reads both and compares them, the way .eslintrc.cjs reads the
+ * so this file reads both and compares them, the way eslint.config.js reads the
  * global component registration instead of restating it.
  *
  * The check is over the AST rather than over the text: a `test.skip` quoted in

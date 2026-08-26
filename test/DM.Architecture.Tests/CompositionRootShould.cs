@@ -1,16 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
-using Autofac;
-using Autofac.Core;
-using Autofac.Core.Lifetime;
-using Autofac.Extensions.DependencyInjection;
 using DM.Domain.Core.Configuration;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -33,20 +29,26 @@ namespace DM.Architecture.Tests;
 /// Both are properties of the registration graph, visible without activating
 /// anything, which is why this builds the containers rather than the hosts.
 ///
+/// The providers are built with ValidateScopes and ValidateOnBuild - the same
+/// options every Program.cs passes - so what this class exercises is the very
+/// startup gate the hosts run: a descriptor the container cannot satisfy fails
+/// the build here exactly as it would fail the deployment.
+///
 /// The seeder is absent on purpose: it composes inside a private method of its
 /// entry point, so the third rule reads its source instead.
 /// </remarks>
 public class CompositionRootShould
 {
-    private static readonly IReadOnlyList<(string Host, IContainer Container)> Hosts = BuildHosts();
+    private static readonly IReadOnlyList<(string Host, IServiceCollection Services, ServiceProvider Provider)>
+        Hosts = BuildHosts();
 
     [Fact]
     public void BuildTheContainerOfEveryHostItCovers()
     {
         Hosts.Should().HaveCount(3);
-        foreach (var (host, container) in Hosts)
+        foreach (var (host, services, _) in Hosts)
         {
-            container.ComponentRegistry.Registrations.Should().HaveCountGreaterThan(100,
+            services.Should().HaveCountGreaterThan(100,
                 $"{host} registers a whole application, and a near-empty graph means the " +
                 "rules below check nothing");
         }
@@ -55,9 +57,9 @@ public class CompositionRootShould
     [Fact]
     public void KeepEveryProcessWideComponentFreeOfScopedDependencies()
     {
-        foreach (var (host, container) in Hosts)
+        foreach (var (host, services, _) in Hosts)
         {
-            CaptiveDependencies(container).Should().BeEmpty(
+            CaptiveDependencies(services).Should().BeEmpty(
                 $"in {host} a component activated once in the root scope keeps whatever it " +
                 "was given for the life of the process, so a scoped dependency it takes is " +
                 "never released and never refreshed - down to the pooled DbContext behind " +
@@ -68,9 +70,9 @@ public class CompositionRootShould
     [Fact]
     public void RegisterEveryConfigurationContractItsOwnComponentsAskFor()
     {
-        foreach (var (host, container) in Hosts)
+        foreach (var (host, services, _) in Hosts)
         {
-            UnboundConfigurationContracts(container).Should().BeEmpty(
+            UnboundConfigurationContracts(services).Should().BeEmpty(
                 $"{host} registers the components that ask for these, and a contract with no " +
                 "registration is not a build error: it surfaces as a resolution failure on " +
                 "the first request or the first message that reaches the type");
@@ -106,12 +108,15 @@ public class CompositionRootShould
     /// classes are internal to their modules, so what makes them resolvable is a
     /// pair of assembly scans and nothing the compiler checks. Without this, a
     /// missing scan surfaces as a seeding run that dies before it writes a row.
+    ///
+    /// Building the host is itself half the rule: the seeder passes
+    /// ValidateOnBuild, so a descriptor its container cannot satisfy throws here.
     /// </remarks>
     [Fact]
     public void SupplyEveryDependencyOfTheSeederOutOfTheContainerTheToolRunsOn()
     {
         using var host = DM.Tools.Seeder.Program.CreateHostBuilder().Build();
-        var container = host.Services.GetRequiredService<ILifetimeScope>();
+        var query = host.Services.GetRequiredService<IServiceProviderIsService>();
 
         var seeder = typeof(DM.Tools.Seeder.Seeding.DataSeeder);
         var dependencies = Dependencies(seeder).ToList();
@@ -121,7 +126,7 @@ public class CompositionRootShould
             "processors, and reading none of them would leave this rule checking nothing");
 
         dependencies
-            .Where(dependency => !container.IsRegistered(dependency))
+            .Where(dependency => !query.IsService(dependency))
             .Select(dependency => dependency.Name)
             .Should().BeEmpty(
                 "the tool is composed by hand, and a dependency its container cannot " +
@@ -129,12 +134,6 @@ public class CompositionRootShould
                 "that fails on the developer's machine after the database was already " +
                 "reset. Registration rather than activation, because activating a store " +
                 "client needs a store");
-
-        // Indexing runs first, before anything is written: a reset drops the Mongo
-        // database and the init script only ever runs on an empty volume, so the
-        // reseeded database held no index until somebody started the API.
-        container.IsRegistered(typeof(MongoIndexInitializer)).Should().BeTrue(
-            "the seeder asserts the Mongo index set itself");
     }
 
     /// <summary>
@@ -231,11 +230,11 @@ public class CompositionRootShould
     /// The component each worker exists to run resolves, with everything under it.
     /// </summary>
     /// <remarks>
-    /// A container builds whether or not its graph can be walked: Autofac finds a
-    /// missing registration when something asks for it, which for a worker is on a
-    /// live message. So a dependency added to a domain service compiles, the
-    /// container still builds, the whole tier stays green, and the queue starts
-    /// failing on the first event.
+    /// ValidateOnBuild already proves every registered descriptor constructible,
+    /// but the processor is resolved by type out of the message scope at runtime
+    /// - GetRequiredService inside the consumer - and a registration nothing
+    /// removed is still what this rule pins: delete the scan that supplies it
+    /// and only this fails with the worker's name on it.
     ///
     /// Resolved inside a scope, because that is where the hosted service resolves
     /// its processor, and per-scope registrations are not resolvable from the root.
@@ -254,10 +253,10 @@ public class CompositionRootShould
         {
             type.Should().NotBeNull($"{host} must still declare the component this rule names");
 
-            var container = Hosts.Single(h => h.Host == host).Container;
-            using var scope = container.BeginLifetimeScope();
+            var provider = Hosts.Single(h => h.Host == host).Provider;
+            using var scope = provider.CreateScope();
 
-            var resolve = () => scope.Resolve(type);
+            var resolve = () => scope.ServiceProvider.GetRequiredService(type);
             resolve.Should().NotThrow(
                 $"{host} runs on {type.Name}, and a dependency it cannot resolve is a " +
                 "worker that builds, starts, reports healthy and fails on the first message");
@@ -286,12 +285,12 @@ public class CompositionRootShould
     [Fact]
     public void RefuseToNameACurrentUserInAHostThatServesNoRequests()
     {
-        var container = Hosts.Single(h => h.Host == "DM.Workers.NotificationDispatcher").Container;
-        using var scope = container.BeginLifetimeScope();
+        var provider = Hosts.Single(h => h.Host == "DM.Workers.NotificationDispatcher").Provider;
+        using var scope = provider.CreateScope();
 
-        var provider = scope.Resolve<DM.Domain.Core.Identity.IIdentityProvider>();
+        var identity = scope.ServiceProvider.GetRequiredService<DM.Domain.Core.Identity.IIdentityProvider>();
 
-        var read = () => provider.Current;
+        var read = () => identity.Current;
         read.Should().Throw<InvalidOperationException>(
             "work here comes off a queue and not out of a request, so there is no current " +
             "user; answering with a null one or with an anonymous one turns a defect in the " +
@@ -302,23 +301,15 @@ public class CompositionRootShould
     /// Every controller and every background job of a host resolves.
     /// </summary>
     /// <remarks>
-    /// The third thing this class was asked for and the one it never did. The
-    /// static walk above sees one kind of missing registration — a contract whose
-    /// name ends in Configuration — and nothing else: a repository, a generator or
-    /// a domain service that nobody registered is invisible to it, because a
-    /// container builds whether or not its graph can be walked. Autofac finds that
-    /// on the first request that reaches the controller, which is production for
-    /// an endpoint nobody opens in review.
+    /// Controllers are the blind spot ValidateOnBuild keeps: MVC activates them
+    /// with its own activator, so the container never holds the type and the
+    /// startup gate never walks their constructors. What the container is asked
+    /// for at runtime is exactly the list of constructor parameters, which is
+    /// what this resolves. The hosted services are resolved as one list because
+    /// that is how the host starts them.
     ///
-    /// Controllers and hosted services because they are the roots: everything the
-    /// host can reach is under one of them. In a scope, since that is where a
-    /// request resolves and per-scope registrations are not resolvable from the
-    /// root.
-    ///
-    /// A controller is resolved through its dependencies rather than as itself,
-    /// because MVC activates controllers with its own activator and the container
-    /// never holds the type — what the container is asked for is exactly the list
-    /// of constructor parameters, which is what a request asks it for too.
+    /// In a scope, since that is where a request resolves and per-scope
+    /// registrations are not resolvable from the root.
     /// </remarks>
     [Fact]
     public void ResolveEveryControllerAndBackgroundJobOfEveryHost()
@@ -326,14 +317,14 @@ public class CompositionRootShould
         var unresolvable = new List<string>();
         var roots = 0;
 
-        foreach (var (host, container) in Hosts)
+        foreach (var (host, services, provider) in Hosts)
         {
-            using var scope = container.BeginLifetimeScope();
+            using var scope = provider.CreateScope();
 
             try
             {
                 // One resolution, because the host starts them as one list.
-                var jobs = scope.Resolve<IEnumerable<IHostedService>>().ToList();
+                var jobs = scope.ServiceProvider.GetRequiredService<IEnumerable<IHostedService>>().ToList();
                 roots += jobs.Count;
             }
             catch (Exception failure)
@@ -341,11 +332,7 @@ public class CompositionRootShould
                 unresolvable.Add($"{host}: a hosted service - {failure.GetBaseException().Message}");
             }
 
-            var controllers = container.ComponentRegistry.Registrations
-                .Select(registration => registration.Activator.LimitType)
-                .Where(IsAuthored)
-                .Select(type => type.Assembly)
-                .Distinct()
+            var controllers = AuthoredAssemblies(services)
                 .SelectMany(assembly => assembly.GetTypes())
                 .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
                 .Distinct()
@@ -358,7 +345,7 @@ public class CompositionRootShould
                 {
                     try
                     {
-                        scope.Resolve(dependency);
+                        scope.ServiceProvider.GetRequiredService(dependency);
                     }
                     catch (Exception failure)
                     {
@@ -419,14 +406,10 @@ public class CompositionRootShould
             "the jobs resolve their processors from the scope, and reading none of them " +
             "would report green over an empty set");
 
-        var (_, container) = Hosts.Single(host => host.Host == "DM.Web.API");
-        using var scope = container.BeginLifetimeScope();
+        var (_, services, provider) = Hosts.Single(host => host.Host == "DM.Web.API");
+        using var scope = provider.CreateScope();
 
-        var types = container.ComponentRegistry.Registrations
-            .Select(registration => registration.Activator.LimitType)
-            .Where(IsAuthored)
-            .Select(type => type.Assembly)
-            .Distinct()
+        var types = AuthoredAssemblies(services)
             .SelectMany(assembly => assembly.GetTypes())
             .Where(type => type.IsInterface)
             .GroupBy(type => type.Name)
@@ -437,7 +420,7 @@ public class CompositionRootShould
         {
             if (!types.TryGetValue(contract, out var type))
             {
-                // Framework contracts (IMapper, IDateTimeProvider and the like) are
+                // Framework contracts (IServiceScopeFactory and the like) are
                 // not what this rule is about; the ones it is about live in the
                 // assemblies the host registers.
                 continue;
@@ -445,7 +428,7 @@ public class CompositionRootShould
 
             try
             {
-                scope.Resolve(type);
+                scope.ServiceProvider.GetRequiredService(type);
             }
             catch (Exception failure)
             {
@@ -474,9 +457,9 @@ public class CompositionRootShould
     [Fact]
     public void RegisterTheFilterThatEnforcesTheSortVocabulary()
     {
-        var (_, container) = Hosts.Single(host => host.Host == "DM.Web.API");
+        var (_, _, provider) = Hosts.Single(host => host.Host == "DM.Web.API");
 
-        var options = container.Resolve<IOptions<MvcOptions>>().Value;
+        var options = provider.GetRequiredService<IOptions<MvcOptions>>().Value;
 
         options.Filters
             .OfType<TypeFilterAttribute>()
@@ -487,28 +470,28 @@ public class CompositionRootShould
                 "was raised over");
     }
 
-    private static IReadOnlyList<(string, IContainer)> BuildHosts() =>
+    private static IReadOnlyList<(string, IServiceCollection, ServiceProvider)> BuildHosts() =>
     [
-        ("DM.Web.API", Build("DM.Web.API", (configuration, environment) =>
+        Build("DM.Web.API", (configuration, environment) =>
         {
             var startup = new DM.Web.API.Startup(configuration, environment);
-            return (startup.ConfigureServices, startup.ConfigureContainer);
-        })),
-        ("DM.Workers.NotificationDispatcher", Build("DM.Workers.NotificationDispatcher", (configuration, environment) =>
+            return startup.ConfigureServices;
+        }),
+        Build("DM.Workers.NotificationDispatcher", (configuration, environment) =>
         {
             var startup = new DM.Workers.NotificationDispatcher.Startup(configuration, environment);
-            return (startup.ConfigureServices, startup.ConfigureContainer);
-        })),
-        ("DM.Workers.Mail", Build("DM.Workers.Mail", (configuration, environment) =>
+            return startup.ConfigureServices;
+        }),
+        Build("DM.Workers.Mail", (configuration, environment) =>
         {
             var startup = new DM.Workers.Mail.Startup(configuration, environment);
-            return (startup.ConfigureServices, startup.ConfigureContainer);
-        })),
+            return startup.ConfigureServices;
+        }),
     ];
 
-    private static IContainer Build(
+    private static (string, IServiceCollection, ServiceProvider) Build(
         string project,
-        Func<IConfiguration, IWebHostEnvironment, (Action<IServiceCollection>, Action<ContainerBuilder>)> compose)
+        Func<IConfiguration, IWebHostEnvironment, Action<IServiceCollection>> compose)
     {
         // The same two files a Development host reads, in the same order: the
         // environment declared below is Development, and the credentials a local
@@ -530,45 +513,98 @@ public class CompositionRootShould
             })
             .Build();
 
-        var (configureServices, configureContainer) = compose(configuration, new HostEnvironment(project));
-
         var services = new ServiceCollection();
-        configureServices(services);
+        var environment = new HostEnvironment(project);
 
-        var builder = new ContainerBuilder();
-        builder.Populate(services);
-        configureContainer(builder);
-        return builder.Build();
+        // What the real host registers before ConfigureServices ever runs: the
+        // generic web host puts the configuration, the environment, the
+        // lifetime and the diagnostics source in first. Composed here too, so
+        // that ValidateOnBuild judges the host's own registrations rather than
+        // the absence of the host around them.
+        var diagnostics = new DiagnosticListener(project);
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton<IWebHostEnvironment>(environment);
+        services.AddSingleton<IHostEnvironment>(environment);
+        services.AddSingleton<IHostApplicationLifetime>(new NoHostLifetime());
+        services.AddSingleton(diagnostics);
+        services.AddSingleton<DiagnosticSource>(diagnostics);
+
+        compose(configuration, environment)(services);
+
+        // The same options every Program.cs passes: this build IS the startup gate.
+        var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateScopes = true,
+            ValidateOnBuild = true,
+        });
+
+        return (project, services, provider);
     }
 
-    private static IEnumerable<string> CaptiveDependencies(IContainer container) => container
-        .ComponentRegistry.Registrations
-        .Where(registration => registration.Sharing == InstanceSharing.Shared &&
-                               registration.Lifetime is RootScopeLifetime)
-        .Select(registration => registration.Activator.LimitType)
+    /// <summary>
+    /// A lifetime nothing ever ends: composition under test starts no host, so
+    /// the tokens never fire and stopping is nobody's business.
+    /// </summary>
+    private sealed class NoHostLifetime : IHostApplicationLifetime
+    {
+        public System.Threading.CancellationToken ApplicationStarted => default;
+        public System.Threading.CancellationToken ApplicationStopping => default;
+        public System.Threading.CancellationToken ApplicationStopped => default;
+
+        public void StopApplication()
+        {
+        }
+    }
+
+    private static IEnumerable<string> CaptiveDependencies(IServiceCollection services) => services
+        .Where(descriptor => descriptor.Lifetime == ServiceLifetime.Singleton)
+        .Select(ImplementationTypeOf)
         .Where(IsAuthored)
+        .Cast<Type>()
         .Distinct()
         .SelectMany(owner => Dependencies(owner)
-            .Where(dependency => IsPerScope(container, dependency))
+            .Where(dependency => IsPerScope(services, dependency))
             .Select(dependency => $"{owner.Name} -> {dependency.Name}"))
         .Distinct();
 
-    private static IEnumerable<string> UnboundConfigurationContracts(IContainer container) => container
-        .ComponentRegistry.Registrations
-        .Select(registration => registration.Activator.LimitType)
-        .Where(IsAuthored)
-        .Distinct()
-        .SelectMany(Dependencies)
-        .Where(dependency => dependency.IsInterface && IsAuthored(dependency) &&
-                             dependency.Name.EndsWith("Configuration", StringComparison.Ordinal))
-        .Distinct()
-        .Where(dependency => !container.IsRegistered(dependency))
-        .Select(dependency => dependency.FullName!);
+    private static IEnumerable<string> UnboundConfigurationContracts(IServiceCollection services)
+    {
+        var registered = new HashSet<Type>(services.Select(descriptor => descriptor.ServiceType));
 
-    private static bool IsPerScope(IContainer container, Type service) =>
-        container.ComponentRegistry.TryGetRegistration(new TypedService(service), out var registration) &&
-        registration.Sharing == InstanceSharing.Shared &&
-        registration.Lifetime is CurrentScopeLifetime;
+        return services
+            .Select(ImplementationTypeOf)
+            .Where(IsAuthored)
+            .Cast<Type>()
+            .Distinct()
+            .SelectMany(Dependencies)
+            .Where(dependency => dependency.IsInterface && IsAuthored(dependency) &&
+                                 dependency.Name.EndsWith("Configuration", StringComparison.Ordinal))
+            .Distinct()
+            .Where(dependency => !registered.Contains(dependency))
+            .Select(dependency => dependency.FullName!);
+    }
+
+    /// <summary>
+    /// The type a descriptor constructs, as far as the descriptor says: typed
+    /// registrations name it, instances carry it, factories keep it to
+    /// themselves and answer null.
+    /// </summary>
+    private static Type? ImplementationTypeOf(ServiceDescriptor descriptor) =>
+        descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType();
+
+    /// <summary>
+    /// Whether a resolution of the service answers with a scoped instance: MS.DI
+    /// hands it to the last descriptor of the type.
+    /// </summary>
+    private static bool IsPerScope(IServiceCollection services, Type service) =>
+        services.LastOrDefault(descriptor => descriptor.ServiceType == service)
+            ?.Lifetime == ServiceLifetime.Scoped;
+
+    private static IEnumerable<Assembly> AuthoredAssemblies(IServiceCollection services) => services
+        .Select(ImplementationTypeOf)
+        .Where(IsAuthored)
+        .Select(type => type!.Assembly)
+        .Distinct();
 
     /// <summary>
     /// Constructor parameter types of a component, minus the ones the container
@@ -599,7 +635,7 @@ public class CompositionRootShould
         [typeof(Func<>), typeof(Lazy<>), typeof(IEnumerable<>)];
 
     private static readonly Type[] ContainerProvided =
-        [typeof(IServiceProvider), typeof(ILifetimeScope), typeof(IComponentContext), typeof(IServiceScopeFactory)];
+        [typeof(IServiceProvider), typeof(IServiceScopeFactory)];
 
     private static bool IsAuthored(Type? type) =>
         type is not null && type != typeof(object) &&

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using DM.Testing;
 using DM.Web.API.Shared.Configuration;
 using DM.Web.API.Shared.Http;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;

@@ -2,8 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
-using FluentAssertions;
-using Microsoft.AspNetCore.Mvc;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
@@ -20,14 +19,6 @@ namespace DM.Web.API.Tests.Shared;
 /// </summary>
 public class MutatingActionsShould
 {
-    private static readonly Type[] MutatingAttributes =
-    [
-        typeof(HttpPostAttribute),
-        typeof(HttpPutAttribute),
-        typeof(HttpPatchAttribute),
-        typeof(HttpDeleteAttribute),
-    ];
-
     [Fact]
     public void NotAcceptACancellationToken()
     {
@@ -51,11 +42,5 @@ public class MutatingActionsShould
     }
 
     /// <summary>Every action of the API that writes.</summary>
-    private static MethodInfo[] MutatingActions() => typeof(Startup).Assembly
-        .GetTypes()
-        .Where(t => t.IsClass && !t.IsAbstract && typeof(ControllerBase).IsAssignableFrom(t))
-        .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
-        .Where(m => m.GetCustomAttributes()
-            .Any(a => MutatingAttributes.Contains(a.GetType())))
-        .ToArray();
+    private static MethodInfo[] MutatingActions() => ApiSurface.MutatingActions().ToArray();
 }

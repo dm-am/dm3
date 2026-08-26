@@ -1,4 +1,4 @@
-import type { ListEnvelope } from "@/shared/api/models/common";
+import type { Envelope, ListEnvelope } from "@/shared/api/models/common";
 import type {
   WebsiteTestimonial,
   WebsiteTestimonialId,
@@ -46,7 +46,7 @@ export default new (class TestimonialApi {
    * @returns Created testimonial
    */
   public createTestimonial(request: CreateWebsiteTestimonialRequest) {
-    return Api.post<WebsiteTestimonial>("testimonials", request);
+    return Api.post<Envelope<WebsiteTestimonial>>("testimonials", request);
   }
 
   /**
@@ -59,7 +59,10 @@ export default new (class TestimonialApi {
     id: WebsiteTestimonialId,
     request: UpdateWebsiteTestimonialRequest,
   ) {
-    return Api.patch<WebsiteTestimonial>(`testimonials/${id}`, request);
+    return Api.patch<Envelope<WebsiteTestimonial>>(
+      `testimonials/${id}`,
+      request,
+    );
   }
 
   /**

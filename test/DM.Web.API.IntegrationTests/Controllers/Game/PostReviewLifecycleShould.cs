@@ -3,7 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Dto;
-using FluentAssertions;
+using DM.Web.API.IntegrationTests.Helpers;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
@@ -83,26 +84,9 @@ public class PostReviewLifecycleShould : IntegrationTestBase
     /// IgnoreQueryFilters: a row this suite has just had removed is hidden by
     /// the global soft-delete filter, and the cleanup would leave it behind.
     /// </summary>
-    private async Task RemoveReview(Guid reviewId)
-    {
-        await using var db = DatabaseFixture.CreateDbContext();
-        await db.PostReviews.IgnoreQueryFilters()
-            .Where(r => r.PostReviewId == reviewId).ExecuteDeleteAsync();
-    }
 
-    private async Task<DbPostReview?> StoredReview(Guid reviewId)
-    {
-        await using var db = DatabaseFixture.CreateDbContext();
-        return await db.PostReviews.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(r => r.PostReviewId == reviewId);
-    }
 
     /// <summary>The counter a received review moves.</summary>
-    private async Task<int> QualityRatingOf(Guid userId)
-    {
-        await using var db = DatabaseFixture.CreateDbContext();
-        return await db.Users.Where(u => u.UserId == userId).Select(u => u.QualityRating).FirstAsync();
-    }
 
     /// <summary>
     /// Put the user past probation, so a sign may be changed at all, and answer
@@ -158,14 +142,14 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             var response = await Patch(reviewId, Moderator, new { text = "Перечитал, поправил формулировку" });
 
             response.StatusCode.Should().Be(HttpStatusCode.OK);
-            var stored = await StoredReview(reviewId);
+            var stored = await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId);
             stored!.Text.Should().Be("Перечитал, поправил формулировку");
             stored.SignValue.Should().Be(1, "an edit of the wording is not a change of the rating");
             stored.ModifiedByUserId.Should().Be(Moderator.UserId);
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
         }
     }
 
@@ -177,7 +161,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
         try
         {
             var (ratingBefore, countBefore) = await ListedPost();
-            var qualityBefore = await QualityRatingOf(PostAuthorId);
+            var qualityBefore = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
 
             var response = await Patch(reviewId, Moderator, new { sign = "Negative" });
             response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -187,11 +171,11 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             // surviving rows, the author's counter is moved by two deltas.
             ratingAfter.Should().Be(ratingBefore - 2);
             countAfter.Should().Be(countBefore, "an edit does not add or remove a review");
-            (await QualityRatingOf(PostAuthorId)).Should().Be(qualityBefore - 2);
+            (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(qualityBefore - 2);
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
             await RestoreQuantityRating(Moderator.UserId, probation);
         }
     }
@@ -204,7 +188,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
         try
         {
             var (ratingBefore, countBefore) = await ListedPost();
-            var qualityBefore = await QualityRatingOf(PostAuthorId);
+            var qualityBefore = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
 
             // The enum converter accepts integers, so the body binds and the
             // update path adds the sign to a public counter as a number. Without
@@ -217,12 +201,12 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             var (ratingAfter, countAfter) = await ListedPost();
             ratingAfter.Should().Be(ratingBefore);
             countAfter.Should().Be(countBefore);
-            (await QualityRatingOf(PostAuthorId)).Should().Be(qualityBefore);
-            (await StoredReview(reviewId))!.SignValue.Should().Be(1);
+            (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(qualityBefore);
+            (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.SignValue.Should().Be(1);
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
             await RestoreQuantityRating(Moderator.UserId, probation);
         }
     }
@@ -238,11 +222,11 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             var stranger = await Patch(reviewId, SeniorModerator, new { text = "Чужая правка" });
             stranger.StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
-            (await StoredReview(reviewId))!.Text.Should().Be("Исходный текст оценки");
+            (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.Text.Should().Be("Исходный текст оценки");
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
         }
     }
 
@@ -255,11 +239,11 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             var response = await Patch(reviewId, Moderator, new { text = "Поздняя правка" });
 
             response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-            (await StoredReview(reviewId))!.Text.Should().Be("Исходный текст оценки");
+            (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.Text.Should().Be("Исходный текст оценки");
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
         }
     }
 
@@ -272,11 +256,11 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             var response = await Delete(reviewId, Moderator);
 
             response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-            (await StoredReview(reviewId))!.IsRemoved.Should().BeTrue();
+            (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.IsRemoved.Should().BeTrue();
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
         }
     }
 
@@ -287,7 +271,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
         try
         {
             var (ratingBefore, countBefore) = await ListedPost();
-            var qualityBefore = await QualityRatingOf(PostAuthorId);
+            var qualityBefore = await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId);
 
             var response = await Delete(reviewId, SeniorModerator);
             response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -295,9 +279,9 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             var (ratingAfter, countAfter) = await ListedPost();
             ratingAfter.Should().Be(ratingBefore - 1);
             countAfter.Should().Be(countBefore - 1);
-            (await QualityRatingOf(PostAuthorId)).Should().Be(qualityBefore - 1);
+            (await PostReviewTestHelper.QualityRatingOf(DatabaseFixture, PostAuthorId)).Should().Be(qualityBefore - 1);
 
-            var stored = await StoredReview(reviewId);
+            var stored = await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId);
             stored!.IsRemoved.Should().BeTrue();
             // Whose hand it was: a removal of somebody else's words with nobody
             // recorded cannot be reviewed afterwards.
@@ -310,7 +294,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
         }
     }
 
@@ -324,11 +308,11 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             // rank reaches a stated opinion and the rating riding on it.
             (await Delete(reviewId, Mentor)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
-            (await StoredReview(reviewId))!.IsRemoved.Should().BeFalse();
+            (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.IsRemoved.Should().BeFalse();
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
         }
     }
 
@@ -347,7 +331,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
         }
         finally
         {
-            await RemoveReview(reviewId);
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
         }
     }
 }

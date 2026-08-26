@@ -6,7 +6,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Identity;
 using DM.Testing;
 using DM.Web.API.Middleware;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging.Abstractions;

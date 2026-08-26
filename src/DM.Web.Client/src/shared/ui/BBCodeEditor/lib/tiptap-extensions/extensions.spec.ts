@@ -192,16 +192,30 @@ describe("BbQuote Extension", () => {
     expect(html).toContain('data-bb-tag="quote"');
   });
 
-  it("should ignore author attribute (not supported)", () => {
+  // The author has to survive the visual mode, and this test used to require
+  // the opposite. What it protected against does not exist: the attribute is
+  // written by bbcodeToHtml and read back by htmlToBbcode, and a node that
+  // dropped it in between made the Quote action lose its attribution in one of
+  // the two editor modes and keep it in the other.
+  it("carries the author attribute through the visual mode", () => {
     const editor = createTestEditor([BbQuote]);
-    // Author should be ignored when parsing
     editor.commands.setContent(
       '<blockquote data-bb-tag="quote" data-bb-author="John"><p>test</p></blockquote>',
     );
     const html = editor.getHTML();
-    // Output should NOT contain author
+    expect(html).toContain('data-bb-author="John"');
+  });
+
+  // A quotation without an author is a legal form and stays one: the DM2 tag
+  // has no attribute at all, so the whole imported archive is that shape, and
+  // an empty attribute would draw a header nobody asked for.
+  it("writes no author attribute when there is no author", () => {
+    const editor = createTestEditor([BbQuote]);
+    editor.commands.setContent(
+      '<blockquote data-bb-tag="quote"><p>test</p></blockquote>',
+    );
+    const html = editor.getHTML();
     expect(html).not.toContain("data-bb-author");
-    expect(html).not.toContain("John");
   });
 
   it("should provide toggle command", () => {

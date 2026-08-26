@@ -75,11 +75,12 @@ internal class BoardService : IBoardService
             LastComment = b.LastComment
         }).ToArray();
 
-        var fillTopicsTask = _unreadCountersRepository.FillParentCounters(boardsCopy, identity.User.UserId,
+        // Sequential on purpose: both fills query the one DmDbContext of this
+        // scope, and a context refuses parallel operations (INV-7).
+        await _unreadCountersRepository.FillParentCounters(boardsCopy, identity.User.UserId,
             b => b.Id, b => b.UnreadTopicsCount);
-        var fillCommentsTask = _unreadCountersRepository.FillTotalUnreadCounters(boardsCopy, identity.User.UserId,
+        await _unreadCountersRepository.FillTotalUnreadCounters(boardsCopy, identity.User.UserId,
             b => b.Id, b => b.UnreadCommentsCount);
-        await Task.WhenAll(fillTopicsTask, fillCommentsTask);
 
         return boardsCopy;
     }
@@ -91,12 +92,12 @@ internal class BoardService : IBoardService
         var identity = _identityProvider.Current;
         if (identity.User.IsAuthenticated)
         {
-            var topicsTask = _unreadCountersRepository.SelectByParentsAsync(
+            // Sequential on purpose: both selects query the one DmDbContext of
+            // this scope, and a context refuses parallel operations (INV-7).
+            var topics = await _unreadCountersRepository.SelectByParentsAsync(
                 identity.User.UserId, UnreadEntryType.Message, board.Id);
-            var commentsTask = _unreadCountersRepository.SelectTotalUnreadByParentsAsync(
+            var comments = await _unreadCountersRepository.SelectTotalUnreadByParentsAsync(
                 identity.User.UserId, UnreadEntryType.Message, board.Id);
-            var topics = await topicsTask;
-            var comments = await commentsTask;
 
             board.UnreadTopicsCount = topics[board.Id];
             board.UnreadCommentsCount = comments[board.Id];

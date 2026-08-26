@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Messaging.Features.Search;
 
@@ -40,12 +41,6 @@ public class SearchScope
 /// </summary>
 public class MessageSearchQuery
 {
-    /// <summary>Maximum allowed page size.</summary>
-    public const int MaxLimit = 100;
-
-    /// <summary>Default page size.</summary>
-    public const int DefaultLimit = 50;
-
     /// <summary>
     /// Free-text portion passed to websearch_to_tsquery (operators stripped).
     /// </summary>
@@ -69,8 +64,8 @@ public class MessageSearchQuery
     public string? Cursor { get; set; }
 
     /// <summary>Requested page size (clamped).</summary>
-    public int Limit { get; set; } = DefaultLimit;
+    public int Limit { get; set; } = CursorQuery.DefaultLimit;
 
     /// <summary>Effective page size, clamped to the valid range.</summary>
-    public int EffectiveLimit => Math.Clamp(Limit, 1, MaxLimit);
+    public int EffectiveLimit => CursorQuery.Clamp(Limit);
 }

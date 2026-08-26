@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Autofac;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Mail;
 using DM.Domain.Core.Mail.ViewModels;
 using DM.Infrastructure.Mail.Rendering;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -94,7 +93,7 @@ public class EmailTemplatesShould : IAsyncDisposable
             .Where(path => Path.GetFileNameWithoutExtension(path) != "EmailLayout")
             .ToList();
 
-        templates.Should().HaveCountGreaterOrEqualTo(5,
+        templates.Should().HaveCountGreaterThanOrEqualTo(5,
             "a directory scan that stops matching turns this green by checking nothing");
 
         foreach (var template in templates)
@@ -131,7 +130,7 @@ public class EmailTemplatesShould : IAsyncDisposable
     {
         // A reflection filter that stops matching would turn the theory green by
         // running it zero times.
-        ViewModels().Should().HaveCountGreaterOrEqualTo(5);
+        ViewModels().Should().HaveCountGreaterThanOrEqualTo(5);
     }
 
     [Theory]
@@ -296,28 +295,28 @@ public class EmailTemplatesShould : IAsyncDisposable
     /// given — a singleton it did not own. Registered per dependency, it took the
     /// shared renderer down with the first scope that ended, and every letter after
     /// that came out empty; the validator then refused the letter and registration
-    /// answered 400. This builds the container out of MailModule rather than
+    /// answered 400. This builds the container out of AddDmMail rather than
     /// constructing the renderer by hand, because the lifetimes are the defect.
     /// </remarks>
     [Fact]
     public async Task KeepRenderingAfterAScopeThatUsedItHasEnded()
     {
-        var builder = new ContainerBuilder();
-        builder.RegisterInstance(NullLoggerFactory.Instance).As<ILoggerFactory>();
-        builder.RegisterGeneric(typeof(NullLogger<>)).As(typeof(ILogger<>)).SingleInstance();
-        builder.RegisterInstance(Options.Create(Deployment)).As<IOptions<SiteAddressConfiguration>>();
-        builder.RegisterModule<MailModule>();
-        await using var container = builder.Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddSingleton<IOptions<SiteAddressConfiguration>>(Options.Create(Deployment));
+        services.AddDmMail();
+        await using var provider = services.BuildServiceProvider();
 
         string first;
-        await using (var scope = container.BeginLifetimeScope())
+        await using (var scope = provider.CreateAsyncScope())
         {
-            first = await scope.Resolve<ITemplateRenderer>()
+            first = await scope.ServiceProvider.GetRequiredService<ITemplateRenderer>()
                 .RenderAsync(new PasswordChangeNotificationViewModel("user"));
         }
 
-        await using var second = container.BeginLifetimeScope();
-        var afterwards = await second.Resolve<ITemplateRenderer>()
+        await using var second = provider.CreateAsyncScope();
+        var afterwards = await second.ServiceProvider.GetRequiredService<ITemplateRenderer>()
             .RenderAsync(new PasswordChangeNotificationViewModel("user"));
 
         first.Should().NotBeEmpty();

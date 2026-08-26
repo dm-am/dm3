@@ -340,8 +340,8 @@ const reset = () => {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Variables"
-@import "@/assets/styles/Themes"
+@use "@/assets/styles/Variables" as *
+@use "@/assets/styles/Themes" as *
 
 // The panel the site's other forms sit in (the create-game section, the
 // create-topic card, the registration dialog). The shared Form draws its

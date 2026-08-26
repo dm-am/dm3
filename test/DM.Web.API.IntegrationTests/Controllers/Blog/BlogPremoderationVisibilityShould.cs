@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;

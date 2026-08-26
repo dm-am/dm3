@@ -4,9 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Notifications;
+using DM.Infrastructure.Messaging;
 using DM.Web.API.Features.Personal.Notifications;
 using DM.Web.API.Notifications;
-using Jamq.Client.Abstractions.Consuming;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 

@@ -4,9 +4,9 @@ using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Testing;
 using DM.Web.API.Features.Personal.Webhooks;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Web.API.Tests.Features.Personal;
@@ -19,19 +19,19 @@ namespace DM.Web.API.Tests.Features.Personal;
 /// </summary>
 public class DiscordWebhookHandlerShould : UnitTestBase
 {
-    private readonly Mock<IBotLinkService> _botLinkService;
+    private readonly IBotLinkService _botLinkService;
     private readonly DiscordWebhookHandler _handler;
 
     public DiscordWebhookHandlerShould()
     {
         _botLinkService = Mock<IBotLinkService>();
         _botLinkService
-            .Setup(s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BotLinkResult { Success = true, Username = "CurrentUser" });
+            .VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new BotLinkResult { Success = true, Username = "CurrentUser" });
 
         _handler = new DiscordWebhookHandler(
-            _botLinkService.Object,
-            Mock<ILogger<DiscordWebhookHandler>>().Object);
+            _botLinkService,
+            Mock<ILogger<DiscordWebhookHandler>>());
     }
 
     private static JsonElement Payload(string json)
@@ -79,7 +79,7 @@ public class DiscordWebhookHandlerShould : UnitTestBase
     {
         var response = await _handler.HandleAsync(Payload(ConnectInGuild));
 
-        _botLinkService.Verify(s => s.VerifyAndLink("ABC123", "discord", "9876543210", It.IsAny<CancellationToken>()), Times.Once);
+        await _botLinkService.Received(1).VerifyAndLink("ABC123", "discord", "9876543210", Arg.Any<CancellationToken>());
 
         var json = AsWireJson(response!);
         json.GetProperty("type").GetInt32().Should().Be(4);
@@ -101,15 +101,15 @@ public class DiscordWebhookHandlerShould : UnitTestBase
 
         await _handler.HandleAsync(payload);
 
-        _botLinkService.Verify(s => s.VerifyAndLink("ABC123", "discord", "1112223334", It.IsAny<CancellationToken>()), Times.Once);
+        await _botLinkService.Received(1).VerifyAndLink("ABC123", "discord", "1112223334", Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task AnswerEphemeralRefusalWhenTheCodeDoesNotVerify()
     {
         _botLinkService
-            .Setup(s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BotLinkResult { Success = false, Error = "Invalid or expired code" });
+            .VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new BotLinkResult { Success = false, Error = "Invalid or expired code" });
 
         var response = await _handler.HandleAsync(Payload(ConnectInGuild));
 
@@ -132,9 +132,7 @@ public class DiscordWebhookHandlerShould : UnitTestBase
 
         var response = await _handler.HandleAsync(payload);
 
-        _botLinkService.Verify(
-            s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         AsWireJson(response!).GetProperty("type").GetInt32().Should().Be(4,
             "an unanswered command shows the invoker a failure in Discord's wording");
     }
@@ -151,9 +149,7 @@ public class DiscordWebhookHandlerShould : UnitTestBase
 
         var response = await _handler.HandleAsync(payload);
 
-        _botLinkService.Verify(
-            s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         AsWireJson(response!).GetProperty("type").GetInt32().Should().Be(4);
     }
 

@@ -35,18 +35,4 @@ internal class TagSetBuilder
         _set.AddRange(tags);
         return this;
     }
-
-    /// <summary>
-    /// Remove tags from set
-    /// </summary>
-    /// <param name="tags">Tags</param>
-    /// <returns>Self</returns>
-    public TagSetBuilder Without(params Tag[] tags)
-    {
-        foreach (var tag in tags)
-        {
-            _set.Remove(tag);
-        }
-        return this;
-    }
 }

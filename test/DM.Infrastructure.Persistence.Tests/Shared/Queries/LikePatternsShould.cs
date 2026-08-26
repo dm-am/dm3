@@ -1,5 +1,5 @@
 using DM.Infrastructure.Persistence.Shared.Queries;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared.Queries;

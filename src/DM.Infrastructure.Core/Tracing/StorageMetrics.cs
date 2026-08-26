@@ -8,25 +8,22 @@ namespace DM.Infrastructure.Core.Tracing;
 /// site decided to lose rather than fail over.
 /// </summary>
 /// <remarks>
-/// The site keeps two stores, and a unit of work spans both: the row is written
-/// to PostgreSQL and committed, and the document that goes with it is written to
-/// MongoDB afterwards. There is no transaction across the two, and the order is
-/// deliberate - the row is the fact, the document is a derived count - so the
-/// only two honest answers when the second write fails are to unwind a commit
-/// that has already happened, or to keep the fact and lose the count.
-///
-/// This is the second answer, made visible. Without the counter the failure has
-/// no reader at all: the caller's request succeeded, the entity is there, and
-/// the only symptom is a badge that is wrong forever for one person - which they
-/// will read as the site being wrong about them rather than as an incident.
+/// The increments of the unread badge run after the unit of work they belong to
+/// has already been committed: the row is the fact, the counter is a derived
+/// number. An error raised there would answer the caller with a failure for
+/// work that was in fact done, so the write is given up and counted here
+/// instead. Without the counter the failure has no reader at all: the caller's
+/// request succeeded, the entity is there, and the only symptom is a badge that
+/// is wrong forever for one person - which they will read as the site being
+/// wrong about them rather than as an incident.
 /// </remarks>
 public static class StorageMetrics
 {
     /// <summary>Meter name for OTel registration.</summary>
     public const string MeterName = "DM.Storage";
 
-    /// <summary>Name of the document store, as measurements label it.</summary>
-    public const string DocumentStore = "mongo";
+    /// <summary>Name of the relational store, as measurements label it.</summary>
+    public const string RelationalStore = "relational";
 
     private static readonly Meter Meter = new(MeterName, "1.0.0");
 

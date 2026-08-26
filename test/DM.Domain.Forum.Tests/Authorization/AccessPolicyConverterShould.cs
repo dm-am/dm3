@@ -1,6 +1,6 @@
 using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Features.Boards;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Forum.Tests.Authorization;

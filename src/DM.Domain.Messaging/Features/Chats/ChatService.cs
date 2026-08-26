@@ -112,8 +112,7 @@ internal class ChatService : IChatService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
-        await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
-            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
+        await FillUnreadCounters(chat, currentUserId);
 
         return chat;
     }
@@ -130,8 +129,7 @@ internal class ChatService : IChatService
         }
 
         var currentUserId = _identityProvider.Current.User.UserId;
-        await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
-            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
+        await FillUnreadCounters(chat, currentUserId);
 
         return chat;
     }
@@ -146,8 +144,7 @@ internal class ChatService : IChatService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
         }
 
-        await _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
-            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
+        await FillUnreadCounters(chat, currentUserId);
 
         return chat;
     }
@@ -170,8 +167,7 @@ internal class ChatService : IChatService
         var existingChat = await _repository.FindDirectChat(currentUserId, otherUserId);
         if (existingChat != null)
         {
-            await _unreadCountersRepository.FillEntityCounters(new[] { existingChat }, currentUserId,
-                c => c.UnreadEntityId, c => c.UnreadMessagesCount);
+            await FillUnreadCounters(existingChat, currentUserId);
             return existingChat;
         }
 
@@ -350,4 +346,8 @@ internal class ChatService : IChatService
         await _repository.Delete(chatId);
         await _unreadCountersRepository.DeleteAsync(chat.UnreadEntityId, UnreadEntryType.Message);
     }
+
+    private Task FillUnreadCounters(Chat chat, Guid currentUserId) =>
+        _unreadCountersRepository.FillEntityCounters(new[] { chat }, currentUserId,
+            c => c.UnreadEntityId, c => c.UnreadMessagesCount);
 }

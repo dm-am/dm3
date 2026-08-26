@@ -19,10 +19,10 @@ using DM.Domain.Personal.Features.Profiles;
 using DM.Testing;
 using DM.Testing.Dsl;
 using DM.Web.API.Features.General.Upload;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
@@ -44,9 +44,9 @@ namespace DM.Web.API.Tests.Features.General;
 public class UploadTargetAuthorizationShould : UnitTestBase
 {
     private readonly Guid _userId = Guid.NewGuid();
-    private readonly Mock<IObjectStorage> _objectStorage;
-    private readonly Mock<IImageProcessingService> _imageProcessing;
-    private readonly Mock<IUploadRepository> _repository;
+    private readonly IObjectStorage _objectStorage;
+    private readonly IImageProcessingService _imageProcessing;
+    private readonly IUploadRepository _repository;
 
     public UploadTargetAuthorizationShould()
     {
@@ -54,12 +54,13 @@ public class UploadTargetAuthorizationShould : UnitTestBase
 
         _imageProcessing = Mock<IImageProcessingService>();
         _imageProcessing
-            .Setup(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<UploadType>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ProcessedImage(new byte[] { 1, 2, 3 }, "image/png", ".png", 200, 150));
+            .ProcessAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<UploadType>(), Arg.Any<CancellationToken>())
+            .Returns(new ProcessedImage(new byte[] { 1, 2, 3 }, "image/png", ".png", 200, 150));
 
         _repository = Mock<IUploadRepository>();
-        _repository.Setup(r => r.AddAsync(It.IsAny<NewUpload>()))
-            .ReturnsAsync((NewUpload u) => new StoredUpload
+        _repository.AddAsync(Arg.Any<NewUpload>()).Returns(ci =>
+        {
+            var u = ci.ArgAt<NewUpload>(0); return new StoredUpload
             {
                 Id = u.Id,
                 UserId = u.UserId,
@@ -72,7 +73,8 @@ public class UploadTargetAuthorizationShould : UnitTestBase
                 Url = u.Url,
                 CreatedUtc = u.CreatedUtc,
                 ConfirmedUtc = u.ConfirmedUtc,
-            });
+            };
+        });
     }
 
     /// <summary>
@@ -134,11 +136,10 @@ public class UploadTargetAuthorizationShould : UnitTestBase
             // expected
         }
 
-        _imageProcessing.Verify(s => s.ProcessAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<UploadType>(), It.IsAny<CancellationToken>()), Times.Never);
-        _objectStorage.Verify(s => s.PutAsync(
-                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
-        _repository.Verify(r => r.AddAsync(It.IsAny<NewUpload>()), Times.Never);
+        await _imageProcessing.DidNotReceive().ProcessAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<UploadType>(), Arg.Any<CancellationToken>());
+        await _objectStorage.DidNotReceive().PutAsync(
+                Arg.Any<string>(), Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _repository.DidNotReceive().AddAsync(Arg.Any<NewUpload>());
     }
 
     /// <summary>
@@ -156,10 +157,9 @@ public class UploadTargetAuthorizationShould : UnitTestBase
     public async Task NameTheObjectWithEnoughRandomnessToNeverCollide()
     {
         var written = new List<NewUpload>();
-        _repository.Setup(r => r.AddAsync(Capture.In(written)))
-            .ReturnsAsync(new StoredUpload());
+        _repository.AddAsync(Arg.Do<NewUpload>(written.Add)).Returns(new StoredUpload());
 
-        var service = Service(new AllowingAuthorizer(UploadType.PostAttachment));
+        var service = Service(new AllowingUploadAuthorizer(UploadType.PostAttachment));
 
         await service.DirectUpload(File(), UploadType.PostAttachment, Guid.NewGuid());
 
@@ -183,22 +183,22 @@ public class UploadTargetAuthorizationShould : UnitTestBase
     private UploadApiService Service(params IUploadTargetAuthorizer[] authorizers)
     {
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(Identities.User(_userId));
+        identityProvider.Current.Returns(Identities.User(_userId));
 
         var cache = Mock<ICache>();
         var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(p => p.Now).Returns(DateTimeOffset.UtcNow);
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         return new UploadApiService(
-            _repository.Object,
-            identityProvider.Object,
-            Mock<IIntentionManager>().Object,
-            Mock<IUserService>().Object,
-            dateTimeProvider.Object,
-            _objectStorage.Object,
-            _imageProcessing.Object,
-            cache.Object,
-            Mock<IHttpContextAccessor>().Object,
+            _repository,
+            identityProvider,
+            Mock<IIntentionManager>(),
+            Mock<IUserService>(),
+            dateTimeProvider,
+            _objectStorage,
+            _imageProcessing,
+            cache,
+            Mock<IHttpContextAccessor>(),
             authorizers,
             Options.Create(new CdnConfiguration
             {
@@ -237,18 +237,5 @@ public class UploadTargetAuthorizationShould : UnitTestBase
             throw new HttpException(HttpStatusCode.NotFound, "Файл не найден");
 
         public Task<bool> MayDetachAsync(Guid targetId) => Task.FromResult(false);
-    }
-
-    private sealed class AllowingAuthorizer : IUploadTargetAuthorizer
-    {
-        public AllowingAuthorizer(UploadType type) => Type = type;
-
-        public UploadType Type { get; }
-
-        public Task EnsureAllowedAsync(Guid targetId) => Task.CompletedTask;
-
-        public Task EnsureReadAllowedAsync(Guid targetId) => Task.CompletedTask;
-
-        public Task<bool> MayDetachAsync(Guid targetId) => Task.FromResult(true);
     }
 }

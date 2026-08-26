@@ -10,7 +10,7 @@ namespace DM.Infrastructure.Core.Configuration;
 /// Configuration the core module and everything built on it needs.
 /// </summary>
 /// <remarks>
-/// Registering <see cref="CoreModule"/> and binding the options it reads is one
+/// Registering <see cref="CoreRegistrationExtensions"/> and binding the options it reads is one
 /// call, so a host cannot do the first without the second. Copied into each
 /// host by hand it drifted twice: once into a search client that three hosts
 /// left unbound, and again into a notification worker that registers the whole
@@ -103,18 +103,6 @@ public static class CoreConfigurationExtensions
     {
         services.AddOptions<ConnectionStrings>()
             .Validate(cs => !string.IsNullOrEmpty(cs.Rdb), "ConnectionStrings:Rdb is required")
-            .ValidateOnStart();
-        return services;
-    }
-
-    /// <summary>
-    /// Declares that this host opens the document store.
-    /// </summary>
-    /// <param name="services">Service collection.</param>
-    public static IServiceCollection RequireDocumentStorage(this IServiceCollection services)
-    {
-        services.AddOptions<ConnectionStrings>()
-            .Validate(cs => !string.IsNullOrEmpty(cs.Mongo), "ConnectionStrings:Mongo is required")
             .ValidateOnStart();
         return services;
     }

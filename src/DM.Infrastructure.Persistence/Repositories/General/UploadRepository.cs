@@ -175,18 +175,8 @@ internal class UploadRepository : IUploadRepository
     {
         // The strategy wrapper is required because the API host configures
         // EnableRetryOnFailure.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                // A retry replays this block; the row the failed attempt left
-                // tracked would otherwise be inserted twice or not at all.
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
             // The soft-delete filter keeps this to the live rows, so a portrait

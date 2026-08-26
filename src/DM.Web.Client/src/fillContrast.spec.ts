@@ -3,7 +3,16 @@
  */
 
 /**
- * A solid accent fill carries a label, and the label has to be readable on it.
+ * An accent fill carries a label, and the label has to be readable on it.
+ *
+ * A fill comes in two shapes. A solid one is one colour wherever it is
+ * painted, and one ratio settles it. A relative one is a translucent overlay —
+ * the shape UI_STANDARDS asks of a control, so that it reads on the page, on a
+ * card and on a modal footer alike — and it has no colour until something is
+ * under it. The primary button is the second kind: composed over $bg-page it
+ * is $bg-element-accent exactly, composed over a form footer (which IS
+ * $bg-element-accent) it is a step darker again. Such a fill is therefore
+ * measured on every surface the site sanctions, not on one.
  *
  * The pairs are not restated here. Each block below is located in its own
  * source by its selector path, its own background and colour declarations are
@@ -56,7 +65,7 @@ interface Fill {
   size: Size;
 }
 
-/** Every place that paints a label on a solid theme colour. */
+/** Every place that paints a label on a fill of its own. */
 const FILLS: Fill[] = [
   {
     name: "primary submit button",
@@ -105,16 +114,16 @@ const FILLS: Fill[] = [
 /** Destructive buttons take the pair from one mixin instead of copying it. */
 const DANGER_CALLERS = [
   "shared/ui/ConfirmDialog/ConfirmDialog.vue",
-  "features/blog-actions/ui/BlogStatusButtons.vue",
-  "features/game-actions/ui/GameStatusButtons.vue",
+  "shared/ui/StatusButtons/StatusButtons.vue",
   "pages/game/CharacterEdit.vue",
 ];
 
-/** The one place allowed to fill with $link-hover, and what for. */
-const ALLOWED_LINK_HOVER_FILL: Record<string, string> = {
-  "pages/dev/StyleVariantsPage.vue":
-    "dev-only mockup catalog of the pending primary-button pick: it replicates the control as it stands on purpose, and goes away with the decision",
-};
+/**
+ * Nowhere fills with $link-hover. The one entry this map ever held was the
+ * mockup catalog of the pending primary-button pick, and it went away with
+ * the decision, exactly as its own note promised.
+ */
+const ALLOWED_LINK_HOVER_FILL: Record<string, string> = {};
 
 // --- theme palettes -------------------------------------------------------
 
@@ -155,8 +164,15 @@ for (const [, name, token] of readFileSync(
 
 const NAMED: Record<string, string> = { white: "#ffffff", black: "#000000" };
 
-/** Resolves a declaration value to the hex a browser would paint. */
-function hex(value: string, theme: string): string {
+/** A translucent overlay: the shape of a relative control fill. */
+const RGBA =
+  /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/;
+
+/**
+ * Resolves a declaration value through the wrappers down to what CSS paints:
+ * a hex, or the `rgba(...)` of a relative fill.
+ */
+function paint(value: string, theme: string): string {
   let current = value.trim();
   for (let step = 0; step < 8; step += 1) {
     if (current.startsWith("$")) {
@@ -176,9 +192,59 @@ function hex(value: string, theme: string): string {
     }
     if (current in NAMED) return NAMED[current];
     if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(current)) return current;
+    if (RGBA.test(current)) return current;
     throw new Error(`${current} is not a colour a contrast can be read from`);
   }
   throw new Error(`${value} does not resolve to a colour`);
+}
+
+/** Resolves a declaration value to the one hex a browser would paint. */
+function hex(value: string, theme: string): string {
+  const painted = paint(value, theme);
+  if (RGBA.test(painted)) {
+    throw new Error(
+      `${value} is a relative fill: it has no colour until a surface is under it`,
+    );
+  }
+  return painted;
+}
+
+/** The three channels of a hex, short form expanded. */
+function channels(colour: string): number[] {
+  const digits = colour.slice(1);
+  const full =
+    digits.length === 3 ? digits.replace(/./g, (one) => one + one) : digits;
+  return [0, 2, 4].map((at) => parseInt(full.slice(at, at + 2), 16));
+}
+
+/** An overlay laid over a backdrop, the way a browser composes the two. */
+function compose(overlay: RegExpExecArray, backdrop: string): string {
+  const alpha = overlay[4] === undefined ? 1 : Number(overlay[4]);
+  const under = channels(backdrop);
+  return `#${[1, 2, 3]
+    .map((at) =>
+      Math.round(Number(overlay[at]) * alpha + under[at - 1] * (1 - alpha)),
+    )
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+/**
+ * What a fill actually paints, and where. A solid colour paints itself and is
+ * one entry; a relative one paints a different colour on every surface the
+ * site sanctions, and every one of them is measured.
+ */
+function surfacesOf(
+  value: string,
+  theme: string,
+): { on: string; colour: string }[] {
+  const painted = paint(value, theme);
+  const overlay = RGBA.exec(painted);
+  if (!overlay) return [{ on: "", colour: painted }];
+  return SURFACES.map((surface) => ({
+    on: surface,
+    colour: compose(overlay, hex(surface, theme)),
+  }));
 }
 
 function luminance(colour: string): number {
@@ -287,7 +353,7 @@ function collect(dir: string, out: string[] = []): string[] {
 const asPath = (file: string): string =>
   relative(CLIENT_SRC, file).split("\\").join("/");
 
-describe("contrast of solid accent fills", () => {
+describe("contrast of accent fills", () => {
   it("reads the palettes and the wrappers it measures through", () => {
     // Empty maps would let every assertion below pass by measuring nothing.
     for (const theme of THEMES) {
@@ -296,7 +362,7 @@ describe("contrast of solid accent fills", () => {
     expect(WRAPPERS.size).toBeGreaterThan(50);
   });
 
-  it("gives every solid fill an ink of its own", () => {
+  it("gives every fill an ink of its own", () => {
     // A fill with no ink is not a passing pair, it is an unmeasured one: the
     // label falls back to whatever the surrounding control declared, which is
     // how four destructive buttons ended up with $text on $accent-red.
@@ -316,11 +382,14 @@ describe("contrast of solid accent fills", () => {
       const ink = declared(body, INK);
       if (background === null || ink === null) continue;
       for (const theme of THEMES) {
-        const measured = ratio(background, ink, theme);
-        if (measured >= AA[fill.size]) continue;
-        offenders.push(
-          `${fill.name} (${fill.file}), ${theme}: ${ink} on ${background} is ${measured.toFixed(2)}, AA asks ${AA[fill.size]}`,
-        );
+        for (const { on, colour } of surfacesOf(background, theme)) {
+          const measured = contrast(colour, hex(ink, theme));
+          if (measured >= AA[fill.size]) continue;
+          const where = on ? `${background} over ${on}` : background;
+          offenders.push(
+            `${fill.name} (${fill.file}), ${theme}: ${ink} on ${where} is ${measured.toFixed(2)}, AA asks ${AA[fill.size]}`,
+          );
+        }
       }
     }
     expect(offenders).toEqual([]);

@@ -190,12 +190,28 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             .ToListAsync(ct);
 
         // Top players by written text volume ("Самый многопишущий игрок"):
-        // the total number of in-character (GameText) characters authored in
-        // the period. Score is the character count.
+        // how much text the player wrote in the period, counted on the visible
+        // text of the post rather than on its source.
+        //
+        // The source was the wrong string on a public board, in two ways that
+        // point the same direction. Markup counted: a post wrapped in tags scored
+        // for characters no reader ever sees, so the same paragraph could outscore
+        // itself by being formatted. And [private] counted: its whole point is
+        // that the room does not see it, and it was adding to a number the room
+        // is shown - a player could take the top place with text nobody could
+        // read, and nobody could tell from the board that they had.
+        //
+        // SearchText is the plain-text render written beside the body, the same
+        // projection the search index and the post filter read: markup gone,
+        // hidden blocks filtered out as tree nodes rather than cut as strings,
+        // runs of whitespace collapsed to one space. So the score is now the text
+        // a reader of the room actually got, which is what the board claims to be
+        // measuring. Numbers on it move down, and they move down most for the
+        // authors who were furthest from the claim.
         var topByVolume = await _dbContext.Posts
             .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
             .GroupBy(p => p.AuthorId)
-            .Select(g => new { UserId = g.Key, Score = g.Sum(p => (int)p.GameText.Length) })
+            .Select(g => new { UserId = g.Key, Score = g.Sum(p => (int)EF.Property<string>(p, "SearchText").Length) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
             .Take(LeaderboardBoards.BoardSize)
@@ -254,9 +270,17 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         // Top blog authors by written text volume ("Самый многопишущий блогер"):
         // the blog analog of TopPlayersByVolume. Users are ranked by the total
         // number of characters in their blog publications' Content authored in
-        // the period, grouped by the publication's AuthorId. Uses the same volume
-        // definition (Content character length) as the player board for
-        // consistency. Score is the character count.
+        // the period, grouped by the publication's AuthorId.
+        //
+        // Still counted on the source, unlike the player board above, and that is
+        // a gap rather than a decision: markup counts here too, so a formatted
+        // publication outscores the same words unformatted. The board cannot be
+        // moved with it because a publication has no projected text beside it -
+        // Message, Post, Topic and Comment do (see DmDbContext.ProjectedBodies),
+        // Publication does not - and giving it one is a column, a migration and a
+        // reseed rather than a line here. What does not apply is the other half:
+        // [private] is a game-post tag, so no publication can score for text its
+        // readers cannot see.
         var topBlogAuthorsByVolume = await _dbContext.Publications
             .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
             .GroupBy(p => p.AuthorId)

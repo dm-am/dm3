@@ -21,9 +21,9 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Blogs;
@@ -35,9 +35,9 @@ namespace DM.Domain.Blog.Tests.Features.Blogs;
 /// </summary>
 public class BlogStatusTransitionShould : UnitTestBase
 {
-    private readonly Mock<IBlogRepository> _repository;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IEventProducer> _eventProducer;
+    private readonly IBlogRepository _repository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IEventProducer _eventProducer;
     private readonly BlogService _service;
     private readonly DateTimeOffset _now = new(2026, 7, 14, 12, 0, 0, TimeSpan.Zero);
     private UpdateBlogEntity? _capturedUpdate;
@@ -51,19 +51,16 @@ public class BlogStatusTransitionShould : UnitTestBase
         var unreadCountersRepository = Mock<IUnreadCountersRepository>();
 
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        identityProvider.Current.Returns(Identity.Guest());
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<BlogIntention>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()));
-        // Every intention says yes by default, which is the same answer the no-op
-        // ThrowIfForbidden above gives. The visibility gates ask instead of
-        // throwing, so without this the whole machine would be exercised as a
-        // stranger and answer 404 everywhere. The tests that mean to be a stranger
-        // call HideEveryBlogFromTheCaller.
+        // Every intention says yes by default: a substituted ThrowIfForbidden returns
+        // void and does nothing. The visibility gates ask instead of throwing, so
+        // without this the whole machine would be exercised as a stranger and answer
+        // 404 everywhere. The tests that mean to be a stranger call
+        // HideEveryBlogFromTheCaller.
         _intentionManager
-            .Setup(m => m.IsAllowed(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()))
-            .Returns(true);
+            .IsAllowed(Arg.Any<BlogIntention>(), Arg.Any<BlogDto>()).Returns(true);
 
         var createBlogValidator = Mock<IValidator<CreateBlog>>();
         var updateBlogValidator = Mock<IValidator<UpdateBlog>>();
@@ -71,32 +68,30 @@ public class BlogStatusTransitionShould : UnitTestBase
         var updateRubricValidator = Mock<IValidator<UpdateRubric>>();
 
         var guidFactory = Mock<IGuidFactory>();
-        guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        guidFactory.Create().Returns(Guid.NewGuid());
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(d => d.Now).Returns(_now);
+        dateTimeProvider.Now.Returns(_now);
 
         _eventProducer = Mock<IEventProducer>();
-        _eventProducer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
-        _eventProducer.Setup(p => p.SendAsync(It.IsAny<IEnumerable<EventType>>(), It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
+        _eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
+        _eventProducer.SendAsync(Arg.Any<IEnumerable<EventType>>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         _service = new BlogService(
-            _repository.Object,
-            blacklistRepository.Object,
-            userLookupService.Object,
-            subscriptionService.Object,
-            unreadCountersRepository.Object,
-            identityProvider.Object,
-            _intentionManager.Object,
-            createBlogValidator.Object,
-            updateBlogValidator.Object,
-            createRubricValidator.Object,
-            updateRubricValidator.Object,
-            guidFactory.Object,
-            dateTimeProvider.Object,
-            _eventProducer.Object);
+            _repository,
+            blacklistRepository,
+            userLookupService,
+            subscriptionService,
+            unreadCountersRepository,
+            identityProvider,
+            _intentionManager,
+            createBlogValidator,
+            updateBlogValidator,
+            createRubricValidator,
+            updateRubricValidator,
+            guidFactory,
+            dateTimeProvider,
+            _eventProducer);
     }
 
     private Guid SetupBlog(
@@ -119,11 +114,14 @@ public class BlogStatusTransitionShould : UnitTestBase
             PremoderationStatus = premoderationStatus,
             Author = new GeneralUser { UserId = Guid.NewGuid() }
         };
-        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(blog);
-        _repository.Setup(r => r.UpdateBlog(It.IsAny<UpdateBlogEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<UpdateBlogEntity, CancellationToken>((update, _) => _capturedUpdate = update)
-            .ReturnsAsync(blog);
+        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
+        _repository.UpdateBlog(Arg.Any<UpdateBlogEntity>(), Arg.Any<CancellationToken>())
+            .Returns(blog)
+            .AndDoes(ci =>
+            {
+                var update = ci.ArgAt<UpdateBlogEntity>(0);
+                _capturedUpdate = update;
+            });
         return blogId;
     }
 
@@ -133,8 +131,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     /// </summary>
     private void HideEveryBlogFromTheCaller() =>
         _intentionManager
-            .Setup(m => m.IsAllowed(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()))
-            .Returns(false);
+            .IsAllowed(Arg.Any<BlogIntention>(), Arg.Any<BlogDto>()).Returns(false);
 
     /// <summary>
     /// The caller passes one of the two view gates and no other intention.
@@ -143,8 +140,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         HideEveryBlogFromTheCaller();
         _intentionManager
-            .Setup(m => m.IsAllowed(gate, It.IsAny<BlogDto>()))
-            .Returns(true);
+            .IsAllowed(gate, Arg.Any<BlogDto>()).Returns(true);
     }
 
     private async Task<HttpException> RefusedStart(string id)
@@ -165,8 +161,8 @@ public class BlogStatusTransitionShould : UnitTestBase
         _capturedUpdate.Should().NotBeNull();
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
         _capturedUpdate.ActivatedUtc.Should().Be(_now);
-        _eventProducer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogActive)), blogId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogActive)), blogId);
     }
 
     [Fact]
@@ -208,8 +204,8 @@ public class BlogStatusTransitionShould : UnitTestBase
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.Frozen);
         _capturedUpdate.ClosedUtc.Should().Be(_now);
-        _eventProducer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogFrozen)), blogId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogFrozen)), blogId);
     }
 
     [Theory]
@@ -239,8 +235,8 @@ public class BlogStatusTransitionShould : UnitTestBase
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.Finished);
         _capturedUpdate.ClosedUtc.Should().Be(_now);
-        _eventProducer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogFinished)), blogId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogFinished)), blogId);
     }
 
     [Theory]
@@ -270,8 +266,8 @@ public class BlogStatusTransitionShould : UnitTestBase
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Closed);
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.None);
         _capturedUpdate.ClosedUtc.Should().Be(_now);
-        _eventProducer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogClosed)), blogId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogClosed)), blogId);
     }
 
     [Fact]
@@ -328,8 +324,8 @@ public class BlogStatusTransitionShould : UnitTestBase
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.None);
         _capturedUpdate.ClearClosedUtc.Should().BeTrue();
         _capturedUpdate.ActivatedUtc.Should().BeNull(); // Already activated before
-        _eventProducer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogActive)), blogId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogActive)), blogId);
     }
 
     [Fact]
@@ -364,11 +360,14 @@ public class BlogStatusTransitionShould : UnitTestBase
     {
         var blogId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, Status = ModuleStatus.Draft };
-        _repository.Setup(r => r.GetByPublicId("abcde", It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(blog);
-        _repository.Setup(r => r.UpdateBlog(It.IsAny<UpdateBlogEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<UpdateBlogEntity, CancellationToken>((update, _) => _capturedUpdate = update)
-            .ReturnsAsync(blog);
+        _repository.GetByPublicId("abcde", Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
+        _repository.UpdateBlog(Arg.Any<UpdateBlogEntity>(), Arg.Any<CancellationToken>())
+            .Returns(blog)
+            .AndDoes(ci =>
+            {
+                var update = ci.ArgAt<UpdateBlogEntity>(0);
+                _capturedUpdate = update;
+            });
 
         await _service.ChangeStatusAsync("abcde", ModuleStatusTransition.Start);
 
@@ -380,8 +379,7 @@ public class BlogStatusTransitionShould : UnitTestBase
     public async Task RejectStatusChangeOfMissingBlogWithNotFound()
     {
         var blogId = Guid.NewGuid();
-        _repository.Setup(r => r.Get(blogId, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((BlogDto?)null);
+        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlogDto?)null);
 
         var act = async () => await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);
 
@@ -417,8 +415,7 @@ public class BlogStatusTransitionShould : UnitTestBase
         var hidden = SetupBlog(ModuleStatus.Draft,
             draftVisibility: visibility, premoderationStatus: premoderationStatus);
         var missing = Guid.NewGuid();
-        _repository.Setup(r => r.Get(missing, It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((BlogDto?)null);
+        _repository.Get(missing, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlogDto?)null);
 
         var onHidden = await RefusedStart(hidden.ToString());
         var onMissing = await RefusedStart(missing.ToString());
@@ -443,10 +440,8 @@ public class BlogStatusTransitionShould : UnitTestBase
             DraftVisibility = DraftVisibility.Private,
             Author = new GeneralUser { UserId = Guid.NewGuid() }
         };
-        _repository.Setup(r => r.GetByPublicId("abcde", It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(hidden);
-        _repository.Setup(r => r.GetByPublicId("fghij", It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((BlogDto?)null);
+        _repository.GetByPublicId("abcde", Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(hidden);
+        _repository.GetByPublicId("fghij", Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlogDto?)null);
 
         var onTaken = await RefusedStart("abcde");
         var onUnclaimed = await RefusedStart("fghij");
@@ -473,10 +468,8 @@ public class BlogStatusTransitionShould : UnitTestBase
         var refusal = await RefusedStart(blogId.ToString());
 
         refusal.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(It.IsAny<BlogIntention>(), It.IsAny<BlogDto>()), Times.Never);
-        _repository.Verify(
-            r => r.UpdateBlog(It.IsAny<UpdateBlogEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(Arg.Any<BlogIntention>(), Arg.Any<BlogDto>());
+        await _repository.DidNotReceive().UpdateBlog(Arg.Any<UpdateBlogEntity>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -493,10 +486,8 @@ public class BlogStatusTransitionShould : UnitTestBase
 
         await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);
 
-        _intentionManager.Verify(
-            m => m.IsAllowed(BlogIntention.ViewDraft, It.IsAny<BlogDto>()), Times.Once);
-        _intentionManager.Verify(
-            m => m.IsAllowed(BlogIntention.ViewPremoderationPending, It.IsAny<BlogDto>()), Times.Once);
+        _intentionManager.Received(1).IsAllowed(BlogIntention.ViewDraft, Arg.Any<BlogDto>());
+        _intentionManager.Received(1).IsAllowed(BlogIntention.ViewPremoderationPending, Arg.Any<BlogDto>());
     }
 
     /// <summary>
@@ -529,8 +520,7 @@ public class BlogStatusTransitionShould : UnitTestBase
         await _service.ChangeStatusAsync(blogId.ToString(), ModuleStatusTransition.Start);
 
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(BlogIntention.SetStatusActive, It.IsAny<BlogDto>()), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.SetStatusActive, Arg.Any<BlogDto>());
     }
 
     #endregion

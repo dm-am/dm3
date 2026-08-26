@@ -260,7 +260,6 @@ function goHome() {
   margin: $medium 0
   padding: $small $medium
   border: 1px solid $border-accent-red
-  border-radius: $border-radius
   font-size: $secondary-font-size
   line-height: 1.5
   text-align: left

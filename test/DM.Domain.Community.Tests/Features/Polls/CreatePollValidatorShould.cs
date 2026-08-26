@@ -4,9 +4,9 @@ using DM.Domain.Community.Features.Polls;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Abstractions;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Polls;
@@ -14,15 +14,15 @@ namespace DM.Domain.Community.Tests.Features.Polls;
 public class CreatePollValidatorShould : UnitTestBase
 {
     private readonly CreatePollValidator validator;
-    private readonly Mock<IDateTimeProvider> dateTimeProvider;
+    private readonly IDateTimeProvider dateTimeProvider;
     private readonly DateTimeOffset now;
 
     public CreatePollValidatorShould()
     {
         now = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
-        dateTimeProvider = new Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(x => x.Now).Returns(now);
-        validator = new CreatePollValidator(dateTimeProvider.Object);
+        dateTimeProvider = Substitute.For<IDateTimeProvider>();
+        dateTimeProvider.Now.Returns(now);
+        validator = new CreatePollValidator(dateTimeProvider);
     }
 
     [Fact]

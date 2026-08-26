@@ -80,7 +80,7 @@ fi
 
 echo "=== Подготовка docker/.env ==="
 # Everything below needs this file: the backup scripts source it, and the
-# compose files declare the encryption key, both Mongo passwords and both MinIO
+# compose files declare the encryption key, both MinIO
 # accounts through ${...:?}, which stops interpolation before the first
 # container. Nothing created it, so the installer died on its last line with the
 # unit and the nightly jobs already enabled.

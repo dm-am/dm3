@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Hosting;
 using Xunit;
 
@@ -28,14 +27,14 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class BackgroundServiceStartupShould
 {
-    private static readonly IReadOnlyCollection<Type> Services = ProductionTypes()
+    private static readonly IReadOnlyCollection<Type> Services = ProductionAssemblies.Types()
         .Where(type => type is { IsAbstract: false, IsClass: true })
         .Where(type => typeof(BackgroundService).IsAssignableFrom(type))
         .ToArray();
 
     [Fact]
     public void FindTheBackgroundServices() =>
-        Services.Should().HaveCountGreaterOrEqualTo(10,
+        Services.Should().HaveCountGreaterThanOrEqualTo(10,
             "the API host alone runs nine periodic jobs, so a smaller match means the " +
             "assemblies were never loaded and the rule below checks nothing");
 
@@ -51,26 +50,4 @@ public class BackgroundServiceStartupShould
             .Should().BeEmpty(
                 "a synchronous body runs inside StartAsync, so anything it touches that is " +
                 "not up yet takes the whole host down before it ever finishes starting");
-
-    private static IEnumerable<Type> ProductionTypes() => Directory
-        .EnumerateFiles(AppContext.BaseDirectory, "DM.*.dll", SearchOption.TopDirectoryOnly)
-        .Where(path => !Path.GetFileNameWithoutExtension(path)
-            .EndsWith(".Tests", StringComparison.Ordinal))
-        .SelectMany(TypesOf);
-
-    private static IEnumerable<Type> TypesOf(string assemblyPath)
-    {
-        try
-        {
-            return Assembly.LoadFrom(assemblyPath).GetTypes();
-        }
-        catch (ReflectionTypeLoadException e)
-        {
-            return e.Types.Where(type => type is not null).Select(type => type!);
-        }
-        catch (Exception)
-        {
-            return Array.Empty<Type>();
-        }
-    }
 }

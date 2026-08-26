@@ -212,11 +212,6 @@ export default new (class ModerationApi {
     });
   }
 
-  /** Delete (soft-delete) an upload. Others' uploads require Admin. */
-  public deleteUpload(id: string) {
-    return Api.delete(`uploads/${id}`);
-  }
-
   // ==================== Username Change Requests ====================
 
   /**

@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Exceptions;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Domain.Core.Enums;
@@ -181,7 +183,7 @@ public class UploadController : ControllerBase
     /// <param name="type">Upload type/purpose</param>
     /// <param name="targetId">Optional target entity ID</param>
     /// <response code="201">File uploaded, processed, and confirmed</response>
-    /// <response code="400">Invalid file (wrong format, too large, not an image)</response>
+    /// <response code="400">Invalid file (wrong format, too large, not an image), or no upload type named</response>
     /// <response code="401">User not authenticated</response>
     /// <response code="429">Too many requests</response>
     [HttpPost(Name = nameof(DirectUpload))]
@@ -197,10 +199,47 @@ public class UploadController : ControllerBase
         [FromQuery] UploadType type,
         [FromQuery] Guid? targetId = null)
     {
+        // The type is read from the query string. Model binding refuses every
+        // value it is given and cannot read - "99", "0", a misspelt member -
+        // with a 400 that names the parameter, so the only state that reaches
+        // here unnamed is the one where the parameter was not sent at all: a
+        // value type nothing bound keeps its default, and no member of this
+        // enum carries zero. That is the easy mistake on a multipart request,
+        // where the type goes in the form beside the file rather than in the
+        // query, and it used to be answered with a 500 and a support token for
+        // a request that was merely incomplete: the zero travelled to the
+        // service, whose switch over the type had no arm for it.
+        //
+        // That throw stays what it is, an invariant of a service handed a type
+        // the API has already vouched for. Refusing the request is this
+        // method's job, and the refusal names the field that is missing.
+        RequireKnownType(type);
+
         // 201 on an Idempotency-Key replay too: the cached answer is the record
         // this logical request created, and the service does not report which
         // call stored it.
         var result = await _uploadApiService.DirectUpload(file, type, targetId);
         return CreatedAtRoute(nameof(GetUpload), new { id = result.Id }, result);
+    }
+
+    /// <summary>
+    /// Refuses an upload that names no upload type, or names one this site does
+    /// not have.
+    /// </summary>
+    private static void RequireKnownType(UploadType type)
+    {
+        if (Enum.IsDefined(type))
+        {
+            return;
+        }
+
+        throw new HttpBadRequestException(new Dictionary<string, string>
+        {
+            // Zero is the default a parameter nobody sent keeps, so it is the
+            // one undefined value that means "not named" rather than "named
+            // wrongly". Both are refusals of the same field and each says which
+            // of the two it is.
+            ["type"] = type == default ? "Не указан тип загрузки" : "Неизвестный тип загрузки",
+        });
     }
 }

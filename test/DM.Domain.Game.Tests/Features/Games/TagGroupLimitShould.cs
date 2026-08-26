@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;

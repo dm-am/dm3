@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Net;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Domain.Community.Features.Icons;
 
@@ -16,7 +18,7 @@ namespace DM.Domain.Community.Features.Icons;
 public static class GameIconCatalog
 {
     /// <summary>Allowed icon names (kebab-case, exactly as the file).</summary>
-    public static readonly IReadOnlySet<string> Names = new HashSet<string>
+    private static readonly IReadOnlySet<string> Names = new HashSet<string>
     {
         "laurels",        // laurel wreath — summer literary contest / top tier
         "trophy-cup",     // cup — winter literary contest
@@ -44,4 +46,14 @@ public static class GameIconCatalog
     /// <summary>True if the icon name is known to the sprite.</summary>
     public static bool IsValid(string iconName) =>
         !string.IsNullOrWhiteSpace(iconName) && Names.Contains(iconName);
+
+    /// <summary>Rejects an unknown icon name with 400, for the save paths.</summary>
+    public static void EnsureValid(string iconName)
+    {
+        if (!IsValid(iconName))
+        {
+            throw new HttpException(HttpStatusCode.BadRequest,
+                RefusalMessage.UnknownIconName(iconName));
+        }
+    }
 }

@@ -198,8 +198,8 @@ watch(
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/ZIndex"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/ZIndex" as *
 
 .user-autocomplete
   position: relative

@@ -7,7 +7,7 @@ using DM.Testing;
 using DM.Web.API.Features.Account.Authentication;
 using DM.Web.API.Features.Account.Registration;
 using DM.Web.API.Features.General.Tickets;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.Tests.Features.Account;
@@ -32,7 +32,7 @@ public class HoneypotRefusalShould : UnitTestBase
     public async Task NameAFieldOfTheLoginRequest()
     {
         var api = Mock<IAuthenticationApiService>();
-        var controller = new AuthenticationController(api.Object);
+        var controller = new AuthenticationController(api);
 
         var refusal = await Assert.ThrowsAsync<HttpBadRequestException>(
             () => controller.Login(new LoginRequest
@@ -43,7 +43,7 @@ public class HoneypotRefusalShould : UnitTestBase
             }));
 
         ShouldNameAVisibleFieldOf<LoginRequest>(refusal);
-        api.VerifyNoOtherCalls();
+        api.ShouldHaveReceivedNoCalls();
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class HoneypotRefusalShould : UnitTestBase
     {
         var registration = Mock<IRegistrationApiService>();
         var activation = Mock<IActivationApiService>();
-        var controller = new RegistrationController(registration.Object, activation.Object);
+        var controller = new RegistrationController(registration, activation);
 
         var refusal = await Assert.ThrowsAsync<HttpBadRequestException>(
             () => controller.Register(new RegistrationRequest
@@ -63,14 +63,14 @@ public class HoneypotRefusalShould : UnitTestBase
             }));
 
         ShouldNameAVisibleFieldOf<RegistrationRequest>(refusal);
-        registration.VerifyNoOtherCalls();
+        registration.ShouldHaveReceivedNoCalls();
     }
 
     [Fact]
     public async Task NameAFieldOfTheTicketRequest()
     {
         var tickets = Mock<ITicketIntakeApiService>();
-        var controller = new TicketIntakeController(tickets.Object);
+        var controller = new TicketIntakeController(tickets);
 
         var refusal = await Assert.ThrowsAsync<HttpBadRequestException>(
             () => controller.CreateTicketIntake(new CreateTicketIntakeRequest
@@ -81,7 +81,7 @@ public class HoneypotRefusalShould : UnitTestBase
             }));
 
         ShouldNameAVisibleFieldOf<CreateTicketIntakeRequest>(refusal);
-        tickets.VerifyNoOtherCalls();
+        tickets.ShouldHaveReceivedNoCalls();
     }
 
     private static void ShouldNameAVisibleFieldOf<TRequest>(HttpBadRequestException refusal)

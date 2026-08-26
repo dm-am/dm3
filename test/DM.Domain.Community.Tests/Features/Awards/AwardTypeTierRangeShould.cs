@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DM.Domain.Community.Features.Awards;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;

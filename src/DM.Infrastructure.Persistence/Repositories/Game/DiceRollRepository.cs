@@ -3,29 +3,34 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Game.Features.Posts;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using MongoDB.Driver;
+using Microsoft.EntityFrameworkCore;
 using DbDiceRoll = DM.Infrastructure.Persistence.Entities.Game.Posts.DiceRoll;
 using DbRollResult = DM.Infrastructure.Persistence.Entities.Game.Posts.RollResult;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
 /// <summary>
-/// Repository for dice rolls (MongoDB)
+/// Repository for dice rolls. Read-only: the rolls are written by
+/// <see cref="PostRepository.Create"/> inside the post's transaction.
 /// </summary>
-internal class DiceRollRepository : MongoCollectionRepository<DbDiceRoll>, IDiceRollRepository
+internal class DiceRollRepository : IDiceRollRepository
 {
+    private readonly DmDbContext _dbContext;
+
     /// <inheritdoc />
-    public DiceRollRepository(DmMongoClient client) : base(client)
+    public DiceRollRepository(DmDbContext dbContext)
     {
+        _dbContext = dbContext;
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<DiceRoll>> GetByPostIdAsync(Guid postId)
     {
-        var rolls = await Collection
-            .Find(Filter.Eq(d => d.PostId, postId))
-            .SortBy(d => d.CreatedUtc)
+        var rolls = await _dbContext.DiceRolls
+            .TagWith("DM.Game.DiceRollsByPost")
+            .Where(d => d.PostId == postId)
+            .OrderBy(d => d.CreatedUtc)
+            .ThenBy(d => d.DiceRollId)
             .ToListAsync();
 
         return rolls.Select(MapToDomain);
@@ -38,9 +43,11 @@ internal class DiceRollRepository : MongoCollectionRepository<DbDiceRoll>, IDice
         if (postIdList.Count == 0)
             return new Dictionary<Guid, IEnumerable<DiceRoll>>();
 
-        var rolls = await Collection
-            .Find(Filter.In(d => d.PostId, postIdList))
-            .SortBy(d => d.CreatedUtc)
+        var rolls = await _dbContext.DiceRolls
+            .TagWith("DM.Game.DiceRollsByPosts")
+            .Where(d => postIdList.Contains(d.PostId))
+            .OrderBy(d => d.CreatedUtc)
+            .ThenBy(d => d.DiceRollId)
             .ToListAsync();
 
         return rolls
@@ -50,46 +57,36 @@ internal class DiceRollRepository : MongoCollectionRepository<DbDiceRoll>, IDice
                 g => g.Select(MapToDomain).AsEnumerable());
     }
 
-    /// <inheritdoc />
-    public Task CreateAsync(IEnumerable<DiceRoll> rolls)
-    {
-        var documents = rolls.Select(MapToDb).ToList();
-        if (documents.Count == 0)
-            return Task.CompletedTask;
-
-        return Collection.InsertManyAsync(documents);
-    }
-
-    /// <inheritdoc />
-    public Task DeleteByPostIdAsync(Guid postId) =>
-        Collection.DeleteManyAsync(Filter.Eq(d => d.PostId, postId));
-
-    private static DbDiceRoll MapToDb(DiceRoll roll) => new()
-    {
-        Id = roll.Id,
-        PostId = roll.PostId,
-        CreatedUtc = roll.CreatedUtc.UtcDateTime,
-        IsAdditional = roll.IsAdditional,
-        IsHidden = roll.IsHidden,
-        IsFair = roll.IsFair,
-        DiceCount = roll.DiceCount,
-        EdgesCount = roll.EdgesCount,
-        ExplosionCount = roll.ExplosionCount,
-        Bonus = roll.Bonus,
-        Comment = roll.Comment,
-        Result = roll.Results.Select(r => new DbRollResult
+    /// <summary>
+    /// The rolls of a post as rows, for the one write path — post creation.
+    /// </summary>
+    internal static IEnumerable<DbDiceRoll> MapToDb(IEnumerable<DiceRoll> rolls) => rolls
+        .Select(roll => new DbDiceRoll
         {
-            Value = r.Value,
-            IsCritical = r.IsCritical,
-            IsExploded = r.IsExploded
-        }).ToArray()
-    };
+            DiceRollId = roll.Id,
+            PostId = roll.PostId,
+            CreatedUtc = roll.CreatedUtc,
+            IsAdditional = roll.IsAdditional,
+            IsHidden = roll.IsHidden,
+            IsFair = roll.IsFair,
+            DiceCount = roll.DiceCount,
+            EdgesCount = roll.EdgesCount,
+            ExplosionCount = roll.ExplosionCount,
+            Bonus = roll.Bonus,
+            Comment = roll.Comment,
+            Result = roll.Results.Select(r => new DbRollResult
+            {
+                Value = r.Value,
+                IsCritical = r.IsCritical,
+                IsExploded = r.IsExploded
+            }).ToArray()
+        });
 
     private static DiceRoll MapToDomain(DbDiceRoll db) => new()
     {
-        Id = db.Id,
+        Id = db.DiceRollId,
         PostId = db.PostId,
-        CreatedUtc = new DateTimeOffset(db.CreatedUtc, TimeSpan.Zero),
+        CreatedUtc = db.CreatedUtc,
         IsAdditional = db.IsAdditional,
         IsHidden = db.IsHidden,
         IsFair = db.IsFair,
@@ -97,12 +94,12 @@ internal class DiceRollRepository : MongoCollectionRepository<DbDiceRoll>, IDice
         EdgesCount = db.EdgesCount,
         ExplosionCount = db.ExplosionCount,
         Bonus = db.Bonus,
-        Comment = db.Comment ?? string.Empty,
-        Results = db.Result?.Select(r => new DiceRollResult
+        Comment = db.Comment,
+        Results = db.Result.Select(r => new DiceRollResult
         {
             Value = r.Value,
             IsCritical = r.IsCritical,
             IsExploded = r.IsExploded
-        }) ?? []
+        })
     };
 }

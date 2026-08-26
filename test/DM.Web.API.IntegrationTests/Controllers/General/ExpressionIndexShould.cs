@@ -3,7 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.RelationalStorage;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

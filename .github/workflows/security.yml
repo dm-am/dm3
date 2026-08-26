@@ -68,7 +68,7 @@ jobs:
         if: matrix.language == 'csharp'
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       - name: Build for analysis
         if: matrix.language == 'csharp'
@@ -128,7 +128,7 @@ jobs:
       - name: Start infrastructure with Docker Compose
         run: |
           cd docker
-          docker compose up -d postgres mongo rabbitmq minio mailhog jaeger
+          docker compose up -d postgres rabbitmq minio mailpit jaeger
           docker compose up -d --build --wait migration
 
       - name: Build and start API

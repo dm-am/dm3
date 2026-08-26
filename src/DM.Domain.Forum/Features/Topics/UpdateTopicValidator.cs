@@ -1,4 +1,5 @@
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
@@ -19,5 +20,12 @@ internal class UpdateTopicValidator : AbstractValidator<UpdateTopic>
             RuleFor(t => t.Title)
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(TopicPolicy.TitleMaxLength).WithMessage(ValidationError.Long));
+
+        // The Comment surface does not declare [private], and an edit is the
+        // other way the tag gets into a stored topic body.
+        When(t => t.Text != null, () =>
+            RuleFor(t => t.Text)
+                .Must(text => !PrivateBlockMarkup.ContainsPrivateMarkup(text))
+                .WithMessage(t => PrivateBlockMarkup.DescribeSurfaceRefusal(t.Text)));
     }
 }

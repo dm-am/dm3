@@ -76,6 +76,7 @@ const create = (text: string) =>
 
 // Raw BBCode source fetch for the edit form (AuthorEdit audience).
 const fetchEditSource = (id: string) => gameApi.getGameCommentForEdit(id);
+const fetchQuoteSource = (id: string) => gameApi.getGameCommentQuote(id);
 
 async function markAsRead() {
   if (!user.value) return;
@@ -107,6 +108,7 @@ async function markAsRead() {
       :like="gameStore.likeComment"
       :unlike="gameStore.unlikeComment"
       :fetch-edit-source="fetchEditSource"
+      :fetch-quote-source="fetchQuoteSource"
       :paging-to="{
         name: 'game-comments',
         params: { id: game?.publicId || gameId },

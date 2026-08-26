@@ -6,7 +6,7 @@ using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.PostPendencies;
 using DM.Testing;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostPendencies;
@@ -14,20 +14,19 @@ namespace DM.Domain.Game.Tests.Features.PostPendencies;
 public class CreatePostPendencyValidatorShould : UnitTestBase
 {
     private readonly CreatePostPendencyValidator validator;
-    private readonly Mock<IUserLookupService> userLookupServiceMock;
+    private readonly IUserLookupService userLookupServiceMock;
 
     public CreatePostPendencyValidatorShould()
     {
         userLookupServiceMock = Mock<IUserLookupService>();
-        validator = new CreatePostPendencyValidator(userLookupServiceMock.Object);
+        validator = new CreatePostPendencyValidator(userLookupServiceMock);
     }
 
     [Fact]
     public async Task PassForValidInput()
     {
         userLookupServiceMock
-            .Setup(s => s.UsernameExistsAsync("validuser", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .UsernameExistsAsync("validuser", Arg.Any<CancellationToken>()).Returns(true);
 
         var input = new CreatePostPendency
         {
@@ -103,8 +102,7 @@ public class CreatePostPendencyValidatorShould : UnitTestBase
     public async Task FailWhenUserDoesNotExist()
     {
         userLookupServiceMock
-            .Setup(s => s.UsernameExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .UsernameExistsAsync("nonexistent", Arg.Any<CancellationToken>()).Returns(false);
 
         var input = new CreatePostPendency
         {

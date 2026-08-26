@@ -2,8 +2,6 @@ import type { ListEnvelope } from "@/shared/api/models/common";
 import type {
   UserNotification,
   NotificationCount,
-  NotificationSettings,
-  UpdateNotificationSettingsRequest,
 } from "@/shared/api/models/notifications";
 import { Api } from "@/shared/api";
 
@@ -36,22 +34,5 @@ export default new (class NotificationApi {
     return id
       ? Api.delete(`${this.basePath}/${id}/unread`)
       : Api.delete(`${this.basePath}/unread`);
-  }
-
-  /**
-   * Get notification settings (bot delivery preferences)
-   */
-  public getSettings() {
-    return Api.get<NotificationSettings>(`${this.basePath}/settings`);
-  }
-
-  /**
-   * Update notification settings
-   */
-  public updateSettings(request: UpdateNotificationSettingsRequest) {
-    return Api.patch<NotificationSettings>(
-      `${this.basePath}/settings`,
-      request,
-    );
   }
 })();

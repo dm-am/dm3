@@ -32,25 +32,10 @@ import SidebarEntityList from "./SidebarEntityList.vue";
 import SidebarGameLink from "./SidebarGameLink.vue";
 import { useGamesStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
-import { onMounted, watch } from "vue";
-import { useRoute } from "vue-router";
-import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
+import { useSidebarRefresh } from "./useSidebarRefresh";
 
 const store = useGamesStore();
 const userStore = useAuthStore();
-const route = useRoute();
 
-onMounted(() => store.fetchFinishedGames());
-
-// Refetch on any change of viewer to keep unread counters accurate (force=true
-// because a plain fetch() no-ops inside the cache TTL). See useViewerChange for
-// why "logged in or out" was the wrong question.
-useViewerChange(() => store.fetchFinishedGames(true));
-
-// Re-trigger on navigation so a failed fetch gets another chance once the
-// TTL cache considers it stale.
-watch(
-  () => route.fullPath,
-  () => store.fetchFinishedGames(),
-);
+useSidebarRefresh(store.fetchFinishedGames);
 </script>

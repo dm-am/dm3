@@ -1,7 +1,6 @@
 bin
 obj
 .idea
-bundles
 .vs
 *.user
 *.tmp
@@ -103,4 +102,3 @@ src/DM.Web.Client/e2e/.auth/
 
 # Word lock files (open document markers)
 ~$*.docx
-scripts/docx/shots/

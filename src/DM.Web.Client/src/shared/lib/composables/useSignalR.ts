@@ -45,7 +45,7 @@ async function startGlobalSocket(): Promise<boolean> {
     // cookie (withCredentials), guests simply negotiate without it and the
     // hub accepts them as receive-only broadcast listeners.
     negotiatedAsAuthenticated = useAuthStore().isAuthenticated;
-    globalConnection = await api.establishHubConnection("whatsup");
+    globalConnection = await api.establishHubConnection("hubs/notifications");
 
     globalConnection.onclose(() => {
       globalIsConnected.value = false;

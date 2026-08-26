@@ -6,7 +6,7 @@ using DM.Domain.Account.Features.EmailChange;
 using DM.Domain.Account.Features.Registration;
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;

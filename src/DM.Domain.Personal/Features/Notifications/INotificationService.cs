@@ -37,6 +37,11 @@ public interface INotificationService
     /// answer: the filter is what keeps a blocked person from reaching somebody,
     /// and a channel reading the request instead of the reply mails out exactly
     /// what the filter refused to store.
+    ///
+    /// Idempotent by (EventId, EventType): a request whose pair is already
+    /// stored is dropped from the answer and stored again by nobody, which is
+    /// what makes a redelivered bus event write once and mail once. A request
+    /// without an EventId is created unconditionally, as before the key existed.
     /// </remarks>
     /// <param name="createNotifications">List of creating DTOs</param>
     /// <param name="ct">Cancellation token</param>

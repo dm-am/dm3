@@ -1,6 +1,6 @@
 using System.Linq;
 using DM.Domain.Core.Configuration;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Core.Tests.Configuration;

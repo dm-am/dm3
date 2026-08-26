@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
@@ -15,7 +15,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// a thousand is not on offer instead of taking a hundred for the whole set.
 ///
 /// The security journal clipped only the top. Below the range nothing looked,
-/// and its limit goes straight into the Mongo driver, where zero means "no
+/// and its limit used to go straight into a driver where zero means "no
 /// limit" — so ?take=0 answered with the whole login and password history of an
 /// account, on a free request, from an endpoint whose own documentation promises
 /// a maximum of 100.

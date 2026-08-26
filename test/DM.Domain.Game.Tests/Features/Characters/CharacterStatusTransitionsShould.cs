@@ -17,9 +17,9 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing;
 using DM.Testing.Dsl;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
@@ -43,10 +43,10 @@ namespace DM.Domain.Game.Tests.Features.Characters;
 /// </remarks>
 public class CharacterStatusTransitionsShould : UnitTestBase
 {
-    private readonly Mock<ICharacterRepository> _repository;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IEventProducer> _producer;
-    private readonly Mock<IGameSubscriptionService> _subscriptions;
+    private readonly ICharacterRepository _repository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IEventProducer _producer;
+    private readonly IGameSubscriptionService _subscriptions;
     private readonly ICharacterService _service;
 
     public CharacterStatusTransitionsShould()
@@ -56,30 +56,29 @@ public class CharacterStatusTransitionsShould : UnitTestBase
         _repository = Mock<ICharacterRepository>();
         _intentionManager = Mock<IIntentionManager>();
         _producer = Mock<IEventProducer>();
-        _producer.Setup(p => p.SendAsync(It.IsAny<IEnumerable<EventType>>(), It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<IEnumerable<EventType>>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(Identities.User(Guid.NewGuid()));
+        identityProvider.Current.Returns(Identities.User(Guid.NewGuid()));
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _subscriptions = Mock<IGameSubscriptionService>();
 
         _service = new CharacterService(
-            createValidator.Object,
-            updateValidator.Object,
-            Mock<IGameService>().Object,
-            _intentionManager.Object,
-            _repository.Object,
-            Mock<ICharacterAttributeValueFiller>().Object,
-            Mock<IUnreadCountersRepository>().Object,
-            _subscriptions.Object,
-            _producer.Object,
-            identityProvider.Object,
-            Mock<IGuidFactory>().Object,
-            dateTimeProvider.Object);
+            createValidator,
+            updateValidator,
+            Mock<IGameService>(),
+            _intentionManager,
+            _repository,
+            Mock<ICharacterAttributeValueFiller>(),
+            Mock<IUnreadCountersRepository>(),
+            _subscriptions,
+            _producer,
+            identityProvider,
+            Mock<IGuidFactory>(),
+            dateTimeProvider);
     }
 
     public static TheoryData<CharacterStatusTransition, CharacterStatus, CharacterIntention,
@@ -111,17 +110,20 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     {
         var characterId = Given(from);
         UpdateCharacterEntity? written = null;
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .Callback<UpdateCharacterEntity>(e => written = e)
-            .ReturnsAsync(new Character { Id = characterId });
+        _repository.Update(Arg.Any<UpdateCharacterEntity>())
+            .Returns(new Character { Id = characterId })
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdateCharacterEntity>(0);
+                written = e;
+            });
 
         await _service.ChangeStatusAsync(characterId, transition);
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(intention, It.IsAny<CharacterToUpdate>()), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(intention, Arg.Any<CharacterToUpdate>());
         written!.Status.Should().Be(to);
-        _producer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(raised)), characterId), Times.Once);
+        await _producer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(raised)), characterId);
     }
 
     /// <summary>
@@ -137,9 +139,13 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     {
         var characterId = Given(CharacterStatus.Active);
         UpdateCharacterEntity? written = null;
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .Callback<UpdateCharacterEntity>(e => written = e)
-            .ReturnsAsync(new Character { Id = characterId });
+        _repository.Update(Arg.Any<UpdateCharacterEntity>())
+            .Returns(new Character { Id = characterId })
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdateCharacterEntity>(0);
+                written = e;
+            });
 
         await _service.ChangeStatusAsync(characterId, transition);
 
@@ -159,9 +165,13 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     {
         var characterId = Given(CharacterStatus.Retired);
         UpdateCharacterEntity? written = null;
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .Callback<UpdateCharacterEntity>(e => written = e)
-            .ReturnsAsync(new Character { Id = characterId });
+        _repository.Update(Arg.Any<UpdateCharacterEntity>())
+            .Returns(new Character { Id = characterId })
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdateCharacterEntity>(0);
+                written = e;
+            });
 
         await _service.ChangeStatusAsync(characterId, transition);
 
@@ -200,14 +210,14 @@ public class CharacterStatusTransitionsShould : UnitTestBase
 
         var thrown = await act.Should().ThrowAsync<HttpException>();
         thrown.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        _repository.Verify(r => r.Update(It.IsAny<UpdateCharacterEntity>()), Times.Never);
+        await _repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
     }
 
     [Fact]
     public async Task AnswerNotFoundForACharacterThatIsNotThere()
     {
         var characterId = Guid.NewGuid();
-        _repository.Setup(r => r.FindCharacter(characterId)).ReturnsAsync((Character?)null);
+        _repository.FindCharacter(characterId).Returns((Character?)null);
 
         var act = () => _service.ChangeStatusAsync(characterId, CharacterStatusTransition.Kill);
 
@@ -221,17 +231,15 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     private Guid Given(CharacterStatus status)
     {
         var characterId = Guid.NewGuid();
-        _repository.Setup(r => r.FindCharacter(characterId))
-            .ReturnsAsync(new Character { Id = characterId });
-        _repository.Setup(r => r.GetForUpdate(characterId))
-            .ReturnsAsync(new CharacterToUpdate
-            {
-                Id = characterId,
-                Status = status,
-                GameId = Guid.NewGuid(),
-                AuthorId = Guid.NewGuid(),
-                GameAssistantIds = Array.Empty<Guid>(),
-            });
+        _repository.FindCharacter(characterId).Returns(new Character { Id = characterId });
+        _repository.GetForUpdate(characterId).Returns(new CharacterToUpdate
+        {
+            Id = characterId,
+            Status = status,
+            GameId = Guid.NewGuid(),
+            AuthorId = Guid.NewGuid(),
+            GameAssistantIds = Array.Empty<Guid>(),
+        });
         return characterId;
     }
 
@@ -248,17 +256,13 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     public async Task SubscribeThePlayerAndNotTheCaller(CharacterStatusTransition transition)
     {
         var characterId = Given(CharacterStatus.Active);
-        var character = (await _repository.Object.GetForUpdate(characterId))!;
-        _repository.Setup(r => r.Update(It.IsAny<UpdateCharacterEntity>()))
-            .ReturnsAsync(new Character { Id = characterId });
+        var character = (await _repository.GetForUpdate(characterId))!;
+        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
         _repository
-            .Setup(r => r.HasOtherActiveCharacters(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>()))
-            .ReturnsAsync(false);
+            .HasOtherActiveCharacters(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>()).Returns(false);
 
         await _service.ChangeStatusAsync(characterId, transition);
 
-        _subscriptions.Verify(
-            s => s.SubscribeUserAsync(character.GameId, character.UserId, It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _subscriptions.Received(1).SubscribeUserAsync(character.GameId, character.UserId, Arg.Any<CancellationToken>());
     }
 }

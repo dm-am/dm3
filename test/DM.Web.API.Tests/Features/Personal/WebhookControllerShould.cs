@@ -11,12 +11,12 @@ using DM.Infrastructure.Core.Configuration;
 using DM.Testing;
 using DM.Web.API.Features.Personal.Notifications;
 using DM.Web.API.Features.Personal.Webhooks;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.Security;
@@ -46,14 +46,14 @@ public class WebhookControllerShould : UnitTestBase
     private static readonly string PublicKeyHex =
         Convert.ToHexString(PrivateKey.GeneratePublicKey().GetEncoded());
 
-    private readonly Mock<IBotLinkService> _botLinkService;
+    private readonly IBotLinkService _botLinkService;
 
     public WebhookControllerShould()
     {
         _botLinkService = Mock<IBotLinkService>();
         _botLinkService
-            .Setup(s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BotLinkResult { Success = true, Username = "CurrentUser" });
+            .VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new BotLinkResult { Success = true, Username = "CurrentUser" });
     }
 
     private WebhookController Controller(
@@ -62,11 +62,11 @@ public class WebhookControllerShould : UnitTestBase
         var controller = new WebhookController(
             new IWebhookHandler[]
             {
-                new DiscordWebhookHandler(_botLinkService.Object, Mock<ILogger<DiscordWebhookHandler>>().Object),
-                new TelegramWebhookHandler(_botLinkService.Object, Mock<ILogger<TelegramWebhookHandler>>().Object),
+                new DiscordWebhookHandler(_botLinkService, Mock<ILogger<DiscordWebhookHandler>>()),
+                new TelegramWebhookHandler(_botLinkService, Mock<ILogger<TelegramWebhookHandler>>()),
             },
             Options.Create(config),
-            Mock<ILogger<WebhookController>>().Object);
+            Mock<ILogger<WebhookController>>());
 
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body));
@@ -184,8 +184,7 @@ public class WebhookControllerShould : UnitTestBase
 
         var result = await controller.HandleWebhook("discord");
 
-        _botLinkService.Verify(
-            s => s.VerifyAndLink("ABC123", "discord", "9876543210", It.IsAny<CancellationToken>()), Times.Once);
+        await _botLinkService.Received(1).VerifyAndLink("ABC123", "discord", "9876543210", Arg.Any<CancellationToken>());
         var response = result.Should().BeOfType<OkObjectResult>().Which.Value;
         var json = JsonSerializer.SerializeToElement(response!);
         json.GetProperty("type").GetInt32().Should().Be(4);
@@ -226,7 +225,6 @@ public class WebhookControllerShould : UnitTestBase
         var result = await controller.HandleWebhook("telegram");
 
         result.Should().BeOfType<OkResult>("Telegram reads nothing from the response body");
-        _botLinkService.Verify(
-            s => s.VerifyAndLink("ABC123", "telegram", "12345", It.IsAny<CancellationToken>()), Times.Once);
+        await _botLinkService.Received(1).VerifyAndLink("ABC123", "telegram", "12345", Arg.Any<CancellationToken>());
     }
 }

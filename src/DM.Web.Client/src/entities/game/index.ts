@@ -87,7 +87,11 @@ export {
 
 // API
 export { gameApi, gameTagApi } from "./api";
-export type { ModerationTagGroup, ModerationTag } from "./api";
+export type {
+  GamesSearchParams,
+  ModerationTagGroup,
+  ModerationTag,
+} from "./api";
 
 // UI Components
 export {

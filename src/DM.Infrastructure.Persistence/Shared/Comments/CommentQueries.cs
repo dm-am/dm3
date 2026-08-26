@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
@@ -103,7 +101,6 @@ internal static class CommentQueries
     /// </summary>
     public static async Task<IEnumerable<Comment>> Page(
         DmDbContext dbContext,
-        IMapper mapper,
         Guid entityId,
         ICommentsQuery commentsQuery,
         PagingData paging,
@@ -117,7 +114,7 @@ internal static class CommentQueries
         return await CommentSorting
             .Apply(filtered, commentsQuery.SortBy, commentsQuery.SortOrder, dbContext)
             .Page(paging)
-            .ProjectTo<Comment>(mapper.ConfigurationProvider)
+            .ProjectToComment()
             .ToArrayAsync(ct);
     }
 
@@ -126,14 +123,13 @@ internal static class CommentQueries
     /// </summary>
     public static Task<Comment?> Single(
         DmDbContext dbContext,
-        IMapper mapper,
         Guid commentId,
         string queryTag,
         CancellationToken ct = default) =>
         dbContext.Comments
             .TagWith(queryTag)
             .Where(c => !c.IsRemoved && c.CommentId == commentId)
-            .ProjectTo<Comment>(mapper.ConfigurationProvider)
+            .ProjectToComment()
             .FirstOrDefaultAsync(ct);
 
     /// <summary>

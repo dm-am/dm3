@@ -6,7 +6,7 @@ using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;

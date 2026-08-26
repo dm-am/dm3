@@ -180,7 +180,7 @@ onMounted(() => fetchNotifications());
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .notifications-page
   padding: $medium

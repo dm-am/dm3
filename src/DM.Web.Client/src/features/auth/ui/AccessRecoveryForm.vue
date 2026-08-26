@@ -97,53 +97,40 @@ const cancel = () => {
   <Dialog :narrow="!result" :auto="!!result" @before-close="clearForm">
     <!-- Result: Password reset sent -->
     <template v-if="result === 'password'">
-      <div class="success-content">
-        <dialog-title>Проверьте почту</dialog-title>
-        <p class="main-text">
-          Мы отправили письмо на
-          <strong>{{ emailField.value.value }}</strong> со ссылкой для сброса
-          пароля.
-        </p>
-        <p class="expiry-note">Ссылка действительна 48 часов</p>
-        <Button type="button" class="confirm-btn" @click="cancel">
-          Закрыть
-        </Button>
-      </div>
+      <dialog-title>Проверьте почту</dialog-title>
+      <p class="main-text">
+        Мы отправили письмо на
+        <strong>{{ emailField.value.value }}</strong> со ссылкой для сброса
+        пароля.
+      </p>
+      <p class="expiry-note">Ссылка действительна 48 часов</p>
+      <Button type="button" @click="cancel"> Закрыть </Button>
     </template>
 
     <!-- Result: Activation resent -->
     <template v-else-if="result === 'activation'">
-      <div class="success-content">
-        <dialog-title>Проверьте почту</dialog-title>
-        <p class="main-text">
-          Мы отправили повторное письмо на
-          <strong>{{ emailField.value.value }}</strong> со ссылкой для
-          активации.
-        </p>
-        <p class="expiry-note">Ссылка действительна 48 часов</p>
-        <Button type="button" class="confirm-btn" @click="cancel">
-          Закрыть
-        </Button>
-      </div>
+      <dialog-title>Проверьте почту</dialog-title>
+      <p class="main-text">
+        Мы отправили повторное письмо на
+        <strong>{{ emailField.value.value }}</strong> со ссылкой для активации.
+      </p>
+      <p class="expiry-note">Ссылка действительна 48 часов</p>
+      <Button type="button" @click="cancel"> Закрыть </Button>
     </template>
 
     <!-- Result: Not found -->
     <template v-else-if="result === 'notfound'">
-      <div class="success-content">
-        <dialog-title>Аккаунт не найден</dialog-title>
-        <p class="main-text">
-          Аккаунта с почтой <strong>{{ emailField.value.value }}</strong> не
-          существует.
-        </p>
-        <p class="expiry-note">
-          <button type="button" class="field-action" @click="tryAgain">
-            Попробовать другую почту?
-          </button>
-        </p>
-        <Button type="button" class="confirm-btn" @click="cancel">
-          Закрыть
-        </Button>
-      </div>
+      <dialog-title>Аккаунт не найден</dialog-title>
+      <p class="main-text">
+        Аккаунта с почтой <strong>{{ emailField.value.value }}</strong> не
+        существует.
+      </p>
+      <p class="expiry-note">
+        <button type="button" class="field-action" @click="tryAgain">
+          Попробовать другую почту?
+        </button>
+      </p>
+      <Button type="button" @click="cancel"> Закрыть </Button>
     </template>
 
     <!-- Email form -->
@@ -189,13 +176,10 @@ const cancel = () => {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .field-action
   +inline-link-button
-
-.success-content
-  text-align: center
 
 .main-text
   margin: 0 0 $small
@@ -205,7 +189,4 @@ const cancel = () => {
   margin: 0 0 $medium
   color: $text-muted
   font-size: $secondary-font-size
-
-.confirm-btn
-  width: 100%
 </style>

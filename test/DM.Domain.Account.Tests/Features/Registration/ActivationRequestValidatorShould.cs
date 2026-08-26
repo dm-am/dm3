@@ -4,7 +4,7 @@ using DM.Domain.Account.Features.Registration;
 using DM.Domain.Core.Exceptions;
 using DM.Testing;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Registration;
@@ -12,15 +12,14 @@ namespace DM.Domain.Account.Tests.Features.Registration;
 public class ActivationRequestValidatorShould : UnitTestBase
 {
     private readonly ActivationRequestValidator validator;
-    private readonly Mock<IRegistrationRepository> repository;
+    private readonly IRegistrationRepository repository;
 
     public ActivationRequestValidatorShould()
     {
         repository = Mock<IRegistrationRepository>();
-        repository.Setup(r => r.UsernameFree(It.IsAny<string>(), default))
-            .ReturnsAsync(true);
+        repository.UsernameFree(Arg.Any<string>(), default).Returns(true);
 
-        validator = new ActivationRequestValidator(repository.Object);
+        validator = new ActivationRequestValidator(repository);
     }
 
     [Fact]

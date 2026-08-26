@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -122,6 +122,35 @@ public class CompilerPolicyShould
             "an added enum member back into a null on the wire");
     }
 
+    /// <summary>
+    /// The mapper diagnostics that stand in for a runtime configuration
+    /// assertion stay build errors, nullability included.
+    /// </summary>
+    /// <remarks>
+    /// RMG012 and RMG020 replaced AutoMapper's AssertConfigurationIsValid and
+    /// RMG068 guards the queryable projections; RMG090 is the nullability half
+    /// and was added after it cost the site every game page it had. A mapping
+    /// whose result is nullable feeding a member declared non-nullable does not
+    /// carry the null - Mapperly throws on it, so one authorless row answered
+    /// 500 for a whole response. All four ship below warning level, which under
+    /// TreatWarningsAsErrors means invisible, so each is worth exactly the line
+    /// in .editorconfig that raises it and nothing without it.
+    /// </remarks>
+    [Fact]
+    public void KeepTheMapperDiagnosticsAtErrorSeverity()
+    {
+        var editorConfig = File.ReadAllText(Path.Combine(RepositoryRoot, ".editorconfig"));
+
+        foreach (var diagnostic in new[] { "RMG012", "RMG020", "RMG068", "RMG090" })
+        {
+            editorConfig.Should().Contain(
+                $"dotnet_diagnostic.{diagnostic}.severity = error",
+                "{0} is only enforced by the line that raises it, and the diagnostic " +
+                "ships quiet enough that lowering it fails nothing until production does",
+                diagnostic);
+        }
+    }
+
     [Fact]
     public void NotRepeatTheSolutionWideNullableSettingInSourceFiles()
     {
@@ -211,9 +240,10 @@ public class CompilerPolicyShould
     /// its own is the one place where the pin does not hold.
     /// </summary>
     /// <remarks>
-    /// Two projects carried the value "preview". CI pins the SDK to 8.0.x and the
-    /// images build on sdk:8.0, so a feature of the next language compiled on a
-    /// developer machine and stopped CI with an error that names a feature and no
+    /// Two projects carried the value "preview". CI pins the SDK band (8.0.x at
+    /// the time) and the images build on the same band, so a feature of the next
+    /// language compiled on a developer machine and stopped CI with an error
+    /// that names a feature and no
     /// cause: the one failure the pin was written against, reintroduced by two lines
     /// that read as harmless repetition next to two properties which really were.
     /// </remarks>
@@ -289,7 +319,7 @@ public class CompilerPolicyShould
     private static string Band(string version)
     {
         var parts = version.Split('.');
-        parts.Length.Should().BeGreaterOrEqualTo(2, $"'{version}' should name a major and a minor");
+        parts.Length.Should().BeGreaterThanOrEqualTo(2, $"'{version}' should name a major and a minor");
         return parts[0] + "." + parts[1];
     }
 

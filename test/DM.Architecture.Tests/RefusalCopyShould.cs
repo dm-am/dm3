@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -201,7 +201,7 @@ public class RefusalCopyShould
         var root = RepositoryRoot;
         var sites = new List<ThrowSite>();
 
-        foreach (var source in SourceFiles(Path.Combine(root.FullName, "src")))
+        foreach (var source in RepositoryFiles.CsharpFiles(Path.Combine(root.FullName, "src"), BuildOutput))
         {
             var text = File.ReadAllText(source);
             var relative = Path.GetRelativePath(root.FullName, source).Replace('\\', '/');
@@ -216,7 +216,7 @@ public class RefusalCopyShould
             }
         }
 
-        sites.Should().HaveCountGreaterOrEqualTo(atLeast,
+        sites.Should().HaveCountGreaterThanOrEqualTo(atLeast,
             "a rule that matches nothing passes");
         return sites;
     }
@@ -325,27 +325,6 @@ public class RefusalCopyShould
         }
 
         return afterLiteral < text.Length && text[afterLiteral] == ']';
-    }
-
-    private static IEnumerable<string> SourceFiles(string directory)
-    {
-        foreach (var file in Directory.EnumerateFiles(directory, "*.cs"))
-        {
-            yield return file;
-        }
-
-        foreach (var nested in Directory.EnumerateDirectories(directory))
-        {
-            if (BuildOutput.Contains(Path.GetFileName(nested)))
-            {
-                continue;
-            }
-
-            foreach (var file in SourceFiles(nested))
-            {
-                yield return file;
-            }
-        }
     }
 
     private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;

@@ -1,6 +1,5 @@
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Moderation.Features.Tickets;
 
 namespace DM.Web.API.Features.General.Tickets;
@@ -9,10 +8,10 @@ namespace DM.Web.API.Features.General.Tickets;
 internal class TicketIntakeApiService : ITicketIntakeApiService
 {
     private readonly ITicketService _ticketService;
-    private readonly IMapper _mapper;
+    private readonly TicketIntakeMapper _mapper;
 
     /// <inheritdoc />
-    public TicketIntakeApiService(ITicketService ticketService, IMapper mapper)
+    public TicketIntakeApiService(ITicketService ticketService, TicketIntakeMapper mapper)
     {
         _ticketService = ticketService;
         _mapper = mapper;
@@ -21,7 +20,7 @@ internal class TicketIntakeApiService : ITicketIntakeApiService
     /// <inheritdoc />
     public async Task<CreateTicketIntakeResponse> CreateTicket(CreateTicketIntakeRequest request)
     {
-        var createTicketIntake = _mapper.Map<CreateTicketIntake>(request);
+        var createTicketIntake = _mapper.ToCreateTicketIntake(request);
         var ticket = await _ticketService.CreateIntakeTicket(createTicketIntake);
         return new CreateTicketIntakeResponse { TrackingToken = ticket.TrackingToken };
     }

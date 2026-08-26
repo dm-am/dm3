@@ -8,16 +8,16 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Abstractions;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Authorization;
 
 public class MessageIntentionResolverShould : UnitTestBase
 {
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly MessageIntentionResolver _resolver;
     private readonly Guid _testUserId = Guid.NewGuid();
     private readonly DateTime _now = DateTime.UtcNow;
@@ -25,14 +25,14 @@ public class MessageIntentionResolverShould : UnitTestBase
     public MessageIntentionResolverShould()
     {
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(p => p.Now).Returns(_now);
+        _dateTimeProvider.Now.Returns(_now);
 
         var options = Options.Create(new MessagingConfiguration
         {
             EditTimeoutMinutes = 60
         });
 
-        _resolver = new MessageIntentionResolver(options, _dateTimeProvider.Object);
+        _resolver = new MessageIntentionResolver(options, _dateTimeProvider);
     }
 
     private AuthenticatedUser CreateUser(Guid userId, UserRole role = UserRole.RegularUser)

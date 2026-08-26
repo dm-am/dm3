@@ -17,6 +17,15 @@ namespace DM.Domain.Core.Content;
 /// cut text a reader has already typed, and nothing in the product asked for the
 /// narrower figure. The minimum is the domain's, because that rule was live —
 /// a short description has been refused all along, only silently.
+///
+/// The same split then reappeared BETWEEN the two domain validators: creation
+/// read these constants while editing kept the old 100 / 50 / 50 written out by
+/// hand, so a game created with a 150-character title could not be saved again
+/// after any edit. Both validators read these constants now, and both directions
+/// of the rule are checked by
+/// <c>UpdateGameValidatorShould.AcceptEveryLengthGameCreationAccepts</c>.
+/// Whoever changes a number here changes it for creation and for editing at
+/// once, which is the point of the file.
 /// </remarks>
 public static class GameFieldLimits
 {

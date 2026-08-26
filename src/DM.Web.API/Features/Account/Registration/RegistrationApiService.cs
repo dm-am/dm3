@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Account.Features.Registration;
 
 namespace DM.Web.API.Features.Account.Registration;
@@ -8,12 +7,12 @@ namespace DM.Web.API.Features.Account.Registration;
 internal class RegistrationApiService : IRegistrationApiService
 {
     private readonly IRegistrationService _registrationService;
-    private readonly IMapper _mapper;
+    private readonly RegistrationMapper _mapper;
 
     /// <inheritdoc />
     public RegistrationApiService(
         IRegistrationService registrationService,
-        IMapper mapper)
+        RegistrationMapper mapper)
     {
         _registrationService = registrationService;
         _mapper = mapper;
@@ -21,5 +20,5 @@ internal class RegistrationApiService : IRegistrationApiService
 
     /// <inheritdoc />
     public Task Register(RegistrationRequest registration) =>
-        _registrationService.Register(_mapper.Map<UserRegistration>(registration));
+        _registrationService.Register(_mapper.ToUserRegistration(registration));
 }

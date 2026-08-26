@@ -41,6 +41,23 @@ internal class RequireRoleAttribute : TypeFilterAttribute
 
             if (identity.User.Role < minimumRole)
             {
+                // The one case where a refusal by rank names its reason: the
+                // rank on the account is enough and was withheld for want of a
+                // second factor. The generic sentence is not merely unhelpful
+                // here, it is untrue - the caller is an administrator being told
+                // the page is for administrators - and the reader would go
+                // looking for a broken site rather than for his own settings.
+                //
+                // Guarded by the recorded rank so that it stays the reason and
+                // not a hint: a withheld senior moderator asking for an
+                // administrator's page is short of the rank either way, and gets
+                // the refusal that names nothing.
+                if (identity.User.PrivilegeWithheld && identity.User.RecordedRole >= minimumRole)
+                {
+                    throw new HttpException(
+                        HttpStatusCode.Forbidden, RefusalMessage.PrivilegeWithheldWithoutTwoFactor);
+                }
+
                 // The role that would have been enough is not named. The reader
                 // cannot grant it to themselves, and the refusal is shown to an
                 // anonymous caller too.

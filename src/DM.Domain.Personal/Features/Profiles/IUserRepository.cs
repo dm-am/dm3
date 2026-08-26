@@ -115,7 +115,7 @@ public class UpdateUserEntity
 }
 
 /// <summary>
-/// DTO for updating user settings in MongoDB
+/// DTO for updating user settings
 /// </summary>
 public class UpdateUserSettingsEntity
 {

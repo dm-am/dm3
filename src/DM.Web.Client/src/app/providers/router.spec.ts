@@ -514,21 +514,6 @@ describe("publication routes of a blog", () => {
 });
 
 /**
- * The variants catalog is reachable only in a development build: the route sits
- * inside an import.meta.env.DEV branch that rollup drops along with the dynamic
- * import. The check lives here because, by the FSD rules, the page does not
- * import the router itself.
- */
-describe("the mockup catalogs", () => {
-  it("answer at their own routes in a development build", () => {
-    const route = router.resolve("/dev/chat-events");
-
-    expect(route.name).toBe("dev-chat-events-variants");
-    expect(route.meta.title).toBe("Мокапы: эвенты чата");
-  });
-});
-
-/**
  * The static head is what a crawler and the tab before the first paint read,
  * and `afterEach` writes the root route's title over it the moment the bundle
  * boots. Two names for one page is what that produced: the document called the

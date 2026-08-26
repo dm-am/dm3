@@ -427,8 +427,8 @@ onBeforeUnmount(() => unregisterExpand?.());
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/Animations"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Animations" as *
 
 .truncated-content-wrapper
   display: flex

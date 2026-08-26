@@ -1,14 +1,13 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
 using DM.Infrastructure.Persistence.Repositories.Personal;
 using DM.Infrastructure.Persistence.Shared.Users;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
@@ -51,9 +50,6 @@ public class UserListEnrichmentShould
     {
         public DateTimeOffset Now => Created.AddDays(1);
     }
-
-    private static readonly IMapper Mapper = new MapperConfiguration(cfg =>
-        cfg.AddProfile<GeneralUserMappingProfile>()).CreateMapper();
 
     private static DbUser NewUser(Guid id, string username) => new()
     {
@@ -124,7 +120,7 @@ public class UserListEnrichmentShould
     }
 
     private static UserRepository Repository(DmDbContext context) =>
-        new(context, null!, new FixedClock(), Mapper);
+        new(context, new FixedClock());
 
     private static Task<GeneralUser> ListedAsync(DmDbContext context) =>
         Repository(context)

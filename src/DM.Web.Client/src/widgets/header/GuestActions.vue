@@ -7,6 +7,7 @@ import {
   RegistrationForm,
   RegistrationSuccess,
   AccessRecoveryForm,
+  TwoFactorRemovalForm,
 } from "@/features/auth";
 import { REDIRECT_QUERY_KEY, resumeTarget } from "@/shared/lib/auth";
 
@@ -51,6 +52,13 @@ const { open: openLogin, close: closeLogin } = useModal({
       closeLogin();
       openRecovery();
     },
+    // Neither the phone nor the recovery codes. The mailed path is the only
+    // way back from there, and it starts here rather than in the recovery
+    // dialog next door: that one resets a password, which this reader knows.
+    onCantPassSecondFactor: () => {
+      closeLogin();
+      openTwoFactorRemoval();
+    },
   },
 });
 
@@ -93,6 +101,13 @@ const { open: openRecovery, close: closeRecovery } = useModal({
       return prefillEmail.value;
     },
     onCancel: () => closeRecovery(),
+  },
+});
+
+const { open: openTwoFactorRemoval, close: closeTwoFactorRemoval } = useModal({
+  component: TwoFactorRemovalForm,
+  attrs: {
+    onCancel: () => closeTwoFactorRemoval(),
   },
 });
 
@@ -169,7 +184,7 @@ function handleRecoveryClick() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .action-link
   vertical-align: baseline

@@ -6,7 +6,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Messaging.Authorization;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
 using DM.Testing.Dsl;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Authorization;

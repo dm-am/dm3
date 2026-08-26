@@ -204,11 +204,7 @@ internal class SubscriptionService : ISubscriptionService
         var users = new List<GeneralUser>();
         foreach (var subscriberId in subscriberIdList)
         {
-            var user = await _userLookupService.GetAsync(subscriberId);
-            if (user != null)
-            {
-                users.Add(user);
-            }
+            users.Add(await _userLookupService.GetAsync(subscriberId));
         }
 
         return users;

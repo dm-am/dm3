@@ -48,7 +48,7 @@ internal class AchievementService : IAchievementService
     public async Task<AchievementCategory> UpdateCategoryAsync(UpdateAchievementCategory update, CancellationToken ct = default)
     {
         await _updateCategoryValidator.ValidateAndThrowAsync(update, ct);
-        if (update.IconName != null) EnsureIconValid(update.IconName);
+        if (update.IconName != null) GameIconCatalog.EnsureValid(update.IconName);
         _ = await _repository.GetCategoryAsync(update.Id, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.AchievementCategoryNotFound);
         return await _repository.UpdateCategoryAsync(update, ct);
@@ -135,14 +135,5 @@ internal class AchievementService : IAchievementService
         return newlyGranted
             ? await _repository.GetUserAchievementsAsync(user.UserId, ct)
             : earned;
-    }
-
-    private static void EnsureIconValid(string iconName)
-    {
-        if (!GameIconCatalog.IsValid(iconName))
-        {
-            throw new HttpException(HttpStatusCode.BadRequest,
-                RefusalMessage.UnknownIconName(iconName));
-        }
     }
 }

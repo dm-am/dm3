@@ -38,8 +38,8 @@ withDefaults(
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Skeleton"
-@import "@/assets/styles/Tables"
+@use "@/assets/styles/Skeleton" as *
+@use "@/assets/styles/Tables" as *
 
 .expandable-list-skeleton
   border: $table-gap solid $border

@@ -53,7 +53,7 @@ onMounted(() => store.fetchActivePolls());
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .forward
   font-weight: bold

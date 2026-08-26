@@ -1,4 +1,3 @@
-using Autofac.Extensions.DependencyInjection;
 using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Core.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -33,7 +32,14 @@ class Program
     /// <returns>Configured host builder</returns>
     public static IHostBuilder CreateWebHostBuilder(string[] args) =>
         Host.CreateDefaultBuilder(args)
-            .UseServiceProviderFactory(new AutofacServiceProviderFactory())
+            // Both validations, in every environment: a missing registration or
+            // a process-wide component holding a scoped one is a defect of the
+            // composition, not of the environment it surfaced in.
+            .UseDefaultServiceProvider(options =>
+            {
+                options.ValidateScopes = true;
+                options.ValidateOnBuild = true;
+            })
             .UseSerilog()
             .ConfigureWebHostDefaults(webBuilder => webBuilder.UseDefault<Startup>());
 }

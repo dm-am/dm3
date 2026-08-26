@@ -97,4 +97,61 @@ describe("author-edit round trip", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  /**
+   * And declares the envelope it actually receives.
+   *
+   * Every single-resource answer of this API is `{ "resource": ... }`
+   * (API_DESIGN.md: "Envelope<T> - стандарт для всех одиночных ресурсов"), and
+   * the axios layer hands the body over untouched - unwrapResource is the
+   * caller's job. A method declared with the bare payload type therefore lies
+   * about its own answer, and the lie is silent: the field the editor reads is
+   * undefined, the seeding falls through to whatever it had, and the editor
+   * opens on the Display render or on nothing at all.
+   *
+   * That is not hypothetical. Three of these eight were declared bare: the game
+   * post, the private message and the global chat message. The post one
+   * published [private] text to the whole room on the first save, because what
+   * the editor kept instead was the Display render, where the block is already
+   * flattened into ordinary markup.
+   *
+   * The rule reads source text for the same reason the rule above does: the
+   * declared type is the only thing these eight call sites share, and there is
+   * nothing for TypeScript to check it against - the type argument is written
+   * by hand and the server is not in the compilation.
+   */
+  it("declares the envelope the server actually sends", () => {
+    const ENVELOPE =
+      /Api\.(get|post|patch|put)<(Envelope|ListEnvelope|CursorEnvelope)</;
+    const CALL = /Api\.(get|post|patch|put)</;
+    const offenders: string[] = [];
+
+    for (const file of sourceFiles(join(HERE, "entities"))) {
+      if (!/api[\\/][a-zA-Z]+Api\.ts$/.test(file)) continue;
+      const lines = readFileSync(file, "utf8").split("\n");
+
+      for (let i = 0; i < lines.length; i++) {
+        if (!AUTHOR_EDIT_CALL.test(lines[i])) continue;
+
+        // The audience is an argument of the call, so the declaration is on
+        // this line or a few above it - the formatter breaks the call across a
+        // handful of lines at most.
+        const opening = lines
+          .slice(Math.max(0, i - 6), i + 1)
+          .reverse()
+          .find((line) => CALL.test(line));
+        if (opening && ENVELOPE.test(opening)) continue;
+
+        offenders.push(
+          relative(HERE, file) +
+            ":" +
+            (i + 1) +
+            " -> " +
+            (opening ?? "?").trim(),
+        );
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
 });

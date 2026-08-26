@@ -1,4 +1,3 @@
-using Autofac;
 using DM.Domain.Community.Authorization;
 using DM.Domain.Personal.Authorization;
 using DM.Infrastructure.Core;
@@ -14,7 +13,6 @@ using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Workers.NotificationDispatcher.Dispatching;
 using DM.Workers.NotificationDispatcher.Bot;
 using DM.Workers.NotificationDispatcher.Email;
-using Jamq.Client.Abstractions.Consuming;
 using DM.Domain.Moderation;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -60,12 +58,10 @@ public class Startup
             // deployment answers on. Empty, it builds no link and says so nowhere,
             // which is the failure the declaration exists to refuse.
             .RequireGeneratedLinks()
-            .RequireRelationalStorage()
-            .RequireDocumentStorage();
+            .RequireRelationalStorage();
 
         services.AddDmRetryingConsumer(NotificationDispatcherConsumer.QueueName);
-        services.AddDmJamqClient(
-            consumerBuilderDefaults: builder => builder.WithMiddleware<RetryingConsumerMiddleware>());
+        services.AddDmConsumerMiddleware<RetryingConsumerMiddleware>();
         services.AddHostedService<NotificationDispatcherConsumer>();
 
         // The two exchanges this host publishes to. Same reason as in the API:
@@ -90,58 +86,51 @@ public class Startup
                 .UseNpgsql(_configuration.GetConnectionString(nameof(ConnectionStrings.Rdb))))
             .AddHttpClient()
             .AddMvc();
-    }
-
-    /// <summary>
-    /// Configure application container
-    /// </summary>
-    /// <param name="builder">Container builder</param>
-    public void ConfigureContainer(ContainerBuilder builder)
-    {
-        builder.RegisterDefaultTypes();
-
-        builder.RegisterModuleOnce<CoreModule>();
-        builder.RegisterModuleOnce<PersistenceModule>();
-        builder.RegisterModuleOnce<MessagingModule>();
-        // Register Domain.Personal types (PersonalModule was removed)
-        var personalAssembly = typeof(UserIntention).Assembly;
-        builder.RegisterDefaultTypes(personalAssembly);
-        builder.RegisterMapper(personalAssembly);
-        // Register Domain.Community types (CommunityModule was removed)
-        var communityAssembly = typeof(PollIntention).Assembly;
-        builder.RegisterDefaultTypes(communityAssembly);
-        builder.RegisterMapper(communityAssembly);
 
         // IIdentityProvider, declared by NotificationService for its read and mark
         // methods, which this host never calls - it only creates. The whole account
         // domain used to be scanned in for that one interface, and it brought its
         // option sections, its mapper profiles and an authorization context
-        // answering Guest with it. One registration instead, and it refuses rather
-        // than answers: see NoIdentityProvider.
-        builder.RegisterType<NoIdentityProvider>().As<IIdentityProvider>().InstancePerLifetimeScope();
+        // answering Guest with it. One type instead, and it refuses rather than
+        // answers - both faces of it: see NoIdentityProvider.
+        services.AddScoped<NoIdentityProvider>();
+        services.AddScoped<IIdentityProvider>(
+            provider => provider.GetRequiredService<NoIdentityProvider>());
+        services.AddScoped<DM.Domain.Core.Authorization.IAuthorizationContextProvider>(
+            provider => provider.GetRequiredService<NoIdentityProvider>());
 
-        builder.RegisterModuleOnce<MailModule>();
+        // Same shape for the realtime push the scanned user service declares:
+        // the hub lives in the API, so this host refuses rather than skips.
+        services.AddScoped<DM.Domain.Personal.Features.Profiles.IRealtimeAvatarBroadcaster,
+            NoRealtimeAvatarBroadcaster>();
 
         // Email notification sender
-        builder.RegisterType<NotificationEmailSender>()
-            .As<INotificationEmailSender>()
-            .InstancePerLifetimeScope();
+        services.AddScoped<INotificationEmailSender, NotificationEmailSender>();
 
         // Bot notification sender (Discord/Telegram)
-        builder.RegisterType<NotificationBotSender>()
-            .As<INotificationBotSender>()
-            .InstancePerLifetimeScope();
+        services.AddScoped<INotificationBotSender, NotificationBotSender>();
 
         // The producer is a type of its own rather than a field the processor builds.
-        // Jamq opens a scope per delivered message and resolves the processor in it,
-        // so a producer constructed by the processor took an AMQP channel per message
-        // and never gave it back: a channel returns to the pool only in Dispose, and
-        // the processor was not IDisposable. Here a scope lives for one message, so
+        // The consumer opens a scope per delivered message and resolves the processor
+        // in it, so a producer constructed by the processor opened an AMQP channel per
+        // message and never closed it: a channel closes only in Dispose, and the
+        // processor was not IDisposable. Here a scope lives for one message, so
         // Dispose is the load-bearing half rather than the lifetime. The scope matches
         // the API, where several services ask for one producer within a request.
-        builder.RegisterType<RealtimeNotificationProducer>()
-            .As<IRealtimeNotificationProducer>()
-            .InstancePerLifetimeScope();
+        services.AddScoped<IRealtimeNotificationProducer, RealtimeNotificationProducer>();
+
+        // The DI modules and the scans, after everything the host wires
+        // explicitly: the scans only fill gaps, so the DbContext and the
+        // registrations above must already be on the collection when they run.
+        services
+            .AddDmMail()
+            .AddDmMessaging()
+            .AddDmCore()
+            .AddDmPersistence()
+            .AddDefaultTypes(typeof(Startup).Assembly)
+            // Domain.Personal and Domain.Community types (their modules were removed)
+            .AddDefaultTypes(typeof(UserIntention).Assembly)
+            .AddDefaultTypes(typeof(PollIntention).Assembly);
     }
 
     /// <summary>

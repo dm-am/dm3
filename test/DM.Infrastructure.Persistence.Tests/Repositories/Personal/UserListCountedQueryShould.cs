@@ -6,7 +6,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
 using DM.Infrastructure.Persistence.Repositories.Personal;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
@@ -143,14 +143,14 @@ public class UserListCountedQueryShould
     }
 
     /// <summary>
-    /// The list repository over a probe context. Mongo and the mapper are the two
-    /// dependencies <see cref="UserRepository.BuildPageQuery" /> does not touch —
-    /// settings live in Mongo and the projection happens after — so they are passed
-    /// as null rather than stood up, which is also what makes this test cheap enough
-    /// to sit in the unit tier next to the statement it reads.
+    /// The list repository over a probe context. The mapper is the one dependency
+    /// <see cref="UserRepository.BuildPageQuery" /> does not touch — the
+    /// projection happens after — so it is passed as null rather than stood up,
+    /// which is also what makes this test cheap enough to sit in the unit tier
+    /// next to the statement it reads.
     /// </summary>
     private static UserRepository Repository(DmDbContext context) =>
-        new(context, null!, new FixedClock(), null!);
+        new(context, new FixedClock());
 
     private sealed class FixedClock : IDateTimeProvider
     {

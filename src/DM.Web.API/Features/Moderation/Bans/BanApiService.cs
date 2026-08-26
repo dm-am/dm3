@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Dto;
 using DM.Domain.Moderation.Features.Warnings;
+using DM.Web.API.Features.Moderation.Warnings;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Moderation.Bans;
@@ -12,10 +12,10 @@ namespace DM.Web.API.Features.Moderation.Bans;
 internal class BanApiService : IBanApiService
 {
     private readonly IBanService _banService;
-    private readonly IMapper _mapper;
+    private readonly WarningMapper _mapper;
 
     /// <inheritdoc />
-    public BanApiService(IBanService banService, IMapper mapper)
+    public BanApiService(IBanService banService, WarningMapper mapper)
     {
         _banService = banService;
         _mapper = mapper;
@@ -31,8 +31,8 @@ internal class BanApiService : IBanApiService
         {
             Username = login,
             IsBanned = activeBan != null,
-            ActiveBan = activeBan != null ? _mapper.Map<Ban>(activeBan) : null,
-            History = bans.Select(_mapper.Map<Ban>)
+            ActiveBan = activeBan != null ? _mapper.ToBan(activeBan) : null,
+            History = bans.Select(_mapper.ToBan)
         };
     }
 
@@ -56,8 +56,8 @@ internal class BanApiService : IBanApiService
         {
             Username = login,
             IsBanned = activeBan != null,
-            ActiveBan = activeBan != null ? _mapper.Map<PublicBan>(activeBan) : null,
-            History = bans.Where(b => !b.IsLifted).Select(_mapper.Map<PublicBan>)
+            ActiveBan = activeBan != null ? _mapper.ToPublicBan(activeBan) : null,
+            History = bans.Where(b => !b.IsLifted).Select(_mapper.ToPublicBan)
         };
     }
 
@@ -65,14 +65,14 @@ internal class BanApiService : IBanApiService
     public async Task<Envelope<PublicBan>?> GetActiveBan(string login)
     {
         var ban = await _banService.GetActiveBan(login);
-        return ban != null ? new Envelope<PublicBan>(_mapper.Map<PublicBan>(ban)) : null;
+        return ban != null ? new Envelope<PublicBan>(_mapper.ToPublicBan(ban)) : null;
     }
 
     /// <inheritdoc />
     public async Task<ListEnvelope<Ban>> GetAllActiveBans(BanType? type = null)
     {
         var bans = await _banService.GetAllActiveBans();
-        var mapped = bans.Select(_mapper.Map<Ban>);
+        var mapped = bans.Select(_mapper.ToBan);
 
         // The type is derived during mapping, so the filter runs after it. The
         // parameter used to be accepted, documented and ignored: ?type=Permanent
@@ -90,7 +90,7 @@ internal class BanApiService : IBanApiService
     {
         var (bans, totalCount) = await _banService.GetBanHistory(query.Skip, query.Take);
         return new ListEnvelope<Ban>(
-            bans.Select(_mapper.Map<Ban>),
+            bans.Select(_mapper.ToBan),
             new PagingInfo(query.Skip, query.Take, totalCount));
     }
 
@@ -108,7 +108,7 @@ internal class BanApiService : IBanApiService
         };
 
         var ban = await _banService.CreateBan(createBan);
-        return new Envelope<Ban>(_mapper.Map<Ban>(ban));
+        return new Envelope<Ban>(_mapper.ToBan(ban));
     }
 
     /// <inheritdoc />

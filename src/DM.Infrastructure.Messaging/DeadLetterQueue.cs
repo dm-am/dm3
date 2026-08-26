@@ -1,3 +1,5 @@
+using System.Threading;
+using System.Threading.Tasks;
 using RabbitMQ.Client;
 
 namespace DM.Infrastructure.Messaging;
@@ -22,14 +24,14 @@ public static class DeadLetterQueue
     /// lands in it.
     /// </summary>
     /// <remarks>
-    /// Called before the consumer subscribes, and knowingly doubling the client:
-    /// naming a dead-letter exchange in the consumer parameters already has the
-    /// client declare this same topology. The double stands because that is an
-    /// internal of a pinned version, and losing it fails in silence - an exchange
-    /// nothing declared discards what is dead-lettered into it exactly as quietly
-    /// as having no dead-letter exchange at all.
+    /// The other half of the routing lives in the consumer parameters: naming a
+    /// <see cref="DmConsumerParameters.DeadLetterExchange"/> stamps the argument
+    /// on the working queue, and this call is what makes the named exchange
+    /// exist and keep what arrives. Losing either half fails in silence — an
+    /// exchange nothing declared discards what is dead-lettered into it exactly
+    /// as quietly as having no dead-letter exchange at all.
     ///
-    /// The price of the double is agreement argument for argument: fanout,
+    /// The two declarations have to agree argument for argument: fanout,
     /// durable, not auto-deleted; the queue durable, not exclusive, not
     /// auto-deleted; an empty binding key. A declaration that disagrees is
     /// answered with 406 when the consumer subscribes, and the host stops.
@@ -39,17 +41,22 @@ public static class DeadLetterQueue
     /// ceiling: the same unprocessable message returns every minute forever. A
     /// poison message has to stop somewhere a human can look at it.
     /// </remarks>
-    /// <param name="connectionFactory">Broker connection factory.</param>
+    /// <param name="connection">Broker connection of the host.</param>
     /// <param name="exchangeName">Name of the dead-letter exchange to declare.</param>
-    public static void DeclareTerminal(IAsyncConnectionFactory connectionFactory, string exchangeName)
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public static async Task DeclareTerminal(
+        DmBrokerConnection connection, string exchangeName, CancellationToken cancellationToken)
     {
         var queueName = $"{exchangeName}-dlq";
 
-        using var configuringConnection = connectionFactory.CreateConnection();
-        using var channel = configuringConnection.CreateModel();
+        var open = await connection.GetOpenConnection(cancellationToken);
+        await using var channel = await open.CreateChannelAsync(cancellationToken: cancellationToken);
 
-        channel.ExchangeDeclare(exchangeName, ExchangeType.Fanout, true);
-        channel.QueueDeclare(queueName, true, false, false);
-        channel.QueueBind(queueName, exchangeName, string.Empty);
+        await channel.ExchangeDeclareAsync(exchangeName, ExchangeType.Fanout, durable: true,
+            autoDelete: false, cancellationToken: cancellationToken);
+        await channel.QueueDeclareAsync(queueName, durable: true, exclusive: false,
+            autoDelete: false, arguments: null, cancellationToken: cancellationToken);
+        await channel.QueueBindAsync(queueName, exchangeName, string.Empty,
+            cancellationToken: cancellationToken);
     }
 }

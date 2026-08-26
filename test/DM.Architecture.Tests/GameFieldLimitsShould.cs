@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using DM.Domain.Core.Content;
 using DM.Web.API.Features.Game.Games;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;

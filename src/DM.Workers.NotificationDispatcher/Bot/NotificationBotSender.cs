@@ -14,17 +14,14 @@ using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Workers.NotificationDispatcher.Dispatching;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.Entities.Account.Settings;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MongoDB.Driver;
 
 namespace DM.Workers.NotificationDispatcher.Bot;
 
 /// <inheritdoc />
-internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, INotificationBotSender
+internal class NotificationBotSender : INotificationBotSender
 {
     private readonly DmDbContext _dbContext;
     private readonly BotConfiguration _botConfig;
@@ -34,11 +31,10 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
 
     public NotificationBotSender(
         DmDbContext dbContext,
-        DmMongoClient mongoClient,
         IOptions<BotConfiguration> botConfig,
         IHttpClientFactory httpClientFactory,
         IOptions<SiteAddressConfiguration> siteAddresses,
-        ILogger<NotificationBotSender> logger) : base(mongoClient)
+        ILogger<NotificationBotSender> logger)
     {
         _dbContext = dbContext;
         _botConfig = botConfig.Value;
@@ -62,14 +58,12 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
             return;
         }
 
-        // Get user settings from MongoDB
-        var settingsList = await Collection
-            .Find(Filter.In(s => s.UserId, userIds))
-            .ToListAsync(ct);
+        // Get user settings
+        var settingsDict = await _dbContext.UserSettings
+            .Where(s => userIds.Contains(s.UserId))
+            .ToDictionaryAsync(s => s.UserId, ct);
 
-        var settingsDict = settingsList.ToDictionary(s => s.UserId);
-
-        // Get user bot IDs from PostgreSQL
+        // Get user bot IDs
         var userBotIds = await _dbContext.Users
             .Where(u => userIds.Contains(u.UserId))
             .Select(u => new { u.UserId, u.DiscordId, u.TelegramId })
@@ -93,7 +87,7 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
             // Send to Discord
             if (!string.IsNullOrEmpty(botIds.DiscordId) && !string.IsNullOrEmpty(_botConfig.DiscordBotToken))
             {
-                if (ShouldSendToChannel(settings?.DiscordPreferences, category.Value))
+                if (NotificationChannels.ShouldSend(settings?.DiscordPreferences, category.Value))
                 {
                     await Deliver(DiscordChannel, eventType,
                         () => SendDiscordMessage(botIds.DiscordId, discordMessage, ct));
@@ -103,23 +97,13 @@ internal class NotificationBotSender : MongoCollectionRepository<UserSettings>, 
             // Send to Telegram
             if (!string.IsNullOrEmpty(botIds.TelegramId) && !string.IsNullOrEmpty(_botConfig.TelegramBotToken))
             {
-                if (ShouldSendToChannel(settings?.TelegramPreferences, category.Value))
+                if (NotificationChannels.ShouldSend(settings?.TelegramPreferences, category.Value))
                 {
                     await Deliver(TelegramChannel, eventType,
                         () => SendTelegramMessage(botIds.TelegramId, telegramMessage, ct));
                 }
             }
         }
-    }
-
-    private static bool ShouldSendToChannel(NotificationChannelPreference? prefs, NotificationCategory category)
-    {
-        if (prefs == null || !prefs.Enabled)
-        {
-            return false;
-        }
-
-        return prefs.EnabledCategories.Contains(category);
     }
 
     /// <summary>Channel name the two bots are counted under.</summary>

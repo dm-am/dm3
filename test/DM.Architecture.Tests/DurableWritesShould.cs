@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -39,11 +39,36 @@ public class DurableWritesShould
         "SaveChangesAsync(",
         "ExecuteUpdateAsync(",
         "ExecuteDeleteAsync(",
+        // W1.1 made raw SQL a normal write path (ON CONFLICT upserts, the
+        // retention sweeper); a method pairing one of these with SaveChanges
+        // owes the same wrapper as any other double write.
+        "ExecuteSqlRawAsync(",
+        "ExecuteSqlInterpolatedAsync(",
+    ];
+
+    /// <summary>
+    /// The two spellings of "this block runs inside an execution strategy".
+    /// </summary>
+    /// <remarks>
+    /// The strategy taken by hand, and <c>RetryableWrite.Run</c> - which is that
+    /// same preamble plus the change-tracker clear, written once instead of the
+    /// nineteen times it used to be. Both put the transaction below INSIDE the
+    /// strategy, which is the property this rule is about, and the helper does it
+    /// by construction rather than by the caller remembering to.
+    ///
+    /// This is not an exemption: a method still has to open a transaction and
+    /// commit it, and it still has to do so under one of these two. What changed
+    /// is that the strategy has a name; the rule reads text, so it has to be told
+    /// the name.
+    /// </remarks>
+    private static readonly string[] Strategy =
+    [
+        "CreateExecutionStrategy(",
+        "RetryableWrite.Run(",
     ];
 
     private static readonly string[] Wrapper =
     [
-        "CreateExecutionStrategy(",
         "BeginTransactionAsync(",
         "CommitAsync(",
     ];
@@ -59,6 +84,12 @@ public class DurableWritesShould
             "compensation on a lost race, asserted by PublishAfterCommitShould",
         ["AddAsync"] =
             "two branches of one if/else, so a call writes once",
+        ["UpdateUser"] =
+            "retry on a lost settings-insert race: the second write replays the first " +
+            "after the whole first transaction rolled back, it does not follow it",
+        ["FlushAsync"] =
+            "two single-statement writes where the first either ends the method " +
+            "or touched zero rows - there is no half-done state to protect",
     };
 
     /// <summary>
@@ -107,7 +138,38 @@ public class DurableWritesShould
     }
 
     private static bool Wrapped(SourceText.Member member) =>
+        UnderStrategy(member) &&
         Wrapper.All(call => member.Body.Contains(call, StringComparison.Ordinal));
+
+    private static bool UnderStrategy(SourceText.Member member) =>
+        Strategy.Any(call => member.Body.Contains(call, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Whether every method of the file that calls this one is wrapped.
+    /// </summary>
+    /// <remarks>
+    /// A helper extracted out of a transaction is not a second transaction: its
+    /// writes land inside the one its caller opened, and they roll back with it.
+    /// Asked of the callers rather than answered by an entry in the register
+    /// above, because the property that makes such a helper safe is exactly this
+    /// one, and it stops being true the moment somebody calls it from outside a
+    /// transaction - at which point that caller is flagged in its own right and
+    /// this helper is flagged with it.
+    ///
+    /// "At least one caller" is half the answer: a helper nothing in the file
+    /// calls is either dead or reached by a route this parser cannot see, and
+    /// neither is a reason to trust it.
+    /// </remarks>
+    private static bool CalledOnlyFromWrappedMembers(
+        SourceText.Member member, IReadOnlyList<SourceText.Member> file)
+    {
+        var callers = file
+            .Where(other => other.Name != member.Name)
+            .Where(other => Regex.IsMatch(other.Body, $@"(?<![.\w]){Regex.Escape(member.Name)}\s*\("))
+            .ToList();
+
+        return callers.Count > 0 && callers.TrueForAll(Wrapped);
+    }
 
     private static int Occurrences(string body, string call)
     {
@@ -153,6 +215,7 @@ public class DurableWritesShould
                 if (Deliberate.ContainsKey(member.Name)) continue;
                 if (Trips(member, members) < 2) continue;
                 if (Wrapped(member)) continue;
+                if (CalledOnlyFromWrappedMembers(member, members)) continue;
 
                 offenders.Add($"{Path.GetFileName(path)}.{member.Name}");
             }
@@ -177,7 +240,7 @@ public class DurableWritesShould
             foreach (var member in SourceText.Members(SourceText.ReadCode(path)))
             {
                 if (!member.Body.Contains("BeginTransactionAsync(", StringComparison.Ordinal)) continue;
-                if (member.Body.Contains("CreateExecutionStrategy(", StringComparison.Ordinal)) continue;
+                if (UnderStrategy(member)) continue;
 
                 offenders.Add($"{Path.GetFileName(path)}.{member.Name}");
             }

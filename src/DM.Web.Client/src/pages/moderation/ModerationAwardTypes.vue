@@ -101,7 +101,7 @@ async function toggleActive(t: AwardType) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .award-types-admin
   display: flex

@@ -12,10 +12,10 @@ internal class CreateTagGroupValidator : AbstractValidator<CreateTagGroup>
     {
         RuleFor(g => g.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(100).WithMessage(ValidationError.Long);
+            .MaximumLength(TagFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(g => g.Description)
-            .MaximumLength(500).WithMessage(ValidationError.Long);
+            .MaximumLength(TagFieldLimits.DescriptionMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(g => g.SortOrder)
             .GreaterThanOrEqualTo(0).WithMessage(ValidationError.Invalid);

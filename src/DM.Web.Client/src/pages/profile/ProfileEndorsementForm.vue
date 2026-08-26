@@ -166,7 +166,7 @@ async function submit() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .endorsement-form-page
   width: 100%

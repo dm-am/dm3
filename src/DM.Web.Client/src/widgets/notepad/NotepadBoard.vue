@@ -218,7 +218,7 @@ function focusEntry(index: number) {
 function onEntryKeydown(event: KeyboardEvent, index: number) {
   const list = sortedEntries.value;
   const last = list.length - 1;
-  let nextIndex: number | null = null;
+  let nextIndex: number;
 
   switch (event.key) {
     case "ArrowDown":
@@ -430,8 +430,8 @@ onMounted(fetchEntries);
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Skeleton" as *
 
 .notepad
   display: flex

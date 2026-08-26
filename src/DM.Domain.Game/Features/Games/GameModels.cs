@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
@@ -538,16 +539,6 @@ public class RoomAccess
     /// User who has access (reader or character author)
     /// </summary>
     public GeneralUser User { get; set; } = null!;
-
-    /// <summary>
-    /// When access was granted
-    /// </summary>
-    public DateTimeOffset GrantedUtc { get; set; }
-
-    /// <summary>
-    /// User who granted access
-    /// </summary>
-    public GeneralUser GrantedBy { get; set; } = null!;
 }
 
 /// <summary>
@@ -641,11 +632,6 @@ public class Room
     /// Room settings
     /// </summary>
     public RoomSettings Settings { get; set; } = null!;
-
-    /// <summary>
-    /// Default room name
-    /// </summary>
-    public const string DefaultRoomName = "Игровая комната";
 }
 
 /// <summary>
@@ -693,9 +679,10 @@ public class CharacterShort
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Character owner
+    /// Character owner. Null for an NPC: the character row carries no author
+    /// identifier at all, and the roster line is the only owner it has.
     /// </summary>
-    public GeneralUser Author { get; set; } = null!;
+    public GeneralUser? Author { get; set; }
 
     /// <summary>
     /// Character status
@@ -837,9 +824,10 @@ public class Character
     public string? Descriptor { get; set; }
 
     /// <summary>
-    /// Character author
+    /// Character author. Null for an NPC, the same way
+    /// <see cref="CharacterShort.Author"/> is.
     /// </summary>
-    public GeneralUser Author { get; set; } = null!;
+    public GeneralUser? Author { get; set; }
 
     /// <summary>
     /// Character name
@@ -1007,9 +995,14 @@ public class Post
     /// collection subquery concatenated onto an in-memory array, and it refused
     /// the query rather than one member, so every read of a post answered 500.
     /// The two parts project on their own; joining them is not database work.
+    ///
+    /// The empty id is not one of them. Written as a plain concatenation, a
+    /// projection that never filled the master put Guid.Empty at the head of
+    /// this list, and Guid.Empty is the id an anonymous reader carries - so the
+    /// rule "a lead sees every [private] block" fired for guests.
     /// </remarks>
     public IReadOnlyCollection<Guid> GameLeadUserIds =>
-        [GameMasterUserId, .. GameAssistantUserIds];
+        AnonymousIdentity.WithoutAnonymous([GameMasterUserId, .. GameAssistantUserIds]);
 
     /// <summary>
     /// Raw JSONB snapshot of owner user ids for every [private] block in
@@ -1371,18 +1364,16 @@ public class CancelledInvitation
 public class GameCommentToDelete : Comment
 {
     /// <summary>
-    /// Comment creation date
+    /// Game identifier.
     /// </summary>
-    public new DateTimeOffset CreatedUtc
-    {
-        get => base.CreatedUtc;
-        set => base.CreatedUtc = value;
-    }
-
-    /// <summary>
-    /// Game identifier
-    /// </summary>
-    public Guid GameId { get; set; }
+    /// <remarks>
+    /// A game's comments hang off the game row itself, so the discussion key IS
+    /// the game - the way BlogId, PublicationId and TopicId read off the same
+    /// member for the other three delete-path DTOs. Settable, it let a caller
+    /// name a game the comment does not belong to; the projection never did, and
+    /// nothing else ever set it.
+    /// </remarks>
+    public Guid GameId => EntityId;
 
     /// <summary>
     /// Current game comment count

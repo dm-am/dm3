@@ -61,77 +61,17 @@ internal class GameInvitationService : IGameInvitationService
     #region Invitations
 
     /// <inheritdoc />
-    public async Task<GameInvitation> InvitePlayer(Guid gameId, string username, CancellationToken ct = default)
-    {
-        var game = await GetGameOrThrow(gameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.InvitePlayer, game);
+    public Task<GameInvitation> InvitePlayer(Guid gameId, string username, CancellationToken ct = default) =>
+        Invite(gameId, username, GameIntention.InvitePlayer,
+            TokenType.GamePlayerInvitation, EventType.PlayerInvitationCreated, ct);
 
-        var user = await _userLookupService.GetAsync(username);
-        await ValidateInvitation(game, user.UserId, ct);
+    public Task<GameInvitation> InviteReader(Guid gameId, string username, CancellationToken ct = default) =>
+        Invite(gameId, username, GameIntention.InviteReader,
+            TokenType.GameReaderInvitation, EventType.ReaderInvitationCreated, ct);
 
-        var entity = new CreateGameInvitationEntity
-        {
-            TokenId = _guidFactory.Create(),
-            GameId = gameId,
-            UserId = user.UserId,
-            CreatorId = _identityProvider.Current.User.UserId,
-            TokenType = TokenType.GamePlayerInvitation,
-            CreatedUtc = _dateTimeProvider.Now
-        };
-
-        var token = await _repository.InvalidateAndCreateInvitation(entity, ct);
-        await _producer.SendAsync(EventType.PlayerInvitationCreated, token.TokenId);
-
-        return await GetInvitationInfo(token.TokenId, ct);
-    }
-
-    public async Task<GameInvitation> InviteReader(Guid gameId, string username, CancellationToken ct = default)
-    {
-        var game = await GetGameOrThrow(gameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.InviteReader, game);
-
-        var user = await _userLookupService.GetAsync(username);
-        await ValidateInvitation(game, user.UserId, ct);
-
-        var entity = new CreateGameInvitationEntity
-        {
-            TokenId = _guidFactory.Create(),
-            GameId = gameId,
-            UserId = user.UserId,
-            CreatorId = _identityProvider.Current.User.UserId,
-            TokenType = TokenType.GameReaderInvitation,
-            CreatedUtc = _dateTimeProvider.Now
-        };
-
-        var token = await _repository.InvalidateAndCreateInvitation(entity, ct);
-        await _producer.SendAsync(EventType.ReaderInvitationCreated, token.TokenId);
-
-        return await GetInvitationInfo(token.TokenId, ct);
-    }
-
-    public async Task<GameInvitation> InviteAssistant(Guid gameId, string username, CancellationToken ct = default)
-    {
-        var game = await GetGameOrThrow(gameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.InviteAssistant, game);
-
-        var user = await _userLookupService.GetAsync(username);
-        await ValidateInvitation(game, user.UserId, ct);
-
-        var entity = new CreateGameInvitationEntity
-        {
-            TokenId = _guidFactory.Create(),
-            GameId = gameId,
-            UserId = user.UserId,
-            CreatorId = _identityProvider.Current.User.UserId,
-            TokenType = TokenType.GameAssistantInvitation,
-            CreatedUtc = _dateTimeProvider.Now
-        };
-
-        var token = await _repository.InvalidateAndCreateInvitation(entity, ct);
-        await _producer.SendAsync(EventType.AssignmentRequestCreated, token.TokenId);
-
-        return await GetInvitationInfo(token.TokenId, ct);
-    }
+    public Task<GameInvitation> InviteAssistant(Guid gameId, string username, CancellationToken ct = default) =>
+        Invite(gameId, username, GameIntention.InviteAssistant,
+            TokenType.GameAssistantInvitation, EventType.AssignmentRequestCreated, ct);
 
     public async Task AcceptInvitation(Guid tokenId, CancellationToken ct = default)
     {
@@ -290,6 +230,45 @@ internal class GameInvitationService : IGameInvitationService
     #endregion
 
     #region Helpers
+
+    /// <summary>
+    /// One invitation, whichever of the three roles it is for.
+    /// </summary>
+    /// <remarks>
+    /// The three public methods differ in three literals and in nothing else: the
+    /// gate they check, the token they write and the event they announce. The
+    /// blog module already answers the same question this way
+    /// (BlogInvitationService.CreateInvitation).
+    /// </remarks>
+    private async Task<GameInvitation> Invite(
+        Guid gameId,
+        string username,
+        GameIntention intention,
+        TokenType tokenType,
+        EventType eventType,
+        CancellationToken ct)
+    {
+        var game = await GetGameOrThrow(gameId);
+        _intentionManager.ThrowIfForbidden(intention, game);
+
+        var user = await _userLookupService.GetAsync(username);
+        await ValidateInvitation(game, user.UserId, ct);
+
+        var entity = new CreateGameInvitationEntity
+        {
+            TokenId = _guidFactory.Create(),
+            GameId = gameId,
+            UserId = user.UserId,
+            CreatorId = _identityProvider.Current.User.UserId,
+            TokenType = tokenType,
+            CreatedUtc = _dateTimeProvider.Now
+        };
+
+        var token = await _repository.InvalidateAndCreateInvitation(entity, ct);
+        await _producer.SendAsync(eventType, token.TokenId);
+
+        return await GetInvitationInfo(token.TokenId, ct);
+    }
 
     private async Task<GameDto> GetGameOrThrow(Guid gameId)
     {

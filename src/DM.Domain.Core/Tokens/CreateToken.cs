@@ -48,9 +48,4 @@ public class CreateToken
     /// Token type
     /// </summary>
     public TokenType Type { get; set; }
-
-    /// <summary>
-    /// User who created this token (for invitations)
-    /// </summary>
-    public Guid? CreatorId { get; set; }
 }

@@ -88,7 +88,7 @@ const untold = computed(() => Math.max(0, props.total - matching.value.length));
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 // The active/inactive subscriber distinction stays in the ordering
 // (active first), not in the color — one uniform muted-links look.

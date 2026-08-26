@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
@@ -65,7 +66,7 @@ public class UpdateGameValidatorShould : UnitTestBase
         var input = new UpdateGame
         {
             GameId = Guid.NewGuid(),
-            Title = new string('a', 101)
+            Title = new string('a', GameFieldLimits.TitleMaxLength + 1)
         };
 
         var result = await validator.TestValidateAsync(input);
@@ -93,7 +94,7 @@ public class UpdateGameValidatorShould : UnitTestBase
         var input = new UpdateGame
         {
             GameId = Guid.NewGuid(),
-            SystemName = new string('a', 51)
+            SystemName = new string('a', GameFieldLimits.SystemMaxLength + 1)
         };
 
         var result = await validator.TestValidateAsync(input);
@@ -121,7 +122,7 @@ public class UpdateGameValidatorShould : UnitTestBase
         var input = new UpdateGame
         {
             GameId = Guid.NewGuid(),
-            NarrativeSetting = new string('a', 51)
+            NarrativeSetting = new string('a', GameFieldLimits.SettingMaxLength + 1)
         };
 
         var result = await validator.TestValidateAsync(input);
@@ -135,7 +136,7 @@ public class UpdateGameValidatorShould : UnitTestBase
         var input = new UpdateGame
         {
             GameId = Guid.NewGuid(),
-            Info = new string('a', 199)
+            Info = new string('a', GameFieldLimits.InfoMinLength - 1)
         };
 
         var result = await validator.TestValidateAsync(input);
@@ -149,6 +150,36 @@ public class UpdateGameValidatorShould : UnitTestBase
         var input = new UpdateGame
         {
             GameId = Guid.NewGuid()
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    /// <summary>
+    /// Whatever creation accepts, an edit of the same game accepts too.
+    /// </summary>
+    /// <remarks>
+    /// The two validators used to carry two sets of numbers: creation took the
+    /// shared <see cref="GameFieldLimits" /> (200 / 100 / 100), while the edit
+    /// had 100 / 50 / 50 written out by hand. So a game created with a
+    /// 150-character title could not be saved again after any edit - refused on
+    /// the length of a field the server itself had just accepted, and the author
+    /// had no way to learn which field, because the domain answers in codes.
+    ///
+    /// The direction is not reversible: narrowing creation to the smaller
+    /// numbers would make already-created games unsavable, which is the same
+    /// defect pointed the other way.
+    /// </remarks>
+    [Fact]
+    public async Task AcceptEveryLengthGameCreationAccepts()
+    {
+        var input = new UpdateGame
+        {
+            GameId = Guid.NewGuid(),
+            Title = new string('a', GameFieldLimits.TitleMaxLength),
+            SystemName = new string('a', GameFieldLimits.SystemMaxLength),
+            NarrativeSetting = new string('a', GameFieldLimits.SettingMaxLength)
         };
 
         var result = await validator.TestValidateAsync(input);

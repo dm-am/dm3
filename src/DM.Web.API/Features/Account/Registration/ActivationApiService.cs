@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Account.Features.Registration;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
@@ -16,13 +15,13 @@ internal class ActivationApiService : IActivationApiService
 {
     private readonly IActivationService _activationService;
     private readonly IWebAuthenticationService _webAuthenticationService;
-    private readonly IMapper _mapper;
+    private readonly UserMapper _mapper;
 
     /// <inheritdoc />
     public ActivationApiService(
         IActivationService activationService,
         IWebAuthenticationService webAuthenticationService,
-        IMapper mapper)
+        UserMapper mapper)
     {
         _activationService = activationService;
         _webAuthenticationService = webAuthenticationService;
@@ -64,7 +63,7 @@ internal class ActivationApiService : IActivationApiService
             new UnconditionalCredentials { UserId = userId },
             httpContext);
 
-        return new Envelope<User>(_mapper.Map<User>(identity.User));
+        return new Envelope<User>(_mapper.ToUser(identity.User));
     }
 
     /// <inheritdoc />

@@ -8,13 +8,13 @@ using DM.Domain.Core.Identity;
 using DM.Testing;
 using FluentValidation;
 using DM.Web.API.Middleware;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Web.API.Tests.Middleware;
@@ -72,13 +72,13 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
         httpContext.Response.Body = new MemoryStream();
 
         var correlationTokenProvider = Mock<ICorrelationTokenProvider>();
-        correlationTokenProvider.Setup(p => p.Current).Returns(_correlationId);
+        correlationTokenProvider.Current.Returns(_correlationId);
 
         var middleware = new ErrorHandlingMiddleware(_ => throw exception);
         await middleware.InvokeAsync(httpContext,
             NullLogger<ErrorHandlingMiddleware>.Instance,
-            Mock<IIdentityProvider>().Object,
-            correlationTokenProvider.Object,
+            Mock<IIdentityProvider>(),
+            correlationTokenProvider,
             ProblemDetailsFactory);
 
         httpContext.Response.Body.Seek(0, SeekOrigin.Begin);

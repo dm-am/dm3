@@ -27,21 +27,9 @@ public static class CachePolicy
     public static readonly TimeSpan Medium = TimeSpan.FromMinutes(1);
 
     /// <summary>
-    /// Data with user-specific counters (own games, unread counts).
-    /// Short TTL as a balance between freshness and performance.
-    /// </summary>
-    public static readonly TimeSpan Short = TimeSpan.FromSeconds(30);
-
-    /// <summary>
     /// Per-viewer data rebuilt on almost every request (game lists of an
     /// authenticated user). Long enough to absorb a burst of identical requests,
     /// short enough for the viewer not to notice the entry at all.
     /// </summary>
     public static readonly TimeSpan VeryShort = TimeSpan.FromSeconds(15);
-
-    /// <summary>
-    /// Frontend stale-while-revalidate window.
-    /// After this time, cached data is returned immediately but refreshed in background.
-    /// </summary>
-    public static readonly TimeSpan FrontendStale = TimeSpan.FromSeconds(60);
 }

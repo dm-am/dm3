@@ -4,23 +4,23 @@ using System.Diagnostics.Metrics;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence.MongoIntegration;
+using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Shared.UnreadCounters;
-using FluentAssertions;
+using AwesomeAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using MongoDB.Driver;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared;
 
 /// <summary>
-/// A document store that cannot be reached does not undo a commit that already
+/// A database that cannot be reached does not undo a commit that already
 /// happened.
 /// </summary>
 /// <remarks>
 /// Every caller of the three adjusting writes reaches them after its own write
-/// has been committed to PostgreSQL, and nothing spans the two stores. So an
+/// has been committed, and the increment is not part of that transaction. So an
 /// exception from here used to travel back up through a service that had already
 /// committed and answer the caller with a failure for work that was done: the
 /// reader saw their own post on the page beside an error saying it was not saved,
@@ -32,14 +32,14 @@ namespace DM.Infrastructure.Persistence.Tests.Shared;
 /// the relational row exists so that the failure arrives while the row can still
 /// be rolled back. Swallowing them would quietly destroy that ordering.
 ///
-/// An unreachable address rather than a mock of the driver: what has to hold is
+/// An unreachable address rather than a mock of the provider: what has to hold is
 /// that a real failure of a real client does not escape, and a mock would only
 /// prove that a thrown exception is caught.
 /// </remarks>
 public class UnreadCountersDurabilityShould
 {
     /// <summary>Address nothing listens on, with the driver told to give up quickly.</summary>
-    private const string Unreachable = "mongodb://127.0.0.1:1/dm3?serverSelectionTimeoutMS=200";
+    private const string Unreachable = "Host=127.0.0.1;Port=1;Database=dm3;Username=x;Password=x;Timeout=1";
 
     [Fact]
     public async Task KeepTheAdjustmentsToItselfWhenTheStoreIsUnreachable()
@@ -107,11 +107,16 @@ public class UnreadCountersDurabilityShould
 
     private static UnreadCountersRepository Repository()
     {
-        var url = new MongoUrl(Unreachable);
+        var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
+            .UseNpgsql(Unreachable)
+            .Options);
+
+        var clock = Substitute.For<IDateTimeProvider>();
+        clock.Now.Returns(DateTimeOffset.UtcNow);
 
         return new UnreadCountersRepository(
-            new DmMongoClient(MongoClientSettings.FromUrl(url), url),
-            Mock.Of<IDateTimeProvider>(p => p.Now == DateTimeOffset.UtcNow),
-            Mock.Of<ILogger<UnreadCountersRepository>>());
+            context,
+            clock,
+            Substitute.For<ILogger<UnreadCountersRepository>>());
     }
 }

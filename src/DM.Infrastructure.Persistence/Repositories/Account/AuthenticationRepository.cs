@@ -3,35 +3,26 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Infrastructure.Persistence.Entities.Account;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
-using DbSession = DM.Infrastructure.Persistence.Entities.Account.Session;
-using DbUserSettings = DM.Infrastructure.Persistence.Entities.Account.Settings.UserSettings;
 using Session = DM.Domain.Core.Identity.Session;
+
+using DM.Infrastructure.Persistence.Shared.Users;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
 /// <inheritdoc cref="IAuthenticationRepository" />
-internal class AuthenticationRepository : MongoRepository, IAuthenticationRepository
+internal class AuthenticationRepository : IAuthenticationRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     /// <inheritdoc />
     public AuthenticationRepository(
-        DmDbContext dbContext,
-        DmMongoClient mongoClient,
-        IMapper mapper) : base(mongoClient)
+        DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -40,7 +31,7 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         var result = await _dbContext.Users
             .TagWith("DM.Authentication.TryFindUserByEmail")
             .Where(u => u.Email.ToLower() == email.ToLower())
-            .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
+            .ProjectToAuthenticatedUser()
             .FirstOrDefaultAsync();
         return (result != null, result);
     }
@@ -51,33 +42,35 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         return _dbContext.Users
             .TagWith("DM.Authentication.FindUser")
             .Where(u => u.UserId == userId)
-            .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
+            .ProjectToAuthenticatedUser()
             .FirstOrDefaultAsync();
     }
 
     /// <inheritdoc />
     public async Task<Session?> FindUserSession(Guid userId, Guid sessionId)
     {
-        // Scoped to the owning document by _id, not searched across every user's
-        // session array: a token whose userId and sessionId belong to different
-        // people must not authenticate. It also turns the hottest query on the
-        // site into a primary-key lookup.
-        var userSessions = await Collection<UserSession>()
-            .Find(Filter<UserSession>().Eq(u => u.Id, userId))
-            .FirstOrDefaultAsync();
-        var matchingSession = userSessions?.Sessions.FirstOrDefault(s => s.Id == sessionId);
-        return matchingSession == null
+        // Both halves of the token in one predicate: a session id that exists
+        // but belongs to somebody else must not authenticate (INV-4). The
+        // hottest query on the site stays a primary-key lookup — the owner
+        // check narrows a set of one.
+        var session = await _dbContext.UserSessions
+            .TagWith("DM.Authentication.FindUserSession")
+            .FirstOrDefaultAsync(s => s.SessionId == sessionId && s.UserId == userId);
+        return session == null
             ? null
-            : _mapper.Map<Session>(matchingSession);
+            : session.ToSession();
     }
 
     /// <inheritdoc />
     public async Task<UserSettings> FindUserSettings(Guid userId)
     {
-        var dbSettings = await Collection<DbUserSettings>()
-            .Find(Filter<DbUserSettings>()
-                .Eq(u => u.UserId, userId))
-            .FirstOrDefaultAsync();
+        // Absence of the row is the ordinary state of a user who never saved
+        // settings, and it means the defaults. A partial row does not exist:
+        // every paging column is NOT NULL (INV-9), which is what buried the
+        // null-Paging repair branch this method used to carry.
+        var dbSettings = await _dbContext.UserSettings
+            .TagWith("DM.Authentication.FindUserSettings")
+            .FirstOrDefaultAsync(s => s.UserId == userId);
 
         if (dbSettings == null)
             return UserSettings.Default;
@@ -86,69 +79,58 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
         {
             Id = dbSettings.UserId,
             Theme = dbSettings.Theme,
-            // Mongo has no schema, so a settings document can exist without the
-            // Paging sub-document — an older document, or a partial write. This
-            // used to dereference it unconditionally and throw
-            // NullReferenceException inside authentication, turning every
-            // request from that user into a 500 with no way back short of
-            // deleting the document.
-            Paging = dbSettings.Paging == null
-                ? UserSettings.Default.Paging
-                : new PagingSettings
-                {
-                    PostsPerPage = dbSettings.Paging.PostsPerPage,
-                    CommentsPerPage = dbSettings.Paging.CommentsPerPage,
-                    MessagesPerPage = dbSettings.Paging.MessagesPerPage,
-                    TopicsPerPage = dbSettings.Paging.TopicsPerPage,
-                    EntitiesPerPage = dbSettings.Paging.EntitiesPerPage
-                }
+            Paging = new PagingSettings
+            {
+                PostsPerPage = dbSettings.PostsPerPage,
+                CommentsPerPage = dbSettings.CommentsPerPage,
+                MessagesPerPage = dbSettings.MessagesPerPage,
+                TopicsPerPage = dbSettings.TopicsPerPage,
+                EntitiesPerPage = dbSettings.EntitiesPerPage
+            }
         };
     }
 
     /// <inheritdoc />
     public Task RemoveSession(Guid userId, Guid sessionId)
     {
-        return Collection<UserSession>().FindOneAndUpdateAsync(
-            Filter<UserSession>().Eq(u => u.Id, userId),
-            Update<UserSession>().PullFilter(s => s.Sessions, s => s.Id == sessionId));
+        return _dbContext.UserSessions
+            .Where(s => s.SessionId == sessionId && s.UserId == userId)
+            .ExecuteDeleteAsync();
     }
 
     /// <inheritdoc />
     public Task RefreshSession(Guid userId, Guid sessionId, DateTimeOffset expirationDate)
     {
-        return Collection<UserSession>().FindOneAndUpdateAsync(
-            Filter<UserSession>().Eq(u => u.Id, userId) &
-            Filter<UserSession>().ElemMatch(u => u.Sessions, s => s.Id == sessionId),
-            Update<UserSession>().Set(u => u.Sessions[-1].ExpirationUtc, expirationDate.UtcDateTime));
+        return _dbContext.UserSessions
+            .Where(s => s.SessionId == sessionId && s.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpirationUtc, expirationDate));
     }
 
     /// <inheritdoc />
     public async Task<Session> AddSession(Guid userId, CreateSession session)
     {
-        var dbSession = new DbSession
+        var dbSession = new UserSession
         {
-            Id = session.Id,
-            ExpirationUtc = session.ExpirationUtc,
+            SessionId = session.Id,
+            UserId = userId,
+            ExpirationUtc = new DateTimeOffset(session.ExpirationUtc, TimeSpan.Zero),
             Persistent = session.Persistent,
-            CreatedUtc = session.CreatedUtc,
+            CreatedUtc = new DateTimeOffset(session.CreatedUtc, TimeSpan.Zero),
             IpAddress = session.IpAddress,
             UserAgent = session.UserAgent,
             DeviceInfo = session.DeviceInfo
         };
-        await Collection<UserSession>().FindOneAndUpdateAsync(
-            Filter<UserSession>().Eq(u => u.Id, userId),
-            Update<UserSession>().Push(s => s.Sessions, dbSession),
-            new FindOneAndUpdateOptions<UserSession> { IsUpsert = true });
-        return _mapper.Map<Session>(dbSession);
+        _dbContext.UserSessions.Add(dbSession);
+        await _dbContext.SaveChangesAsync();
+        return dbSession.ToSession();
     }
 
     /// <inheritdoc />
     public Task RemoveSessionsExcept(Guid userId, Guid sessionId)
     {
-        return Collection<UserSession>().FindOneAndUpdateAsync(
-            Filter<UserSession>().Eq(u => u.Id, userId),
-            Update<UserSession>().PullFilter(s => s.Sessions, s => s.Id != sessionId),
-            new FindOneAndUpdateOptions<UserSession> { IsUpsert = true });
+        return _dbContext.UserSessions
+            .Where(s => s.UserId == userId && s.SessionId != sessionId)
+            .ExecuteDeleteAsync();
     }
 
     /// <inheritdoc />
@@ -165,20 +147,16 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     /// <inheritdoc />
     public async Task<IReadOnlyCollection<Session>> GetUserSessions(Guid userId, Guid? currentSessionId = null)
     {
-        var userSessions = await Collection<UserSession>()
-            .Find(Filter<UserSession>().Eq(u => u.Id, userId))
-            .FirstOrDefaultAsync();
+        var userSessions = await _dbContext.UserSessions
+            .TagWith("DM.Authentication.UserSessions")
+            .Where(s => s.UserId == userId)
+            .ToListAsync();
 
-        if (userSessions?.Sessions == null)
-        {
-            return Array.Empty<Session>();
-        }
-
-        return userSessions.Sessions
+        return userSessions
             .Select(s =>
             {
-                var session = _mapper.Map<Session>(s);
-                session.IsCurrent = currentSessionId.HasValue && s.Id == currentSessionId.Value;
+                var session = s.ToSession();
+                session.IsCurrent = currentSessionId.HasValue && s.SessionId == currentSessionId.Value;
                 return session;
             })
             .OrderByDescending(s => s.IsCurrent)
@@ -197,36 +175,21 @@ internal class AuthenticationRepository : MongoRepository, IAuthenticationReposi
     /// <inheritdoc />
     public Task RemoveAllSessions(Guid userId)
     {
-        return Collection<UserSession>().FindOneAndUpdateAsync(
-            Filter<UserSession>().Eq(u => u.Id, userId),
-            Update<UserSession>().Set(u => u.Sessions, new List<DbSession>()));
+        return _dbContext.UserSessions
+            .Where(s => s.UserId == userId)
+            .ExecuteDeleteAsync();
     }
 
     /// <inheritdoc />
-    /// <remarks>
-    /// Two writes, in this order: pull the expired entries out of every document,
-    /// then delete the documents the pull emptied. Reversing them would leave the
-    /// documents emptied by this very pass behind until the next one.
-    /// </remarks>
     public async Task<SessionPurgeResult> PurgeExpiredSessions(
         DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        var deadline = now.UtcDateTime;
-        var collection = Collection<UserSession>();
+        // One DELETE: a session is a row now, and the notion of "a document
+        // emptied of its sessions" is gone with the document.
+        var removed = await _dbContext.UserSessions
+            .Where(s => s.ExpirationUtc < now)
+            .ExecuteDeleteAsync(cancellationToken);
 
-        var pulled = await collection.UpdateManyAsync(
-            Filter<UserSession>().Empty,
-            Update<UserSession>().PullFilter(
-                u => u.Sessions,
-                session => session.ExpirationUtc < deadline),
-            cancellationToken: cancellationToken);
-
-        var emptied = await collection.DeleteManyAsync(
-            Filter<UserSession>().Or(
-                Filter<UserSession>().Eq(u => u.Sessions, null),
-                Filter<UserSession>().Size(u => u.Sessions, 0)),
-            cancellationToken: cancellationToken);
-
-        return new SessionPurgeResult(pulled.ModifiedCount, emptied.DeletedCount);
+        return new SessionPurgeResult(removed);
     }
 }

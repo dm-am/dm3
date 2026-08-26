@@ -218,8 +218,8 @@ const shell = useDialogShell({
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/ZIndex"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/ZIndex" as *
 
 .pinned-manager-overlay
   position: fixed

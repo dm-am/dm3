@@ -11,8 +11,8 @@ using DM.Domain.Core.Users;
 using DM.Domain.Personal.Features.Subscriptions;
 using DM.Testing;
 using DM.Testing.Dsl;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Personal.Tests.Features.Subscriptions;
@@ -57,11 +57,11 @@ public class SubscriptionServiceShould : UnitTestBase
         }
     }
 
-    private readonly Mock<ISubscriptionRepository> _repository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IUserLookupService> _userLookupService;
+    private readonly ISubscriptionRepository _repository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IUserLookupService _userLookupService;
     private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly Guid _targetId = Guid.NewGuid();
 
@@ -73,19 +73,18 @@ public class SubscriptionServiceShould : UnitTestBase
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _identityProvider.Setup(p => p.Current)
-            .Returns(Identities.User(_currentUserId, "subscriber"));
-        _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, "subscriber"));
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
     }
 
     private SubscriptionService ServiceGuardedBy(params ISubscriptionTargetGuard[] guards) =>
         new(
-            _repository.Object,
-            _userLookupService.Object,
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
+            _repository,
+            _userLookupService,
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider,
             guards);
 
     [Fact]
@@ -99,10 +98,9 @@ public class SubscriptionServiceShould : UnitTestBase
         (await act.Should().ThrowAsync<HttpException>())
             .Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         guard.Asked.Should().Be(1, "the target is asked before the row is written, not after");
-        _repository.Verify(
-            r => r.CreateAsync(It.IsAny<CreateSubscription>(), It.IsAny<CancellationToken>()),
-            Times.Never,
-            "the row is the thing the rule exists to prevent");
+        // The row is the thing the rule exists to prevent.
+        await _repository.DidNotReceive().CreateAsync(
+            Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -114,12 +112,10 @@ public class SubscriptionServiceShould : UnitTestBase
         await service.SubscribeAsync(SubscriptionTargetType.Game, _targetId);
 
         guard.Asked.Should().Be(1);
-        _repository.Verify(
-            r => r.CreateAsync(
-                It.Is<CreateSubscription>(s =>
+        await _repository.Received(1).CreateAsync(
+                Arg.Is<CreateSubscription>(s =>
                     s.TargetType == SubscriptionTargetType.Game && s.TargetId == _targetId),
-                It.IsAny<CancellationToken>()),
-            Times.Once);
+                Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -134,9 +130,8 @@ public class SubscriptionServiceShould : UnitTestBase
         await service.SubscribeAsync(SubscriptionTargetType.Blog, _targetId);
 
         gameGuard.Asked.Should().Be(0, "a blog is not a game");
-        _repository.Verify(
-            r => r.CreateAsync(It.IsAny<CreateSubscription>(), It.IsAny<CancellationToken>()),
-            Times.Once,
-            "a type with no rule of its own is not refused by another type's rule");
+        // A type with no rule of its own is not refused by another type's rule.
+        await _repository.Received(1).CreateAsync(
+            Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>());
     }
 }

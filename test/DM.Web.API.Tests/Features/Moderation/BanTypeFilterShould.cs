@@ -3,15 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Uploads;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Testing;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Moderation.Bans;
 using DM.Web.API.Features.Moderation.Warnings;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 using DomainBan = DM.Domain.Moderation.Features.Warnings.Ban;
 
@@ -31,32 +31,6 @@ public class BanTypeFilterShould : UnitTestBase
 {
     private static readonly DateTimeOffset Moment = new(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-    private static IMapper MapperAt(DateTimeOffset moment)
-    {
-        var clock = new Mock<IDateTimeProvider>();
-        clock.SetupGet(c => c.Now).Returns(moment);
-
-        var configuration = new MapperConfiguration(cfg =>
-        {
-            cfg.AddProfile<UserMappingProfile>();
-            cfg.AddProfile<WarningMappingProfile>();
-        });
-
-        return configuration.CreateMapper(type =>
-        {
-            if (type == typeof(BanActivityResolver))
-            {
-                return new BanActivityResolver(clock.Object);
-            }
-
-            if (type == typeof(BanTypeResolver))
-            {
-                return new BanTypeResolver(clock.Object);
-            }
-
-            return Activator.CreateInstance(type)!;
-        });
-    }
 
     private static readonly Guid TemporaryId = Guid.Parse("a1c3f5e7-0000-4000-8000-000000000001");
     private static readonly Guid PermanentId = Guid.Parse("a1c3f5e7-0000-4000-8000-000000000002");
@@ -64,10 +38,9 @@ public class BanTypeFilterShould : UnitTestBase
 
     private static BanApiService Service()
     {
-        var banService = new Mock<IBanService>();
+        var banService = Substitute.For<IBanService>();
         banService
-            .Setup(s => s.GetAllActiveBans(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<DomainBan>
+            .GetAllActiveBans(Arg.Any<CancellationToken>()).Returns(new List<DomainBan>
             {
                 new()
                 {
@@ -90,7 +63,7 @@ public class BanTypeFilterShould : UnitTestBase
                 }
             });
 
-        return new BanApiService(banService.Object, MapperAt(Moment));
+        return new BanApiService(banService, WarningMappers.At(Moment));
     }
 
     [Theory]

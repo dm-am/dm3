@@ -2,7 +2,7 @@ using System;
 using System.Threading.Tasks;
 using DM.Domain.Moderation.Features.Tags;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;

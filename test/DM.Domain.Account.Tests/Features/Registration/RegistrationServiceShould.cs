@@ -9,23 +9,24 @@ using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Exceptions;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Registration;
 
 public class RegistrationServiceShould : UnitTestBase
 {
-    private readonly Mock<IValidator<UserRegistration>> _validator;
-    private readonly Mock<ISecurityManager> _securityManager;
-    private readonly Mock<ICompromisedPasswordChecker> _compromisedPasswordChecker;
-    private readonly Mock<IRegistrationRepository> _repository;
-    private readonly Mock<IRegistrationMailSender> _mailSender;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IValidator<UserRegistration> _validator;
+    private readonly ISecurityManager _securityManager;
+    private readonly ICompromisedPasswordChecker _compromisedPasswordChecker;
+    private readonly IRegistrationRepository _repository;
+    private readonly IRegistrationMailSender _mailSender;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly RegistrationService _service;
 
     public RegistrationServiceShould()
@@ -38,21 +39,20 @@ public class RegistrationServiceShould : UnitTestBase
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _validator.Setup(v => v.ValidateAsync(
-                It.IsAny<ValidationContext<UserRegistration>>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _validator.ValidateAsync(
+                Arg.Any<ValidationContext<UserRegistration>>(),
+                Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _service = new RegistrationService(
-            _validator.Object,
-            _securityManager.Object,
-            _compromisedPasswordChecker.Object,
-            _repository.Object,
-            _mailSender.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _validator,
+            _securityManager,
+            _compromisedPasswordChecker,
+            _repository,
+            _mailSender,
+            _guidFactory,
+            _dateTimeProvider);
     }
 
     [Fact]
@@ -65,8 +65,7 @@ public class RegistrationServiceShould : UnitTestBase
             AcceptedRules = true
         };
 
-        _compromisedPasswordChecker.Setup(c => c.IsCompromisedAsync(registration.Password))
-            .ReturnsAsync(true);
+        _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(true);
 
         var exception = await Assert.ThrowsAsync<HttpBadRequestException>(
             () => _service.Register(registration));
@@ -86,26 +85,21 @@ public class RegistrationServiceShould : UnitTestBase
         var pendingId = Guid.NewGuid();
         var tokenId = Guid.NewGuid();
 
-        _compromisedPasswordChecker.Setup(c => c.IsCompromisedAsync(registration.Password))
-            .ReturnsAsync(false);
-        _securityManager.Setup(s => s.GeneratePassword(registration.Password))
-            .Returns(("hash", "salt"));
-        _guidFactory.SetupSequence(g => g.Create())
-            .Returns(pendingId)
-            .Returns(tokenId);
-        _repository.Setup(r => r.PendingExists(registration.Email, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+        _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
+        _securityManager.GeneratePassword(registration.Password).Returns(("hash", "salt"));
+        _guidFactory.Create().Returns(pendingId, tokenId);
+        _repository.PendingExists(registration.Email, Arg.Any<CancellationToken>()).Returns(false);
 
         await _service.Register(registration);
 
-        _repository.Verify(r => r.AddPending(It.Is<PendingRegistration>(p =>
+        await _repository.Received(1).AddPending(Arg.Is<PendingRegistration>(p =>
             p.Email == registration.Email.ToLowerInvariant() &&
             p.PendingRegistrationId == pendingId &&
             p.Secret == tokenId &&
             p.SecretHash.SequenceEqual(ConfirmationSecret.Hash(tokenId)) &&
             p.AcceptedRules == registration.AcceptedRules
-        )), Times.Once);
-        _mailSender.Verify(m => m.Send(registration.Email, tokenId), Times.Once);
+        ));
+        await _mailSender.Received(1).Send(registration.Email, tokenId);
     }
 
     [Fact]
@@ -120,24 +114,19 @@ public class RegistrationServiceShould : UnitTestBase
         var pendingId = Guid.NewGuid();
         var tokenId = Guid.NewGuid();
 
-        _compromisedPasswordChecker.Setup(c => c.IsCompromisedAsync(registration.Password))
-            .ReturnsAsync(false);
-        _securityManager.Setup(s => s.GeneratePassword(registration.Password))
-            .Returns(("newhash", "newsalt"));
-        _guidFactory.SetupSequence(g => g.Create())
-            .Returns(pendingId)
-            .Returns(tokenId);
-        _repository.Setup(r => r.PendingExists(registration.Email, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
+        _securityManager.GeneratePassword(registration.Password).Returns(("newhash", "newsalt"));
+        _guidFactory.Create().Returns(pendingId, tokenId);
+        _repository.PendingExists(registration.Email, Arg.Any<CancellationToken>()).Returns(true);
 
         await _service.Register(registration);
 
-        _repository.Verify(r => r.ReplacePending(It.Is<PendingRegistration>(p =>
+        await _repository.Received(1).ReplacePending(Arg.Is<PendingRegistration>(p =>
             p.Email == registration.Email.ToLowerInvariant() &&
             p.PasswordHash == "newhash" &&
             p.Salt == "newsalt"
-        )), Times.Once);
-        _mailSender.Verify(m => m.Send(registration.Email, tokenId), Times.Once);
+        ));
+        await _mailSender.Received(1).Send(registration.Email, tokenId);
     }
 
     [Fact]
@@ -150,18 +139,15 @@ public class RegistrationServiceShould : UnitTestBase
             AcceptedRules = true
         };
 
-        _compromisedPasswordChecker.Setup(c => c.IsCompromisedAsync(registration.Password))
-            .ReturnsAsync(false);
-        _securityManager.Setup(s => s.GeneratePassword(registration.Password))
-            .Returns(("hash", "salt"));
-        _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
-        _repository.Setup(r => r.PendingExists(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+        _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
+        _securityManager.GeneratePassword(registration.Password).Returns(("hash", "salt"));
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _repository.PendingExists(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
 
         await _service.Register(registration);
 
-        _repository.Verify(r => r.AddPending(It.Is<PendingRegistration>(p =>
+        await _repository.Received(1).AddPending(Arg.Is<PendingRegistration>(p =>
             p.Email == "test@example.com"
-        )), Times.Once);
+        ));
     }
 }

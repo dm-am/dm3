@@ -33,5 +33,28 @@ public enum RenderAudience
     /// Link preview / cross-post embed. Uses the NSFW-safe tag set
     /// and unconditionally strips privacy-sensitive tags.
     /// </summary>
-    EmbedSafe = 3
+    EmbedSafe = 3,
+
+    /// <summary>
+    /// Source of a quotation: BBCode, not HTML, for the reply the reader is
+    /// about to write. Privacy-sensitive tags are stripped unconditionally -
+    /// for the author of the post and for a game lead as well - and a
+    /// quotation already inside the text is dropped with its content.
+    /// </summary>
+    /// <remarks>
+    /// Quoting is republication. The addressee snapshot of a [private] block
+    /// does not travel with the quotation: in the new post the same block would
+    /// be visible by the new post's rules, that is to a different set of people.
+    /// So the answer is not "filter it for this reader" but "there is never a
+    /// private block in a quotation".
+    ///
+    /// Deliberately unreachable from <see cref="BbAudienceHeader"/>. The header
+    /// is client-controlled and applies to every BbText field of every response,
+    /// while this audience emits BBCode source rather than HTML - text that no
+    /// security substitution has run over, because the point of the source is to
+    /// give back what the author typed. Parsed by the header it would put raw
+    /// author text into fields the client binds through v-html. It is selected
+    /// by the endpoint that is asked for a quotation and by nothing else.
+    /// </remarks>
+    QuoteSource = 4
 }

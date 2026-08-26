@@ -3,10 +3,14 @@
   "exclude": [],
   "compilerOptions": {
     "composite": true,
-    "lib": [],
+    // Spelled out, and wider than the app on purpose: specs run in Node, so
+    // they may use what the browser bundle cannot (Array.prototype.at and the
+    // rest of ES2022). An empty list here does not fall back to the target —
+    // it loads no library at all, and the surface is then whatever the ambient
+    // packages happen to reference, which put ES2022 methods one @types bump
+    // away from vanishing.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node", "jsdom"],
-    "preserveValueImports": false,
-    "importsNotUsedAsValues": "remove",
     "verbatimModuleSyntax": true
   }
 }

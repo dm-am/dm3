@@ -1,6 +1,6 @@
 using DM.Domain.Core.Configuration;
 using DM.Infrastructure.Core.Storage;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Options;
 using Xunit;
 

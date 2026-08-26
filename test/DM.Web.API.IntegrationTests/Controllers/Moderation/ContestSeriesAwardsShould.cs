@@ -4,7 +4,7 @@ using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbAwardType = DM.Infrastructure.Persistence.Entities.Community.AwardType;

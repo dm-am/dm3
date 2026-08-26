@@ -12,19 +12,19 @@ using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Unread;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Unread;
 
 public class FirstUnreadServiceShould : UnitTestBase
 {
-    private readonly Mock<IFirstUnreadRepository> _firstUnreadRepository;
-    private readonly Mock<IGameService> _gameService;
-    private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IIntentionManager> _intentionManager;
+    private readonly IFirstUnreadRepository _firstUnreadRepository;
+    private readonly IGameService _gameService;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IIntentionManager _intentionManager;
     private readonly FirstUnreadService _service;
 
     public FirstUnreadServiceShould()
@@ -35,14 +35,13 @@ public class FirstUnreadServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _intentionManager = Mock<IIntentionManager>();
 
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDto>()));
 
         _service = new FirstUnreadService(
-            _firstUnreadRepository.Object,
-            _gameService.Object,
-            _unreadCountersRepository.Object,
-            _identityProvider.Object,
-            _intentionManager.Object);
+            _firstUnreadRepository,
+            _gameService,
+            _unreadCountersRepository,
+            _identityProvider,
+            _intentionManager);
     }
 
     [Fact]
@@ -55,14 +54,13 @@ public class FirstUnreadServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         };
 
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _identityProvider.Setup(p => p.Current).Returns(Identities.Guest());
-        _firstUnreadRepository.Setup(r => r.GetAccessibleRoomIds(gameId, It.IsAny<Guid>()))
-            .ReturnsAsync(new List<Guid>());
+        _gameService.GetAsync(gameId).Returns(game);
+        _identityProvider.Current.Returns(Identities.Guest());
+        _firstUnreadRepository.GetAccessibleRoomIds(gameId, Arg.Any<Guid>()).Returns(new List<Guid>());
 
         await _service.GetFirstUnreadPost(gameId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.Read, game), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Read, game);
     }
 
     [Fact]
@@ -70,14 +68,13 @@ public class FirstUnreadServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
 
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(new GameDto
+        _gameService.GetAsync(gameId).Returns(new GameDto
         {
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(Guid.NewGuid(), UserRole.RegularUser));
-        _firstUnreadRepository.Setup(r => r.GetAccessibleRoomIds(gameId, It.IsAny<Guid>()))
-            .ReturnsAsync(new List<Guid>());
+        _identityProvider.Current.Returns(Identities.User(Guid.NewGuid(), UserRole.RegularUser));
+        _firstUnreadRepository.GetAccessibleRoomIds(gameId, Arg.Any<Guid>()).Returns(new List<Guid>());
 
         var result = await _service.GetFirstUnreadPost(gameId);
 
@@ -91,16 +88,14 @@ public class FirstUnreadServiceShould : UnitTestBase
         var roomIds = new List<Guid> { Guid.NewGuid() };
         var expectedResult = new FirstUnreadPostResult { HasUnread = true, PostId = Guid.NewGuid() };
 
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(new GameDto
+        _gameService.GetAsync(gameId).Returns(new GameDto
         {
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identities.Guest());
-        _firstUnreadRepository.Setup(r => r.GetAccessibleRoomIds(gameId, It.IsAny<Guid>()))
-            .ReturnsAsync(roomIds);
-        _firstUnreadRepository.Setup(r => r.GetFirstPostInRooms(roomIds))
-            .ReturnsAsync(expectedResult);
+        _identityProvider.Current.Returns(Identities.Guest());
+        _firstUnreadRepository.GetAccessibleRoomIds(gameId, Arg.Any<Guid>()).Returns(roomIds);
+        _firstUnreadRepository.GetFirstPostInRooms(roomIds).Returns(expectedResult);
 
         var result = await _service.GetFirstUnreadPost(gameId);
 
@@ -116,18 +111,16 @@ public class FirstUnreadServiceShould : UnitTestBase
         var lastReadTimes = new Dictionary<Guid, DateTime> { { roomIds[0], DateTime.UtcNow.AddDays(-1) } };
         var expectedResult = new FirstUnreadPostResult { HasUnread = true, PostId = Guid.NewGuid() };
 
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(new GameDto
+        _gameService.GetAsync(gameId).Returns(new GameDto
         {
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
-        _firstUnreadRepository.Setup(r => r.GetAccessibleRoomIds(gameId, userId))
-            .ReturnsAsync(roomIds);
-        _unreadCountersRepository.Setup(r => r.GetLastReadTimesAsync(userId, UnreadEntryType.Message, It.IsAny<Guid[]>()))
-            .ReturnsAsync(lastReadTimes);
-        _firstUnreadRepository.Setup(r => r.FindFirstUnreadPost(roomIds, lastReadTimes))
-            .ReturnsAsync(expectedResult);
+        _identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
+        _firstUnreadRepository.GetAccessibleRoomIds(gameId, userId).Returns(roomIds);
+        _unreadCountersRepository.GetLastReadTimesAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>())
+            .Returns(lastReadTimes);
+        _firstUnreadRepository.FindFirstUnreadPost(roomIds, lastReadTimes).Returns(expectedResult);
 
         var result = await _service.GetFirstUnreadPost(gameId);
 
@@ -143,20 +136,17 @@ public class FirstUnreadServiceShould : UnitTestBase
         var lastReadTimes = new Dictionary<Guid, DateTime> { { roomIds[0], DateTime.UtcNow.AddDays(-1) } };
         var expectedResult = new FirstUnreadPostResult { HasUnread = false, PostId = Guid.NewGuid() };
 
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(new GameDto
+        _gameService.GetAsync(gameId).Returns(new GameDto
         {
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
-        _firstUnreadRepository.Setup(r => r.GetAccessibleRoomIds(gameId, userId))
-            .ReturnsAsync(roomIds);
-        _unreadCountersRepository.Setup(r => r.GetLastReadTimesAsync(userId, UnreadEntryType.Message, It.IsAny<Guid[]>()))
-            .ReturnsAsync(lastReadTimes);
-        _firstUnreadRepository.Setup(r => r.FindFirstUnreadPost(roomIds, lastReadTimes))
-            .ReturnsAsync((FirstUnreadPostResult?)null);
-        _firstUnreadRepository.Setup(r => r.GetLastPostInRooms(roomIds))
-            .ReturnsAsync(expectedResult);
+        _identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
+        _firstUnreadRepository.GetAccessibleRoomIds(gameId, userId).Returns(roomIds);
+        _unreadCountersRepository.GetLastReadTimesAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>())
+            .Returns(lastReadTimes);
+        _firstUnreadRepository.FindFirstUnreadPost(roomIds, lastReadTimes).Returns((FirstUnreadPostResult?)null);
+        _firstUnreadRepository.GetLastPostInRooms(roomIds).Returns(expectedResult);
 
         var result = await _service.GetFirstUnreadPost(gameId);
 
@@ -173,14 +163,13 @@ public class FirstUnreadServiceShould : UnitTestBase
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         };
 
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(game);
-        _identityProvider.Setup(p => p.Current).Returns(Identities.Guest());
-        _firstUnreadRepository.Setup(r => r.GetFirstComment(gameId))
-            .ReturnsAsync(new FirstUnreadCommentResult { HasUnread = false });
+        _gameService.GetAsync(gameId).Returns(game);
+        _identityProvider.Current.Returns(Identities.Guest());
+        _firstUnreadRepository.GetFirstComment(gameId).Returns(new FirstUnreadCommentResult { HasUnread = false });
 
         await _service.GetFirstUnreadComment(gameId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameIntention.ReadComments, game), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.ReadComments, game);
     }
 
     [Fact]
@@ -189,14 +178,13 @@ public class FirstUnreadServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var expectedResult = new FirstUnreadCommentResult { HasUnread = true, CommentId = Guid.NewGuid() };
 
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(new GameDto
+        _gameService.GetAsync(gameId).Returns(new GameDto
         {
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identities.Guest());
-        _firstUnreadRepository.Setup(r => r.GetFirstComment(gameId))
-            .ReturnsAsync(expectedResult);
+        _identityProvider.Current.Returns(Identities.Guest());
+        _firstUnreadRepository.GetFirstComment(gameId).Returns(expectedResult);
 
         var result = await _service.GetFirstUnreadComment(gameId);
 
@@ -211,16 +199,14 @@ public class FirstUnreadServiceShould : UnitTestBase
         var lastRead = DateTime.UtcNow.AddDays(-1);
         var expectedResult = new FirstUnreadCommentResult { HasUnread = true, CommentId = Guid.NewGuid() };
 
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(new GameDto
+        _gameService.GetAsync(gameId).Returns(new GameDto
         {
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
-        _unreadCountersRepository.Setup(r => r.GetLastReadTimeAsync(userId, gameId, UnreadEntryType.Message))
-            .ReturnsAsync(lastRead);
-        _firstUnreadRepository.Setup(r => r.FindFirstUnreadComment(gameId, lastRead))
-            .ReturnsAsync(expectedResult);
+        _identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
+        _unreadCountersRepository.GetLastReadTimeAsync(userId, gameId, UnreadEntryType.Message).Returns(lastRead);
+        _firstUnreadRepository.FindFirstUnreadComment(gameId, lastRead).Returns(expectedResult);
 
         var result = await _service.GetFirstUnreadComment(gameId);
 
@@ -235,18 +221,15 @@ public class FirstUnreadServiceShould : UnitTestBase
         var lastRead = DateTime.UtcNow.AddDays(-1);
         var expectedResult = new FirstUnreadCommentResult { HasUnread = false, CommentId = Guid.NewGuid() };
 
-        _gameService.Setup(s => s.GetAsync(gameId)).ReturnsAsync(new GameDto
+        _gameService.GetAsync(gameId).Returns(new GameDto
         {
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
         });
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(userId, UserRole.RegularUser));
-        _unreadCountersRepository.Setup(r => r.GetLastReadTimeAsync(userId, gameId, UnreadEntryType.Message))
-            .ReturnsAsync(lastRead);
-        _firstUnreadRepository.Setup(r => r.FindFirstUnreadComment(gameId, lastRead))
-            .ReturnsAsync((FirstUnreadCommentResult?)null);
-        _firstUnreadRepository.Setup(r => r.GetLastComment(gameId))
-            .ReturnsAsync(expectedResult);
+        _identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
+        _unreadCountersRepository.GetLastReadTimeAsync(userId, gameId, UnreadEntryType.Message).Returns(lastRead);
+        _firstUnreadRepository.FindFirstUnreadComment(gameId, lastRead).Returns((FirstUnreadCommentResult?)null);
+        _firstUnreadRepository.GetLastComment(gameId).Returns(expectedResult);
 
         var result = await _service.GetFirstUnreadComment(gameId);
 

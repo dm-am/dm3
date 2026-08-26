@@ -112,44 +112,23 @@ internal class PostService : IPostService
             CreatedUtc = now
         };
 
-        // Roll and persist any requested dice server-side (doc 4.2.2.13).
+        // Roll any requested dice server-side (doc 4.2.2.13).
         // The client already gates the composer on the room setting, but the
         // server must not trust the payload — dice are dropped when the room
         // has rolling disabled.
         //
-        // Rolled and stored before the post, and undone if the post does not
-        // follow. There is no transaction across PostgreSQL and MongoDB and no
-        // outbox — DATA_STORAGE.md says both — so a feature living in two stores
-        // owes an explicit order: what is written first, and who clears the
-        // remainder. A roll is the one thing here that cannot be produced again,
-        // because rolling a second time answers a different number: written after
-        // the post, a failed Mongo call left a committed post whose dice are gone
-        // for good, and the author has no way to get the same throw back. Written
-        // first, the same failure loses a post nobody has seen and the author may
-        // simply post again. The post id is ours already, generated above.
+        // The rolls travel inside the entity and the repository writes them in
+        // the post's own transaction: both land or neither does (INV-6). A roll
+        // is the one thing here that cannot be produced again — rolling a second
+        // time answers a different number — and the transaction is what makes
+        // "rolls without a post" and "a post without its rolls" unrepresentable.
         var diceSpecs = createPost.DiceRolls?.ToList() ?? new List<CreatePostDiceRoll>();
         var rolls = diceSpecs.Count > 0 && room.Settings?.DiceEnabled == true
             ? _diceRoller.Roll(entity.PostId, now, diceSpecs)
             : [];
+        entity.DiceRolls = rolls;
 
-        if (rolls.Count > 0)
-        {
-            await _diceRollRepository.CreateAsync(rolls);
-        }
-
-        Post createdPost;
-        try
-        {
-            createdPost = await _repository.Create(entity);
-        }
-        catch
-        {
-            if (rolls.Count > 0)
-            {
-                await _diceRollRepository.DeleteByPostIdAsync(entity.PostId);
-            }
-            throw;
-        }
+        var createdPost = await _repository.Create(entity);
 
         if (rolls.Count > 0)
         {
@@ -295,13 +274,21 @@ internal class PostService : IPostService
     /// out no access that room membership did not. Blocks an earlier save
     /// resolved keep their ids — the rule is addressee-forever, and re-resolving
     /// them on edit would revoke a player whose character has left since.
+    ///
+    /// The character travels beside its name because the snapshot compares by
+    /// identity: a name can be given up and taken by somebody else, and an edit
+    /// that writes a name whose character has changed is refused rather than
+    /// delivered to whoever the name used to mean. The refusal comes out of
+    /// <see cref="PrivateAddresseeSnapshot"/> as an ordinary bad-request, before
+    /// anything is written.
     /// </remarks>
     private static string ResolvePrivateAddressees(
         string gameText, RoomToUpdate? room, string? previousSnapshotJson) =>
         PrivateAddresseeSnapshot.Build(gameText, previousSnapshotJson,
             room?.Accesses
-                .Where(a => a.Character is not null && a.Character.Author is not null)
-                .Select(a => new PrivateAddressee(a.Character.Name, a.Character.Author.UserId))
+                .Select(a => a.Character)
+                .Where(c => c is { Author: not null })
+                .Select(c => new PrivateAddressee(c!.Id, c.Name, c.Author!.UserId))
             ?? []);
 
     private async Task EnrichWithDiceRollsAsync(List<Post> posts)

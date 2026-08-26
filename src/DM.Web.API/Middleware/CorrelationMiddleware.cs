@@ -11,13 +11,13 @@ namespace DM.Web.API.Middleware;
 /// </summary>
 public class CorrelationMiddleware
 {
-    private readonly RequestDelegate next;
+    private readonly RequestDelegate _next;
     private const string CorrelationTokenHeader = "X-Dm-Correlation-Token";
 
     /// <inheritdoc />
     public CorrelationMiddleware(RequestDelegate next)
     {
-        this.next = next;
+        _next = next;
     }
 
     /// <summary>
@@ -40,6 +40,6 @@ public class CorrelationMiddleware
         // the event itself, so a copy pushed from the request would name the span
         // of the request on every line - including lines written inside a nested
         // span, which are the ones worth linking from.
-        await next(httpContext);
+        await _next(httpContext);
     }
 }

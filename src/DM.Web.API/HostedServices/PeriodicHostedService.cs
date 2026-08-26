@@ -70,9 +70,11 @@ internal abstract class PeriodicHostedService : BackgroundService
     {
         await Task.Yield();
 
+        // The interval as a TimeSpan, not TotalHours: the outbox relay runs
+        // every second, and "Every 0.0002h" is a line nobody can read.
         _logger.LogInformation(
-            "{Tag} Service started. Every {IntervalHours}h, first pass after {DelayMinutes}m",
-            Tag, Interval.TotalHours, StartupDelay.TotalMinutes);
+            "{Tag} Service started. Every {Interval}, first pass after {StartupDelay}",
+            Tag, Interval, StartupDelay);
 
         using var timer = new PeriodicTimer(Interval);
 

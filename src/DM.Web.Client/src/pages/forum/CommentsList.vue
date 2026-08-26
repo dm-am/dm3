@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from "vue";
+import { computed, ref, watch } from "vue";
 import { useBoardsStore, forumApi } from "@/entities/forum";
 import type { CommentId } from "@/entities/forum";
 import { useUiStore } from "@/shared/stores/ui";
@@ -10,6 +10,7 @@ import { CommentItem, useCommentWarnDialog } from "@/features/comment";
 import { useCommentsFilter } from "@/features/comment-filter";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { ErrorState } from "@/shared/ui/ErrorState";
+import { useCommentHashScroll } from "@/shared/lib/composables/useScrollToElement";
 
 const route = useRoute();
 const boardsStore = useBoardsStore();
@@ -33,30 +34,7 @@ watch(
   { immediate: false },
 );
 
-// Scroll to the comment referenced by the URL hash (#comment-{id}) once the
-// comments for the current page are rendered. Backs the permalink feature: a
-// copied link lands the viewer on the exact comment.
-async function scrollToHashComment() {
-  const hash = route.hash;
-  if (!hash || !hash.startsWith("#comment-")) return;
-  if (!comments.value?.resources.length) return;
-
-  await nextTick();
-  // Wait for content (avatars, BBCode media) to settle before measuring.
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  const element = document.getElementById(hash.slice(1));
-  if (!element) return;
-  element.scrollIntoView({ behavior: "smooth", block: "center" });
-  element.classList.add("highlight-unread");
-  setTimeout(() => element.classList.remove("highlight-unread"), 2000);
-}
-
-watch(
-  () => [comments.value, route.hash] as const,
-  () => scrollToHashComment(),
-  { immediate: true, flush: "post" },
-);
+useCommentHashScroll(() => comments.value?.resources);
 
 // Calculate comment number based on paging
 function getCommentNumber(index: number): number {
@@ -90,6 +68,11 @@ const { warnComment: handleWarn } = useCommentWarnDialog((id) =>
 // Raw BBCode source fetch for the edit form (AuthorEdit audience).
 const fetchEditSource = (id: string) =>
   forumApi.getCommentForUpdate(id as CommentId);
+
+// Markup of a quotation of one comment, for the reply composer that lives on
+// the page above this list.
+const fetchQuoteSource = (id: string) =>
+  forumApi.getCommentQuote(id as CommentId);
 
 function retryLoad() {
   boardsStore.searchComments(searchParams.value);
@@ -166,6 +149,7 @@ function pagingAnchor(): HTMLElement | null {
         :number="getCommentNumber(index)"
         :search-query="filterState.search"
         :fetch-edit-source="fetchEditSource"
+        :fetch-quote-source="fetchQuoteSource"
         :submit-edit="handleEdit"
         :submit-delete="handleDelete"
         @like="handleLike"

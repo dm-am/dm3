@@ -1,6 +1,6 @@
 using System.Reflection;
 using DM.Infrastructure.Core.Logging;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Logging;

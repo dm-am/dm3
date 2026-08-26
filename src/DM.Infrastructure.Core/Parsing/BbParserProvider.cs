@@ -12,18 +12,15 @@ public class BbParserProvider : IBbParserProvider
     private const string CodeClassName = "code";
     private const string SpoilerHeadClassName = "spoiler-head";
     private const string SpoilerClassName = "spoiler";
-    private const string ImageClassName = "image";
     private const string QuoteClassName = "quote";
     private const string QuoteHeaderClassName = "quote-author";
-    private const string HeaderClassName = "info-head";
     private const string PrivateClassName = "private-message";
     private const string PrivateHeaderClassName = "private-message-header";
 
     private static readonly Tag Strong = new("b", "<strong>", "</strong>");
     private static readonly Tag Italic = new("i", "<em>", "</em>");
     private static readonly Tag Underlined = new("u", "<u>", "</u>");
-    private static readonly Tag Strike = new("s", "<s>", "</s>");
-    private static readonly Tag StrikeAlias = new("strike", "<s>", "</s>");
+    private static readonly Tag Strike = new("strike", "<s>", "</s>");
 
     // NSFW - same structure as spoiler, but with nsfw-head toggle and nsfw-spoiler content
     // href="#" and not javascript:void(0): a javascript: URL is inline script to
@@ -34,9 +31,6 @@ public class BbParserProvider : IBbParserProvider
         "<a href=\"#\" class=\"nsfw-head\" data-swaptext=\"Скрыть шокирующий контент\">Показать шокирующий контент</a><div class=\"nsfw-spoiler\">",
         "</div>");
 
-    // Warning block - red highlighted block for important warnings
-    private static readonly Tag Warning = new("warning", "<div class=\"warning-block\">", "</div>");
-
     // Mod block - green highlighted block for moderator messages (Common and Message contexts only)
     private static readonly Tag Mod = new("mod", "<div class=\"mod-block\">", "</div>");
 
@@ -44,12 +38,9 @@ public class BbParserProvider : IBbParserProvider
     // extension can round-trip the tag back into BBCode on save.
     private static readonly Tag ModAuthorEdit = new(
         "mod", "<div class=\"mod-block\" data-bb-tag=\"mod\">", "</div>");
-    private static readonly Tag Preformatted = new("pre", $"<pre class=\"{CodeClassName}\">", "</pre>");
     private static readonly ListTag OrderedList = new("ol", "<ol>", "</ol>");
     private static readonly ListTag UnorderedList = new("ul", "<ul>", "</ul>");
     private static readonly Tag ListItem = new("li", "<li>", "</li>");
-
-    private static readonly Tag Head = new("head", $"<h4 class=\"{HeaderClassName}\">", "</h4>");
 
     // Spoiler — same structure as NSFW, and the same href="#" for the same CSP
     // reason: the client preventDefaults the click, so the href never navigates.
@@ -61,11 +52,24 @@ public class BbParserProvider : IBbParserProvider
         $"<div class=\"{QuoteClassName}\"><div class=\"{QuoteHeaderClassName}\">{{value}}</div>", "</div>", true,
         false);
 
-    private static readonly Tag Image = new("img",
-        $"<a href=\"{{value}}\" target=\"_blank\"><img src=\"{{value}}\" class=\"{ImageClassName}\" /></a>", true);
-
-    private static readonly Tag Link = new("link", "<a href=\"{value}\">", "</a>", true);
-
+    // [img] and [link] are deliberately absent from every tag set below.
+    //
+    // BbParserWrapper renders both itself, from text it cuts out before the
+    // parser ever runs, and everything that makes a URL safe to put on a page
+    // lives there: the scheme white list, the refusal of loopback and private
+    // addresses, the spoiler gate on public surfaces, referrerpolicy, lazy
+    // loading. Leaving the tags in the parser's set as well meant any spelling
+    // the wrapper's patterns did not catch fell through to a template that
+    // substitutes the address as written — and the spellings it does not catch
+    // are the unclosed ones, which is ordinary mistyping:
+    //
+    //     [link=vbscript:msgbox(1)]click          -> live anchor, dangerous scheme
+    //     [link=http://169.254.169.254/...]meta   -> anchor into the reader's network
+    //     [img=200]                               -> <img src="200">
+    //
+    // Without them in the set an unextracted spelling is not a tag at all, so it
+    // renders as the text the author typed. That is both safe and honest, and it
+    // is the same answer for every future spelling nobody has thought of.
     private static readonly Tag Tab = new("tab", "&nbsp;&nbsp;&nbsp;");
 
     private static readonly CodeTag Code = new("code", $"<pre class=\"{CodeClassName}\">", "</pre>");
@@ -73,8 +77,15 @@ public class BbParserProvider : IBbParserProvider
     // Noparse - outputs content as-is without parsing inner BBCode tags
     private static readonly CodeTag Noparse = new("noparse", "", "");
 
+    // Sealed: only [/private] ends it. A closing tag of some other name that
+    // stands inside the block used to end it early, and the rest of the block -
+    // written by its author as private text - was printed to the whole room.
+    // See Tag.SealedByOwnTag for the worked example; [mod] is deliberately not
+    // sealed, being public on read, so ending it early costs a reader nothing
+    // but formatting.
     private static readonly Tag Private = new("private", $"<div class=\"{PrivateClassName}\">",
-        $"</div><div class=\"{PrivateHeaderClassName}\">Получатели: {{value}}</div>", true, false);
+        $"</div><div class=\"{PrivateHeaderClassName}\">Получатели: {{value}}</div>", true, false,
+        sealedByOwnTag: true);
 
     // AuthorEdit variant of [private] — opens with data-bb-tag and
     // data-bb-addressees carrying the raw attribute value so Tiptap's
@@ -89,7 +100,8 @@ public class BbParserProvider : IBbParserProvider
         "private",
         $"<div class=\"{PrivateClassName}\" data-bb-tag=\"private\" data-bb-addressees=\"{{value}}\">",
         "</div>",
-        true, false);
+        true, false,
+        sealedByOwnTag: true);
 
     private static readonly Dictionary<string, string> CommonSubstitutions = new()
     {
@@ -123,17 +135,17 @@ public class BbParserProvider : IBbParserProvider
     // Base tags available in all contexts
     private static TagSetBuilder DefaultTags => new(new[]
     {
-        Strong, Italic, Underlined, Strike, StrikeAlias,
-        Preformatted, Spoiler, Quote, Image,
+        Strong, Italic, Underlined, Strike,
+        Spoiler, Quote,
         UnorderedList, OrderedList, ListItem,
-        Link, Tab, Code, Noparse, Nsfw, Warning
+        Tab, Code, Noparse, Nsfw
     });
 
-    // "Safe" is two things: no preformatted block, and images behind a spoiler.
-    // Only the first is expressible as a tag set. The second is a wrapper flag,
-    // because [img] is extracted before the inner parser sees the text, so a tag
-    // set that swapped the img template changed nothing at all.
-    private static TagSetBuilder DefaultSafeTags => DefaultTags.Without(Preformatted);
+    // "Safe" is one thing: images behind a spoiler. It is not expressible as a
+    // tag set but as a wrapper flag, because [img] is extracted before the inner
+    // parser sees the text, so a tag set that swapped the img template changed
+    // nothing at all. The safe parsers below therefore take the same tag sets as
+    // their ordinary counterparts and differ only by spoilerGatedImages.
 
     // Common context: base tags + mod
     private static readonly Lazy<IBbParser> CommonParser = new(() =>
@@ -145,9 +157,11 @@ public class BbParserProvider : IBbParserProvider
         new BbParserWrapper(new BbParser(DefaultTags.With(Private).Build(),
             BbParser.SecuritySubstitutions, CommonSubstitutions)));
 
-    // Info context: base tags + head (no mod, no private)
+    // Info context: base tags (no mod, no private). It differs from the chat
+    // message context by its substitutions, not by its tag set: "\n___" becomes
+    // a horizontal rule here and nowhere else.
     private static readonly Lazy<IBbParser> InfoParser = new(() =>
-        new BbParserWrapper(new BbParser(DefaultTags.With(Head).Build(),
+        new BbParserWrapper(new BbParser(DefaultTags.Build(),
             BbParser.SecuritySubstitutions, InfoSubstitutions)));
 
     // Direct/group message context: base tags only — no [mod] (private
@@ -157,17 +171,17 @@ public class BbParserProvider : IBbParserProvider
         new BbParserWrapper(new BbParser(DefaultTags.Build(),
             BbParser.SecuritySubstitutions, ChatMessageSubstitutions)));
 
-    // General chat context: safe tags + preformatted + mod
+    // General chat context: base tags + mod, with images behind a spoiler
     private static readonly Lazy<IBbParser> GeneralChatMessageParser = new(() =>
-        new BbParserWrapper(new BbParser(DefaultSafeTags.With(Preformatted, Mod).Build(),
+        new BbParserWrapper(new BbParser(DefaultTags.With(Mod).Build(),
             BbParser.SecuritySubstitutions, CommonSubstitutions), spoilerGatedImages: true));
 
     private static readonly Lazy<IBbParser> SafePostParser = new(() =>
-        new BbParserWrapper(new BbParser(DefaultSafeTags.With(Private).Build(),
+        new BbParserWrapper(new BbParser(DefaultTags.With(Private).Build(),
             BbParser.SecuritySubstitutions, SafeSubstitutions), spoilerGatedImages: true));
 
     private static readonly Lazy<IBbParser> SafeRatingParser = new(() =>
-        new BbParserWrapper(new BbParser(DefaultSafeTags.Build(),
+        new BbParserWrapper(new BbParser(DefaultTags.Build(),
             BbParser.SecuritySubstitutions, SafeSubstitutions), spoilerGatedImages: true));
 
     // ═════════════════════════════════════════════════════════════════════
@@ -185,14 +199,8 @@ public class BbParserProvider : IBbParserProvider
             BbParser.SecuritySubstitutions, CommonSubstitutions)));
 
     private static readonly Lazy<IBbParser> GeneralChatAuthorEditParser = new(() =>
-        new BbParserWrapper(new BbParser(DefaultSafeTags.With(Preformatted, ModAuthorEdit).Build(),
+        new BbParserWrapper(new BbParser(DefaultTags.With(ModAuthorEdit).Build(),
             BbParser.SecuritySubstitutions, CommonSubstitutions), spoilerGatedImages: true));
-
-    /// <inheritdoc />
-    public IBbParser CurrentCommon => CommonParser.Value;
-
-    /// <inheritdoc />
-    public IBbParser CurrentInfo => InfoParser.Value;
 
     /// <inheritdoc />
     public IBbParser GetForSurface(BbSurface surface) => surface switch
@@ -201,9 +209,9 @@ public class BbParserProvider : IBbParserProvider
         BbSurface.GamePost => PostParser.Value,
         // All comments / topic bodies (forum / blog / game): [mod] allowed, [private] not.
         BbSurface.Comment => CommonParser.Value,
-        // Global chat: [mod] allowed, [private] not, safe tag set.
+        // Global chat: [mod] allowed, [private] not, images behind a spoiler.
         BbSurface.GlobalChatMessage => GeneralChatMessageParser.Value,
-        // Profile bios / best posts: neither [mod] nor [private]; info tag set.
+        // Profile bios / best posts: neither [mod] nor [private]; info substitutions.
         BbSurface.Profile => InfoParser.Value,
         // Private 1-to-1 messages: neither [mod] nor [private].
         BbSurface.DirectMessage => ChatMessageParser.Value,

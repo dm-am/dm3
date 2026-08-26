@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blogs;
@@ -16,26 +17,26 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Domain.Core.Dto;
-using DM.Domain.Account.Features.Authentication;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using DM.Domain.Account.Features.Authentication;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Invitations;
 
 public class BlogInvitationServiceShould : UnitTestBase
 {
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IBlogInvitationRepository> _repository;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IBlogService> _blogService;
-    private readonly Mock<IBlogSubscriptionService> _subscriptionService;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IUserBlacklistChecker> _userBlacklistChecker;
-    private readonly Mock<IEventProducer> _eventProducer;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IBlogInvitationRepository _repository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IBlogService _blogService;
+    private readonly IBlogSubscriptionService _subscriptionService;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IUserBlacklistChecker _userBlacklistChecker;
+    private readonly IEventProducer _eventProducer;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly BlogInvitationService _service;
 
     public BlogInvitationServiceShould()
@@ -51,22 +52,21 @@ public class BlogInvitationServiceShould : UnitTestBase
         _eventProducer = Mock<IEventProducer>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
-        _userBlacklistChecker.Setup(c => c.IsBlockedAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), default))
-            .ReturnsAsync(false);
+        _identityProvider.Current.Returns(Identity.Guest());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        _userBlacklistChecker.IsBlockedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), default).Returns(false);
 
         _service = new BlogInvitationService(
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _repository.Object,
-            _intentionManager.Object,
-            _blogService.Object,
-            _subscriptionService.Object,
-            _userLookupService.Object,
-            _userBlacklistChecker.Object,
-            _eventProducer.Object,
-            _dateTimeProvider.Object);
+            _identityProvider,
+            _guidFactory,
+            _repository,
+            _intentionManager,
+            _blogService,
+            _subscriptionService,
+            _userLookupService,
+            _userBlacklistChecker,
+            _eventProducer,
+            _dateTimeProvider);
     }
 
     [Fact]
@@ -77,19 +77,19 @@ public class BlogInvitationServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var invitedUserId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, Title = "Test Blog", BlacklistedUserIds = new HashSet<Guid>() };
-        var identity = CreateAuthenticatedIdentity(userId);
+        var identity = AuthenticatedIdentities.Of(userId);
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _guidFactory.Setup(f => f.Create()).Returns(tokenId);
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _userLookupService.Setup(s => s.GetAsync("invitee"))
-            .ReturnsAsync(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
-        _repository.Setup(r => r.FindInvitations(blogId, invitedUserId, TokenType.BlogAssistantInvitation, default))
-            .ReturnsAsync(new List<Guid>());
+        _identityProvider.Current.Returns(identity);
+        _guidFactory.Create().Returns(tokenId);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _userLookupService.GetAsync("invitee")
+            .Returns(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
+        _repository.FindInvitations(blogId, invitedUserId, TokenType.BlogAssistantInvitation, default)
+            .Returns(new List<Guid>());
 
         await _service.InviteAssistant(blogId, "invitee");
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.InviteAssistant, blog), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.InviteAssistant, blog);
     }
 
     [Fact]
@@ -99,12 +99,12 @@ public class BlogInvitationServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var invitedUserId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, BlacklistedUserIds = new HashSet<Guid> { invitedUserId } };
-        var identity = CreateAuthenticatedIdentity(userId);
+        var identity = AuthenticatedIdentities.Of(userId);
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _userLookupService.Setup(s => s.GetAsync("invitee"))
-            .ReturnsAsync(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
+        _identityProvider.Current.Returns(identity);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _userLookupService.GetAsync("invitee")
+            .Returns(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
 
         var act = async () => await _service.InviteAssistant(blogId, "invitee");
 
@@ -119,13 +119,13 @@ public class BlogInvitationServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var invitedUserId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, BlacklistedUserIds = new HashSet<Guid>() };
-        var identity = CreateAuthenticatedIdentity(userId);
+        var identity = AuthenticatedIdentities.Of(userId);
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _userLookupService.Setup(s => s.GetAsync("invitee"))
-            .ReturnsAsync(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
-        _userBlacklistChecker.Setup(c => c.IsBlockedAsync(userId, invitedUserId, default)).ReturnsAsync(true);
+        _identityProvider.Current.Returns(identity);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _userLookupService.GetAsync("invitee")
+            .Returns(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
+        _userBlacklistChecker.IsBlockedAsync(userId, invitedUserId, default).Returns(true);
 
         var act = async () => await _service.InviteAssistant(blogId, "invitee");
 
@@ -141,19 +141,19 @@ public class BlogInvitationServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var invitedUserId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, Title = "Test Blog", BlacklistedUserIds = new HashSet<Guid>() };
-        var identity = CreateAuthenticatedIdentity(userId);
+        var identity = AuthenticatedIdentities.Of(userId);
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _guidFactory.Setup(f => f.Create()).Returns(tokenId);
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
-        _userLookupService.Setup(s => s.GetAsync("invitee"))
-            .ReturnsAsync(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
-        _repository.Setup(r => r.FindInvitations(blogId, invitedUserId, TokenType.BlogAssistantInvitation, default))
-            .ReturnsAsync(new List<Guid>());
+        _identityProvider.Current.Returns(identity);
+        _guidFactory.Create().Returns(tokenId);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _userLookupService.GetAsync("invitee")
+            .Returns(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
+        _repository.FindInvitations(blogId, invitedUserId, TokenType.BlogAssistantInvitation, default)
+            .Returns(new List<Guid>());
 
         await _service.InviteAssistant(blogId, "invitee");
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.BlogInvitationCreated, tokenId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.BlogInvitationCreated, tokenId);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class BlogInvitationServiceShould : UnitTestBase
     {
         var tokenId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var identity = CreateAuthenticatedIdentity(userId);
+        var identity = AuthenticatedIdentities.Of(userId);
         var expiredTime = DateTimeOffset.UtcNow.AddDays(-1);
         var invitation = new BlogInvitation
         {
@@ -171,9 +171,9 @@ public class BlogInvitationServiceShould : UnitTestBase
             ExpiresUtc = expiredTime
         };
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
-        _repository.Setup(r => r.GetInvitation(tokenId, default)).ReturnsAsync(invitation);
+        _identityProvider.Current.Returns(identity);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        _repository.GetInvitation(tokenId, default).Returns(invitation);
 
         var act = async () => await _service.AcceptInvitation(tokenId);
 
@@ -187,7 +187,7 @@ public class BlogInvitationServiceShould : UnitTestBase
         var tokenId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
-        var identity = CreateAuthenticatedIdentity(userId);
+        var identity = AuthenticatedIdentities.Of(userId);
         var invitation = new BlogInvitation
         {
             TokenId = tokenId,
@@ -196,8 +196,8 @@ public class BlogInvitationServiceShould : UnitTestBase
             ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30)
         };
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _repository.Setup(r => r.GetInvitation(tokenId, default)).ReturnsAsync(invitation);
+        _identityProvider.Current.Returns(identity);
+        _repository.GetInvitation(tokenId, default).Returns(invitation);
 
         var act = async () => await _service.AcceptInvitation(tokenId);
 
@@ -230,13 +230,13 @@ public class BlogInvitationServiceShould : UnitTestBase
             ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30)
         };
 
-        _identityProvider.Setup(p => p.Current).Returns(CreateAuthenticatedIdentity(userId));
-        _repository.Setup(r => r.GetInvitation(tokenId, default)).ReturnsAsync(invitation);
+        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(userId));
+        _repository.GetInvitation(tokenId, default).Returns(invitation);
 
         await _service.AcceptInvitation(tokenId);
 
-        _subscriptionService.Verify(s => s.SubscribeAsync(blogId, default), Times.Once);
-        _blogService.Verify(s => s.Subscribe(It.IsAny<Guid>(), default), Times.Never);
+        await _subscriptionService.Received(1).SubscribeAsync(blogId, default);
+        await _blogService.DidNotReceive().Subscribe(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -245,7 +245,7 @@ public class BlogInvitationServiceShould : UnitTestBase
         var tokenId = Guid.NewGuid();
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var identity = CreateAuthenticatedIdentity(userId);
+        var identity = AuthenticatedIdentities.Of(userId);
         var blog = new BlogDto { Id = blogId };
         var invitation = new BlogInvitation
         {
@@ -254,19 +254,13 @@ public class BlogInvitationServiceShould : UnitTestBase
             TargetRole = BlogRole.Assistant
         };
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _repository.Setup(r => r.GetInvitation(tokenId, default)).ReturnsAsync(invitation);
-        _blogService.Setup(s => s.GetBlogAsync(blogId, default)).ReturnsAsync(blog);
+        _identityProvider.Current.Returns(identity);
+        _repository.GetInvitation(tokenId, default).Returns(invitation);
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
 
         await _service.CancelInvitation(tokenId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(BlogIntention.CancelInvitation, blog), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.CancelInvitation, blog);
     }
 
-    private static IIdentity CreateAuthenticatedIdentity(Guid userId)
-    {
-        var user = new AuthenticatedUser { UserId = userId, Username = "testuser" };
-        var session = new Session();
-        return Identity.Success(user, session, UserSettings.Default, "token");
-    }
 }

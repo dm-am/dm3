@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -23,7 +23,7 @@ namespace DM.Architecture.Tests;
 /// ignore the colour.
 ///
 /// Read out of the sources rather than measured against a database, because
-/// seeding needs PostgreSQL, MongoDB and object storage at once while the
+/// seeding needs PostgreSQL and object storage at once while the
 /// property being defended is a property of the code. The measurement is
 /// scripts/verify-seed-reproducibility.sh, which runs the seeder twice into the
 /// same empty database and diffs the result; this file is what keeps that
@@ -106,9 +106,10 @@ public class SeedDeterminismShould
         program.Should().Contain("SeededGuidFactory",
             "forbidding Guid.NewGuid in the tool changes nothing while the factory it resolves " +
             "is still the infrastructure one");
-        program.Should().Contain("As<IGuidFactory>",
-            "the seeded factory has to be registered as the interface the seeder asks for, " +
-            "otherwise it is a class nobody constructs");
+        program.Should().Contain("AddSingleton<IGuidFactory, SeededGuidFactory>",
+            "the seeded factory has to be registered as the interface the seeder asks for - " +
+            "and after every module call, because MS.DI hands the resolution to the last " +
+            "registration - otherwise it is a class nobody constructs");
     }
 
     /// <summary>

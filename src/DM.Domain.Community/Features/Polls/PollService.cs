@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Community.Authorization;
 using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -23,7 +22,6 @@ internal class PollService : IPollService
     private readonly IPollFactory _factory;
     private readonly IPollRepository _repository;
     private readonly IEventProducer _producer;
-    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IIdentityProvider _identityProvider;
 
     public PollService(
@@ -33,7 +31,6 @@ internal class PollService : IPollService
         IPollFactory factory,
         IPollRepository repository,
         IEventProducer producer,
-        IDateTimeProvider dateTimeProvider,
         IIdentityProvider identityProvider)
     {
         _createValidator = createValidator;
@@ -42,7 +39,6 @@ internal class PollService : IPollService
         _factory = factory;
         _repository = repository;
         _producer = producer;
-        _dateTimeProvider = dateTimeProvider;
         _identityProvider = identityProvider;
     }
 

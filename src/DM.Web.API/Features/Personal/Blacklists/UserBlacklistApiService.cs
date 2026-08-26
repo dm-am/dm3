@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Personal.Features.Blacklists;
 using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Dto;
@@ -13,12 +12,12 @@ namespace DM.Web.API.Features.Personal.Blacklists;
 internal class UserBlacklistApiService : IUserBlacklistApiService
 {
     private readonly IUserBlacklistService _blacklistService;
-    private readonly IMapper _mapper;
+    private readonly BlacklistMapper _mapper;
 
     /// <inheritdoc />
     public UserBlacklistApiService(
         IUserBlacklistService blacklistService,
-        IMapper mapper)
+        BlacklistMapper mapper)
     {
         _blacklistService = blacklistService;
         _mapper = mapper;
@@ -33,7 +32,7 @@ internal class UserBlacklistApiService : IUserBlacklistApiService
         var pagedEntries = allEntries
             .Skip(query.Skip)
             .Take(query.Take)
-            .Select(_mapper.Map<BlacklistEntry>);
+            .Select(_mapper.ToBlacklistEntry);
 
         var pagingInfo = new PagingInfo(query.Skip, query.Take, totalCount);
 
@@ -44,7 +43,7 @@ internal class UserBlacklistApiService : IUserBlacklistApiService
     public async Task<BlacklistSettings> GetSettings()
     {
         var flags = await _blacklistService.GetSettings();
-        return _mapper.Map<BlacklistSettings>(flags);
+        return _mapper.ToBlacklistSettings(flags);
     }
 
     /// <inheritdoc />
@@ -55,7 +54,7 @@ internal class UserBlacklistApiService : IUserBlacklistApiService
         // written as cleared.
         var current = await _blacklistService.GetSettings();
         var result = await _blacklistService.UpdateSettings(request.ApplyTo(current));
-        return _mapper.Map<BlacklistSettings>(result);
+        return _mapper.ToBlacklistSettings(result);
     }
 
     /// <inheritdoc />
@@ -63,7 +62,7 @@ internal class UserBlacklistApiService : IUserBlacklistApiService
     {
         var dto = new OperateUserBlacklistLink { Username = request.Username };
         var entry = await _blacklistService.Block(dto);
-        return _mapper.Map<BlacklistEntry>(entry);
+        return _mapper.ToBlacklistEntry(entry);
     }
 
     /// <inheritdoc />

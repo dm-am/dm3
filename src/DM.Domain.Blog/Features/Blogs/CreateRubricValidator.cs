@@ -14,6 +14,6 @@ internal class CreateRubricValidator : AbstractValidator<CreateRubric>
 
         RuleFor(x => x.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(100).WithMessage(ValidationError.Long);
+            .MaximumLength(BlogFieldLimits.RubricTitleMaxLength).WithMessage(ValidationError.Long);
     }
 }

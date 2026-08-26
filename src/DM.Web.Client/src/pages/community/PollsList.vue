@@ -131,7 +131,7 @@ function pagingAnchor(): HTMLElement | null {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Skeleton" as *
 
 .polls-list
   display: flex

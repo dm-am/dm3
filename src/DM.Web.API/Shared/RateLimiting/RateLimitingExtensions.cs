@@ -65,13 +65,27 @@ internal static class RateLimitingExtensions
     /// more to track and only pays off where a burst at a window boundary is the
     /// thing being prevented.
     /// </param>
-    private sealed record Policy(string Name, Partition Partition, int PermitLimit, int SlidingSegments = 0);
+    internal sealed record Policy(string Name, Partition Partition, int PermitLimit, int SlidingSegments = 0);
 
-    private static readonly Policy[] Policies =
+    /// <summary>
+    /// The whole table, readable by the tests that gate which endpoint spends
+    /// which of these.
+    /// </summary>
+    internal static readonly Policy[] Policies =
     {
         // Credential endpoints. Deliberately the strictest number here: this is
         // the budget an online password-guessing attempt gets.
         new(RateLimitPolicies.Auth, Partition.Address, 5),
+
+        // Settings of the second factor. Counted per account rather than per
+        // address, which is the whole reason it is not the policy above: these
+        // endpoints all carry a session, and the person switching a factor on is
+        // one account whatever address the office or the carrier puts them
+        // behind. Ten rather than five because one sitting is four requests and
+        // a mistyped code has to cost a refusal that says so; ten is still a
+        // pointless door for guessing a six-digit code, which at /confirm closes
+        // with the setup window half an hour later in any case.
+        new(RateLimitPolicies.TwoFactor, Partition.AccountThenAddress, 10),
 
         // Registration-form availability checks. Reachable without a session and
         // they answer a question about other people's data, so they are counted
@@ -180,7 +194,7 @@ internal static class RateLimitingExtensions
                 // every 429 went out as application/json while the rest of the
                 // API answered application/problem+json.
                 await context.HttpContext.Response.WriteAsJsonAsync(
-                    problem, problem.GetType(), options: null, contentType: "application/problem+json", ct);
+                    problem, problem.GetType(), options: null, contentType: ApiContentTypes.ProblemJson, ct);
             };
         });
 

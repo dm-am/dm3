@@ -605,7 +605,7 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .topics-page
   display: flex

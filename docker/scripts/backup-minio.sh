@@ -32,7 +32,7 @@ docker run --rm --network host \
   -e "MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD" \
   -e "BUCKET=$BUCKET" \
   --entrypoint sh \
-  minio/mc:RELEASE.2024-06-20T14-50-54Z -c 'mc alias set src "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" > /dev/null && mc mirror "src/$BUCKET" /backup'
+  minio/mc:RELEASE.2025-05-21T01-59-54Z -c 'mc alias set src "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" > /dev/null && mc mirror "src/$BUCKET" /backup'
 
 BACKUP_SIZE=$(du -sh "$BACKUP_DIR/$TIMESTAMP" | cut -f1)
 echo "[$(date)] Backup created: $TIMESTAMP/ ($BACKUP_SIZE)"

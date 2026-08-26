@@ -5,7 +5,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Features.Topics;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Forum;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;

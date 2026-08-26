@@ -12,8 +12,8 @@ using DM.Domain.Game.Features.Posts;
 using DM.Domain.Game.Features.Rooms;
 using DM.Testing;
 using DM.Testing.Dsl;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Posts;
@@ -38,9 +38,9 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
     private readonly Guid _postId = Guid.NewGuid();
     private readonly Guid _roomId = Guid.NewGuid();
 
-    private readonly Mock<IPostRepository> _postRepository;
-    private readonly Mock<IRoomRepository> _roomRepository;
-    private readonly Mock<IIntentionManager> _intentionManager;
+    private readonly IPostRepository _postRepository;
+    private readonly IRoomRepository _roomRepository;
+    private readonly IIntentionManager _intentionManager;
     private readonly PostAttachmentUploadAuthorizer _sut;
 
     public PostAttachmentUploadAuthorizerShould()
@@ -50,36 +50,33 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         _intentionManager = Mock<IIntentionManager>();
 
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId));
+        identityProvider.Current.Returns(Identities.User(_currentUserId));
 
         _sut = new PostAttachmentUploadAuthorizer(
-            _postRepository.Object,
-            _roomRepository.Object,
-            _intentionManager.Object,
-            identityProvider.Object);
+            _postRepository,
+            _roomRepository,
+            _intentionManager,
+            identityProvider);
     }
 
     /// <summary>A post the caller can see, written by whoever is named.</summary>
     private void PostVisible(Guid authorId) =>
-        _postRepository.Setup(r => r.Get(_postId, _currentUserId))
-            .ReturnsAsync(new Post
-            {
-                Id = _postId,
-                RoomId = _roomId,
-                Author = new GeneralUser { UserId = authorId, Username = "author" },
-                AuthorUserId = authorId,
-                GameText = "текст",
-                MetagameText = string.Empty,
-            });
+        _postRepository.Get(_postId, _currentUserId).Returns(new Post
+        {
+            Id = _postId,
+            RoomId = _roomId,
+            Author = new GeneralUser { UserId = authorId, Username = "author" },
+            AuthorUserId = authorId,
+            GameText = "текст",
+            MetagameText = string.Empty,
+        });
 
     /// <summary>A post outside the caller's scope: the read answers with nothing.</summary>
     private void PostInvisible() =>
-        _postRepository.Setup(r => r.Get(_postId, _currentUserId))
-            .ReturnsAsync((Post?)null);
+        _postRepository.Get(_postId, _currentUserId).Returns((Post?)null);
 
     private void RoomAvailable() =>
-        _roomRepository.Setup(r => r.GetForUpdate(_roomId, _currentUserId))
-            .ReturnsAsync(new RoomToUpdate { Id = _roomId });
+        _roomRepository.GetForUpdate(_roomId, _currentUserId).Returns(new RoomToUpdate { Id = _roomId });
 
     // ─────────────────────────────────────────────────────────────────────────
     // Attaching
@@ -129,9 +126,8 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
             // expected
         }
 
-        _roomRepository.Verify(r => r.GetForUpdate(It.IsAny<Guid>(), It.IsAny<Guid>()), Times.Never);
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(It.IsAny<RoomIntention>(), It.IsAny<object>()), Times.Never);
+        await _roomRepository.DidNotReceive().GetForUpdate(Arg.Any<Guid>(), Arg.Any<Guid>());
+        _intentionManager.DidNotReceive().ThrowIfForbidden(Arg.Any<RoomIntention>(), Arg.Any<object>());
     }
 
     [Fact]
@@ -187,9 +183,8 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
 
         await _sut.EnsureReadAllowedAsync(_postId);
 
-        _postRepository.Verify(r => r.Get(_postId, _currentUserId), Times.Once);
-        _postRepository.Verify(
-            r => r.Get(It.IsAny<Guid>(), It.Is<Guid>(id => id != _currentUserId)), Times.Never);
+        await _postRepository.Received(1).Get(_postId, _currentUserId);
+        await _postRepository.DidNotReceive().Get(Arg.Any<Guid>(), Arg.Is<Guid>(id => id != _currentUserId));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -202,8 +197,7 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         PostVisible(authorId: Guid.NewGuid());
         RoomAvailable();
         _intentionManager
-            .Setup(m => m.IsAllowed(PostIntention.EditText, It.IsAny<(Post, RoomToUpdate)>()))
-            .Returns(true);
+            .IsAllowed(PostIntention.EditText, Arg.Any<(Post, RoomToUpdate)>()).Returns(true);
 
         (await _sut.MayDetachAsync(_postId)).Should().BeTrue();
     }
@@ -214,8 +208,7 @@ public class PostAttachmentUploadAuthorizerShould : UnitTestBase
         PostVisible(authorId: Guid.NewGuid());
         RoomAvailable();
         _intentionManager
-            .Setup(m => m.IsAllowed(PostIntention.EditText, It.IsAny<(Post, RoomToUpdate)>()))
-            .Returns(false);
+            .IsAllowed(PostIntention.EditText, Arg.Any<(Post, RoomToUpdate)>()).Returns(false);
 
         (await _sut.MayDetachAsync(_postId)).Should().BeFalse();
     }

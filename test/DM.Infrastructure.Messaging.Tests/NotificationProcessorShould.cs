@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Messaging.GeneralBus;
@@ -11,31 +10,31 @@ using DM.Workers.NotificationDispatcher.Dispatching;
 using DM.Workers.NotificationDispatcher.Bot;
 using DM.Workers.NotificationDispatcher.Email;
 using DM.Workers.NotificationDispatcher.Notifiers;
-using FluentAssertions;
-using Jamq.Client.Abstractions.Consuming;
+using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Infrastructure.Messaging.Tests;
 
 /// <summary>
 /// Every delivered event runs through a retry middleware that replays the whole
-/// Process on any exception, and the event carries no idempotency key, so a replay
-/// cannot be told apart from a first delivery. That makes the durable write the
-/// point of no return: past it a failure has to stay inside the channel that
-/// produced it, otherwise the recipient gets the entry, the letter and the bot
-/// message twice. Before it, throwing is the only thing that keeps an event which
-/// produced nothing yet from being lost.
+/// Process on any exception. The durable write is the point of no return: past it
+/// a failure has to stay inside the channel that produced it. The write is
+/// idempotent by EventId since W1.4, so what a throw past that point would cost
+/// is no longer a duplicate entry — it is the retry ladder burnt replaying a
+/// message whose write already happened, and a full duplicate for the messages
+/// that predate the key. Before the write, throwing is still the only thing that
+/// keeps an event which produced nothing yet from being lost.
 /// </summary>
 public class NotificationProcessorShould : UnitTestBase
 {
     private const EventType HandledEvent = EventType.NewTopicComment;
 
-    private readonly Mock<INotificationService> _notificationService;
-    private readonly Mock<INotificationEmailSender> _emailSender;
-    private readonly Mock<INotificationBotSender> _botSender;
-    private readonly Mock<IMapper> _mapper;
+    private readonly INotificationService _notificationService;
+    private readonly INotificationEmailSender _emailSender;
+    private readonly INotificationBotSender _botSender;
     private readonly RecordingRealtimeProducer _producer = new();
     private readonly InvokedEvent _event = new() { Type = HandledEvent, EntityId = Guid.NewGuid() };
 
@@ -44,11 +43,9 @@ public class NotificationProcessorShould : UnitTestBase
         _notificationService = Mock<INotificationService>();
         _emailSender = Mock<INotificationEmailSender>();
         _botSender = Mock<INotificationBotSender>();
-        _mapper = Mock<IMapper>();
 
         _notificationService
-            .Setup(s => s.CreateAsync(It.IsAny<IEnumerable<CreateNotification>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[]
+            .CreateAsync(Arg.Any<IEnumerable<CreateNotification>>(), Arg.Any<CancellationToken>()).Returns(new[]
             {
                 new CreatedNotification(
                     new CreateNotification { EventType = HandledEvent, UsersInterested = [Guid.NewGuid()] },
@@ -60,18 +57,14 @@ public class NotificationProcessorShould : UnitTestBase
                     })
             });
 
-        _mapper
-            .Setup(m => m.Map<RealtimeNotification>(It.IsAny<object>()))
-            .Returns(new RealtimeNotification());
     }
 
     [Fact]
     public async Task AcknowledgeTheMessageWhenAChannelFails()
     {
         _emailSender
-            .Setup(s => s.SendIfEnabled(
-                It.IsAny<CreateNotification>(), It.IsAny<EventType>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("the store went away"));
+            .SendIfEnabled(
+                Arg.Any<CreateNotification>(), Arg.Any<EventType>(), Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("the store went away"));
 
         var result = await Processor().Process("key", _event, CancellationToken.None);
 
@@ -87,19 +80,17 @@ public class NotificationProcessorShould : UnitTestBase
 
         await Processor().Process("key", _event, CancellationToken.None);
 
-        _emailSender.Verify(s => s.SendIfEnabled(
-                It.IsAny<CreateNotification>(), It.IsAny<EventType>(), It.IsAny<CancellationToken>()),
-            Times.Once);
-        _botSender.Verify(s => s.SendIfEnabled(
-                It.IsAny<CreateNotification>(), It.IsAny<EventType>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _emailSender.Received(1).SendIfEnabled(
+                Arg.Any<CreateNotification>(), Arg.Any<EventType>(), Arg.Any<CancellationToken>());
+        await _botSender.Received(1).SendIfEnabled(
+                Arg.Any<CreateNotification>(), Arg.Any<EventType>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task LetAFailureBeforeTheDurableWriteEscape()
     {
         _notificationService
-            .Setup(s => s.CreateAsync(It.IsAny<IEnumerable<CreateNotification>>(), It.IsAny<CancellationToken>()))
+            .CreateAsync(Arg.Any<IEnumerable<CreateNotification>>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("the store went away"));
 
         var process = () => Processor().Process("key", _event, CancellationToken.None);
@@ -110,10 +101,9 @@ public class NotificationProcessorShould : UnitTestBase
 
     private NotificationProcessor Processor() => new(
         [new StubGenerator()],
-        _notificationService.Object,
-        _emailSender.Object,
-        _botSender.Object,
-        _mapper.Object,
+        _notificationService,
+        _emailSender,
+        _botSender,
         _producer,
         NullLogger<NotificationProcessor>.Instance);
 

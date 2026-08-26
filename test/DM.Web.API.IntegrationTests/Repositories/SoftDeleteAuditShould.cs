@@ -13,7 +13,7 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Posts;
 using DM.Domain.Game.Features.Rooms;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

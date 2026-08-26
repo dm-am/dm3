@@ -17,7 +17,7 @@ import { storeToRefs } from "pinia";
 import { useGamesStore, type Tag } from "@/entities/game";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
-import { formatDateForDisplay } from "@/shared/lib/filters";
+import { formatDateRangeForDisplay } from "@/shared/lib/filters";
 import {
   FilterSearchInput,
   FilterButton,
@@ -485,7 +485,7 @@ const statusBubbleLabel = computed(() => {
   const status = filterState.value.status;
   if (!status) return "";
 
-  let label = STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
+  const label = STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
   let subLabel = "";
 
   if (status === "Active" && filterState.value.recruitmentFilter !== "any") {
@@ -511,12 +511,10 @@ const hasCreatedDateFilter = computed(
     filterState.value.createdToUtc !== null,
 );
 const createdDateLabel = computed(() => {
-  const from = formatDateForDisplay(filterState.value.createdFromUtc);
-  const to = formatDateForDisplay(filterState.value.createdToUtc);
-  if (from && to) return `${from} — ${to}`;
-  if (from) return `с ${from}`;
-  if (to) return `до ${to}`;
-  return "";
+  return formatDateRangeForDisplay({
+    from: filterState.value.createdFromUtc,
+    to: filterState.value.createdToUtc,
+  });
 });
 
 const hasActivatedDateFilter = computed(
@@ -525,12 +523,10 @@ const hasActivatedDateFilter = computed(
     filterState.value.activatedToUtc !== null,
 );
 const activatedDateLabel = computed(() => {
-  const from = formatDateForDisplay(filterState.value.activatedFromUtc);
-  const to = formatDateForDisplay(filterState.value.activatedToUtc);
-  if (from && to) return `${from} — ${to}`;
-  if (from) return `с ${from}`;
-  if (to) return `до ${to}`;
-  return "";
+  return formatDateRangeForDisplay({
+    from: filterState.value.activatedFromUtc,
+    to: filterState.value.activatedToUtc,
+  });
 });
 
 const hasRecruitmentStartedDateFilter = computed(
@@ -539,14 +535,10 @@ const hasRecruitmentStartedDateFilter = computed(
     filterState.value.recruitmentStartedToUtc !== null,
 );
 const recruitmentStartedDateLabel = computed(() => {
-  const from = formatDateForDisplay(
-    filterState.value.recruitmentStartedFromUtc,
-  );
-  const to = formatDateForDisplay(filterState.value.recruitmentStartedToUtc);
-  if (from && to) return `${from} — ${to}`;
-  if (from) return `с ${from}`;
-  if (to) return `до ${to}`;
-  return "";
+  return formatDateRangeForDisplay({
+    from: filterState.value.recruitmentStartedFromUtc,
+    to: filterState.value.recruitmentStartedToUtc,
+  });
 });
 
 const hasClosedDateFilter = computed(
@@ -555,12 +547,10 @@ const hasClosedDateFilter = computed(
     filterState.value.closedToUtc !== null,
 );
 const closedDateLabel = computed(() => {
-  const from = formatDateForDisplay(filterState.value.closedFromUtc);
-  const to = formatDateForDisplay(filterState.value.closedToUtc);
-  if (from && to) return `${from} — ${to}`;
-  if (from) return `с ${from}`;
-  if (to) return `до ${to}`;
-  return "";
+  return formatDateRangeForDisplay({
+    from: filterState.value.closedFromUtc,
+    to: filterState.value.closedToUtc,
+  });
 });
 
 // Tags bubbles
@@ -930,7 +920,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Filters"
+@use "@/assets/styles/Filters" as *
 
 .games-filter
   display: flex

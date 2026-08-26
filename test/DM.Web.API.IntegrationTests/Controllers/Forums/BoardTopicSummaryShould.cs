@@ -5,7 +5,8 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Features.Topics;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Forum;
-using FluentAssertions;
+using DM.Web.API.IntegrationTests.Helpers;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -157,7 +158,7 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         }
         finally
         {
-            await DropComments(boardId);
+            await PostTestHelper.DropComments(DatabaseFixture, boardId);
             await DropBoard(boardId);
         }
     }
@@ -186,14 +187,6 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         return boards.First(b => b.Id == boardId);
     }
 
-    private async Task DropComments(Guid boardId)
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """DELETE FROM "Comments" WHERE "EntityId" IN (SELECT "TopicId" FROM "Topics" WHERE "BoardId" = {0})""",
-            boardId);
-    }
     private async Task<Topic> CreateTopic(Guid boardId, int index)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

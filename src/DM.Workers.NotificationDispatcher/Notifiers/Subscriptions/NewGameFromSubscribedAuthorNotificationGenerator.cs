@@ -55,29 +55,11 @@ internal class NewGameFromSubscribedAuthorNotificationGenerator : BaseNotificati
             yield break;
         }
 
-        var usersInterested = new HashSet<Guid>();
-
-        var masterSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
-            SubscriptionTargetType.User,
+        var usersInterested = await SubscribedAudience.OfTeamAsync(
+            _subscriptionRepository,
             gameData.MasterId,
+            gameData.AssistantIds,
             SubscriptionSettings.AuthorGameEvents);
-        usersInterested.UnionWith(masterSubscriptions.Select(s => s.SubscriberId));
-
-        foreach (var assistantId in gameData.AssistantIds)
-        {
-            var assistantSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
-                SubscriptionTargetType.User,
-                assistantId,
-                SubscriptionSettings.AuthorGameEvents);
-            usersInterested.UnionWith(assistantSubscriptions.Select(s => s.SubscriberId));
-        }
-
-        // Exclude the team — they're notified through team-targeted generators.
-        usersInterested.Remove(gameData.MasterId);
-        foreach (var assistantId in gameData.AssistantIds)
-        {
-            usersInterested.Remove(assistantId);
-        }
 
         if (usersInterested.Count == 0)
         {

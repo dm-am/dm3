@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -75,9 +75,9 @@ public class UnreadMarkerOwnershipShould
         var sources = Sources().ToList();
 
         sources.Count(source => source.Code.Contains("ReserveAsync(", StringComparison.Ordinal))
-            .Should().BeGreaterOrEqualTo(6, "every entity with unread counters reserves them");
+            .Should().BeGreaterThanOrEqualTo(6, "every entity with unread counters reserves them");
         sources.Count(source => source.Code.Contains("CreateMarkerAsync(", StringComparison.Ordinal))
-            .Should().BeGreaterOrEqualTo(2, "the contract declares the write and one class implements it");
+            .Should().BeGreaterThanOrEqualTo(2, "the contract declares the write and one class implements it");
     }
 
     [Fact]

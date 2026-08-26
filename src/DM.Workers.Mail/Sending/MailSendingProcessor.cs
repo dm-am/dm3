@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Mail.Configuration;
-using Jamq.Client.Abstractions.Consuming;
+using DM.Infrastructure.Messaging;
 using MailKit;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -73,7 +73,7 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
         // no AUTH extension by refusing it outright - "The SMTP server does not
         // support authentication." - rather than by sending nothing, and the letter
         // that triggered it would be retried, dead lettered and never delivered.
-        // Nothing changes on a stand: MailHog advertises AUTH PLAIN and answers
+        // Nothing changes on a stand: Mailpit advertises AUTH PLAIN and answers
         // empty credentials with 235, which is why the shipped empty values work
         // there today. The relay this opens the way to is an internal one with no
         // AUTH at all, which until now could not be configured here.
@@ -124,7 +124,7 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
     /// wanted encryption had no way to ask for it: an attacker on the path strips
     /// STARTTLS out of the greeting and the same session continues in the clear,
     /// carrying activation and password reset links. Opportunistic upgrade stays
-    /// the default only because the local and preview stacks send through MailHog.
+    /// the default only because the local and preview stacks send through Mailpit.
     /// </remarks>
     private SecureSocketOptions TransportSecurity()
     {

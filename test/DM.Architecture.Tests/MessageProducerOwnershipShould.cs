@@ -3,9 +3,9 @@ using System.IO;
 using ArchUnitNET.Domain;
 using ArchUnitNET.Fluent;
 using ArchUnitNET.Loader;
-using ArchUnitNET.xUnit;
-using FluentAssertions;
-using Jamq.Client.Abstractions.Producing;
+using ArchUnitNET.xUnitV3;
+using AwesomeAssertions;
+using DM.Infrastructure.Messaging;
 using Xunit;
 using static ArchUnitNET.Fluent.ArchRuleDefinition;
 using ArchitectureModel = ArchUnitNET.Domain.Architecture;
@@ -16,18 +16,15 @@ namespace DM.Architecture.Tests;
 /// Whoever builds a message producer has to be able to release it.
 /// </summary>
 /// <remarks>
-/// BuildRabbit returns a producer that takes an AMQP channel out of the pool on
-/// its first send. The channel comes back only when the producer is disposed:
-/// ConnectionAdapter counts channels on a semaphore of ChannelsLimit and releases
-/// a slot on the channel's ModelShutdown, and RabbitProducer closes the channel
-/// only in Dispose. With the shipped defaults — 16 connections of 256 channels —
-/// a wrapper that is not disposable exhausts the pool after about four thousand
-/// publishes, and from then on every publish in that process throws.
+/// The builder returns a producer that opens an AMQP channel on its first send
+/// and closes it only in Dispose. A wrapper that is not disposable therefore
+/// leaks one channel per instance for the life of the process, until the
+/// broker's channel ceiling turns every further publish into an exception.
 ///
 /// A rule rather than three tests, because the defect appeared three times
 /// independently — the event producer, the mail sender and the notification
 /// processor — and each time from the same slip: the producer was built in a
-/// constructor and nobody owned it. Anything that takes IProducerBuilder is
+/// constructor and nobody owned it. Anything that takes IDmProducerBuilder is
 /// covered the moment it is written.
 ///
 /// Disposability is the half that lives in the type. The other half is the
@@ -38,32 +35,36 @@ public class MessageProducerOwnershipShould
 {
     private static readonly ArchitectureModel Solution = new ArchLoader()
         .LoadFilteredDirectory(AppContext.BaseDirectory, "DM.*.dll", SearchOption.TopDirectoryOnly)
-        .LoadAssembly(typeof(IProducerBuilder).Assembly)
         .Build();
 
     // Production assemblies only, and only types that can hold what they build.
-    // Naming the builder is enough to match, so without the first filter the rule
-    // flags the class holding the rule and the Jamq extension class that declares
-    // BuildRabbit; without the second it flags the registration extensions, which
-    // name the builder in a lambda and own nothing — a static class has no
-    // instance to keep a producer in, so it cannot be the one to release it.
+    // Naming the builder is enough to match, so without the assembly filter the
+    // rule flags the class holding the rule; without the static-class filter it
+    // flags the registration extensions, which name the builder in a lambda and
+    // own nothing — a static class has no instance to keep a producer in, so it
+    // cannot be the one to release it. The builder implementation is excluded
+    // the same way: it hands producers out and holds none.
     private static readonly IObjectProvider<Class> ProducerOwners = Classes()
-        .That().DependOnAny(typeof(IProducerBuilder))
+        .That().DependOnAny(typeof(IDmProducerBuilder))
         .And().FollowCustomPredicate(
             c => c.Assembly.Name.StartsWith("DM.", StringComparison.Ordinal)
                  && !c.Assembly.Name.EndsWith(".Tests", StringComparison.Ordinal)
-                 && !(c.IsAbstract == true && c.IsSealed == true),
-            "are instantiable types declared in a DM production assembly")
+                 && !(c.IsAbstract == true && c.IsSealed == true)
+                 // Named as a string because the builder implementation is
+                 // internal to the messaging assembly.
+                 && c.FullName != "DM.Infrastructure.Messaging.DmProducerBuilder",
+            "are instantiable types declared in a DM production assembly, " +
+            "not the messaging plumbing itself")
         .As("classes that build a message producer");
 
     /// <summary>
     /// A rule that matches nothing passes. There are three producer owners today,
-    /// so a loader that stops resolving the Jamq assembly turns the rule green
-    /// instead of red.
+    /// so a loader that stops resolving the messaging assembly turns the rule
+    /// green instead of red.
     /// </summary>
     [Fact]
     public void FindTheProducerOwners() =>
-        ProducerOwners.GetObjects(Solution).Should().HaveCountGreaterOrEqualTo(3);
+        ProducerOwners.GetObjects(Solution).Should().HaveCountGreaterThanOrEqualTo(3);
 
     /// <summary>
     /// The workers and the seeder are separate executables that no other project
@@ -90,8 +91,8 @@ public class MessageProducerOwnershipShould
     public void KeepEveryProducerOwnerDisposable() =>
         Classes().That().Are(ProducerOwners)
             .Should().ImplementInterface(typeof(IDisposable))
-            .Because("the AMQP channel the producer leases comes back to the pool only " +
-                     "on Dispose, so a wrapper that cannot be disposed leaks one channel " +
-                     "per instance until the pool throws and publishing stops")
+            .Because("the AMQP channel the producer opens is closed only on Dispose, " +
+                     "so a wrapper that cannot be disposed leaks one channel per " +
+                     "instance until the broker's ceiling stops publishing altogether")
             .Check(Solution);
 }

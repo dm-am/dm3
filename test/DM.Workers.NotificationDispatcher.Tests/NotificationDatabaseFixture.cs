@@ -26,7 +26,7 @@ public class NotificationDatabaseFixture : IAsyncLifetime
 
     private string _connectionString = string.Empty;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await _postgres.StartAsync();
         _connectionString = _postgres.GetConnectionString();
@@ -36,7 +36,7 @@ public class NotificationDatabaseFixture : IAsyncLifetime
         await NotificationSeed.ApplyAsync(context);
     }
 
-    public Task DisposeAsync() => _postgres.DisposeAsync().AsTask();
+    public ValueTask DisposeAsync() => _postgres.DisposeAsync();
 
     public DmDbContext CreateContext() => new(new DbContextOptionsBuilder<DmDbContext>()
         .UseNpgsql(_connectionString)

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using DM.Web.API.Shared.Http;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Xunit;
@@ -35,12 +35,7 @@ public class TokenGatedActionsShould
     private static readonly string[] CredentialHeaders = [TokenHeaders.Account, TokenHeaders.Ticket];
 
     /// <summary>Every controller action in the host.</summary>
-    private static MethodInfo[] Actions() => typeof(Startup).Assembly
-        .GetTypes()
-        .Where(t => t.IsClass && !t.IsAbstract && typeof(ControllerBase).IsAssignableFrom(t))
-        .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
-        .Where(m => m.GetCustomAttributes<HttpMethodAttribute>().Any())
-        .ToArray();
+    private static MethodInfo[] Actions() => ApiSurface.RoutedActions().ToArray();
 
     [Fact]
     public void NotNameTheTokenInTheRoute()

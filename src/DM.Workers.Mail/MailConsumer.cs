@@ -1,19 +1,15 @@
+using DM.Domain.Core.Mail;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
-using Jamq.Client.Abstractions.Consuming;
-using Jamq.Client.Rabbit.Consuming;
+using DM.Workers.Mail.Sending;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
-using RabbitMQ.Client;
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-using DM.Domain.Core.Mail;
-using DM.Workers.Mail.Sending;
 namespace DM.Workers.Mail;
 
 internal class MailConsumer : BackgroundService
@@ -32,18 +28,18 @@ internal class MailConsumer : BackgroundService
     private const string DeadLetterExchangeName = "dm.mail.unsent";
 
     private readonly ILogger<MailConsumer> _logger;
-    private readonly IConsumerBuilder _consumerBuilder;
-    private readonly IAsyncConnectionFactory _rabbitConnectionFactory;
+    private readonly IDmConsumerBuilder _consumerBuilder;
+    private readonly DmBrokerConnection _brokerConnection;
     private readonly AsyncRetryPolicy _consumeRetryPolicy;
 
     public MailConsumer(
         ILogger<MailConsumer> logger,
-        IConsumerBuilder consumerBuilder,
-        IAsyncConnectionFactory rabbitConnectionFactory)
+        IDmConsumerBuilder consumerBuilder,
+        DmBrokerConnection brokerConnection)
     {
         _logger = logger;
         _consumerBuilder = consumerBuilder;
-        _rabbitConnectionFactory = rabbitConnectionFactory;
+        _brokerConnection = brokerConnection;
 
         _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
             attempt => TimeSpan.FromSeconds(1 << attempt),
@@ -61,10 +57,10 @@ internal class MailConsumer : BackgroundService
         // this way all along.
         await Task.Yield();
 
-        var parameters = new RabbitConsumerParameters("dm.mail.sender", QueueName, ProcessingOrder.Sequential)
+        var parameters = new DmConsumerParameters("dm.mail.sender", QueueName)
         {
             ExchangeName = ConsumerExchangeName,
-            RoutingKeys = new[] { "#" },
+            RoutingKeys = ["#"],
 
             // Without this the working queue has no dead-letter exchange, so a
             // letter that keeps failing is rejected into nothing: the retries run
@@ -73,16 +69,15 @@ internal class MailConsumer : BackgroundService
             // never attached to them.
             DeadLetterExchange = DeadLetterExchangeName,
         };
-        var consumer = _consumerBuilder.BuildRabbit<EmailLetter, MailSendingProcessor>(parameters);
+        var consumer = _consumerBuilder.Build<EmailLetter, MailSendingProcessor>(parameters);
 
-        // The dead-letter declaration is inside the policy with the subscription: it
-        // opens its own connection to the same broker, and it used to be the one call
-        // nothing retried, so an unreachable broker threw past Polly entirely.
-        await _consumeRetryPolicy.ExecuteAsync(_ =>
+        // The dead-letter declaration is inside the policy with the subscription:
+        // both talk to the same broker, and one call left outside the policy is
+        // the one an unreachable broker throws past entirely.
+        await _consumeRetryPolicy.ExecuteAsync(async token =>
         {
-            DeadLetterQueue.DeclareTerminal(_rabbitConnectionFactory, DeadLetterExchangeName);
-            consumer.Subscribe();
-            return Task.CompletedTask;
+            await DeadLetterQueue.DeclareTerminal(_brokerConnection, DeadLetterExchangeName, token);
+            await consumer.Subscribe(token);
         }, stoppingToken);
 
         _logger.LogDebug("[👂] Mail sending consumer is listening to {QueueName} queue", parameters.QueueName);

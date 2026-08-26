@@ -97,7 +97,7 @@
 | **Даты/время** | суффикс `Utc` | `CreatedUtc`, `ActivatedUtc`, `ExpiresUtc` |
 | Тестовый класс | `{Class}Should.cs` | `TopicServiceShould.cs` |
 | Repository | `I{Feature}Repository.cs` | `ITopicRepository.cs` |
-| AutoMapper | `{Feature}MappingProfile.cs` | `TopicMappingProfile.cs` |
+| Mapperly-мапер | `{Feature}Mapper.cs` | `TopicMapper.cs` |
 
 ### Унифицированные имена между слоями
 
@@ -112,13 +112,15 @@
 | Автор | `AuthorUsername`, `Author` | `AuthorLogin` |
 | Мастер игры | `MasterUsername`, `Master` | `MasterLogin` |
 
-**Принцип:** Если имена совпадают между слоями, AutoMapper маппит автоматически (convention-based mapping).
+**Принцип:** Если имена совпадают между слоями, Mapperly маппит их по имени
+без конфигурации; несовпадение требует явного `[MapProperty]` (идиомы — в
+[PATTERNS.md](./PATTERNS.md), раздел "Маппинг — Mapperly").
 
 **Исключение — собственный ключ.** Сущность и доменная модель называют его
 `{Сущность}Id`, API-DTO — `Id`: в базе имя должно оставаться однозначным среди
 чужих ключей рядом, а в ответе тип уже назван самой моделью, и `ticket.ticketId`
 на клиенте — заикание. Это единственное место, где имя меняется на границе, и
-менять его приходится явным `ForMember` в профиле маппинга. Правило чужих
+менять его приходится явным `[MapProperty]` в мапере. Правило чужих
 ключей действует на всех слоях без исключения: `Id` в ответе — всегда ключ
 того, что этот ответ описывает.
 
@@ -231,8 +233,8 @@
 #### Новая фича
 
 - [ ] Feature folder — [PATTERNS.md](./PATTERNS.md#webapi--feature-folders)
-- [ ] Service + Repository + Intention + Validator + MappingProfile
-- [ ] DI регистрация
+- [ ] Service + Repository + Intention + Validator + Mapper
+- [ ] Регистрация в DI — только если скана сборки по умолчанию не хватает
 
 #### Новый endpoint
 

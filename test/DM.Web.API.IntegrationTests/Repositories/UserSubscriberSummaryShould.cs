@@ -6,7 +6,7 @@ using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;

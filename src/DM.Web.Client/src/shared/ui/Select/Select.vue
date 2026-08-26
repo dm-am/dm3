@@ -95,7 +95,7 @@ defineEmits<{
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .select-control
   position: relative

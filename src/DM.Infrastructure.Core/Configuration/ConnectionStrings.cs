@@ -11,16 +11,6 @@ public class ConnectionStrings
     public string Rdb { get; set; } = null!;
 
     /// <summary>
-    /// Mongo connection string
-    /// </summary>
-    public string Mongo { get; set; } = null!;
-
-    /// <summary>
-    /// Mongo in-memory connection string
-    /// </summary>
-    public string Cache { get; set; } = null!;
-
-    /// <summary>
     /// Logging storage connection string
     /// </summary>
     public string Logs { get; set; } = null!;

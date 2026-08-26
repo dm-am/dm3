@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Configuration;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbUserEndorsement = DM.Infrastructure.Persistence.Entities.Community.UserEndorsement;

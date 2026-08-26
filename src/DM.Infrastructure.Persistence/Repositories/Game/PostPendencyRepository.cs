@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostPendencies;
@@ -17,14 +15,11 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 internal class PostPendencyRepository : IPostPendencyRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     public PostPendencyRepository(
-        DmDbContext dbContext,
-        IMapper mapper)
+        DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -33,7 +28,7 @@ internal class PostPendencyRepository : IPostPendencyRepository
         return _dbContext.PostPendencies
             .TagWith("DM.PostPendency.Get")
             .Where(e => e.PendencyId == pendencyId)
-            .ProjectTo<PostPendency>(_mapper.ConfigurationProvider)
+            .ProjectToPostPendency()
             .FirstOrDefaultAsync()!;
     }
 
@@ -56,7 +51,7 @@ internal class PostPendencyRepository : IPostPendencyRepository
         return await _dbContext.PostPendencies
             .TagWith("DM.PostPendency.Created")
             .Where(e => e.PendencyId == entity.PendencyId)
-            .ProjectTo<PostPendency>(_mapper.ConfigurationProvider)
+            .ProjectToPostPendency()
             .FirstAsync();
     }
 

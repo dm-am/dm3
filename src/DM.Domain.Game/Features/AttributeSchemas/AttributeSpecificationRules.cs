@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
+using FluentValidation;
 
 namespace DM.Domain.Game.Features.AttributeSchemas;
 
@@ -12,6 +14,42 @@ namespace DM.Domain.Game.Features.AttributeSchemas;
 /// </summary>
 internal static class AttributeSpecificationRules
 {
+    /// <summary>
+    /// The per-specification rules, whichever DTO carries the specification.
+    /// </summary>
+    /// <remarks>
+    /// Written once and applied by both schema validators: creation and editing
+    /// have to accept the same specification, and the copy that used to sit in
+    /// each of them was the same three rules word for word.
+    /// </remarks>
+    public static void Apply<TSpecification>(InlineValidator<TSpecification> specification)
+        where TSpecification : IAttributeSpecificationInput
+    {
+        specification.RuleFor(s => s.Title)
+            .NotEmpty().WithMessage(ValidationError.Empty)
+            .MaximumLength(AttributeSchemaFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long);
+
+        specification.RuleFor(s => s.Type)
+            .IsInEnum().WithMessage(ValidationError.Invalid);
+
+        specification.RuleFor(s => s.Order)
+            .GreaterThanOrEqualTo(0).WithMessage(ValidationError.Invalid);
+    }
+
+    /// <summary>
+    /// Report every schema-level violation of <see cref="Collect" /> to the
+    /// validation context of whichever DTO is being checked.
+    /// </summary>
+    public static void AddFailures<TSchema>(
+        IEnumerable<IAttributeSpecificationInput>? specifications,
+        ValidationContext<TSchema> context)
+    {
+        foreach (var error in Collect(specifications))
+        {
+            context.AddFailure(error);
+        }
+    }
+
     /// <summary>
     /// Collect all rule violations for a set of specifications.
     /// </summary>

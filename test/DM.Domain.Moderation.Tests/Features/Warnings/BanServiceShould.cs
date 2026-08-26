@@ -14,20 +14,21 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Warnings;
 
 public class BanServiceShould : UnitTestBase
 {
-    private readonly Mock<IBanRepository> _banRepository;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IEventProducer> _eventProducer;
+    private readonly IBanRepository _banRepository;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IEventProducer _eventProducer;
     private readonly BanService _service;
     private readonly Guid _moderatorUserId = Guid.NewGuid();
     private readonly Guid _targetUserId = Guid.NewGuid();
@@ -45,22 +46,22 @@ public class BanServiceShould : UnitTestBase
 
         // Ban creation and lifting require SeniorModerator, so tests default to it
         SetCurrentUser(UserRole.SeniorModerator);
-        _dateTimeProvider.Setup(d => d.Now).Returns(_now);
-        _guidFactory.Setup(g => g.Create()).Returns(_banId);
+        _dateTimeProvider.Now.Returns(_now);
+        _guidFactory.Create().Returns(_banId);
 
         var createValidator = Mock<IValidator<CreateBan>>();
         createValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateBan>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreateBan>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _service = new BanService(
-            _banRepository.Object,
-            _userLookupService.Object,
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
-            createValidator.Object,
-            _eventProducer.Object);
+            _banRepository,
+            _userLookupService,
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider,
+            createValidator,
+            _eventProducer);
     }
 
     private void SetCurrentUser(UserRole role)
@@ -70,13 +71,13 @@ public class BanServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        _identityProvider.Setup(p => p.Current).Returns(identity);
+        _identityProvider.Current.Returns(identity);
     }
 
     [Fact]
     public async Task ReturnEmptyListWhenGettingBansForNonexistentUser()
     {
-        _userLookupService.Setup(s => s.GetAsync("Unknown"))
+        _userLookupService.GetAsync("Unknown")
             .ThrowsAsync(new HttpException(HttpStatusCode.NotFound, "Пользователь не найден"));
 
         var result = await _service.GetUserBans("Unknown");
@@ -91,9 +92,8 @@ public class BanServiceShould : UnitTestBase
         // - and an empty list is the answer to it. A dropped connection is not
         // that answer: it used to reach the moderator's page as "no bans",
         // which is exactly what an unblemished profile looks like.
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
-        _banRepository.Setup(r => r.GetUserBans(_targetUserId, It.IsAny<CancellationToken>()))
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _banRepository.GetUserBans(_targetUserId, Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("connection reset"));
 
         var act = () => _service.GetUserBans("Target");
@@ -106,9 +106,8 @@ public class BanServiceShould : UnitTestBase
     {
         // Same rule on the public route: "we could not check" must not leave
         // the service as "not banned".
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
-        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("connection reset"));
 
         var act = () => _service.GetActiveBan("Target");
@@ -124,7 +123,7 @@ public class BanServiceShould : UnitTestBase
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),
             "token");
-        _identityProvider.Setup(p => p.Current).Returns(userIdentity);
+        _identityProvider.Current.Returns(userIdentity);
 
         var act = () => _service.GetAllActiveBans();
 
@@ -137,13 +136,12 @@ public class BanServiceShould : UnitTestBase
     public async Task AllowModeratorToViewAllActiveBans()
     {
         SetCurrentUser(UserRole.Moderator);
-        _banRepository.Setup(r => r.GetAllActiveBans(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
+        _banRepository.GetAllActiveBans(Arg.Any<CancellationToken>()).Returns([]);
 
         var result = await _service.GetAllActiveBans();
 
         result.Should().NotBeNull();
-        _banRepository.Verify(r => r.GetAllActiveBans(It.IsAny<CancellationToken>()), Times.Once);
+        await _banRepository.Received(1).GetAllActiveBans(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -162,14 +160,13 @@ public class BanServiceShould : UnitTestBase
     public async Task AllowModeratorToViewBanHistory()
     {
         SetCurrentUser(UserRole.Moderator);
-        _banRepository.Setup(r => r.GetBanHistory(0, 20, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(([], 0));
+        _banRepository.GetBanHistory(0, 20, Arg.Any<CancellationToken>()).Returns(([], 0));
 
         var (bans, totalCount) = await _service.GetBanHistory(0, 20);
 
         bans.Should().BeEmpty();
         totalCount.Should().Be(0);
-        _banRepository.Verify(r => r.GetBanHistory(0, 20, It.IsAny<CancellationToken>()), Times.Once);
+        await _banRepository.Received(1).GetBanHistory(0, 20, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -198,31 +195,31 @@ public class BanServiceShould : UnitTestBase
     public async Task RefuseAVoluntaryBanAimedAtSomebodyElse()
     {
         SetCurrentUser(UserRole.RegularUser);
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
 
         var act = () => _service.CreateBan(new CreateBan { Username = "Target", IsVoluntary = true });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
             .WithMessage("Добровольный бан можно наложить только на себя");
-        _banRepository.Verify(
-            r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _banRepository.DidNotReceive().Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task LetAUserBanThemselvesVoluntarily()
     {
         SetCurrentUser(UserRole.RegularUser);
-        _userLookupService.Setup(s => s.GetAsync("Self"))
-            .ReturnsAsync(new GeneralUser { UserId = _moderatorUserId, Username = "Self" });
-        _banRepository.Setup(r => r.GetActiveBan(_moderatorUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
+        _userLookupService.GetAsync("Self").Returns(new GeneralUser { UserId = _moderatorUserId, Username = "Self" });
+        _banRepository.GetActiveBan(_moderatorUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
 
         CreateBanEntity? capturedEntity = null;
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ban());
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateBanEntity>(0);
+                capturedEntity = e;
+            });
 
         await _service.CreateBan(new CreateBan { Username = "Self", IsVoluntary = true, Comment = "Отдых" });
 
@@ -238,9 +235,8 @@ public class BanServiceShould : UnitTestBase
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
         var existingBan = new Ban { BanId = Guid.NewGuid(), EndedUtc = _now.AddDays(1) };
 
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
-        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(existingBan);
+        _userLookupService.GetAsync("Target").Returns(targetUser);
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>()).Returns(existingBan);
 
         var createBan = new CreateBan { Username = "Target", DurationHours = 24 };
         var act = () => _service.CreateBan(createBan);
@@ -254,14 +250,17 @@ public class BanServiceShould : UnitTestBase
     public async Task CreateBanWithDurationInHours()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
-        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
+        _userLookupService.GetAsync("Target").Returns(targetUser);
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
 
         CreateBanEntity? capturedEntity = null;
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ban());
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateBanEntity>(0);
+                capturedEntity = e;
+            });
 
         var createBan = new CreateBan
         {
@@ -286,11 +285,10 @@ public class BanServiceShould : UnitTestBase
     public async Task AnnounceAnIssuedBan()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
-        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban { BanId = _banId });
+        _userLookupService.GetAsync("Target").Returns(targetUser);
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId });
 
         await _service.CreateBan(new CreateBan
         {
@@ -300,7 +298,7 @@ public class BanServiceShould : UnitTestBase
             IsVoluntary = false
         });
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.BanIssued, _banId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.BanIssued, _banId);
     }
 
     [Fact]
@@ -309,11 +307,10 @@ public class BanServiceShould : UnitTestBase
         // The ban notification exists to tell a person about something he did not
         // do. Its only recipient is the target, who here is the author as well.
         var targetUser = new GeneralUser { UserId = _moderatorUserId, Username = "Moderator" };
-        _userLookupService.Setup(s => s.GetAsync("Moderator")).ReturnsAsync(targetUser);
-        _banRepository.Setup(r => r.GetActiveBan(_moderatorUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban { BanId = _banId });
+        _userLookupService.GetAsync("Moderator").Returns(targetUser);
+        _banRepository.GetActiveBan(_moderatorUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId });
 
         await _service.CreateBan(new CreateBan
         {
@@ -323,21 +320,24 @@ public class BanServiceShould : UnitTestBase
             IsVoluntary = true
         });
 
-        _eventProducer.Verify(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()), Times.Never);
+        await _eventProducer.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
     }
 
     [Fact]
     public async Task PersistDemocraticBanScopeWhenRequested()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
-        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
+        _userLookupService.GetAsync("Target").Returns(targetUser);
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
 
         CreateBanEntity? capturedEntity = null;
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ban());
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateBanEntity>(0);
+                capturedEntity = e;
+            });
 
         var createBan = new CreateBan
         {
@@ -357,14 +357,17 @@ public class BanServiceShould : UnitTestBase
     public async Task DefaultBanScopeToFullBan()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
-        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
+        _userLookupService.GetAsync("Target").Returns(targetUser);
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
 
         CreateBanEntity? capturedEntity = null;
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ban());
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateBanEntity>(0);
+                capturedEntity = e;
+            });
 
         // No AccessRestrictionPolicy set → the DTO default (FullBan) applies.
         var createBan = new CreateBan { Username = "Target", DurationHours = 24, Comment = "Spam" };
@@ -379,14 +382,17 @@ public class BanServiceShould : UnitTestBase
     public async Task CoerceUnsupportedBanScopeToFullBan()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
-        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
+        _userLookupService.GetAsync("Target").Returns(targetUser);
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
 
         CreateBanEntity? capturedEntity = null;
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ban());
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateBanEntity>(0);
+                capturedEntity = e;
+            });
 
         // A scope that is neither Democratic nor Full falls back to FullBan.
         var createBan = new CreateBan
@@ -407,14 +413,17 @@ public class BanServiceShould : UnitTestBase
     public async Task CreatePermanentBanWhenNoDurationProvided()
     {
         var targetUser = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.Setup(s => s.GetAsync("Target")).ReturnsAsync(targetUser);
-        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
+        _userLookupService.GetAsync("Target").Returns(targetUser);
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
 
         CreateBanEntity? capturedEntity = null;
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ban());
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateBanEntity>(0);
+                capturedEntity = e;
+            });
 
         var createBan = new CreateBan { Username = "Target", Comment = "Permanent ban" };
         await _service.CreateBan(createBan);
@@ -427,14 +436,17 @@ public class BanServiceShould : UnitTestBase
     public async Task AllowVoluntaryBanCreatedByUser()
     {
         var targetUser = new GeneralUser { UserId = _moderatorUserId, Username = "Moderator" };
-        _userLookupService.Setup(s => s.GetAsync("Moderator")).ReturnsAsync(targetUser);
-        _banRepository.Setup(r => r.GetActiveBan(_moderatorUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
+        _userLookupService.GetAsync("Moderator").Returns(targetUser);
+        _banRepository.GetActiveBan(_moderatorUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
 
         CreateBanEntity? capturedEntity = null;
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateBanEntity, CancellationToken>((e, _) => capturedEntity = e)
-            .ReturnsAsync(new Ban());
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban())
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<CreateBanEntity>(0);
+                capturedEntity = e;
+            });
 
         var createBan = new CreateBan
         {
@@ -465,8 +477,7 @@ public class BanServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowNotFoundWhenLiftingMissingBan()
     {
-        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
 
         var act = () => _service.LiftBan(_banId);
 
@@ -477,60 +488,58 @@ public class BanServiceShould : UnitTestBase
     [Fact]
     public async Task LiftTemporaryBanAsSeniorModerator()
     {
-        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban { BanId = _banId, EndedUtc = _now.AddDays(7) });
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId, EndedUtc = _now.AddDays(7) });
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        await _banRepository.Received(1).Lift(_banId, Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ForbidSeniorModeratorFromLiftingPermanentBan()
     {
         // Permanent bans are stored with a far-future end date
-        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100) });
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100) });
 
         var act = () => _service.LiftBan(_banId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        _banRepository.Verify(r => r.Lift(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _banRepository.DidNotReceive().Lift(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task AllowAdminToLiftPermanentBan()
     {
         SetCurrentUser(UserRole.Admin);
-        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100) });
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100) });
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        await _banRepository.Received(1).Lift(_banId, Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task AllowSeniorModeratorToLiftPermanentVoluntaryBan()
     {
-        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100), IsVoluntary = true });
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100), IsVoluntary = true });
 
         await _service.LiftBan(_banId);
 
-        _banRepository.Verify(r => r.Lift(_banId, It.IsAny<Guid>(), It.IsAny<DateTimeOffset>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        await _banRepository.Received(1).Lift(_banId, Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
     // --- Who may ban whom (BE-18, BE-19) ---
 
     private void ArrangeTarget(UserRole targetRole)
     {
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _targetUserId, Username = "Target", Role = targetRole });
-        _banRepository.Setup(r => r.GetActiveBan(_targetUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban());
+        _userLookupService.GetAsync("Target")
+            .Returns(new GeneralUser { UserId = _targetUserId, Username = "Target", Role = targetRole });
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>()).Returns(new Ban());
     }
 
     /// <summary>
@@ -539,12 +548,10 @@ public class BanServiceShould : UnitTestBase
     private void ArrangeSelf(UserRole role)
     {
         SetCurrentUser(role);
-        _userLookupService.Setup(s => s.GetAsync("Target"))
-            .ReturnsAsync(new GeneralUser { UserId = _moderatorUserId, Username = "Target", Role = role });
-        _banRepository.Setup(r => r.GetActiveBan(_moderatorUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Ban?)null);
-        _banRepository.Setup(r => r.Create(It.IsAny<CreateBanEntity>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban());
+        _userLookupService.GetAsync("Target")
+            .Returns(new GeneralUser { UserId = _moderatorUserId, Username = "Target", Role = role });
+        _banRepository.GetActiveBan(_moderatorUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>()).Returns(new Ban());
     }
 
     private static CreateBan BanRequest() => new()
@@ -632,8 +639,8 @@ public class BanServiceShould : UnitTestBase
     {
         // A democratic ban leaves the role and authentication intact, so without
         // this a banned senior moderator simply lifts it from himself.
-        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban { BanId = _banId, TargetUserId = _moderatorUserId, EndedUtc = _now.AddDays(7) });
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId, TargetUserId = _moderatorUserId, EndedUtc = _now.AddDays(7) });
 
         var act = () => _service.LiftBan(_banId);
 
@@ -644,12 +651,12 @@ public class BanServiceShould : UnitTestBase
     [Fact]
     public async Task RecordWhoLiftedTheBanAndWhy()
     {
-        _banRepository.Setup(r => r.Get(_banId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Ban { BanId = _banId, TargetUserId = _targetUserId, EndedUtc = _now.AddDays(7) });
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId, TargetUserId = _targetUserId, EndedUtc = _now.AddDays(7) });
 
         await _service.LiftBan(_banId, "Разобрались");
 
-        _banRepository.Verify(r => r.Lift(_banId, _moderatorUserId, _now, "Разобрались",
-            It.IsAny<CancellationToken>()), Times.Once);
+        await _banRepository.Received(1).Lift(_banId, _moderatorUserId, _now, "Разобрались",
+            Arg.Any<CancellationToken>());
     }
 }

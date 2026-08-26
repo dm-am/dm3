@@ -19,6 +19,7 @@ namespace DM.Domain.Messaging.Features.GlobalChatEvents;
 internal class GlobalChatEventService : IGlobalChatEventService
 {
     private readonly IValidator<CreateGlobalChatEvent> _createValidator;
+    private readonly IValidator<UpdateGlobalChatEvent> _updateValidator;
     private readonly IIntentionManager _intentionManager;
     private readonly IGlobalChatEventFactory _factory;
     private readonly IGlobalChatEventRepository _repository;
@@ -28,6 +29,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
 
     public GlobalChatEventService(
         IValidator<CreateGlobalChatEvent> createValidator,
+        IValidator<UpdateGlobalChatEvent> updateValidator,
         IIntentionManager intentionManager,
         IGlobalChatEventFactory factory,
         IGlobalChatEventRepository repository,
@@ -36,6 +38,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
         IEventProducer eventProducer)
     {
         _createValidator = createValidator;
+        _updateValidator = updateValidator;
         _intentionManager = intentionManager;
         _factory = factory;
         _repository = repository;
@@ -91,6 +94,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
     /// <inheritdoc />
     public async Task<GlobalChatEvent> UpdateAsync(UpdateGlobalChatEvent updateGlobalChatEvent, CancellationToken ct = default)
     {
+        await _updateValidator.ValidateAndThrowAsync(updateGlobalChatEvent, ct).ConfigureAwait(false);
         var chatEvent = await GetAsync(updateGlobalChatEvent.Id).ConfigureAwait(false);
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Update, chatEvent);
 
@@ -173,14 +177,17 @@ internal class GlobalChatEventService : IGlobalChatEventService
 
     // ═══ PARTICIPANTS ═══
 
-    /// <inheritdoc />
-    public async Task<GlobalChatEventParticipant> JoinAsync(Guid eventId, CancellationToken ct = default)
+    /// <summary>
+    /// One person joins an event, whether they asked or an organiser added them.
+    /// </summary>
+    /// <remarks>
+    /// A second row for somebody already on the list is a 409 and not a silent
+    /// success: the caller is told the state it wanted is the state that already
+    /// holds, rather than being handed a duplicate participant.
+    /// </remarks>
+    private async Task<GlobalChatEventParticipant> AddParticipant(
+        Guid eventId, Guid userId, CancellationToken ct)
     {
-        var chatEvent = await GetAsync(eventId).ConfigureAwait(false);
-        _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Join, chatEvent);
-
-        var userId = _identityProvider.Current.User.UserId;
-
         if (await _repository.IsParticipant(eventId, userId))
         {
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UserAlreadyParticipant);
@@ -192,6 +199,17 @@ internal class GlobalChatEventService : IGlobalChatEventService
         await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantJoined, eventId).ConfigureAwait(false);
 
         return result;
+    }
+
+    /// <inheritdoc />
+    public async Task<GlobalChatEventParticipant> JoinAsync(Guid eventId, CancellationToken ct = default)
+    {
+        var chatEvent = await GetAsync(eventId).ConfigureAwait(false);
+        _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Join, chatEvent);
+
+        var userId = _identityProvider.Current.User.UserId;
+
+        return await AddParticipant(eventId, userId, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -213,17 +231,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
         var chatEvent = await GetAsync(eventId).ConfigureAwait(false);
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.AddParticipant, chatEvent);
 
-        if (await _repository.IsParticipant(eventId, userId))
-        {
-            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UserAlreadyParticipant);
-        }
-
-        var participant = _factory.CreateParticipant(eventId, userId, isOrganizer: false);
-        var result = await _repository.AddParticipant(participant, ct).ConfigureAwait(false);
-
-        await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantJoined, eventId).ConfigureAwait(false);
-
-        return result;
+        return await AddParticipant(eventId, userId, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

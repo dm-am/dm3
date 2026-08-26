@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.GameReviews;
@@ -15,13 +14,13 @@ internal class GameReviewApiService : IGameReviewApiService
 {
     private readonly IGameReviewService _gameReviewService;
     private readonly IUserLookupService _userLookupService;
-    private readonly IMapper _mapper;
+    private readonly ReviewMapper _mapper;
 
     /// <inheritdoc />
     public GameReviewApiService(
         IGameReviewService gameReviewService,
         IUserLookupService userLookupService,
-        IMapper mapper)
+        ReviewMapper mapper)
     {
         _gameReviewService = gameReviewService;
         _userLookupService = userLookupService;
@@ -32,7 +31,7 @@ internal class GameReviewApiService : IGameReviewApiService
     public async Task<ListEnvelope<GameReviewDto>> GetList(Guid gameId, PagingQuery query)
     {
         var (reviews, paging) = await _gameReviewService.GetListAsync(gameId, query);
-        var apiReviews = reviews.Select(_mapper.Map<GameReviewDto>);
+        var apiReviews = reviews.Select(_mapper.ToGameReview);
         return new ListEnvelope<GameReviewDto>(apiReviews, new PagingInfo(paging));
     }
 
@@ -70,7 +69,7 @@ internal class GameReviewApiService : IGameReviewApiService
     private async Task<ListEnvelope<GameReviewDto>> GetFiltered(PagingQuery query, GameReviewFilter filter)
     {
         var (reviews, paging) = await _gameReviewService.GetAllAsync(query, filter);
-        var apiReviews = reviews.Select(_mapper.Map<GameReviewDto>);
+        var apiReviews = reviews.Select(_mapper.ToGameReview);
         return new ListEnvelope<GameReviewDto>(apiReviews, new PagingInfo(paging));
     }
 
@@ -78,7 +77,7 @@ internal class GameReviewApiService : IGameReviewApiService
     public async Task<Envelope<GameReviewDto>> Get(Guid reviewId)
     {
         var review = await _gameReviewService.GetAsync(reviewId);
-        return new Envelope<GameReviewDto>(_mapper.Map<GameReviewDto>(review));
+        return new Envelope<GameReviewDto>(_mapper.ToGameReview(review));
     }
 
     /// <inheritdoc />
@@ -90,6 +89,6 @@ internal class GameReviewApiService : IGameReviewApiService
             Text = request.Text
         };
         var review = await _gameReviewService.CreateAsync(createReview);
-        return new Envelope<GameReviewDto>(_mapper.Map<GameReviewDto>(review));
+        return new Envelope<GameReviewDto>(_mapper.ToGameReview(review));
     }
 }

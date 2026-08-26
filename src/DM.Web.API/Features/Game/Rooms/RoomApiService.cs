@@ -1,11 +1,8 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Game.Features.Rooms;
 using DM.Web.API.Shared.Dto;
-using CreateRoom = DM.Domain.Game.Features.Rooms.CreateRoom;
-using UpdateRoom = DM.Domain.Game.Features.Rooms.UpdateRoom;
 
 namespace DM.Web.API.Features.Game.Rooms;
 
@@ -13,12 +10,12 @@ namespace DM.Web.API.Features.Game.Rooms;
 internal class RoomApiService : IRoomApiService
 {
     private readonly IRoomService _roomService;
-    private readonly IMapper _mapper;
+    private readonly RoomMapper _mapper;
 
     /// <inheritdoc />
     public RoomApiService(
         IRoomService roomService,
-        IMapper mapper)
+        RoomMapper mapper)
     {
         _roomService = roomService;
         _mapper = mapper;
@@ -28,32 +25,32 @@ internal class RoomApiService : IRoomApiService
     public async Task<ListEnvelope<Room>> GetAll(Guid gameId)
     {
         var rooms = await _roomService.GetAllAsync(gameId);
-        return new ListEnvelope<Room>(rooms.Select(_mapper.Map<Room>));
+        return new ListEnvelope<Room>(rooms.Select(_mapper.ToRoom));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Room>> Get(Guid roomId)
     {
         var room = await _roomService.GetAsync(roomId);
-        return new Envelope<Room>(_mapper.Map<Room>(room));
+        return new Envelope<Room>(_mapper.ToRoom(room));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Room>> Create(Guid gameId, CreateRoomRequest room)
     {
-        var createRoom = _mapper.Map<CreateRoom>(room);
+        var createRoom = _mapper.ToCreateRoom(room);
         createRoom.GameId = gameId;
         var createdRoom = await _roomService.CreateAsync(createRoom);
-        return new Envelope<Room>(_mapper.Map<Room>(createdRoom));
+        return new Envelope<Room>(_mapper.ToRoom(createdRoom));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Room>> Update(Guid roomId, UpdateRoomRequest request)
     {
-        var updateRoom = _mapper.Map<UpdateRoom>(request);
+        var updateRoom = _mapper.ToUpdateRoom(request);
         updateRoom.RoomId = roomId;
         var updatedRoom = await _roomService.UpdateAsync(updateRoom);
-        return new Envelope<Room>(_mapper.Map<Room>(updatedRoom));
+        return new Envelope<Room>(_mapper.ToRoom(updatedRoom));
     }
 
     /// <inheritdoc />

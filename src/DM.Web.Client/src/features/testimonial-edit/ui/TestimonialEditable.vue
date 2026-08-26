@@ -133,7 +133,7 @@ function handleEditKeydown(event: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .testimonial-edit
   display: flex

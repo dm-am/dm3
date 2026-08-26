@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
+using DM.Web.API.Shared.Http;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace DM.Web.API.Swagger;
@@ -24,17 +25,22 @@ namespace DM.Web.API.Swagger;
 /// </remarks>
 internal class ResponseMediaTypeSwaggerFilter : IOperationFilter
 {
-    private const string JsonContentType = "application/json";
-
-    /// <summary>The constant ErrorHandlingMiddleware writes on every refusal.</summary>
-    private const string ProblemJsonContentType = "application/problem+json";
-
     /// <inheritdoc />
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {
+        if (operation.Responses == null)
+        {
+            return;
+        }
+
         foreach (var response in operation.Responses)
         {
-            var content = response.Value.Content;
+            if (response.Value is not OpenApiResponse mutable)
+            {
+                continue;
+            }
+
+            var content = mutable.Content;
             if (content == null || content.Count == 0)
             {
                 continue;
@@ -46,9 +52,12 @@ internal class ResponseMediaTypeSwaggerFilter : IOperationFilter
             // entry is the body; what changes is the single name it is published
             // under.
             var body = content.Values.First();
-            response.Value.Content = new Dictionary<string, OpenApiMediaType>
+            mutable.Content = new Dictionary<string, OpenApiMediaType>
             {
-                [isFailure ? ProblemJsonContentType : JsonContentType] = body,
+                // ApiContentTypes.ProblemJson is what ErrorHandlingMiddleware writes on
+                // every refusal; documenting anything else here would describe a
+                // response the API does not send.
+                [isFailure ? ApiContentTypes.ProblemJson : ApiContentTypes.Json] = body,
             };
         }
     }

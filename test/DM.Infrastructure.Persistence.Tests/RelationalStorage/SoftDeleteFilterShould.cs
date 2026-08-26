@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using DM.Infrastructure.Persistence.Entities.Contracts;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -21,6 +21,20 @@ namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 /// </remarks>
 public class SoftDeleteFilterShould
 {
+    /// <summary>
+    /// Entities that opt out of the global filter on purpose: their write paths
+    /// have to see tombstone rows. An upsert over a tombstoned unread marker
+    /// deliberately revives it for a re-added participant, and a game resolves
+    /// its removed attribute schema through its own reference. Each of their
+    /// reads spells its own IsRemoved predicate instead — see the entity
+    /// remarks. Adding here is a decision, not a convenience.
+    /// </summary>
+    private static readonly string[] OwnTheirPredicates =
+    [
+        nameof(Entities.Shared.UnreadCounter),
+        "AttributeSchema",
+    ];
+
     private static DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString())
         .Options);
@@ -35,9 +49,30 @@ public class SoftDeleteFilterShould
             .ToArray();
 
         removable.Should().NotBeEmpty("the model has soft-deletable entities");
-        removable.Where(entity => entity.GetQueryFilter() == null)
+        removable.Where(entity => entity.GetDeclaredQueryFilters().Count == 0)
             .Select(entity => entity.ClrType.Name)
+            .Where(name => !OwnTheirPredicates.Contains(name, StringComparer.Ordinal))
             .Should().BeEmpty("an unfiltered set answers with rows the site treats as deleted");
+    }
+
+    /// <summary>
+    /// The opt-out list has to keep naming entities that exist and that really
+    /// are unfiltered, or a rename leaves a hole and a re-added filter leaves a
+    /// stale exemption.
+    /// </summary>
+    [Fact]
+    public void KeepTheOptOutListHonest()
+    {
+        using var context = Context();
+
+        var unfiltered = context.Model.GetEntityTypes()
+            .Where(entity => typeof(IRemovable).IsAssignableFrom(entity.ClrType))
+            .Where(entity => entity.GetDeclaredQueryFilters().Count == 0)
+            .Select(entity => entity.ClrType.Name)
+            .ToArray();
+
+        OwnTheirPredicates.Except(unfiltered, StringComparer.Ordinal).Should().BeEmpty(
+            "an exemption for an entity that is filtered after all, or gone, outlives its reason");
     }
 
     [Fact]

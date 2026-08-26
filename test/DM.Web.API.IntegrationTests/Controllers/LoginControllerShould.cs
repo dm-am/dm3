@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using DM.Web.API.IntegrationTests.Helpers;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers;
@@ -76,11 +76,8 @@ public class LoginControllerShould : IntegrationTestBase
     public async Task Login_WithValidCredentials_ReturnsOkWithSession()
     {
         // Arrange — create a real user with a known password
-        var uid = Guid.NewGuid().ToString("N")[..8];
-        var login = $"loginok{uid}";
-        var email = $"{login}@test.example.com";
         var password = "TestPass123ok";
-        await UserTestHelper.CreateActivatedUser(Client, DatabaseFixture, login, password, email);
+        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "loginok", password);
 
         // Act — login
         var credentials = new { email, password };
@@ -99,10 +96,7 @@ public class LoginControllerShould : IntegrationTestBase
     [Fact]
     public async Task Login_WithWrongPassword_ReturnsBadRequest()
     {
-        var uid = Guid.NewGuid().ToString("N")[..8];
-        var login = $"loginfail{uid}";
-        var email = $"{login}@test.example.com";
-        await UserTestHelper.CreateActivatedUser(Client, DatabaseFixture, login, "TestPass123ok", email);
+        var (_, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "loginfail", "TestPass123ok");
 
         var credentials = new { email, password = "WrongPassword123" };
         var response = await Client.PostAsJsonAsync("/v1/account/login", credentials);
@@ -118,11 +112,8 @@ public class LoginControllerShould : IntegrationTestBase
     public async Task Login_ThenGetCurrent_ReturnsUser()
     {
         // Arrange
-        var uid = Guid.NewGuid().ToString("N")[..8];
-        var login = $"sess{uid}";
-        var email = $"{login}@test.example.com";
         var password = "TestPass123ok";
-        await UserTestHelper.CreateActivatedUser(Client, DatabaseFixture, login, password, email);
+        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "sess", password);
         var sessionCookie = await UserTestHelper.Login(Client, email, password);
 
         // Act — use session cookie to call authenticated endpoint
@@ -139,11 +130,8 @@ public class LoginControllerShould : IntegrationTestBase
     public async Task Logout_InvalidatesSession()
     {
         // Arrange
-        var uid = Guid.NewGuid().ToString("N")[..8];
-        var login = $"logout{uid}";
-        var email = $"{login}@test.example.com";
         var password = "TestPass123ok";
-        await UserTestHelper.CreateActivatedUser(Client, DatabaseFixture, login, password, email);
+        var (_, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "logout", password);
         var sessionCookie = await UserTestHelper.Login(Client, email, password);
 
         // Act — logout
@@ -161,11 +149,8 @@ public class LoginControllerShould : IntegrationTestBase
     public async Task LogoutOthers_InvalidatesOtherSessions()
     {
         // Arrange — create user and login twice
-        var uid = Guid.NewGuid().ToString("N")[..8];
-        var login = $"logoutall{uid}";
-        var email = $"{login}@test.example.com";
         var password = "TestPass123ok";
-        await UserTestHelper.CreateActivatedUser(Client, DatabaseFixture, login, password, email);
+        var (_, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "logoutall", password);
         var session1 = await UserTestHelper.Login(Client, email, password);
         var session2 = await UserTestHelper.Login(Client, email, password);
 
@@ -191,11 +176,8 @@ public class LoginControllerShould : IntegrationTestBase
     public async Task Login_AfterMaxAttempts_ReturnsLocked()
     {
         // Arrange — create user
-        var uid = Guid.NewGuid().ToString("N")[..8];
-        var login = $"lockout{uid}";
-        var email = $"{login}@test.example.com";
         var password = "TestPass123ok";
-        await UserTestHelper.CreateActivatedUser(Client, DatabaseFixture, login, password, email);
+        var (_, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "lockout", password);
 
         // Act — exhaust attempts (threshold is 5 in test config)
         // The 5th attempt triggers lockout, but itself returns WrongPassword.

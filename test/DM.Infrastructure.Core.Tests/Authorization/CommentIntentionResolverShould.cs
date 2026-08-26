@@ -7,7 +7,7 @@ using DM.Domain.Core.Dto;
 using DM.Infrastructure.Core.Authorization;
 using DM.Testing;
 using DM.Testing.Dsl;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Authorization;

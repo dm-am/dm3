@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using AwesomeAssertions;
 
 namespace DM.Architecture.Tests;
 
@@ -23,8 +25,8 @@ namespace DM.Architecture.Tests;
 ///
 /// One spelling, in one place, because five copies of it existed and the sixth
 /// check copied none of them. It lives in this project rather than in DM.Testing
-/// on purpose: a text helper has no reason to depend on Moq and EF, and a
-/// reference to that project would put Moq in the output directory the ArchUnit
+/// on purpose: a text helper has no reason to depend on NSubstitute and EF, and a
+/// reference to that project would put NSubstitute in the output directory the ArchUnit
 /// loader scans. It moves to a shared home when a consumer outside this tier
 /// appears, rather than being copied to it.
 /// </remarks>
@@ -44,6 +46,27 @@ internal static class SourceText
     /// <param name="path">Absolute path of the source file.</param>
     internal static string ReadCode(string path) =>
         Comments.Replace(File.ReadAllText(path), string.Empty);
+
+    /// <summary>
+    /// The slice from one marker up to the next, the opening marker included.
+    /// </summary>
+    /// <remarks>
+    /// Both markers are asserted rather than answered around, because the rules
+    /// that ask for a slice are asking about what is inside it: a marker that has
+    /// been renamed away leaves an empty slice, and an empty slice contains
+    /// nothing to complain about.
+    /// </remarks>
+    /// <param name="source">Text to slice</param>
+    /// <param name="start">Marker the slice opens at</param>
+    /// <param name="end">Marker the slice stops before</param>
+    internal static string Between(string source, string start, string end)
+    {
+        var from = source.IndexOf(start, StringComparison.Ordinal);
+        from.Should().BeGreaterThan(-1, $"the source must still declare {start}");
+        var to = source.IndexOf(end, from + start.Length, StringComparison.Ordinal);
+        to.Should().BeGreaterThan(-1, $"the declaration of {start} must be terminated");
+        return source[from..to];
+    }
 
     /// <summary>
     /// Signature followed by a body or an expression body. The capture keeps the

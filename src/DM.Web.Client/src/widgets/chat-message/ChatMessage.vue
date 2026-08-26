@@ -515,7 +515,7 @@ function initMessageBbcode(el: HTMLElement) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 // ============================================================================
 // ChatMessage — shared message styles for global chat and messenger
@@ -828,7 +828,6 @@ $compact-time-gutter: 80px
     display: block
   .msg-text :deep(.bb-quote),
   .msg-text :deep(.bb-mod),
-  .msg-text :deep(.bb-warning),
   .msg-text :deep(.bb-private)
     display: block !important
     margin: 0 !important

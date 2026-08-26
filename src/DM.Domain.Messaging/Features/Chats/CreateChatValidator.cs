@@ -12,7 +12,7 @@ internal class CreateChatValidator : AbstractValidator<CreateChat>
     {
         RuleFor(c => c.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(200).WithMessage(ValidationError.Long);
+            .MaximumLength(ChatFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(c => c.ParticipantIds)
             .NotEmpty().WithMessage(ValidationError.Empty)

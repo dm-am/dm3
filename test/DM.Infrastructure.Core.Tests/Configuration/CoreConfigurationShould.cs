@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DM.Infrastructure.Core.Configuration;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -15,7 +15,7 @@ namespace DM.Infrastructure.Core.Tests.Configuration;
 /// <remarks>
 /// The shared call demanded both connection strings from every host, so the mail
 /// worker - which reads a queue and speaks SMTP - could not start without a Postgres
-/// and a Mongo it never opens, and the next host would have been pushed into writing
+/// and a store it never opens, and the next host would have been pushed into writing
 /// a fake value, which is what empties the check for the hosts that need it. The
 /// imgproxy pair had the opposite problem: nothing validated it, a non-hex value
 /// threw on the first page with a thumbnail, and a key with no salt turned every
@@ -29,7 +29,6 @@ public class CoreConfigurationShould
     private static readonly Dictionary<string, string?> Storage = new()
     {
         ["ConnectionStrings:Rdb"] = "Host=localhost;Database=dm3",
-        ["ConnectionStrings:Mongo"] = "mongodb://localhost:27017/dm3",
         ["CdnConfiguration:Url"] = "http://localhost:9000",
         ["CdnConfiguration:BucketName"] = "dm-uploads",
         ["CdnConfiguration:AccessKey"] = "key",
@@ -50,13 +49,6 @@ public class CoreConfigurationShould
                 new Dictionary<string, string?> { ["SiteAddressConfiguration:PublicUrl"] = "http://localhost:5173" },
                 services => services.RequireRelationalStorage())
             .Should().Contain("ConnectionStrings:Rdb");
-
-    [Fact]
-    public void RefuseAHostThatDeclaresTheDocumentStoreWithoutOne() =>
-        Validate(
-                new Dictionary<string, string?> { ["SiteAddressConfiguration:PublicUrl"] = "http://localhost:5173" },
-                services => services.RequireDocumentStorage())
-            .Should().Contain("ConnectionStrings:Mongo");
 
     [Fact]
     public void RefuseAHostThatDeclaresObjectStorageWithoutCredentials() =>

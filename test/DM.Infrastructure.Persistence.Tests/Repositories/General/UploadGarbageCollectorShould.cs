@@ -6,8 +6,9 @@ using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Repositories.General;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 using Xunit;
 using IObjectStorage = DM.Domain.Core.Uploads.IObjectStorage;
 
@@ -43,8 +44,8 @@ public class UploadGarbageCollectorShould : UnitTestBase
     private UploadGarbageCollector Collector(DmDbContext context)
     {
         var clock = Mock<IDateTimeProvider>();
-        clock.SetupGet(c => c.Now).Returns(Now);
-        return new UploadGarbageCollector(context, clock.Object);
+        clock.Now.Returns(Now);
+        return new UploadGarbageCollector(context, clock);
     }
 
     private static Upload NewUpload(UploadType type, Guid target, DateTimeOffset createdUtc) => new()

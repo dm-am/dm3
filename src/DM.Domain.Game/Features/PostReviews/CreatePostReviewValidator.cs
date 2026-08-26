@@ -1,3 +1,4 @@
+using DM.Domain.Core.Content;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.PostReviews;
@@ -20,5 +21,11 @@ internal class CreatePostReviewValidator : AbstractValidator<CreatePostReview>
         RuleFor(r => r.Text)
             .NotEmpty()
             .WithMessage("Введите текст рецензии");
+
+        // A review renders on the Comment surface, which does not declare
+        // [private]: the tag is not markup there and hides nothing.
+        RuleFor(r => r.Text)
+            .Must(text => !PrivateBlockMarkup.ContainsPrivateMarkup(text))
+            .WithMessage(r => PrivateBlockMarkup.DescribeSurfaceRefusal(r.Text));
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
@@ -91,6 +92,32 @@ internal class TicketService : ITicketService
             _ => ModeratorSubtypes
         };
 
+    /// <summary>
+    /// The ticket, if this role is allowed to see that it exists.
+    /// </summary>
+    /// <remarks>
+    /// A subtype out of scope for the role answers 404 and not 403, so a junior
+    /// moderator cannot probe admin-only tickets by GUID: an existing ticket the
+    /// role may not touch must be indistinguishable from an identifier that
+    /// addresses nothing.
+    /// </remarks>
+    private async Task<Ticket> VisibleTicket(Guid ticketId, UserRole role, CancellationToken ct)
+    {
+        var ticket = await _ticketRepository.Get(ticketId, ct);
+        if (ticket == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
+        }
+
+        var visible = GetVisibleSubtypes(role);
+        if (visible != null && !visible.Contains(ticket.Subtype))
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
+        }
+
+        return ticket;
+    }
+
     /// <inheritdoc />
     public async Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetTickets(PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default)
@@ -148,7 +175,7 @@ internal class TicketService : ITicketService
         // oracle for out-of-scope tickets probed by GUID.
         if (ticket == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
         }
 
         // The reporter can always read their own ticket.
@@ -165,7 +192,7 @@ internal class TicketService : ITicketService
             return ticket;
         }
 
-        throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
+        throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
     }
 
     /// <inheritdoc />
@@ -178,7 +205,7 @@ internal class TicketService : ITicketService
 
         if (targetUser.UserId == currentUser.UserId)
         {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Нельзя пожаловаться на себя");
+            throw new HttpException(HttpStatusCode.BadRequest, "Нельзя пожаловаться на себя");
         }
 
         var entity = new CreateTicketEntity
@@ -261,24 +288,11 @@ internal class TicketService : ITicketService
     public async Task<Ticket> AssignToMe(Guid ticketId, CancellationToken ct = default)
     {
         var currentUser = _identityProvider.Current.User;
-        var ticket = await _ticketRepository.Get(ticketId, ct);
-
-        if (ticket == null)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
-        }
-
-        // Out-of-scope subtypes are invisible to this role: 404 (not 403) so a
-        // junior moderator cannot assign / probe admin-only tickets by GUID.
-        var visible = GetVisibleSubtypes(currentUser.Role);
-        if (visible != null && !visible.Contains(ticket.Subtype))
-        {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
-        }
+        var ticket = await VisibleTicket(ticketId, currentUser.Role, ct);
 
         if (ticket.Status is TicketStatus.Closed or TicketStatus.Spam)
         {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Закрытое обращение нельзя взять в работу");
+            throw new HttpException(HttpStatusCode.BadRequest, "Закрытое обращение нельзя взять в работу");
         }
 
         var updateEntity = new UpdateTicketEntity
@@ -296,24 +310,11 @@ internal class TicketService : ITicketService
         await _resolveValidator.ValidateAndThrowAsync(resolveTicket, ct);
 
         var currentUser = _identityProvider.Current.User;
-        var ticket = await _ticketRepository.Get(ticketId, ct);
-
-        if (ticket == null)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
-        }
-
-        // Out-of-scope subtypes are invisible to this role: 404 (not 403) so a
-        // junior moderator cannot resolve / probe admin-only tickets by GUID.
-        var visible = GetVisibleSubtypes(currentUser.Role);
-        if (visible != null && !visible.Contains(ticket.Subtype))
-        {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
-        }
+        var ticket = await VisibleTicket(ticketId, currentUser.Role, ct);
 
         if (ticket.Status is TicketStatus.Closed or TicketStatus.Spam)
         {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest, "Обращение уже закрыто");
+            throw new HttpException(HttpStatusCode.BadRequest, "Обращение уже закрыто");
         }
 
         var now = _dateTimeProvider.Now;
@@ -328,7 +329,7 @@ internal class TicketService : ITicketService
 
         if ((resolveTicket.IssueWarning || resolveTicket.IssueBan) && ticket.TargetUsername == null)
         {
-            throw new HttpException(System.Net.HttpStatusCode.BadRequest,
+            throw new HttpException(HttpStatusCode.BadRequest,
                 "В обращении не указан пользователь: некому выдать предупреждение или бан");
         }
 
@@ -357,7 +358,7 @@ internal class TicketService : ITicketService
         {
             if (currentUser.Role < UserRole.SeniorModerator)
             {
-                throw new HttpException(System.Net.HttpStatusCode.Forbidden,
+                throw new HttpException(HttpStatusCode.Forbidden,
                     "Выдавать баны может только старший модератор");
             }
 

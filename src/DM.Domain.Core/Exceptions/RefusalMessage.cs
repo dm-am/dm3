@@ -36,6 +36,90 @@ public static class RefusalMessage
     /// </summary>
     public const string AuthenticationRequired = "Требуется авторизация";
 
+    /// <summary>
+    /// The credentials were proven and moderation has closed the account
+    /// </summary>
+    /// <remarks>
+    /// "Забанен", not "заблокирован": the security history captions the lockout
+    /// after failed attempts "Аккаунт заблокирован", and that is a different
+    /// event. One word, one meaning. Said by both halves of a login, because a
+    /// ban issued between the two of them refuses at the second one.
+    /// </remarks>
+    public const string AccountBanned = "Аккаунт забанен";
+
+    /// <summary>
+    /// The credentials were proven and the account no longer exists
+    /// </summary>
+    public const string AccountRemoved = "Аккаунт удален";
+
+    // ═══ SECOND FACTOR ═══
+
+    /// <summary>
+    /// The current password was asked for again and did not match
+    /// </summary>
+    /// <remarks>
+    /// Said wherever a change of the account's own credentials is confirmed by
+    /// retyping the password: deactivation, and every operation on the second
+    /// factor. One sentence, because to the reader it is one event.
+    /// </remarks>
+    public const string WrongPassword = "Неверный пароль";
+
+    /// <summary>
+    /// The single answer to every way of failing the second factor
+    /// </summary>
+    /// <remarks>
+    /// A wrong code, an expired challenge, a challenge nobody issued, a recovery
+    /// code already spent and a challenge out of attempts all come back as this
+    /// sentence and nothing else. Anything narrower tells whoever is guessing
+    /// which of the five walls they are standing at, and how many tries are left
+    /// - which the password path deliberately does not say either.
+    /// </remarks>
+    public const string TwoFactorRejected = "Код не подошел";
+
+    /// <summary>
+    /// An operation that needs the factor was addressed to an account without one
+    /// </summary>
+    public const string TwoFactorNotEnabled = "Второй фактор не включен";
+
+    /// <summary>
+    /// Switching on what is already on; replacing a device is off and on again
+    /// </summary>
+    public const string TwoFactorAlreadyEnabled = "Второй фактор уже включен";
+
+    /// <summary>
+    /// The issued secret was never confirmed inside the window and is gone
+    /// </summary>
+    public const string TwoFactorSetupExpired = "Настройка второго фактора устарела, начните заново";
+
+    /// <summary>
+    /// The mailed removal path is closed for the ranks that owe a factor
+    /// </summary>
+    /// <remarks>
+    /// Names its reason, unlike a refusal by rank elsewhere. Allowed here because
+    /// it is addressed to the owner of the account about his own account and
+    /// discloses nothing he does not already know.
+    /// </remarks>
+    public const string TwoFactorMailRemovalClosed =
+        "Снять второй фактор по почте нельзя: обратитесь ко второму администратору";
+
+    /// <summary>
+    /// The rank was withheld for want of a factor, and the refusal says so
+    /// </summary>
+    /// <remarks>
+    /// The one refusal by rank in the product that names its reason, and it has
+    /// to: <see cref="AccessDenied" /> is a lie to an administrator, who is one
+    /// and can read that he is one on his own profile. Allowed for the same
+    /// argument as <see cref="TwoFactorMailRemovalClosed" /> - addressed to the
+    /// owner of the account about his own account, disclosing nothing he does
+    /// not already know.
+    ///
+    /// Said only where the recorded rank would have been enough. An account
+    /// short of the rank with or without a factor gets the ordinary refusal,
+    /// which names nothing.
+    /// </remarks>
+    public const string PrivilegeWithheldWithoutTwoFactor =
+        "Полномочия выключены, пока не настроен второй фактор";
+
     // ═══ USERS ═══
 
     /// <summary>

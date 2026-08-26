@@ -18,10 +18,11 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
-import { createPinia } from "pinia";
+import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { gameApi, PostReviewItem } from "@/entities/game";
-import type { Post, PostReview } from "@/entities/game";
+import type { Post, PostAttachment, PostReview } from "@/entities/game";
+import { useAuthStore } from "@/shared/stores";
 import GamePost from "./GamePost.vue";
 
 // The composer behind the inline edit is tiptap; nothing here composes text.
@@ -223,5 +224,197 @@ describe("GamePost dice rolls", () => {
     const line = wrapper.find(".dice-roll").text();
     expect(line).toContain("3d6: 4 2 6");
     expect(line).toContain("= 12");
+  });
+});
+
+/**
+ * An attachment that is a picture used to be a file name and a byte count, and
+ * nothing else: to let anyone see the map they had attached, an author had to
+ * copy its address back into an image tag by hand.
+ *
+ * What decides that it is drawn is the type the server read off the file
+ * itself, and what keeps the text below it still while it loads is the measured
+ * pair — the same one a picture standing in the post's own text is given.
+ */
+describe("GamePost attachments", () => {
+  const MAP_ID = "571c0beb-1890-9ba6-2170-4bb531bc51f6";
+
+  const attachment = (over: Partial<PostAttachment> = {}): PostAttachment => ({
+    id: MAP_ID,
+    fileName: "карта-подземелья.jpg",
+    contentType: "image/jpeg",
+    sizeBytes: 6707,
+    width: 125,
+    height: 138,
+    url: `/v1/uploads/${MAP_ID}/content`,
+    createdUtc: "2026-07-26T15:00:00",
+    ...over,
+  });
+
+  const carrying = (...files: PostAttachment[]) =>
+    ({ ...post, attachments: files }) as unknown as Post;
+
+  it("draws an attachment that is a picture, in its measured box", async () => {
+    const wrapper = await render("/", carrying(attachment()));
+
+    const image = wrapper.get(".attachment-image");
+    // The content endpoint, which decides the right on every request — not an
+    // address out of the bucket.
+    expect(image.attributes("src")).toContain(`/v1/uploads/${MAP_ID}/content`);
+    expect(image.attributes("alt")).toBe("карта-подземелья.jpg");
+    expect([image.attributes("width"), image.attributes("height")]).toEqual([
+      "125",
+      "138",
+    ]);
+    // The link to the file stays: it is what names the file and opens it.
+    expect(wrapper.get(".attachment-name").text()).toBe("карта-подземелья.jpg");
+  });
+
+  it("leaves a file that is not a picture as its name and size", async () => {
+    const wrapper = await render(
+      "/",
+      carrying(
+        attachment({
+          fileName: "правила.pdf",
+          contentType: "application/pdf",
+          width: null,
+          height: null,
+        }),
+      ),
+    );
+
+    expect(wrapper.find(".attachment-image").exists()).toBe(false);
+    expect(wrapper.get(".attachment-name").text()).toBe("правила.pdf");
+    expect(wrapper.get(".attachment-size").text()).toBe("6.5 КБ");
+  });
+
+  it("draws a picture stored before its size was recorded, declaring no box", async () => {
+    // A guessed pair would be a wrong box rather than a reserved one, so the
+    // picture goes without and behaves as any undeclared image does.
+    const wrapper = await render(
+      "/",
+      carrying(attachment({ width: null, height: null })),
+    );
+
+    const image = wrapper.get(".attachment-image");
+    expect(image.attributes("width")).toBeUndefined();
+    expect(image.attributes("height")).toBeUndefined();
+    expect(wrapper.get(".attachment-name").text()).toBe("карта-подземелья.jpg");
+  });
+});
+
+/**
+ * The editor is seeded from a rendering the page never shows: the author's own,
+ * the only one that carries [private] in a form the editor can round-trip.
+ *
+ * That answer is an envelope - the post sits under `resource` - and the seeding
+ * read the field off the top level, where it was undefined every time. The
+ * editor then silently kept what it had been given a moment earlier, the
+ * Display rendering, and handed server-built HTML to an editor that takes
+ * BBCode. Saving that published the [private] block to the whole room as
+ * ordinary text, which is the one harm the fetch exists to prevent.
+ *
+ * So the assertion is on both halves at once: the seed has to be the source of
+ * the private block, and it has to not be the display rendering. A shallow read
+ * fails both.
+ */
+describe("GamePost seeds the editor from the author's own rendering", () => {
+  // What the page shows: the block is a div with a class and nothing the
+  // reverse conversion can read, and the addressees are a separate line of
+  // prose. Nothing here can produce a [private] tag.
+  const DISPLAY_HTML =
+    '<strong>Жирно</strong> <div class="private-message">Секрет</div>' +
+    '<div class="private-message-header">Получатели: Чак</div> хвост';
+
+  // What the author's own rendering carries: the marked form, which is where
+  // [private="Чак"] comes back from.
+  const AUTHOR_EDIT_HTML =
+    '<strong data-bb-tag="b">Жирно</strong> <div class="private-message" ' +
+    'data-bb-tag="private" data-bb-addressees="Чак">Секрет</div> хвост';
+
+  const ownPost = {
+    ...post,
+    gameText: DISPLAY_HTML,
+    // Inside the fifteen minutes, so the button is drawn for its author.
+    createdUtc: new Date().toISOString(),
+  } as unknown as Post;
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.spyOn(gameApi, "getPostReviews").mockResolvedValue({
+      data: { resources: [] },
+      error: undefined,
+    } as never);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Mounts the post as its own author sees it on the room page. */
+  async function renderOwn() {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: ROUTES,
+    });
+    await router.push("/game/abcde/rooms/2");
+    await router.isReady();
+
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    useAuthStore().user = { username: "Author", role: "Player" } as never;
+
+    const wrapper = mount(GamePost, {
+      props: { post: ownPost, number: 7, editable: true },
+      global: { plugins: [pinia, router] },
+    });
+    await flushPromises();
+    return wrapper;
+  }
+
+  const editButton = (wrapper: Awaited<ReturnType<typeof renderOwn>>) =>
+    wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Редактировать") as ReturnType<
+      typeof wrapper.get
+    >;
+
+  const seededText = (wrapper: Awaited<ReturnType<typeof renderOwn>>) =>
+    wrapper.get(".post-edit .editor-stub").attributes("value") ?? "";
+
+  it("takes the seed out of the envelope, not off its lid", async () => {
+    vi.spyOn(gameApi, "getPostForEdit").mockResolvedValue({
+      data: { resource: { ...ownPost, gameText: AUTHOR_EDIT_HTML } },
+      error: undefined,
+    } as never);
+
+    const wrapper = await renderOwn();
+    await editButton(wrapper).trigger("click");
+    await flushPromises();
+
+    const seed = seededText(wrapper);
+
+    // Came from the author's rendering: only the marked form yields the tag.
+    expect(seed).toContain("[private=Чак]");
+    // And is not the display rendering, whose addressee line is prose.
+    expect(seed).not.toContain("Получатели");
+    expect(seed).not.toContain('class="private-message"');
+  });
+
+  it("keeps the displayed text when the answer carries no post", async () => {
+    // An empty envelope is not a reason to refuse to open the editor: the
+    // author is better off editing without the private block than staring at
+    // a button that does nothing.
+    vi.spyOn(gameApi, "getPostForEdit").mockResolvedValue({
+      data: { resource: null },
+      error: undefined,
+    } as never);
+
+    const wrapper = await renderOwn();
+    await editButton(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find(".post-edit").exists()).toBe(true);
+    expect(seededText(wrapper)).toBe(DISPLAY_HTML);
   });
 });

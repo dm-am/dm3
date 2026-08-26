@@ -4,16 +4,16 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Account.Features.Security;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using MongoDB.Driver;
+using Microsoft.EntityFrameworkCore;
 using static DM.Domain.Core.Parsing.UserAgentParser;
 using DbEntry = DM.Infrastructure.Persistence.Entities.Account.SecurityAuditEntry;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
 /// <inheritdoc />
-internal class SecurityAuditRepository : MongoCollectionRepository<DbEntry>, ISecurityAuditRepository
+internal class SecurityAuditRepository : ISecurityAuditRepository
 {
+    private readonly DmDbContext _dbContext;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
@@ -21,10 +21,11 @@ internal class SecurityAuditRepository : MongoCollectionRepository<DbEntry>, ISe
     /// Creates a new security audit repository
     /// </summary>
     public SecurityAuditRepository(
-        DmMongoClient mongoClient,
+        DmDbContext dbContext,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider) : base(mongoClient)
+        IDateTimeProvider dateTimeProvider)
     {
+        _dbContext = dbContext;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
     }
@@ -39,10 +40,10 @@ internal class SecurityAuditRepository : MongoCollectionRepository<DbEntry>, ISe
     {
         var entry = new DbEntry
         {
-            Id = _guidFactory.Create(),
+            SecurityAuditEntryId = _guidFactory.Create(),
             UserId = userId,
-            EventType = (int)eventType,
-            // The retention TTL index expires the entry by this field, so the
+            EventType = eventType,
+            // The retention sweep expires the entry by this field, so the
             // storage lifetime is set by the injected clock, not by the host's.
             TimestampUtc = _dateTimeProvider.Now.UtcDateTime,
             IpAddress = ipAddress,
@@ -51,16 +52,18 @@ internal class SecurityAuditRepository : MongoCollectionRepository<DbEntry>, ISe
             Details = details
         };
 
-        await Collection.InsertOneAsync(entry);
+        _dbContext.SecurityAuditEntries.Add(entry);
+        await _dbContext.SaveChangesAsync();
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<SecurityAuditEntry>> GetRecentEventsAsync(Guid userId, int limit = 50)
     {
-        var entries = await Collection
-            .Find(e => e.UserId == userId)
-            .SortByDescending(e => e.TimestampUtc)
-            .Limit(limit)
+        var entries = await _dbContext.SecurityAuditEntries
+            .TagWith("DM.Security.RecentEvents")
+            .Where(e => e.UserId == userId)
+            .OrderByDescending(e => e.TimestampUtc)
+            .Take(limit)
             .ToListAsync();
 
         return entries.Select(ToDto).ToList();
@@ -73,14 +76,11 @@ internal class SecurityAuditRepository : MongoCollectionRepository<DbEntry>, ISe
         // The set arrives from the domain rather than being built here: which
         // types make up a category is a statement about the product, and four
         // copies of this query differing only in that array is what it used to be.
-        var filter = Filter.And(
-            Filter.Eq(e => e.UserId, userId),
-            Filter.In(e => e.EventType, eventTypes.Select(type => (int)type)));
-
-        var entries = await Collection
-            .Find(filter)
-            .SortByDescending(e => e.TimestampUtc)
-            .Limit(limit)
+        var entries = await _dbContext.SecurityAuditEntries
+            .TagWith("DM.Security.EventsByTypes")
+            .Where(e => e.UserId == userId && eventTypes.Contains(e.EventType))
+            .OrderByDescending(e => e.TimestampUtc)
+            .Take(limit)
             .ToListAsync();
 
         return entries.Select(ToDto).ToList();
@@ -88,9 +88,9 @@ internal class SecurityAuditRepository : MongoCollectionRepository<DbEntry>, ISe
 
     private static SecurityAuditEntry ToDto(DbEntry entry) => new()
     {
-        Id = entry.Id,
+        Id = entry.SecurityAuditEntryId,
         UserId = entry.UserId,
-        EventType = (SecurityEventType)entry.EventType,
+        EventType = entry.EventType,
         TimestampUtc = new DateTimeOffset(entry.TimestampUtc, TimeSpan.Zero),
         IpAddress = entry.IpAddress,
         DeviceInfo = entry.DeviceInfo,

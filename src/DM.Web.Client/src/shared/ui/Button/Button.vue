@@ -25,7 +25,7 @@ withDefaults(
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 button
   +button
@@ -35,15 +35,28 @@ button
   // above sets, so the caption stays whatever the caller passed.
   +button-busy
 
-  // Primary action — filled with the site's link/action colour so it clearly
-  // outranks the secondary (e.g. "Отмена") control. The ink is $text-on-fill and
-  // not white: $link is navy in the light theme only, in the dark one it is a
-  // light blue on which white measures 2.30.
-  // Hover is the +button overlay over the same fill. $link-hover cannot serve
-  // as the hover fill: at its luminance neither white (3.45) nor $text (3.63)
-  // clears AA in the light theme.
+  // Primary action — the site's existing "this one is picked" idiom, the one
+  // the active segment of a SegmentedControl wears: a step of fill above the
+  // surface plus weight, and no second language of emphasis.
+  //
+  // The fill is the RELATIVE step and not the solid $bg-element-accent the
+  // segment uses, because a form footer IS $bg-element-accent (Form.vue
+  // .controls) and that is where most of the site's primary buttons stand: a
+  // solid fill there would paint the main action in the exact colour of the
+  // strip under it, flatter than the "Отмена" beside it, which takes its own
+  // relative step. Composed over $bg-page this overlay is $bg-element-accent
+  // itself in both themes — ThemeVariables.css does that arithmetic where the
+  // token is declared.
+  //
+  // The ink is written out although +button already sets it: a fill with no
+  // ink of its own is a pair nobody measured, and fillContrast.spec.ts asks
+  // every fill on the site for both halves.
+  //
+  // Hover needs nothing here. +button stacks $hover-overlay over whatever
+  // fill the control carries, so the primary steps up by exactly what every
+  // neighbouring control steps up by, and the border stays the shared $border.
   &.primary
-    background-color: $link
-    border-color: $link
-    color: $text-on-fill
+    background-color: $control-bg-hover-overlay
+    color: $text
+    font-weight: 700
 </style>

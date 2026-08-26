@@ -1,13 +1,8 @@
-using Autofac;
 using DM.Infrastructure.Core;
 using DM.Infrastructure.Core.Configuration;
-using DM.Infrastructure.Mail.Configuration;
-using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Messaging;
-using DM.Workers.Mail;
-using Jamq.Client.Abstractions.Consuming;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -49,8 +44,7 @@ public class Startup
             .AddDmLogging("DM.MailSender.Consumer", _configuration, _environment);
 
         services.AddDmRetryingConsumer(MailConsumer.QueueName);
-        services.AddDmJamqClient(
-            consumerBuilderDefaults: builder => builder.WithMiddleware<RetryingConsumerMiddleware>());
+        services.AddDmConsumerMiddleware<RetryingConsumerMiddleware>();
 
         services.AddHostedService<MailConsumer>();
 
@@ -60,18 +54,20 @@ public class Startup
         services.AddDmBrokerHealthCheck(_configuration, ["messaging", "ready"]);
 
         services.AddMvc();
-    }
 
-    /// <summary>
-    /// Configure application container
-    /// </summary>
-    /// <param name="builder">Container builder</param>
-    public void ConfigureContainer(ContainerBuilder builder)
-    {
-        builder.RegisterDefaultTypes();
+        // The intention manager arrives with the core module and asks who the
+        // authorization is about; this host serves no request, so it refuses
+        // rather than answers: see NoAuthorizationContextProvider.
+        services.AddScoped<DM.Domain.Core.Authorization.IAuthorizationContextProvider,
+            Sending.NoAuthorizationContextProvider>();
 
-        builder.RegisterModuleOnce<CoreModule>();
-        builder.RegisterModuleOnce<MessagingModule>();
+        // The DI modules and the host's own scan, after everything the host
+        // wires explicitly: the scans only fill gaps behind the registrations
+        // above.
+        services
+            .AddDmMessaging()
+            .AddDmCore()
+            .AddDefaultTypes(typeof(Startup).Assembly);
     }
 
     /// <summary>

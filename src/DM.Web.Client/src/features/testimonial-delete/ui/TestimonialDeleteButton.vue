@@ -71,7 +71,7 @@ async function confirmRemove() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 // Zero-width preserved space: invisible in layout (font-size: 0) but
 // Selection.toString() still emits a real " " before the delete control.

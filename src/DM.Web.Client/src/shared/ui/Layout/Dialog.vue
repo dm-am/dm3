@@ -38,7 +38,7 @@ const contentClass = computed(() => {
 </template>
 
 <style lang="sass">
-@import "@/assets/styles/ZIndex"
+@use "@/assets/styles/ZIndex" as *
 
 .vfm
   display: flex

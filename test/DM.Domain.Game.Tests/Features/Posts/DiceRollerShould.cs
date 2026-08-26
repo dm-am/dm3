@@ -4,15 +4,15 @@ using System.Linq;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Game.Features.Posts;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Posts;
 
 public class DiceRollerShould : UnitTestBase
 {
-    private readonly Mock<IRandomNumberGenerator> _rng;
+    private readonly IRandomNumberGenerator _rng;
     private readonly DiceRoller _roller;
 
     public DiceRollerShould()
@@ -20,15 +20,15 @@ public class DiceRollerShould : UnitTestBase
         _rng = Mock<IRandomNumberGenerator>();
 
         var guidFactory = Mock<IGuidFactory>();
-        guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid);
+        guidFactory.Create().Returns(_ => Guid.NewGuid());
 
-        _roller = new DiceRoller(_rng.Object, guidFactory.Object);
+        _roller = new DiceRoller(_rng, guidFactory);
     }
 
     private void SetupRolls(params int[] values)
     {
         var queue = new Queue<int>(values);
-        _rng.Setup(r => r.Generate(It.IsAny<int>())).Returns(queue.Dequeue);
+        _rng.Generate(Arg.Any<int>()).Returns(_ => queue.Dequeue());
     }
 
     [Fact]
@@ -130,6 +130,6 @@ public class DiceRollerShould : UnitTestBase
         var rolls = _roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec });
 
         rolls.Should().BeEmpty();
-        _rng.Verify(r => r.Generate(It.IsAny<int>()), Times.Never);
+        _rng.DidNotReceive().Generate(Arg.Any<int>());
     }
 }

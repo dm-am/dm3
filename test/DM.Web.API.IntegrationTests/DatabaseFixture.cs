@@ -13,7 +13,6 @@ using DM.Infrastructure.Persistence.Entities.Community;
 using DM.Infrastructure.Persistence.Entities.Subscriptions;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Testcontainers.MongoDb;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 using Xunit;
@@ -21,7 +20,7 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests;
 
 /// <summary>
-/// Shared fixture managing PostgreSQL, MongoDB, and RabbitMQ containers.
+/// Shared fixture managing PostgreSQL and RabbitMQ containers.
 /// Provides consistent test data seeding with a data-driven approach.
 /// </summary>
 public class DatabaseFixture : IAsyncLifetime
@@ -42,38 +41,34 @@ public class DatabaseFixture : IAsyncLifetime
         .WithPassword("test")
         .Build();
 
-    private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder()
-        .WithImage("mongo:7")
-        .Build();
-
+    // The AMQP port is pinned rather than random. A random host port is
+    // reassigned by Docker when a container is stopped and started again, and
+    // the broker-restart tests do exactly that: with a random port the endpoint
+    // every connection string of the host was built from dies with the stop,
+    // and nothing can ever reconnect - which reads as "events lost" in the one
+    // test written to prove they are not. 45672 to stay clear of a development
+    // stand's broker on 5672 running on the same machine.
     private readonly RabbitMqContainer _rabbitMqContainer = new RabbitMqBuilder()
-        .WithImage("rabbitmq:3-management-alpine")
+        .WithImage("rabbitmq:4.3-management-alpine")
         .WithUsername("guest")
         .WithPassword("guest")
+        .WithPortBinding(45672, 5672)
         .Build();
 
     private CustomWebApplicationFactory? _sharedFactory;
 
     public string ConnectionString { get; private set; } = string.Empty;
-    public string MongoConnectionString { get; private set; } = string.Empty;
     public string RabbitMqConnectionString { get; private set; } = string.Empty;
 
     public CustomWebApplicationFactory Factory => _sharedFactory ??= new CustomWebApplicationFactory(this);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await Task.WhenAll(
             _postgresContainer.StartAsync(),
-            _mongoContainer.StartAsync(),
             _rabbitMqContainer.StartAsync());
 
         ConnectionString = _postgresContainer.GetConnectionString();
-
-        var rawMongoUrl = _mongoContainer.GetConnectionString();
-        MongoConnectionString = rawMongoUrl.Contains("/?")
-            ? rawMongoUrl.Replace("/?", "/dm3_test?authSource=admin&")
-            : rawMongoUrl.TrimEnd('/') + "/dm3_test";
-
         RabbitMqConnectionString = _rabbitMqContainer.GetConnectionString();
 
         await using var context = CreateDbContext();
@@ -89,12 +84,11 @@ public class DatabaseFixture : IAsyncLifetime
         await SeedAllAsync(context);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _sharedFactory?.Dispose();
         await Task.WhenAll(
             _postgresContainer.DisposeAsync().AsTask(),
-            _mongoContainer.DisposeAsync().AsTask(),
             _rabbitMqContainer.DisposeAsync().AsTask());
     }
 
@@ -103,6 +97,16 @@ public class DatabaseFixture : IAsyncLifetime
         .EnableSensitiveDataLogging()
         .EnableDetailedErrors()
         .Options);
+
+    /// <summary>
+    /// Stops the broker container without removing it: the queues, the bindings
+    /// and the persisted messages survive, which is exactly the deployment
+    /// window the outbox exists for (AC-1 of the outbox design).
+    /// </summary>
+    public Task StopBrokerAsync() => _rabbitMqContainer.StopAsync();
+
+    /// <summary>Starts the stopped broker container back up, same ports.</summary>
+    public Task StartBrokerAsync() => _rabbitMqContainer.StartAsync();
 
     /// <summary>
     /// Context for another database on the same container, for tests that need a schema

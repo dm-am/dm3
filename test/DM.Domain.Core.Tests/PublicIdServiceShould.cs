@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Identity;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Core.Tests;

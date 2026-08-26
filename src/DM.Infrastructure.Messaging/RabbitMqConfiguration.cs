@@ -33,10 +33,11 @@ public class RabbitMqConfiguration
     /// How long a publisher that asks for confirmation waits for it.
     /// </summary>
     /// <remarks>
-    /// Only the mail producer asks; see MailSender for why it is the only one.
-    /// The wait is inside a request the reader is watching, so the ceiling is
-    /// what a person will sit through rather than what a broker might need: a
-    /// broker that has not answered in five seconds is not about to.
+    /// Two producers ask: the mail sender, where the wait is inside a request
+    /// the reader is watching, and the outbox relay, which must not mark a row
+    /// published without the confirm. The ceiling is what a person will sit
+    /// through rather than what a broker might need: a broker that has not
+    /// answered in five seconds is not about to.
     /// </remarks>
     public TimeSpan PublishConfirmTimeout { get; set; } = TimeSpan.FromSeconds(5);
 

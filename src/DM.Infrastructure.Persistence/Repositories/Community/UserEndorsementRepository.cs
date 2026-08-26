@@ -4,8 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Community.Features.UserEndorsements;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
@@ -21,16 +19,13 @@ namespace DM.Infrastructure.Persistence.Repositories.Community;
 internal class UserEndorsementRepository : IUserEndorsementRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public UserEndorsementRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -48,13 +43,13 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
             .OrderByDescending(e => e.CreatedUtc)
             .ThenByDescending(e => e.UserEndorsementId)
             .Page(paging)
-            .ProjectTo<UserEndorsement>(_mapper.ConfigurationProvider)
+            .ProjectToUserEndorsement()
             .ToArrayAsync();
 
     /// <inheritdoc />
     public Task<UserEndorsement?> GetAsync(Guid id) => _dbContext.UserEndorsements
         .Where(e => !e.IsRemoved && e.UserEndorsementId == id)
-        .ProjectTo<UserEndorsement>(_mapper.ConfigurationProvider)
+        .ProjectToUserEndorsement()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -62,7 +57,7 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
         .Where(e => e.TargetUserId == targetUserId &&
                     e.AuthorId == authorId &&
                     !e.IsRemoved)
-        .ProjectTo<UserEndorsement>(_mapper.ConfigurationProvider)
+        .ProjectToUserEndorsement()
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -79,7 +74,7 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
 
         return await sorted
             .Page(paging)
-            .ProjectTo<UserEndorsement>(_mapper.ConfigurationProvider)
+            .ProjectToUserEndorsement()
             .ToArrayAsync();
     }
 
@@ -185,7 +180,7 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
 
         return await _dbContext.UserEndorsements
             .Where(e => e.UserEndorsementId == dbEndorsement.UserEndorsementId)
-            .ProjectTo<UserEndorsement>(_mapper.ConfigurationProvider)
+            .ProjectToUserEndorsement()
             .FirstAsync();
     }
 
@@ -222,7 +217,7 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
         return await _dbContext.UserEndorsements
             .IgnoreQueryFilters()
             .Where(e => e.UserEndorsementId == entity.EndorsementId)
-            .ProjectTo<UserEndorsement>(_mapper.ConfigurationProvider)
+            .ProjectToUserEndorsement()
             .FirstAsync();
     }
 

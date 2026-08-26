@@ -185,6 +185,18 @@ internal class MessageService : IMessageService
     }
 
     /// <inheritdoc />
+    public async Task<Message> GetGlobalChatMessageAsync(Guid messageId, CancellationToken ct = default)
+    {
+        var message = await _repository.GetGlobalChatMessage(messageId, ct);
+        if (message == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.MessageNotFound);
+        }
+
+        return message;
+    }
+
+    /// <inheritdoc />
     public async Task<CursorResult<Message>> GetWithCursorAsync(
         Guid chatId, CursorQuery query, CancellationToken ct = default)
     {
@@ -212,8 +224,19 @@ internal class MessageService : IMessageService
     public async Task<Message> UpdateAsync(UpdateMessage updateMessage)
     {
         await _updateValidator.ValidateAndThrowAsync(updateMessage);
-        var message = await GetAsync(updateMessage.MessageId);
+        return await UpdateInternalAsync(updateMessage, await GetAsync(updateMessage.MessageId));
+    }
 
+    /// <inheritdoc />
+    public async Task<Message> UpdateGlobalChatMessageAsync(UpdateMessage updateMessage)
+    {
+        await _updateValidator.ValidateAndThrowAsync(updateMessage);
+        return await UpdateInternalAsync(
+            updateMessage, await GetGlobalChatMessageAsync(updateMessage.MessageId));
+    }
+
+    private async Task<Message> UpdateInternalAsync(UpdateMessage updateMessage, Message message)
+    {
         _intentionManager.ThrowIfForbidden(MessageIntention.Edit, message);
 
         var text = updateMessage.Text?.Trim();
@@ -238,18 +261,20 @@ internal class MessageService : IMessageService
     // ═══ DELETE ═══
 
     /// <inheritdoc />
-    public async Task DeleteAsync(Guid messageId)
+    public async Task DeleteAsync(Guid messageId) =>
+        await DeleteInternalAsync(await GetAsync(messageId));
+
+    /// <inheritdoc />
+    public async Task DeleteGlobalChatMessageAsync(Guid messageId) =>
+        await DeleteInternalAsync(await GetGlobalChatMessageAsync(messageId));
+
+    private async Task DeleteInternalAsync(Message message)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var message = await _repository.Get(messageId, currentUserId);
-        if (message == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.MessageNotFound);
-        }
 
         _intentionManager.ThrowIfForbidden(MessageIntention.Delete, message);
 
-        await _repository.Delete(messageId, currentUserId);
+        await _repository.Delete(message.Id, currentUserId);
 
         // The counter comes down with the message, the way it does for every
         // other kind of comment on the site — blog, publication, topic, game,
@@ -270,6 +295,6 @@ internal class MessageService : IMessageService
         await _unreadCountersRepository.DecrementAsync(
             chat.UnreadEntityId, UnreadEntryType.Message, message.CreatedUtc);
 
-        await _producer.SendAsync(EventType.DeletedMessage, messageId);
+        await _producer.SendAsync(EventType.DeletedMessage, message.Id);
     }
 }

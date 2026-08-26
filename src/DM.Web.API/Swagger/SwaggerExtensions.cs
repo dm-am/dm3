@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.Swagger;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Swashbuckle.AspNetCore.SwaggerUI;
@@ -111,6 +111,7 @@ public static class SwaggerExtensions
                 return;
             }
 
+            document.Servers ??= new List<OpenApiServer>();
             document.Servers.Add(new OpenApiServer
             {
                 Url = prefix,

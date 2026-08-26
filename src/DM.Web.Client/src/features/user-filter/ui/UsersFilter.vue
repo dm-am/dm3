@@ -10,7 +10,7 @@ import {
   optionsHint,
 } from "../model";
 import type { ActivityFilter, RoleFilter, ExperienceFilter } from "../model";
-import { formatDateForDisplay } from "@/shared/lib/filters";
+import { formatDateRangeForDisplay } from "@/shared/lib/filters";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import {
@@ -303,12 +303,10 @@ const hasRegisteredFilter = computed(
     filterState.value.registeredToUtc !== null,
 );
 const registeredLabel = computed(() => {
-  const from = formatDateForDisplay(filterState.value.registeredFromUtc);
-  const to = formatDateForDisplay(filterState.value.registeredToUtc);
-  if (from && to) return `${from} — ${to}`;
-  if (from) return `с ${from}`;
-  if (to) return `до ${to}`;
-  return "";
+  return formatDateRangeForDisplay({
+    from: filterState.value.registeredFromUtc,
+    to: filterState.value.registeredToUtc,
+  });
 });
 
 // Sort is driven by the SortButton, not the filter bubbles — it must NOT
@@ -567,7 +565,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Filters"
+@use "@/assets/styles/Filters" as *
 
 .users-filter
   display: flex

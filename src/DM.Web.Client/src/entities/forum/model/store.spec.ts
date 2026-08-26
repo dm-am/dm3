@@ -78,32 +78,38 @@ vi.mock("../api/forumApi", () => ({
   },
 }));
 
-// Mock auth store - needs to work with storeToRefs
-const { mockUser } = vi.hoisted(() => {
-  const { ref } = require("vue");
+// The viewer, as a real store and not a bare object.
+//
+// The store under test reads the session through `storeToRefs(useAuthStore())`,
+// and that call is exactly the kind of thing a pinia major changes under us — so
+// the spec has to run it. Stubbing `storeToRefs` itself, as this file used to,
+// left the one line that can break unexecuted and the gate green either way.
+//
+// The leaf module rather than the "@/shared/stores" barrel: usePaging imports
+// "@/shared/stores/auth" directly, so mocking only the barrel put two different
+// stores in the graph answering for one session.
+//
+// Full shape of the real store, not just the member read today: a double that
+// offers less answers `undefined` for the rest, and `undefined` for
+// `isAuthenticated` reads as a guest — a gap in the double would then pass as an
+// assertion about the guest branch.
+vi.mock("@/shared/stores/auth", async () => {
+  const { defineStore } = await import("pinia");
+  const { ref, computed } = await import("vue");
   return {
-    mockUser: ref({
-      id: "user-1",
-      username: "testuser",
-      settings: { paging: { topicsPerPage: 20, commentsPerPage: 20 } },
-    }),
-  };
-});
-
-vi.mock("@/shared/stores", () => ({
-  useAuthStore: () => ({
-    user: mockUser.value,
-    $state: { user: mockUser.value },
-  }),
-}));
-
-// Also mock storeToRefs to return our ref directly
-vi.mock("pinia", async (importOriginal) => {
-  const actual = (await importOriginal()) as any;
-  return {
-    ...actual,
-    storeToRefs: () => ({
-      user: mockUser,
+    useAuthStore: defineStore("auth", () => {
+      const user = ref<User | null>({
+        id: "user-1",
+        username: "testuser",
+        settings: { paging: { topicsPerPage: 20, commentsPerPage: 20 } },
+      } as unknown as User);
+      return {
+        user,
+        isAuthenticated: computed(() => user.value !== null),
+        updateUser: (newUser: User | null) => {
+          user.value = newUser;
+        },
+      };
     }),
   };
 });

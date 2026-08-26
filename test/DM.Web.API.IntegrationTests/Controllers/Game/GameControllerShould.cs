@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;

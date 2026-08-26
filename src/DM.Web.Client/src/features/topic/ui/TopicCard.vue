@@ -75,6 +75,8 @@ const props = withDefaults(
     canLike?: boolean;
     /** Whether the current viewer already liked the content. */
     isLikedByMe?: boolean;
+    /** Whether the reader has a composer on this page to quote into. */
+    canQuote?: boolean;
     /** Whether the moderator warn action is available. */
     canWarn?: boolean;
     /** Topic is closed — renders the lock + "Топик закрыт" badge (doc 4.2.2.17). */
@@ -109,6 +111,7 @@ const props = withDefaults(
     likes: () => [],
     canLike: false,
     isLikedByMe: false,
+    canQuote: false,
     canWarn: false,
     isClosed: false,
     canEdit: false,
@@ -127,6 +130,7 @@ const emit = defineEmits<{
   edit: [];
   delete: [];
   toggleClose: [];
+  quote: [];
 }>();
 
 // getLikesTooltip only reads usernames; its declared User[] parameter is
@@ -304,6 +308,9 @@ function initCardBbcode(el: HTMLElement) {
             <span class="likes-count">{{ likesCount }}</span>
           </Tooltip>
         </span>
+        <button v-if="canQuote" class="action-btn" @click="emit('quote')">
+          Цитировать
+        </button>
         <button v-if="canEdit" class="action-btn" @click="emit('edit')">
           Редактировать
         </button>
@@ -330,7 +337,7 @@ function initCardBbcode(el: HTMLElement) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/BbcodeContent"
+@use "@/assets/styles/BbcodeContent" as *
 
 .topic
   padding: $medium

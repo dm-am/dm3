@@ -294,7 +294,7 @@ const allEmpty = computed(
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .site-statistics-page
   width: 100%

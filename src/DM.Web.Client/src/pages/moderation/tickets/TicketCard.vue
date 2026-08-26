@@ -7,13 +7,13 @@
  * to the ticket page.
  */
 import { computed } from "vue";
-import type { Ticket } from "@/entities/ticket";
-import { formatDateFull } from "@/shared/lib/utils/datetime";
 import {
-  TICKET_STATUS_CLASSES,
   TICKET_STATUS_LABELS,
   TICKET_SUBTYPE_LABELS,
-} from "../lib/labels";
+  type Ticket,
+} from "@/entities/ticket";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { TICKET_STATUS_CLASSES } from "../lib/labels";
 
 const props = withDefaults(
   defineProps<{

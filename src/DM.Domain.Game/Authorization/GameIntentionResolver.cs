@@ -122,15 +122,15 @@ internal class GameIntentionResolver :
 
             GameIntention.ReadComments =>
                 target.CommentsAccessMode != CommentsAccessMode.Private ||
-                target.GetRoles(user.UserId).HasAnyRole(),
+                roles.HasAnyRole(),
             // An ordinary ban silences discussion of games the user is not part
             // of; a game they lead or were accepted into stays open. Posts in
             // rooms are a different intention and are not affected.
             GameIntention.CreateComment when user.IsAuthenticated =>
                 !target.IsBlacklisted(user.UserId) &&
                 (target.CommentsAccessMode == CommentsAccessMode.Public ||
-                target.GetRoles(user.UserId).HasAnyRole()) &&
-                user.MaySpeak(inOwnSpace: target.GetRoles(user.UserId).IsOwnGame()),
+                roles.HasAnyRole()) &&
+                user.MaySpeak(inOwnSpace: roles.IsOwnGame()),
 
             // Character creation when:
             // - game is active AND recruitment is open, OR

@@ -110,6 +110,30 @@ public class MessageController : ControllerBase
     public async Task<IActionResult> GetMessage(Guid id) => Ok(await _apiService.GetMessageAsync(id));
 
     /// <summary>
+    /// Get quotation source of a message
+    /// </summary>
+    /// <remarks>
+    /// Returns the BBCode a reader's composer is filled with when they quote the
+    /// message, wrapped in a quotation attributed to its author. Serves both a
+    /// private chat and the global chat, the way reading one message does.
+    /// Whoever cannot read the message cannot read its quotation - the same
+    /// refusal, from the same read.
+    /// </remarks>
+    /// <param name="id">Message identifier</param>
+    /// <response code="200">Returns the quotation source</response>
+    /// <response code="400">Message text could not be parsed</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="404">Message not found</response>
+    [HttpGet("{id:guid}/quote", Name = nameof(GetMessageQuote))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<QuoteSource>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetMessageQuote(Guid id) =>
+        Ok(await _apiService.GetMessageQuoteAsync(id));
+
+    /// <summary>
     /// Update message
     /// </summary>
     /// <param name="id">Message identifier</param>

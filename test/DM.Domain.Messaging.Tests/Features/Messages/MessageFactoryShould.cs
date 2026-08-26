@@ -2,8 +2,8 @@ using System;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Messaging.Features.Messages;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Features.Messages;
@@ -11,8 +11,8 @@ namespace DM.Domain.Messaging.Tests.Features.Messages;
 public class MessageFactoryShould : UnitTestBase
 {
     private readonly MessageFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public MessageFactoryShould()
     {
@@ -20,8 +20,8 @@ public class MessageFactoryShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
 
         _factory = new MessageFactory(
-            _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _guidFactory,
+            _dateTimeProvider);
     }
 
     [Fact]
@@ -38,8 +38,8 @@ public class MessageFactoryShould : UnitTestBase
             Text = "Test message"
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(messageId);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _guidFactory.Create().Returns(messageId);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = _factory.Create(createMessage, userId);
 
@@ -62,8 +62,8 @@ public class MessageFactoryShould : UnitTestBase
             Text = text
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(createMessage, Guid.NewGuid());
 
@@ -80,8 +80,8 @@ public class MessageFactoryShould : UnitTestBase
             Text = "Test"
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(createMessage, userId);
 
@@ -97,8 +97,8 @@ public class MessageFactoryShould : UnitTestBase
             Text = "Test"
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _guidFactory.Create().Returns(Guid.NewGuid());
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         var result = _factory.Create(createMessage, Guid.NewGuid());
 

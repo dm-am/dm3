@@ -150,7 +150,7 @@ async function reject(invitationId: string) {
 </script>
 
 <style scoped lang="sass">
-@import "../AccountPage.styles"
+@use "../AccountPage.styles" as *
 
 .invitations-content
   padding: $medium

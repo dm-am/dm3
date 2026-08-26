@@ -118,10 +118,10 @@ const BASE_TAGS = [
  * - message: Chat and private conversations, includes [mod]
  */
 export const CONTEXT_TAGS: Record<BBCodeContext, string[]> = {
-  common: [...BASE_TAGS, "mod", "warning"],
+  common: [...BASE_TAGS, "mod"],
   post: [...BASE_TAGS, "private"],
   info: [...BASE_TAGS],
-  message: [...BASE_TAGS, "mod", "warning"],
+  message: [...BASE_TAGS, "mod"],
 };
 
 // ============================================================================
@@ -159,10 +159,21 @@ const BB_TO_HTML = {
   spoiler: /\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi,
   nsfw: /\[nsfw\]([\s\S]*?)\[\/nsfw\]/gi,
   mod: /\[mod\]([\s\S]*?)\[\/mod\]/gi,
-  warning: /\[warning\]([\s\S]*?)\[\/warning\]/gi,
 
-  // Quote (author parameter is NOT supported - [quote=X] treated as [quote])
-  quoteWithAuthor: /\[quote=[^\]]+\]([\s\S]*?)\[\/quote\]/gi,
+  // Quote. The author is captured, not discarded: the server has always
+  // rendered [quote=Author] with an attribution line, so dropping it here made
+  // opening one's own post in the editor and saving it again — with nothing
+  // changed — delete the attribution, silently.
+  //
+  // Both spellings of the value, because the server's grammar reads both and
+  // the quotation the Quote action brings back is the quoted one. Quoted is
+  // what a name needs: unquoted stops at a double quote, so a nickname written
+  // the ordinary way — `Джон "Быстрый" Смит` — stopped being a tag at all. The
+  // classes below are the server's own: quoted takes anything but an opening
+  // bracket and a quote, plus a quote that is not the one before the closing
+  // bracket; unquoted runs to the bracket.
+  quoteWithAuthor:
+    /\[quote=(?:"((?:[^"[]|"(?!\]))*)"|([^[\]"\r\n]+))\]([\s\S]*?)\[\/quote\]/gi,
   quote: /\[quote\]([\s\S]*?)\[\/quote\]/gi,
 
   // Link (with text MUST be before simple link)
@@ -213,11 +224,10 @@ const HTML_TO_BB_MARKED = {
   spoiler: /<div[^>]*data-bb-tag="spoiler"[^>]*>([\s\S]*?)<\/div>/gi,
   nsfw: /<div[^>]*data-bb-tag="nsfw"[^>]*>([\s\S]*?)<\/div>/gi,
   mod: /<div[^>]*data-bb-tag="mod"[^>]*>([\s\S]*?)<\/div>/gi,
-  warning: /<div[^>]*data-bb-tag="warning"[^>]*>([\s\S]*?)<\/div>/gi,
 
-  // Quote with author - convert to simple quote
+  // Quote with author - the author comes back out into [quote=Author]
   quoteWithAuthor:
-    /<blockquote[^>]*data-bb-tag="quote"[^>]*data-bb-author="[^"]*"[^>]*>(?:<cite>[^<]*<\/cite>)?([\s\S]*?)<\/blockquote>/gi,
+    /<blockquote[^>]*data-bb-tag="quote"[^>]*data-bb-author="([^"]*)"[^>]*>(?:<cite>[^<]*<\/cite>)?([\s\S]*?)<\/blockquote>/gi,
   quote: /<blockquote[^>]*data-bb-tag="quote"[^>]*>([\s\S]*?)<\/blockquote>/gi,
 
   linkSelfref:
@@ -272,9 +282,10 @@ const HTML_TO_BB_UNMARKED = {
   a: /<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
   img: /<img[^>]*src="([^"]*)"[^>]*\/?>/gi,
 
-  // Quote with author - convert to simple quote (ignore author)
+  // Quote with author - the attribution line the server renders is where the
+  // author name is, so it is read back out rather than thrown away
   blockquoteWithAuthor:
-    /<blockquote><div class="quote-author">[^<]*<\/div>([\s\S]*?)<\/blockquote>/gi,
+    /<blockquote><div class="quote-author">([^<]*)<\/div>([\s\S]*?)<\/blockquote>/gi,
   blockquote: /<blockquote>([\s\S]*?)<\/blockquote>/gi,
 
   spoiler: /<div class="spoiler">([\s\S]*?)<\/div>/gi,
@@ -295,11 +306,11 @@ const STRUCTURAL = {
   emptyPWithBr: /<p><br\s*\/?><\/p>/gi,
   emptyP: /<p><\/p>/gi,
   consecutiveP: /<\/p>\s*<p>/gi,
-  pBeforeBlock: /<\/p>\s*(\[(?:code|spoiler|nsfw|quote|mod|warning|ul|ol)\])/gi,
-  blockBeforeP: /(\[\/(?:code|spoiler|nsfw|quote|mod|warning|ul|ol)\])\s*<p>/gi,
-  pAndBlock: /<p>\s*(\[(?:code|spoiler|nsfw|quote|mod|warning|ul|ol)\])/gi,
+  pBeforeBlock: /<\/p>\s*(\[(?:code|spoiler|nsfw|quote|mod|ul|ol)\])/gi,
+  blockBeforeP: /(\[\/(?:code|spoiler|nsfw|quote|mod|ul|ol)\])\s*<p>/gi,
+  pAndBlock: /<p>\s*(\[(?:code|spoiler|nsfw|quote|mod|ul|ol)\])/gi,
   consecutiveBlocks:
-    /(\[\/(?:code|spoiler|nsfw|quote|mod|warning|ul|ol)\])(\[(?:code|spoiler|nsfw|quote|mod|warning|ul|ol)(?:=[^\]]*)?\])/gi,
+    /(\[\/(?:code|spoiler|nsfw|quote|mod|ul|ol)\])(\[(?:code|spoiler|nsfw|quote|mod|ul|ol)(?:=[^\]]*)?\])/gi,
   pOpen: /<p>/gi,
   pClose: /<\/p>/gi,
 } as const;
@@ -341,7 +352,7 @@ const PATTERN_ORDER_RULES: Array<{
   {
     first: "quoteWithAuthor",
     then: "quote",
-    reason: "[quote=X] before [quote] (author ignored)",
+    reason: "[quote=X] before [quote]",
   },
   { first: "linkWithText", then: "link", reason: "[link=text] before [link]" },
   {
@@ -382,8 +393,11 @@ function validatePatternOrder(): void {
   }
 }
 
-// Validate pattern order in development mode
-if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
+// Validate pattern order in development mode. The dev server and Vitest both
+// run with DEV set, and a production build folds the check to false, so rollup
+// drops the call along with it - which is the same coverage the NODE_ENV pair
+// gave, without reaching for a Node global from browser code.
+if (import.meta.env.DEV) {
   validatePatternOrder();
 }
 
@@ -391,8 +405,12 @@ if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
 // PERFORMANCE MONITORING
 // ============================================================================
 
-/** Performance metrics for development mode */
-const PERF_ENABLED = process.env.NODE_ENV === "development";
+/**
+ * Performance metrics for development mode. Vitest runs with DEV set as well,
+ * so the test mode is excluded by hand: the warnings below are meant for a
+ * human watching a browser console, not for a test log.
+ */
+const PERF_ENABLED = import.meta.env.DEV && import.meta.env.MODE !== "test";
 const PERF_THRESHOLD_MS = 10; // Warn if conversion takes longer than this
 
 /**
@@ -483,6 +501,50 @@ function toPrivateTag(_: string, character: string, content: string): string {
   return addressees
     ? `[private=${addressees}]${content}[/private]`
     : `[private]${content}[/private]`;
+}
+
+/**
+ * The author name out of whichever spelling of the value matched.
+ *
+ * The quoted spelling reaches this function through its own group, and on that
+ * path there is nothing left to do. The unquoted one does not always mean the
+ * value was written unquoted: BBCode is HTML-escaped before the tags are read,
+ * so a value written in quotes arrives with its quotes already entities, and
+ * the unquoted class - which stops at a literal quote and at nothing else - is
+ * what matches it. Stripping the pair here is what keeps the author out of its
+ * own quotation marks in the attribution line.
+ *
+ * @param quoted - Value of the quoted spelling, if that is what matched
+ * @param bare - Value of the unquoted spelling, if that is what matched
+ * @returns The name as written
+ */
+function readQuoteAuthor(quoted?: string, bare?: string): string {
+  if (typeof quoted === "string") return quoted;
+  const value = bare ?? "";
+  const entityQuoted = /^&quot;([\s\S]*)&quot;$/.exec(value);
+  return entityQuoted ? entityQuoted[1] : value;
+}
+
+/**
+ * Rebuild a [quote] tag from a matched element.
+ *
+ * The value is written quoted, which is the form the server composes a
+ * quotation in and the only one that carries a name whole: unquoted stops at a
+ * double quote, so a nickname written the ordinary way — `Джон "Быстрый" Смит` —
+ * came back as text instead of a tag. The one character no spelling can carry
+ * is the opening bracket, because it is what starts the next tag, so it is
+ * dropped; a name reduced to nothing by that gives the bare tag, which draws
+ * without a header.
+ *
+ * @param author - Author name from the element's attribute
+ * @param content - Text the quotation wraps
+ * @returns The BBCode tag
+ */
+function toQuoteTag(author: string, content: string): string {
+  const cleanAuthor = unescapeHtml(author).replace(/\[/g, "").trim();
+  return cleanAuthor
+    ? `[quote="${cleanAuthor}"]${content}[/quote]`
+    : `[quote]${content}[/quote]`;
 }
 
 /**
@@ -724,15 +786,21 @@ function phase3_convertBbcodeTags(state: BbcodeToHtmlState): BbcodeToHtmlState {
     BB_TO_HTML.mod,
     '<div class="bb-mod" data-bb-tag="mod">$1</div>',
   );
-  html = html.replace(
-    BB_TO_HTML.warning,
-    '<div class="bb-warning" data-bb-tag="warning">$1</div>',
-  );
 
-  // Quote - author parameter is NOT supported, [quote=X] converts same as [quote]
+  // Quote. data-bb-author carries the attribution through the round trip; the
+  // attribute order matters, because HTML_TO_BB_MARKED.quoteWithAuthor reads
+  // data-bb-tag first and data-bb-author after it.
   html = html.replace(
     BB_TO_HTML.quoteWithAuthor,
-    '<blockquote class="bb-quote" data-bb-tag="quote">$1</blockquote>',
+    (
+      _,
+      quotedAuthor: string | undefined,
+      bareAuthor: string | undefined,
+      content: string,
+    ) =>
+      `<blockquote class="bb-quote" data-bb-tag="quote" data-bb-author="${escapeAttr(
+        readQuoteAuthor(quotedAuthor, bareAuthor),
+      )}">${content}</blockquote>`,
   );
   html = html.replace(
     BB_TO_HTML.quote,
@@ -967,13 +1035,12 @@ function phase2_convertMarkedHtml(state: HtmlToBbcodeState): HtmlToBbcodeState {
   bbcode = bbcode.replace(HTML_TO_BB_MARKED.spoiler, "[spoiler]$1[/spoiler]");
   bbcode = bbcode.replace(HTML_TO_BB_MARKED.nsfw, "[nsfw]$1[/nsfw]");
   bbcode = bbcode.replace(HTML_TO_BB_MARKED.mod, "[mod]$1[/mod]");
-  bbcode = bbcode.replace(HTML_TO_BB_MARKED.warning, "[warning]$1[/warning]");
 
-  // Quote
-  // Quote - author is NOT supported, convert any quote to simple [quote]
+  // Quote. The author is unescaped on the way out for the same reason link text
+  // is: leaving the entities in accumulates them one round trip at a time.
   bbcode = bbcode.replace(
     HTML_TO_BB_MARKED.quoteWithAuthor,
-    "[quote]$1[/quote]",
+    (_, author: string, content: string) => toQuoteTag(author, content),
   );
   bbcode = bbcode.replace(HTML_TO_BB_MARKED.quote, "[quote]$1[/quote]");
 
@@ -1108,10 +1175,10 @@ function phase3_convertUnmarkedHtml(
     return `[img]${safeSrc}[/img]`;
   });
 
-  // Unmarked quote - author is NOT supported, convert to simple [quote]
+  // Unmarked quote - the attribution line carries the author back into the tag
   bbcode = bbcode.replace(
     HTML_TO_BB_UNMARKED.blockquoteWithAuthor,
-    "[quote]$1[/quote]",
+    (_, author: string, content: string) => toQuoteTag(author, content),
   );
   bbcode = bbcode.replace(HTML_TO_BB_UNMARKED.blockquote, "[quote]$1[/quote]");
 
@@ -1462,7 +1529,6 @@ export function validateBBCode(bbcode: string): string[] {
     "noparse",
     "img",
     "mod",
-    "warning",
   ];
   const standaloneTags = ["tab"];
 

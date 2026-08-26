@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -10,19 +10,24 @@ namespace DM.Architecture.Tests;
 /// Nothing is announced before the state it announces is durable.
 /// </summary>
 /// <remarks>
-/// An event on the bus is read by consumers that send letters and bot messages,
-/// and neither can be taken back. Publishing while the write is still in the
-/// change tracker makes the announcement the reliable half and the record the
-/// unreliable one: the reminder loop marked every stale pendency in memory,
+/// The announcement is an outbox INSERT now (W1.5): SendAsync writes a row in
+/// its own transaction and the relay publishes from it, but the row is read by
+/// consumers that send letters and bot messages, and neither can be taken back.
+/// The order therefore holds two facts at once. First, an event stored while
+/// its own write is still in the change tracker announces a state that may
+/// never arrive - the reminder loop once marked every stale pendency in memory,
 /// published a reminder for each, and saved the batch afterwards, so a lost
 /// connection to Postgres past that point sent the masters letters the database
-/// holds no trace of - and twelve hours later sent them again, until one save
-/// finally landed. Stopping the process between the loop and the save does the
-/// same thing.
+/// holds no trace of, and twelve hours later sent them again. Second, and new
+/// with the outbox: SendAsync makes its own SaveChanges on the scoped context
+/// shared with the caller, so a SendAsync before the domain commit would flush
+/// the caller's half-written changes along with the row - a commit nobody asked
+/// for, of a state nobody finished. This is risk R1 of the outbox design, and
+/// this file is what holds it shut.
 ///
 /// Asserted on the text, because the order of two awaits inside one method is
 /// not something the type system or the IL has an opinion about, and the callers
-/// need a database and a broker to run at all.
+/// need a database to run at all.
 ///
 /// Two rules, because the code has two shapes. Where one method both writes and
 /// announces, the order of the two calls is what there is to check. Where the

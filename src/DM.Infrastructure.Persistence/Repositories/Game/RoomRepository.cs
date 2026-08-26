@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Rooms;
@@ -18,17 +16,14 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 internal class RoomRepository : IRoomRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public RoomRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -56,7 +51,7 @@ internal class RoomRepository : IRoomRepository
 
         var rooms = await visible
             .OrderBy(r => r.OrderNumber)
-            .ProjectTo<Room>(_mapper.ConfigurationProvider)
+            .ProjectToRoom()
             .ToArrayAsync();
 
         foreach (var room in rooms)
@@ -73,7 +68,7 @@ internal class RoomRepository : IRoomRepository
             .Where(r => r.RoomId == roomId)
             .Where(GameAccessibilityFilters.RoomAvailable(
                 userId, mayJudgePremoderation: mayJudgePremoderation))
-            .ProjectTo<Room>(_mapper.ConfigurationProvider)
+            .ProjectToRoom()
             .FirstOrDefaultAsync()!;
     }
 
@@ -82,7 +77,7 @@ internal class RoomRepository : IRoomRepository
         return _dbContext.Rooms
             .Where(r => r.RoomId == roomId)
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
-            .ProjectTo<RoomToUpdate>(_mapper.ConfigurationProvider)
+            .ProjectToRoomToUpdate()
             .FirstOrDefaultAsync()!;
     }
 
@@ -91,7 +86,7 @@ internal class RoomRepository : IRoomRepository
         return _dbContext.Rooms
             .Where(r => !r.IsRemoved && r.GameId == gameId)
             .OrderByDescending(r => r.OrderNumber)
-            .ProjectTo<RoomOrderInfo>(_mapper.ConfigurationProvider)
+            .ProjectToRoomOrderInfo()
             .FirstOrDefaultAsync();
     }
 
@@ -110,19 +105,8 @@ internal class RoomRepository : IRoomRepository
         // behind it. The strategy wrapper is required because the API host
         // configures EnableRetryOnFailure, and a retrying execution strategy
         // refuses a transaction opened by hand.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                // A retry replays this whole block, so anything the failed
-                // attempt left tracked has to go: still Added it would insert
-                // the room twice, already Unchanged it would insert nothing.
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
             await _dbContext.Database.ExecuteSqlRawAsync(
@@ -174,7 +158,7 @@ internal class RoomRepository : IRoomRepository
 
         return await _dbContext.Rooms
             .Where(r => r.RoomId == createRoom.RoomId)
-            .ProjectTo<Room>(_mapper.ConfigurationProvider)
+            .ProjectToRoom()
             .FirstAsync();
     }
 
@@ -280,7 +264,7 @@ internal class RoomRepository : IRoomRepository
 
         return await _dbContext.Rooms
             .Where(r => r.RoomId == updateRoom.RoomId)
-            .ProjectTo<Room>(_mapper.ConfigurationProvider)
+            .ProjectToRoom()
             .FirstAsync();
     }
 
@@ -291,20 +275,8 @@ internal class RoomRepository : IRoomRepository
         // files retired under a room nobody deleted, and nothing repairs either.
         // The strategy wrapper is required because the API host configures
         // EnableRetryOnFailure.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            if (attempted)
-            {
-                // A retry replays this block, and SaveChanges leaves the entities
-                // Unchanged even when the transaction around it rolled back: the
-                // second attempt would otherwise write no soft-delete at all.
-                _dbContext.ChangeTracker.Clear();
-            }
-
-            attempted = true;
-
             var room = await _dbContext.Rooms.FindAsync(roomId);
             if (room == null) return;
 

@@ -6,7 +6,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;

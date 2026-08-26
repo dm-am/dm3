@@ -28,7 +28,7 @@ const upload = (event: Event) => {
   const formData = new FormData();
   const name = files.length === 1 ? "file" : "files";
 
-  for (let file of files) formData.append(name, file);
+  for (const file of files) formData.append(name, file);
 
   emits("uploading", formData);
 };

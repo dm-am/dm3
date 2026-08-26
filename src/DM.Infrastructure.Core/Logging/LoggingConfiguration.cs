@@ -1,5 +1,4 @@
 using DM.Infrastructure.Core.Configuration;
-using Jamq.Client.OpenTelemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Metrics;
@@ -109,12 +108,31 @@ public static class LoggingConfiguration
                 .ConfigureResource(r => r.AddService(applicationName))
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
-                // SQL text carries the parameter values a query was built with, so it goes
-                // into a trace only where the trace stays on the developer's machine.
-                .AddEntityFrameworkCoreInstrumentation(opts => opts.SetDbStatementForText = isDevelopment)
-                .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources") // MongoDb is not too fancy
+                // The successor package always records the parameterised SQL text:
+                // upstream removed SetDbStatementForText after 1.12 (verified against
+                // the 1.18.0-beta.1 options surface), so the per-environment switch the
+                // predecessor had cannot be expressed. Parameter values are what carry
+                // user data, and those stay off (SetDbQueryParameters defaults to
+                // false). Residual exposure is literals EF inlines past parameters;
+                // traces only ever reach our own Jaeger. An EnrichWithIDbCommand
+                // workaround that strips the tag exists and is deliberately not taken.
+                .AddEntityFrameworkCoreInstrumentation()
                 .AddSource(DM.Infrastructure.Core.Tracing.DmActivitySource.Name)
-                .AddJamqClientInstrumentation()
+                // The broker client's own instrumentation: RabbitMQ.Client 7.x
+                // opens a publish span on one source and a deliver span on the
+                // other, carries the context in the message headers, and parents
+                // the deliver span to the publisher (the client default) - which
+                // is what keeps the request and the work it caused one trace
+                // across the broker. Subscribed to directly rather than through
+                // RabbitMQ.Client.OpenTelemetry: that package is still a release
+                // candidate, and the whole of what it adds over these two lines
+                // is option plumbing this solution does not use. The names are
+                // string literals because they are declared on
+                // RabbitMQ.Client.RabbitMQActivitySource, and referencing the
+                // broker client from this assembly for two constants would hand
+                // every host a dependency only three of them have.
+                .AddSource("RabbitMQ.Client.Publisher")
+                .AddSource("RabbitMQ.Client.Subscriber")
                 .AddOtlpExporter(options => options.Endpoint = new Uri(connectionStrings.TracingEndpoint)))
             .WithMetrics(builder => builder
                 .ConfigureResource(r => r.AddService(applicationName))

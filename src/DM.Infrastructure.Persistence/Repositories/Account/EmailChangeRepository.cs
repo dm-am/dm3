@@ -2,15 +2,13 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Account.Features.EmailChange;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Tokens;
 using DM.Infrastructure.Persistence.Shared.Users;
+using DM.Infrastructure.Persistence.Shared.Tokens;
 using Microsoft.EntityFrameworkCore;
-using TokenEntity = DM.Infrastructure.Persistence.Entities.Account.Token;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
@@ -18,21 +16,16 @@ namespace DM.Infrastructure.Persistence.Repositories.Account;
 internal class EmailChangeRepository : IEmailChangeRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     public EmailChangeRepository(
-        DmDbContext dbContext,
-        IMapper mapper)
+        DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     /// <inheritdoc />
-    public Task<AuthenticatedUser?> FindUser(string username) => _dbContext.Users
-        .Where(u => u.Username.ToLower() == username.ToLower())
-        .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
-        .FirstOrDefaultAsync();
+    public Task<AuthenticatedUser?> FindUser(string username) =>
+        _dbContext.Users.FindAuthenticatedUser(username);
 
     /// <inheritdoc />
     public async Task<bool> IsEmailFree(string email, CancellationToken ct) =>
@@ -50,18 +43,7 @@ internal class EmailChangeRepository : IEmailChangeRepository
         // took the account away from its owner along with any way to be told.
         user.PendingEmail = newEmail;
 
-        var tokenEntity = new TokenEntity
-        {
-            TokenId = tokenDto.TokenId,
-            // The letter carries tokenDto.Secret; the row keeps only its hash.
-            SecretHash = tokenDto.SecretHash,
-            UserId = tokenDto.UserId,
-            EntityId = tokenDto.EntityId,
-            CreatedUtc = tokenDto.CreatedUtc,
-            Type = tokenDto.Type,
-            CreatorId = tokenDto.CreatorId,
-            IsRemoved = false
-        };
+        var tokenEntity = TokenRows.From(tokenDto);
         _dbContext.Tokens.Add(tokenEntity);
         await _dbContext.SaveChangesAsync();
     }

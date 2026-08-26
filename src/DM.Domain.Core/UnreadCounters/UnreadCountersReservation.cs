@@ -10,14 +10,16 @@ namespace DM.Domain.Core.UnreadCounters;
 /// </summary>
 /// <remarks>
 /// <para>
-/// There is no transaction across the two stores and no outbox — DATA_STORAGE.md
-/// says both in as many words — so a feature living in both owes an explicit
-/// order. The markers go first, because their identifiers are minted by the
-/// caller and need no round trip to learn. Written after the insert instead, a
-/// refused write to the document store left a committed entity whose counters do
-/// not exist and never will: nothing recreates them, and its badge reads zero for
-/// everybody forever. Written first, the same refusal loses an entity nobody has
-/// seen yet, and the caller may simply try again.
+/// Both ends of this path live in one PostgreSQL now, so a single transaction
+/// became possible - and was deliberately not taken: folding the marker upsert
+/// into every caller's transaction means threading it through dozens of call
+/// sites, deferred by design (deliberately out of scope). Until then
+/// the explicit order stands. The markers go first, because their identifiers
+/// are minted by the caller and need no round trip to learn. Written after the
+/// insert instead, a refused marker write left a committed entity whose
+/// counters do not exist and never will: nothing recreates them, and its badge
+/// reads zero for everybody forever. Written first, the same refusal loses an
+/// entity nobody has seen yet, and the caller may simply try again.
 /// </para>
 /// <para>
 /// Taking them back is part of the write path rather than a habit of each caller:
@@ -30,8 +32,8 @@ namespace DM.Domain.Core.UnreadCounters;
 /// its way out — the refusal of the store is what the caller has to see, not the
 /// refusal of the cleanup that followed it. What survives such a double failure
 /// is a marker under an entity that was never committed: it cannot be opened by
-/// anybody, and it inflates one parent-scoped total until the expiry index that
-/// collects removed markers reaches it.
+/// anybody, and it inflates one parent-scoped total until the retention sweep
+/// that collects removed markers reaches it.
 /// </para>
 /// </remarks>
 public sealed class UnreadCountersReservation : IAsyncDisposable

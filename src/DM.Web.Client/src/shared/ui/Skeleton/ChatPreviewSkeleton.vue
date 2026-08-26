@@ -33,7 +33,7 @@ withDefaults(
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Skeleton" as *
 
 .chat-skeleton-list
   display: flex

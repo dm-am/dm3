@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Game.Features.Posts;
 using DM.Web.API.Shared.Authentication;
+using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -79,6 +80,25 @@ public class PostController : ControllerBase
     [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPost(Guid id) => Ok(await _postApiService.Get(id));
+
+    /// <summary>
+    /// Get quotation source of a post
+    /// </summary>
+    /// <remarks>
+    /// Returns the BBCode a reader's composer is filled with when they quote the
+    /// post: the post's own game text, wrapped in a quotation attributed to its
+    /// author. Whoever cannot read the post cannot read its quotation - the same
+    /// refusal, from the same read.
+    /// </remarks>
+    /// <param name="id">Post identifier</param>
+    /// <response code="200">Returns the quotation source</response>
+    /// <response code="400">Post text could not be parsed</response>
+    /// <response code="404">Post not found</response>
+    [HttpGet("{id}/quote", Name = nameof(GetPostQuote))]
+    [ProducesResponseType(typeof(Envelope<QuoteSource>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPostQuote(Guid id) => Ok(await _postApiService.GetQuote(id));
 
     /// <summary>
     /// Update post

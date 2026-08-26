@@ -8,8 +8,8 @@ using DM.Domain.Account.Features.Tokens;
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Domain.Core.Abstractions;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Tokens;
@@ -33,12 +33,12 @@ public class AccountRetentionShould : UnitTestBase
 {
     private static readonly DateTimeOffset Now = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly Mock<IDateTimeProvider> _clock;
+    private readonly IDateTimeProvider _clock;
 
     public AccountRetentionShould()
     {
         _clock = Mock<IDateTimeProvider>();
-        _clock.SetupGet(c => c.Now).Returns(Now);
+        _clock.Now.Returns(Now);
     }
 
     [Fact]
@@ -46,14 +46,13 @@ public class AccountRetentionShould : UnitTestBase
     {
         var repository = Mock<ITokenMaintenanceRepository>();
         repository
-            .Setup(r => r.DeleteWithdrawnOrIssuedBefore(It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(3);
+            .DeleteWithdrawnOrIssuedBefore(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(3);
 
-        var deleted = await new TokenCleanupProcessor(repository.Object, _clock.Object).DeleteStaleAsync();
+        var deleted = await new TokenCleanupProcessor(repository, _clock).DeleteStaleAsync();
 
         deleted.Should().Be(3);
-        repository.Verify(r => r.DeleteWithdrawnOrIssuedBefore(
-            Now - AccountRetentionPolicy.TokenRetention, It.IsAny<CancellationToken>()), Times.Once);
+        await repository.Received(1).DeleteWithdrawnOrIssuedBefore(
+            Now - AccountRetentionPolicy.TokenRetention, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -61,15 +60,14 @@ public class AccountRetentionShould : UnitTestBase
     {
         var repository = Mock<IRegistrationRepository>();
         repository
-            .Setup(r => r.DeletePendingStartedBefore(It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(2);
+            .DeletePendingStartedBefore(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(2);
 
-        var deleted = await new PendingRegistrationCleanupProcessor(repository.Object, _clock.Object)
+        var deleted = await new PendingRegistrationCleanupProcessor(repository, _clock)
             .DeleteExpiredAsync();
 
         deleted.Should().Be(2);
-        repository.Verify(r => r.DeletePendingStartedBefore(
-            Now - AccountRetentionPolicy.PendingRegistrationLifetime, It.IsAny<CancellationToken>()), Times.Once);
+        await repository.Received(1).DeletePendingStartedBefore(
+            Now - AccountRetentionPolicy.PendingRegistrationLifetime, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -77,18 +75,17 @@ public class AccountRetentionShould : UnitTestBase
     {
         var repository = Mock<IUsernameChangeRepository>();
         repository
-            .Setup(r => r.ExpireUnreviewedRequests(
-                It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<string>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
+            .ExpireUnreviewedRequests(
+                Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<string>(),
+                Arg.Any<CancellationToken>()).Returns(1);
 
-        await new UsernameChangeExpiryProcessor(repository.Object, _clock.Object).ExpireUnreviewedAsync();
+        await new UsernameChangeExpiryProcessor(repository, _clock).ExpireUnreviewedAsync();
 
-        repository.Verify(r => r.ExpireUnreviewedRequests(
+        await repository.Received(1).ExpireUnreviewedRequests(
             Now - AccountRetentionPolicy.UsernameChangeReviewWindow,
             Now,
-            It.Is<string>(comment => comment.Contains("срок ожидания модерации")),
-            It.IsAny<CancellationToken>()), Times.Once);
+            Arg.Is<string>(comment => comment.Contains("срок ожидания модерации")),
+            Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -100,18 +97,17 @@ public class AccountRetentionShould : UnitTestBase
     {
         var repository = Mock<IUsernameChangeRepository>();
         repository
-            .Setup(r => r.ExpireApprovalTokens(
-                It.IsAny<DateTimeOffset>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
+            .ExpireApprovalTokens(
+                Arg.Any<DateTimeOffset>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(1);
 
-        await new UsernameChangeExpiryProcessor(repository.Object, _clock.Object).ExpireApprovalTokensAsync();
+        await new UsernameChangeExpiryProcessor(repository, _clock).ExpireApprovalTokensAsync();
 
         // The reason travels without a separator glued to it: approving takes no
         // comment, so it is normally the whole text the requester reads.
-        repository.Verify(r => r.ExpireApprovalTokens(
+        await repository.Received(1).ExpireApprovalTokens(
             Now,
-            It.Is<string>(reason => reason.StartsWith("Токен истек")),
-            It.IsAny<CancellationToken>()), Times.Once);
+            Arg.Is<string>(reason => reason.StartsWith("Токен истек")),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -119,14 +115,13 @@ public class AccountRetentionShould : UnitTestBase
     {
         var repository = Mock<IAuthenticationRepository>();
         repository
-            .Setup(r => r.PurgeExpiredSessions(It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new SessionPurgeResult(4, 1));
+            .PurgeExpiredSessions(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new SessionPurgeResult(4));
 
-        var purged = await new SessionCleanupProcessor(repository.Object, _clock.Object).PurgeExpiredAsync();
+        var purged = await new SessionCleanupProcessor(repository, _clock).PurgeExpiredAsync();
 
-        purged.UsersTouched.Should().Be(4);
-        purged.EmptyDocumentsRemoved.Should().Be(1);
-        repository.Verify(r => r.PurgeExpiredSessions(Now, It.IsAny<CancellationToken>()), Times.Once);
+        purged.SessionsRemoved.Should().Be(4);
+        await repository.Received(1).PurgeExpiredSessions(Now, Arg.Any<CancellationToken>());
     }
 
     /// <summary>

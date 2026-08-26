@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Comments;
@@ -21,18 +19,15 @@ namespace DM.Infrastructure.Persistence.Repositories.Blog;
 internal class PublicationCommentRepository : IPublicationCommentRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
 
     public PublicationCommentRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IDateTimeProvider dateTimeProvider,
         IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
         _guidFactory = guidFactory;
     }
@@ -43,11 +38,11 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
 
     /// <inheritdoc />
     public Task<IEnumerable<Comment>> Get(Guid publicationId, CommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null, CancellationToken ct = default) =>
-        CommentQueries.Page(_dbContext, _mapper, publicationId, query, paging, excludeUserIds, "DM.PublicationComments.List", ct);
+        CommentQueries.Page(_dbContext, publicationId, query, paging, excludeUserIds, "DM.PublicationComments.List", ct);
 
     /// <inheritdoc />
     public Task<Comment?> Get(Guid commentId, CancellationToken ct = default) =>
-        CommentQueries.Single(_dbContext, _mapper, commentId, "DM.PublicationComments.Get", ct);
+        CommentQueries.Single(_dbContext, commentId, "DM.PublicationComments.Get", ct);
 
     /// <inheritdoc />
     public async Task<(Comment comment, Guid commentId)> Create(CreateComment createComment, Guid authorId, Guid publicationId, int newCommentCount, CancellationToken ct = default)
@@ -80,33 +75,16 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
         var comment = await _dbContext.Comments
             .TagWith("DM.PublicationComments.Created")
             .Where(c => c.CommentId == commentId)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
+            .ProjectToComment()
             .FirstAsync(ct);
 
         return (comment, commentId);
     }
 
     /// <inheritdoc />
-    public async Task<Comment> Update(UpdatePublicationCommentEntity entity, CancellationToken ct = default)
-    {
-        var dbComment = await _dbContext.Comments.FindAsync([entity.CommentId], ct);
-        if (dbComment != null)
-        {
-            dbComment.Text = entity.Text;
-            // The comment row keeps no modification stamp: ModifiedUtc is derived
-            // from the newest entry of this history, and the client draws its
-            // "edited" mark from that. Written here rather than at the call site so
-            // the text and its trace go in one SaveChanges.
-            CommentEdits.Record(_dbContext, _guidFactory, entity.CommentId, entity.EditorUserId, entity.LastUpdateUtc);
-            await _dbContext.SaveChangesAsync(ct);
-        }
-
-        return await _dbContext.Comments
-            .TagWith("DM.PublicationComments.Updated")
-            .Where(c => c.CommentId == entity.CommentId)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .FirstAsync(ct);
-    }
+    public Task<Comment> Update(UpdatePublicationCommentEntity entity, CancellationToken ct = default)
+        => CommentWrites.Update(_dbContext, _guidFactory, entity.CommentId, entity.Text,
+            entity.EditorUserId, entity.LastUpdateUtc, "DM.PublicationComments.Updated", ct);
 
     /// <inheritdoc />
     public async Task<PublicationCommentToDelete?> GetForDelete(Guid commentId, CancellationToken ct = default)
@@ -114,7 +92,7 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
         var comment = await _dbContext.Comments
             .TagWith("DM.PublicationComments.GetForDelete")
             .Where(c => !c.IsRemoved && c.CommentId == commentId)
-            .ProjectTo<PublicationCommentToDelete>(_mapper.ConfigurationProvider)
+            .ProjectToPublicationCommentToDelete()
             .FirstOrDefaultAsync(ct);
 
         if (comment == null) return null;

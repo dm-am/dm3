@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { signIn } from "@/entities/user";
-import { ref, computed, onMounted } from "vue";
+import { signIn, completeSecondFactor } from "@/entities/user";
+import { ref, computed, nextTick, onMounted, useTemplateRef } from "vue";
 import type { LoginCredentials } from "@/shared/api/models/account";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import { PasswordInput } from "@/shared/ui/PasswordInput";
@@ -20,10 +20,39 @@ const emit = defineEmits<{
   (e: "cancel"): void;
   (e: "cantSignIn", email?: string): void;
   (e: "resendActivation", email: string): void;
+  (e: "cantPassSecondFactor"): void;
 }>();
 
 // Track pending activation state
 const pendingActivation = ref(false);
+
+/**
+ * Which half of the login is on screen.
+ *
+ * The second step is this same dialog with its contents swapped, and not a
+ * route of its own: between the two factors there is no session, so there is
+ * nowhere to send the reader and nothing that would survive the trip.
+ */
+const step = ref<"credentials" | "secondFactor">("credentials");
+
+/**
+ * Whether the reader said they are typing a recovery code.
+ *
+ * A hint and a label, nothing more: one field goes to the server either way,
+ * and the server tells the two apart by shape. A flag the client set wrongly
+ * would turn a right value into a refusal, which is why it never leaves here.
+ */
+const recoveryMode = ref(false);
+
+/**
+ * The one field of the second step.
+ *
+ * Focused when the step arrives, because the step arrives by swapping the
+ * contents of a dialog that is already open: the button the reader pressed is
+ * gone, focus falls back to the document, and somebody on a keyboard has to
+ * find their way back into a form they never left.
+ */
+const codeInput = useTemplateRef<HTMLInputElement>("codeInput");
 
 // Form fields
 const emailField = useValidatedField({
@@ -35,6 +64,10 @@ const passwordField = useValidatedField({
   validate: validators.required(),
 });
 
+const codeField = useValidatedField({
+  validate: validators.required(),
+});
+
 const honeypot = ref("");
 const formLoadTime = ref(0);
 const loading = ref(false);
@@ -42,6 +75,16 @@ const rememberMe = ref(true);
 
 const canSubmit = computed(
   () => emailField.isReady.value && passwordField.isReady.value,
+);
+
+const codeLabel = computed(() =>
+  recoveryMode.value ? "Резервный код" : "Код из приложения",
+);
+
+const codeHint = computed(() =>
+  recoveryMode.value
+    ? "Шестнадцать символов резервного кода, регистр и дефисы не важны"
+    : "Шесть цифр из приложения-аутентификатора",
 );
 
 onMounted(() => {
@@ -74,14 +117,27 @@ const submit = async () => {
     rememberMe: rememberMe.value,
   };
 
-  const failure = await signIn(credentials);
+  const outcome = await signIn(credentials);
   loading.value = false;
 
-  if (!failure) {
+  if (outcome.stage === "signedIn") {
     emit("success");
     return;
   }
 
+  // The password was right and the login is not finished. This used to read as
+  // a success with no viewer in it: the dialog closed, the store stayed empty,
+  // and an account with a factor on it could not sign in at all.
+  if (outcome.stage === "secondFactor") {
+    step.value = "secondFactor";
+    recoveryMode.value = false;
+    codeField.reset();
+    await nextTick();
+    codeInput.value?.focus();
+    return;
+  }
+
+  const failure = outcome.failure;
   const errors = parseApiErrors(failure);
 
   // Check for pending activation flag
@@ -119,6 +175,28 @@ const submit = async () => {
   }
 };
 
+const submitSecondFactor = async () => {
+  if (!(await codeField.validate())) return;
+
+  loading.value = true;
+  const failure = await completeSecondFactor(codeField.value.value);
+  loading.value = false;
+
+  if (!failure) {
+    emit("success");
+    return;
+  }
+
+  // Every way of failing this step answers with one sentence: a wrong code, an
+  // expired challenge, a recovery code already spent. A 403 is the account
+  // itself refused in the minutes between the two factors, and it belongs in
+  // the same place. Anything the interceptor already announced is left to its
+  // toast rather than said twice.
+  if (failure.status === 403 || !announcedByInterceptor(failure.status)) {
+    codeField.setError(describeFailure(failure, "Не удалось войти"));
+  }
+};
+
 const handleResendActivation = () => {
   emit("resendActivation", emailField.value.value.trim());
 };
@@ -148,83 +226,143 @@ const onPasswordInput = () => {
 
 <template>
   <Dialog narrow>
-    <dialog-title>Вход</dialog-title>
+    <template v-if="step === 'secondFactor'">
+      <dialog-title>Подтверждение входа</dialog-title>
 
-    <Form
-      @submit="submit"
-      @cancel="emit('cancel')"
-      :valid="canSubmit"
-      :loading="loading"
-      action="Войти"
-      cancel="Отмена"
-    >
-      <form-field
-        label="Почта"
-        name="email"
-        :errors="emailField.error.value ? [emailField.error.value] : []"
+      <Form
+        @submit="submitSecondFactor"
+        @cancel="emit('cancel')"
+        :valid="codeField.isReady.value"
+        :loading="loading"
+        action="Войти"
+        cancel="Отмена"
       >
+        <form-field
+          name="two-factor-code"
+          :errors="codeField.error.value ? [codeField.error.value] : []"
+        >
+          <template #label>
+            <label for="two-factor-code">{{ codeLabel }}</label>
+            <button
+              type="button"
+              class="field-action"
+              @click="recoveryMode = !recoveryMode"
+            >
+              {{
+                recoveryMode
+                  ? "Ввести код из приложения"
+                  : "Ввести резервный код"
+              }}
+            </button>
+          </template>
+          <input
+            id="two-factor-code"
+            ref="codeInput"
+            v-model="codeField.value.value"
+            class="code-input"
+            type="text"
+            :inputmode="recoveryMode ? 'text' : 'numeric'"
+            autocomplete="one-time-code"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            @input="codeField.onInput"
+            @blur="codeField.onBlur"
+          />
+          <template #hint>{{ codeHint }}</template>
+        </form-field>
+
+        <p class="second-factor-help">
+          <button
+            type="button"
+            class="field-action"
+            @click="emit('cantPassSecondFactor')"
+          >
+            Нет доступа к приложению и резервным кодам?
+          </button>
+        </p>
+      </Form>
+    </template>
+
+    <template v-else>
+      <dialog-title>Вход</dialog-title>
+
+      <Form
+        @submit="submit"
+        @cancel="emit('cancel')"
+        :valid="canSubmit"
+        :loading="loading"
+        action="Войти"
+        cancel="Отмена"
+      >
+        <form-field
+          label="Почта"
+          name="email"
+          :errors="emailField.error.value ? [emailField.error.value] : []"
+        >
+          <input
+            v-model="emailField.value.value"
+            id="email"
+            type="email"
+            autocomplete="email"
+            @input="onEmailInput"
+            @blur="emailField.onBlur"
+          />
+        </form-field>
+
+        <form-field
+          name="password"
+          :errors="passwordField.error.value ? [passwordField.error.value] : []"
+        >
+          <template #label>
+            <label for="password">Пароль</label>
+            <button
+              v-if="pendingActivation"
+              type="button"
+              class="field-action"
+              @click="handleResendActivation"
+            >
+              Отправить повторное письмо?
+            </button>
+            <button
+              v-else
+              type="button"
+              class="field-action"
+              @click="emit('cantSignIn', emailField.value.value.trim())"
+            >
+              Не могу войти
+            </button>
+          </template>
+          <password-input
+            v-model="passwordField.value.value"
+            id="password"
+            autocomplete="current-password"
+            @input="onPasswordInput"
+            @blur="passwordField.onBlur"
+          />
+        </form-field>
+
+        <div class="remember-me">
+          <input type="checkbox" v-model="rememberMe" id="rememberMe" />
+          <label for="rememberMe">Запомнить меня</label>
+        </div>
+
+        <!-- Honeypot field for bot protection -->
         <input
-          v-model="emailField.value.value"
-          id="email"
-          type="email"
-          autocomplete="email"
-          @input="onEmailInput"
-          @blur="emailField.onBlur"
+          name="website"
+          v-model="honeypot"
+          class="honeypot-field"
+          autocomplete="off"
+          tabindex="-1"
+          aria-hidden="true"
         />
-      </form-field>
-
-      <form-field
-        name="password"
-        :errors="passwordField.error.value ? [passwordField.error.value] : []"
-      >
-        <template #label>
-          <label for="password">Пароль</label>
-          <button
-            v-if="pendingActivation"
-            type="button"
-            class="field-action"
-            @click="handleResendActivation"
-          >
-            Отправить повторное письмо?
-          </button>
-          <button
-            v-else
-            type="button"
-            class="field-action"
-            @click="emit('cantSignIn', emailField.value.value.trim())"
-          >
-            Не могу войти
-          </button>
-        </template>
-        <password-input
-          v-model="passwordField.value.value"
-          id="password"
-          autocomplete="current-password"
-          @input="onPasswordInput"
-          @blur="passwordField.onBlur"
-        />
-      </form-field>
-
-      <div class="remember-me">
-        <input type="checkbox" v-model="rememberMe" id="rememberMe" />
-        <label for="rememberMe">Запомнить меня</label>
-      </div>
-
-      <!-- Honeypot field for bot protection -->
-      <input
-        name="website"
-        v-model="honeypot"
-        class="honeypot-field"
-        autocomplete="off"
-        tabindex="-1"
-        aria-hidden="true"
-      />
-    </Form>
+      </Form>
+    </template>
   </Dialog>
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .field-action
   +inline-link-button
@@ -234,4 +372,10 @@ const onPasswordInput = () => {
   display: flex
   align-items: center
   gap: $small
+
+.code-input
+  font-family: monospace
+
+.second-factor-help
+  margin: $medium 0 0
 </style>

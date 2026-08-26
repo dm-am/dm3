@@ -1,4 +1,3 @@
-using Autofac;
 using DM.Domain.Account;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Security;
@@ -31,7 +30,6 @@ using DM.Web.API.Middleware;
 using DM.Web.API.Realtime;
 using DM.Web.API.Swagger;
 using DM.Web.API.HostedServices;
-using Jamq.Client.Abstractions.Consuming;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -66,7 +64,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     /// <remarks>
     /// The plain writer copies the message of every failed check into the body, and
     /// those messages belong to the drivers: Npgsql spells out host, port, database
-    /// and user, MongoDB and RabbitMQ do the same. These endpoints carry no
+    /// and user, RabbitMQ does the same. These endpoints carry no
     /// authentication of their own, so whoever reaches the port reads the report; it
     /// has to say what is broken without saying where it lives. The response keeps
     /// its shape either way - the exception field stays, only its text is replaced.
@@ -98,7 +96,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AddDmLogging("DM.API", configuration, _environment)
             .RequireGeneratedLinks()
             .RequireRelationalStorage()
-            .RequireDocumentStorage()
             .RequireObjectStorage();
 
         // CORS is an API concern and no other host has an opinion on it, so this
@@ -142,12 +139,6 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             configuration.GetSection(nameof(SessionCookieConfiguration)).Bind);
 
         services
-            // No AddAutoMapper here: the mapper is owned by the Autofac
-            // registration in RegisterMapper, which is applied after Populate and
-            // therefore always won. This call registered a second mapper — with an
-            // empty profile set, because it was given no assemblies — and its
-            // AllowNullCollections never took effect. The setting now lives in the
-            // configuration that is actually built.
             .AddMemoryCache()
             .AddResponseCompression(options =>
             {
@@ -156,7 +147,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 options.Providers.Add<GzipCompressionProvider>();
                 options.MimeTypes = System.Linq.Enumerable.Concat(
                     ResponseCompressionDefaults.MimeTypes,
-                    new[] { "application/json", "application/problem+json" });
+                    new[] { ApiContentTypes.Json, ApiContentTypes.ProblemJson });
             })
             .Configure<BrotliCompressionProviderOptions>(options => options.Level = System.IO.Compression.CompressionLevel.Fastest)
             .Configure<GzipCompressionProviderOptions>(options => options.Level = System.IO.Compression.CompressionLevel.Fastest)
@@ -189,8 +180,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
         // This host consumes too, and until it passed a pipeline of its own the
         // realtime push was the one queue nothing counted. Measured, not retried:
         // RealtimeConsumerMetricsMiddleware says why.
-        services.AddDmJamqClient(
-            consumerBuilderDefaults: builder => builder.WithMiddleware<RealtimeConsumerMetricsMiddleware>());
+        services.AddDmConsumerMiddleware<RealtimeConsumerMetricsMiddleware>();
 
         if (!_migrateOnStart)
         {
@@ -228,40 +218,32 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
                 config.Filters.Add<SortVocabularyFilter>();
             })
             .AddJsonOptions(config => config.Setup(_httpContextAccessor, _bbParserProvider));
-    }
 
-    /// <summary>
-    /// Configure application container
-    /// </summary>
-    /// <param name="builder">Container builder</param>
-    public void ConfigureContainer(ContainerBuilder builder)
-    {
-        builder.RegisterDefaultTypes();
-        builder.RegisterMapper();
-
-        builder.RegisterInstance(_httpContextAccessor)
-            .AsSelf()
-            .AsImplementedInterfaces();
-        builder.RegisterInstance(_bbParserProvider)
-            .AsSelf()
-            .AsImplementedInterfaces();
-
-        builder.RegisterModuleOnce<MessagingModule>();
-
-        builder.RegisterModuleOnce<PersistenceModule>();
-        builder.RegisterModuleOnce<MailModule>();
-        builder.RegisterModuleOnce<CoreModule>();
-
-        RegisterDomainServices(builder);
+        services.AddSingleton(_httpContextAccessor);
+        services.AddSingleton(_bbParserProvider);
 
         // Singleton for SignalR user connection tracking. Safe only while the type
         // takes no dependencies: a single instance is activated in the root scope,
         // and every scoped service it took would be captured there for the life of
         // the process — down to the pooled DbContext behind authentication.
-        builder.RegisterType<UserConnectionService>()
-            .AsImplementedInterfaces()
-            .SingleInstance();
+        services.AddSingleton<IUserConnectionService, UserConnectionService>();
 
+        // The DI modules and the scans, after everything the host wires
+        // explicitly: the scans only fill gaps, so the pooled DbContext, the
+        // typed HttpClient and the singletons above must already be on the
+        // collection when they run. Lifetimes that differ from the scan default
+        // are declared by the assembly that owns the types, not restated here
+        // per host.
+        services
+            .AddDmMail()
+            .AddDmMessaging()
+            .AddDmAccount()
+            .AddDmModeration()
+            .AddDmCore()
+            .AddDmPersistence()
+            .AddDefaultTypes(typeof(Startup).Assembly);
+
+        RegisterDomainServices(services);
     }
 
     /// <summary>
@@ -402,7 +384,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .UseEndpoints(c =>
             {
                 c.MapControllers();
-                c.MapHub<Notifications.NotificationHub>("/whatsup");
+                c.MapHub<Notifications.NotificationHub>("/hubs/notifications");
                 c.MapPrometheusScrapingEndpoint("/metrics");
 
                 // Liveness - Docker health check (no dependency checks)
@@ -430,17 +412,17 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     /// <summary>
     /// Register all Domain layer services centrally.
     /// </summary>
-    private static void RegisterDomainServices(ContainerBuilder builder)
+    private static void RegisterDomainServices(IServiceCollection services)
     {
-        // Domain assemblies to scan for services and AutoMapper profiles.
+        // Domain assemblies to scan for services.
         // Any public type works as an assembly marker; the Intention enums are
         // the one every Domain.* project is guaranteed to have.
         //
         // Written out in full rather than through a using, so that the list names
         // every module it composes and can be read against the tree. A module left
-        // out compiles, starts, and answers ComponentNotRegisteredException on the
-        // first request to one of its endpoints, which the compiler cannot report
-        // and only an integration test of that endpoint would catch.
+        // out compiles, starts, and fails resolution on the first request to one
+        // of its endpoints, which the compiler cannot report and only an
+        // integration test of that endpoint would catch.
         var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
         var personalAssembly = typeof(DM.Domain.Personal.Authorization.UserIntention).Assembly;
         var communityAssembly = typeof(DM.Domain.Community.Authorization.PollIntention).Assembly;
@@ -456,17 +438,12 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             messagingAssembly, forumAssembly, blogAssembly, gameAssembly
         };
 
-        // Register types and AutoMapper profiles from all Domain assemblies
+        // Register types from all Domain assemblies
         foreach (var assembly in domainAssemblies)
         {
-            builder.RegisterDefaultTypes(assembly);
-            builder.RegisterMapper(assembly);
+            services.AddDefaultTypes(assembly);
         }
 
-        // Lifetimes that differ from the scan default are declared by the
-        // assembly that owns the types, not restated here per host.
-        builder.RegisterModuleOnce<DM.Domain.Account.AccountModule>();
-        builder.RegisterModuleOnce<DM.Domain.Moderation.ModerationModule>();
     }
 
 }

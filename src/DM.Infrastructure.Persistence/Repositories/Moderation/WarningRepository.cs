@@ -3,11 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Moderation.Features.Warnings;
 using Microsoft.EntityFrameworkCore;
+using DM.Infrastructure.Persistence.Shared.Users;
 using DbWarning = DM.Infrastructure.Persistence.Entities.Moderation.Warning;
 
 namespace DM.Infrastructure.Persistence.Repositories.Moderation;
@@ -16,13 +15,11 @@ namespace DM.Infrastructure.Persistence.Repositories.Moderation;
 internal class WarningRepository : IWarningRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     /// <inheritdoc />
-    public WarningRepository(DmDbContext dbContext, IMapper mapper)
+    public WarningRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -31,7 +28,7 @@ internal class WarningRepository : IWarningRepository
         return await _dbContext.Warnings
             .Where(w => w.TargetUserId == userId && !w.IsRemoved)
             .OrderByDescending(w => w.CreatedUtc)
-            .ProjectTo<Warning>(_mapper.ConfigurationProvider)
+            .ProjectToWarning()
             .ToListAsync(ct);
     }
 
@@ -41,7 +38,7 @@ internal class WarningRepository : IWarningRepository
         return await _dbContext.Warnings
             .Where(w => !w.IsRemoved)
             .OrderByDescending(w => w.CreatedUtc)
-            .ProjectTo<Warning>(_mapper.ConfigurationProvider)
+            .ProjectToWarning()
             .ToListAsync(ct);
     }
 
@@ -50,7 +47,7 @@ internal class WarningRepository : IWarningRepository
     {
         return await _dbContext.Warnings
             .Where(w => w.WarningId == warningId)
-            .ProjectTo<Warning>(_mapper.ConfigurationProvider)
+            .ProjectToWarning()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -120,7 +117,7 @@ internal class WarningRepository : IWarningRepository
         var userIds = aggregates.Select(a => a.UserId).ToList();
         var users = await _dbContext.Users
             .Where(u => userIds.Contains(u.UserId))
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ProjectToGeneralUser()
             .ToDictionaryAsync(u => u.UserId, ct);
 
         return aggregates

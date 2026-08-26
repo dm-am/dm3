@@ -1,24 +1,21 @@
 <script setup lang="ts">
 /**
- * GameStatusButtons — the game status-transition button group. Reads the
- * current status from the game-details store and offers the applicable
- * transitions (Start / Finish / Freeze / Close / Reopen), each calling
- * store.transitionStatus. Destructive transitions (Close) go through a
- * ConfirmDialog.
+ * GameStatusButtons — the game status-transition button group: reads the
+ * current status from the game-details store, offers the applicable
+ * transitions (Start / Finish / Freeze / Close / Reopen) and hands them to the
+ * shared StatusButtons, which draws them and dispatches the chosen one.
  *
  * Gating (who may change status) is the caller's responsibility — this
- * component only renders and dispatches.
+ * component only supplies the transitions and the store call.
  *
- * `variant`:
- *  - "strip" (default): sidebar-style plain-link actions (one per line).
- *  - "button": a horizontal group of real buttons for page surfaces.
+ * `variant` is passed straight through: "strip" (default) for the sidebar,
+ * "button" for page surfaces.
  */
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { storeToRefs } from "pinia";
-import { useGameDetailsStore, GameStatusTransition } from "@/entities/game";
-import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { useGameDetailsStore } from "@/entities/game";
+import { StatusButtons } from "@/shared/ui/StatusButtons";
 import { availableStatusTransitions } from "../model/transitions";
-import { notifyFailure } from "@/shared/lib/errors";
 
 withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
   variant: "strip",
@@ -30,127 +27,13 @@ const { game } = storeToRefs(store);
 const transitions = computed(() =>
   availableStatusTransitions(game.value?.status, game.value?.closedReason),
 );
-
-const pending = ref<GameStatusTransition | null>(null);
-const confirmOption = ref<{
-  value: GameStatusTransition;
-  label: string;
-} | null>(null);
-
-const confirmMessage = computed(() =>
-  confirmOption.value
-    ? `Действие "${confirmOption.value.label}" изменит статус игры. Продолжить?`
-    : "",
-);
-
-async function run(t: GameStatusTransition) {
-  pending.value = t;
-  const error = await store.transitionStatus(t);
-  pending.value = null;
-  if (error) notifyFailure(error, "Не удалось изменить статус игры");
-}
-
-function onClick(t: {
-  value: GameStatusTransition;
-  label: string;
-  danger?: boolean;
-}) {
-  if (t.danger) {
-    confirmOption.value = { value: t.value, label: t.label };
-  } else {
-    run(t.value);
-  }
-}
-
-async function confirm() {
-  const opt = confirmOption.value;
-  confirmOption.value = null;
-  if (opt) await run(opt.value);
-}
 </script>
 
 <template>
-  <template v-if="transitions.length">
-    <!-- Sidebar strip variant -->
-    <template v-if="variant === 'strip'">
-      <li v-for="t in transitions" :key="t.value" class="link">
-        <span class="muted" aria-hidden="true">- </span>
-        <button
-          type="button"
-          class="strip-action"
-          :class="{ danger: t.danger }"
-          :disabled="pending === t.value"
-          @click="onClick(t)"
-        >
-          {{ t.label }}
-        </button>
-      </li>
-    </template>
-
-    <!-- Page button-group variant -->
-    <div v-else class="status-buttons">
-      <button
-        v-for="t in transitions"
-        :key="t.value"
-        type="button"
-        class="status-btn"
-        :class="{ danger: t.danger }"
-        :disabled="pending === t.value"
-        @click="onClick(t)"
-      >
-        {{ t.label }}
-      </button>
-    </div>
-
-    <ConfirmDialog
-      :show="!!confirmOption"
-      title="Изменение статуса игры"
-      :message="confirmMessage"
-      :confirm-label="confirmOption?.label"
-      danger
-      @confirm="confirm"
-      @cancel="confirmOption = null"
-    />
-  </template>
+  <StatusButtons
+    :transitions="transitions"
+    :apply="store.transitionStatus"
+    subject="игры"
+    :variant="variant"
+  />
 </template>
-
-<style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-
-.link
-  display: block
-
-.muted
-  color: $text-muted
-
-.strip-action
-  padding: 0
-  border: none
-  background: none
-  font: inherit
-  color: $link
-  cursor: pointer
-
-  &:hover:not(:disabled)
-    color: $link-hover
-    text-decoration: underline
-
-  &.danger
-    color: $accent-red
-
-  &:disabled
-    opacity: 0.6
-    cursor: default
-
-.status-buttons
-  display: flex
-  flex-wrap: wrap
-  gap: $small
-
-.status-btn
-  font-size: $secondary-font-size
-  +button
-
-  &.danger
-    +button-danger
-</style>

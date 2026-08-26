@@ -1,7 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Infrastructure.Messaging;
-using Jamq.Client.Abstractions.Consuming;
 
 namespace DM.Web.API.Realtime;
 

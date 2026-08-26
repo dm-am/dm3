@@ -14,7 +14,7 @@ const emit = defineEmits<{
 
 <template>
   <Dialog auto>
-    <div class="success-content">
+    <div>
       <dialog-title>Проверьте почту</dialog-title>
 
       <p class="main-text">
@@ -24,17 +24,12 @@ const emit = defineEmits<{
 
       <p class="expiry-note">Ссылка действительна 48 часов</p>
 
-      <Button type="button" class="confirm-btn" @click="emit('confirm')">
-        Закрыть
-      </Button>
+      <Button type="button" @click="emit('confirm')"> Закрыть </Button>
     </div>
   </Dialog>
 </template>
 
 <style scoped lang="sass">
-.success-content
-  text-align: center
-
 .main-text
   margin: 0 0 $small
   line-height: 1.5
@@ -43,7 +38,4 @@ const emit = defineEmits<{
   margin: 0 0 $medium
   color: $text-muted
   font-size: $secondary-font-size
-
-.confirm-btn
-  width: 100%
 </style>

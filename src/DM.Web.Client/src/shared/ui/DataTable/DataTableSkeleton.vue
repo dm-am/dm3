@@ -72,7 +72,7 @@ function getBarWidth(
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Skeleton" as *
 
 // Rows inherit table-layout: fixed column widths from the parent <table>.
 // No need to set widths here — the <thead> defines them.

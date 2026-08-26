@@ -11,6 +11,6 @@ internal class UpdateWebsiteTestimonialValidator : AbstractValidator<UpdateWebsi
     {
         RuleFor(t => t.Text)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(10000).WithMessage(ValidationError.Long);
+            .MaximumLength(WebsiteTestimonialFieldLimits.TextMaxLength).WithMessage(ValidationError.Long);
     }
 }

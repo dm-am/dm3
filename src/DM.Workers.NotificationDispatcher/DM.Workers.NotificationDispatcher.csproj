@@ -1,16 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Autofac" />
-        <PackageReference Include="Autofac.Extensions.DependencyInjection" />
-        <PackageReference Include="Jamq.Client.Rabbit.DependencyInjection" />
         <PackageReference Include="Polly" />
-        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+        <!-- Source generator only: nothing of Mapperly reaches the runtime. -->
+        <PackageReference Include="Riok.Mapperly" PrivateAssets="all" />
     </ItemGroup>
 
     <ItemGroup>

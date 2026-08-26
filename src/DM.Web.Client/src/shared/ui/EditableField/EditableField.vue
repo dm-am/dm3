@@ -79,7 +79,7 @@ const controlId = `editable-field-${Math.random().toString(36).slice(2, 9)}`;
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 // No external margin — spacing is the parent container's responsibility
 // (e.g. ProfilePersonalInfo `.info-grid` uses `gap: 0`). A built-in

@@ -7,7 +7,7 @@ using DM.Domain.Account.Features.Recovery;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Tokens;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

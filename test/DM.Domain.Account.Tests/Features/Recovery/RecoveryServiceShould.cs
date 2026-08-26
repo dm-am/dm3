@@ -10,24 +10,24 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Tokens;
 using DM.Domain.Core.Enums;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Recovery;
 
 public class RecoveryServiceShould : UnitTestBase
 {
-    private readonly Mock<IEmailLookupRepository> _emailLookupRepository;
-    private readonly Mock<IRegistrationRepository> _registrationRepository;
-    private readonly Mock<IPasswordResetRepository> _passwordResetRepository;
-    private readonly Mock<IPasswordResetMailSender> _passwordResetEmailSender;
-    private readonly Mock<IRegistrationMailSender> _activationEmailSender;
-    private readonly Mock<ITokenFactory> _tokenFactory;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<ISecurityAuditRepository> _auditService;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IEmailLookupRepository _emailLookupRepository;
+    private readonly IRegistrationRepository _registrationRepository;
+    private readonly IPasswordResetRepository _passwordResetRepository;
+    private readonly IPasswordResetMailSender _passwordResetEmailSender;
+    private readonly IRegistrationMailSender _activationEmailSender;
+    private readonly ITokenFactory _tokenFactory;
+    private readonly IGuidFactory _guidFactory;
+    private readonly ISecurityAuditRepository _auditService;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly RecoveryService _service;
 
     public RecoveryServiceShould()
@@ -43,19 +43,19 @@ public class RecoveryServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         var logger = Mock<ILogger<RecoveryService>>();
 
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _service = new RecoveryService(
-            _emailLookupRepository.Object,
-            _registrationRepository.Object,
-            _passwordResetRepository.Object,
-            _passwordResetEmailSender.Object,
-            _activationEmailSender.Object,
-            _tokenFactory.Object,
-            _guidFactory.Object,
-            _auditService.Object,
-            _dateTimeProvider.Object,
-            logger.Object);
+            _emailLookupRepository,
+            _registrationRepository,
+            _passwordResetRepository,
+            _passwordResetEmailSender,
+            _activationEmailSender,
+            _tokenFactory,
+            _guidFactory,
+            _auditService,
+            _dateTimeProvider,
+            logger);
     }
 
     [Fact]
@@ -81,15 +81,15 @@ public class RecoveryServiceShould : UnitTestBase
             Type = TokenType.PasswordChange
         };
 
-        _emailLookupRepository.Setup(r => r.GetUserByEmail(email, It.IsAny<CancellationToken>())).ReturnsAsync(user);
-        _tokenFactory.Setup(f => f.Create(userId, TokenType.PasswordChange)).Returns(token);
+        _emailLookupRepository.GetUserByEmail(email, Arg.Any<CancellationToken>()).Returns(user);
+        _tokenFactory.Create(userId, TokenType.PasswordChange).Returns(token);
 
         var result = await _service.Recover(email);
 
         result.Should().Be(RecoveryResult.PasswordReset);
-        _passwordResetRepository.Verify(r => r.ReplacePasswordResetToken(userId, token), Times.Once);
-        _passwordResetEmailSender.Verify(s => s.Send(email, user.Username, secret), Times.Once);
-        _passwordResetEmailSender.Verify(s => s.Send(email, user.Username, tokenId), Times.Never);
+        await _passwordResetRepository.Received(1).ReplacePasswordResetToken(userId, token);
+        await _passwordResetEmailSender.Received(1).Send(email, user.Username, secret);
+        await _passwordResetEmailSender.DidNotReceive().Send(email, user.Username, tokenId);
     }
 
     [Fact]
@@ -104,10 +104,9 @@ public class RecoveryServiceShould : UnitTestBase
             SecretHash = ConfirmationSecret.Hash(Guid.NewGuid())
         };
 
-        _emailLookupRepository.Setup(r => r.GetUserByEmail(email, It.IsAny<CancellationToken>())).ReturnsAsync((EmailLookupInfo?)null);
-        _registrationRepository.Setup(r => r.FindPendingByEmail(email, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(pending);
-        _guidFactory.Setup(g => g.Create()).Returns(newTokenId);
+        _emailLookupRepository.GetUserByEmail(email, Arg.Any<CancellationToken>()).Returns((EmailLookupInfo?)null);
+        _registrationRepository.FindPendingByEmail(email, Arg.Any<CancellationToken>()).Returns(pending);
+        _guidFactory.Create().Returns(newTokenId);
 
         var result = await _service.Recover(email);
 
@@ -116,8 +115,8 @@ public class RecoveryServiceShould : UnitTestBase
         // recoverable from the row, so mailing it again is not an option.
         pending.Secret.Should().Be(newTokenId);
         pending.SecretHash.Should().Equal(ConfirmationSecret.Hash(newTokenId));
-        _registrationRepository.Verify(r => r.UpdatePending(pending), Times.Once);
-        _activationEmailSender.Verify(s => s.Send(email, newTokenId), Times.Once);
+        await _registrationRepository.Received(1).UpdatePending(pending);
+        await _activationEmailSender.Received(1).Send(email, newTokenId);
     }
 
     [Fact]
@@ -125,9 +124,9 @@ public class RecoveryServiceShould : UnitTestBase
     {
         var email = "unknown@example.com";
 
-        _emailLookupRepository.Setup(r => r.GetUserByEmail(email, It.IsAny<CancellationToken>())).ReturnsAsync((EmailLookupInfo?)null);
-        _registrationRepository.Setup(r => r.FindPendingByEmail(email, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((PendingRegistration?)null);
+        _emailLookupRepository.GetUserByEmail(email, Arg.Any<CancellationToken>()).Returns((EmailLookupInfo?)null);
+        _registrationRepository.FindPendingByEmail(email, Arg.Any<CancellationToken>())
+            .Returns((PendingRegistration?)null);
 
         var result = await _service.Recover(email);
 

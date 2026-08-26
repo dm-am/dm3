@@ -88,13 +88,30 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       sass: {
-        additionalData: `
-          @import "@/assets/styles/Variables"
-          @import "@/assets/styles/Breakpoints"
-          @import "@/assets/styles/Layout"
-          @import "@/assets/styles/Themes"
-          @import "@/assets/styles/Surfaces"
-        `,
+        // The shared layer, in front of every stylesheet the project compiles:
+        // a component asks for $text or +card without saying where they live.
+        //
+        // `as *` and not a namespace. Under the module system a member is
+        // reached through the name of the module that owns it, and namespacing
+        // this injection would mean rewriting every reference in 308 style
+        // blocks — a restyle, not a migration. `as *` keeps the names the
+        // files already write. It is safe here because no two of these five
+        // declare the same member; if two ever did, Sass would refuse to
+        // compile rather than let one quietly win, which is more than @import
+        // ever offered.
+        //
+        // Injecting a module is free: @use evaluates it once per compilation
+        // and emits nothing, and none of the five emits a rule of its own.
+        // That is a standing requirement of this list, not an accident — a
+        // rule added to any of them would be re-emitted into all 308 scoped
+        // stylesheets (InputsGlobal.sass records what that cost the last time
+        // it happened).
+        additionalData: `@use "@/assets/styles/Variables" as *
+@use "@/assets/styles/Breakpoints" as *
+@use "@/assets/styles/Layout" as *
+@use "@/assets/styles/Themes" as *
+@use "@/assets/styles/Surfaces" as *
+`,
       },
     },
   },
@@ -119,9 +136,11 @@ export default defineConfig({
             // than in vendor. Not because few views need it: two dozen do
             // (forum, blogs, games, profile, moderation, support - anywhere
             // text is composed). Because the views that only READ text do
-            // not, and at 361 KB raw it is the largest thing a reader can
-            // avoid downloading. @tiptap/pm is left out: that package has a
-            // structure of its own.
+            // not, and it is the largest thing a reader can avoid
+            // downloading. A figure for it does not belong here: it moves on
+            // every minor of tiptap and nobody would come back to correct it,
+            // and the argument does not rest on the exact number anyway.
+            // @tiptap/pm is left out: that package has a structure of its own.
             {
               name: "tiptap",
               test: /node_modules[\\/]@tiptap[\\/](?!pm[\\/])/,
@@ -132,6 +151,16 @@ export default defineConfig({
             {
               name: "signalr",
               test: /node_modules[\\/]@microsoft[\\/]signalr[\\/]/,
+            },
+            // The QR encoder. One component reaches it by a dynamic import, so
+            // it would be a chunk of its own without this entry; what the entry
+            // buys is the name. Left alone, the bundler names the chunk after
+            // the package's entry FILE - dist/index - and a network waterfall
+            // then shows "dist-<hash>.js", which the next person reading it has
+            // to open in order to find out what it is.
+            {
+              name: "qrcode",
+              test: /node_modules[\\/]uqr[\\/]/,
             },
           ],
         },

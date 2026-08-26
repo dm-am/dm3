@@ -6,29 +6,28 @@ using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Boards;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Forum.Tests.Authorization;
 
 public class ForumIntentionResolverShould : UnitTestBase
 {
-    private readonly Mock<IAccessPolicyConverter> policyConverter;
+    private readonly IAccessPolicyConverter policyConverter;
     private readonly BoardIntentionResolver resolver;
 
     public ForumIntentionResolverShould()
     {
         policyConverter = Mock<IAccessPolicyConverter>();
-        resolver = new BoardIntentionResolver(policyConverter.Object);
+        resolver = new BoardIntentionResolver(policyConverter);
     }
 
     [Fact]
     public void ForbidCreateTopicWhenCreatePolicyMatchesNotUserRole()
     {
         policyConverter
-            .Setup(c => c.Convert(UserRole.Admin))
-            .Returns(
+            .Convert(UserRole.Admin).Returns(
                 BoardAccessPolicy.Moderator |
                 BoardAccessPolicy.RegularUser |
                 BoardAccessPolicy.Mentor);
@@ -57,8 +56,7 @@ public class ForumIntentionResolverShould : UnitTestBase
     public void AllowCreateTopicWhenCreatePolicyMatchUserRole()
     {
         policyConverter
-            .Setup(c => c.Convert(UserRole.Admin))
-            .Returns(
+            .Convert(UserRole.Admin).Returns(
                 BoardAccessPolicy.Guest |
                 BoardAccessPolicy.RegularUser |
                 BoardAccessPolicy.Administrator);
@@ -77,8 +75,7 @@ public class ForumIntentionResolverShould : UnitTestBase
     public void ForbidCreateTopicUnderTheOrdinaryBan()
     {
         policyConverter
-            .Setup(c => c.Convert(UserRole.RegularUser))
-            .Returns(BoardAccessPolicy.RegularUser);
+            .Convert(UserRole.RegularUser).Returns(BoardAccessPolicy.RegularUser);
 
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.RegularUser).WithAccessPolicy(AccessPolicy.DemocraticBan).Please(),

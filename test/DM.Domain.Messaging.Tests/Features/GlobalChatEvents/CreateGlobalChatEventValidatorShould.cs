@@ -3,9 +3,9 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Features.GlobalChatEvents;
@@ -13,15 +13,15 @@ namespace DM.Domain.Messaging.Tests.Features.GlobalChatEvents;
 public class CreateGlobalChatEventValidatorShould : UnitTestBase
 {
     private readonly CreateGlobalChatEventValidator validator;
-    private readonly Mock<IDateTimeProvider> dateTimeProvider;
+    private readonly IDateTimeProvider dateTimeProvider;
     private readonly DateTimeOffset now;
 
     public CreateGlobalChatEventValidatorShould()
     {
         now = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
-        dateTimeProvider = new Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(x => x.Now).Returns(now);
-        validator = new CreateGlobalChatEventValidator(dateTimeProvider.Object);
+        dateTimeProvider = Substitute.For<IDateTimeProvider>();
+        dateTimeProvider.Now.Returns(now);
+        validator = new CreateGlobalChatEventValidator(dateTimeProvider);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Authentication;
+using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Forum.Comments;
@@ -165,6 +166,26 @@ public class TopicController : ControllerBase
     [ProducesResponseType(typeof(Envelope<Topic>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetTopic(Guid id) => Ok(await _topicApiService.Get(id));
+
+    /// <summary>
+    /// Get quotation source of a topic
+    /// </summary>
+    /// <remarks>
+    /// Returns the BBCode a reader's composer is filled with when they quote the
+    /// opening message of the topic, wrapped in a quotation attributed to its
+    /// author. Whoever cannot read the topic cannot read its quotation - the
+    /// same refusal, from the same read.
+    /// </remarks>
+    /// <param name="id">Topic identifier (GUID)</param>
+    /// <response code="200">Returns the quotation source</response>
+    /// <response code="400">Topic text could not be parsed</response>
+    /// <response code="404">Topic not found</response>
+    [HttpGet("{id}/quote", Name = nameof(GetTopicQuote))]
+    [ProducesResponseType(typeof(Envelope<QuoteSource>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetTopicQuote(Guid id) =>
+        Ok(await _topicApiService.GetQuote(id));
 
     /// <summary>
     /// Get topic by board alias and topic number

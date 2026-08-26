@@ -200,8 +200,8 @@ defineExpose({ expandItem });
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Animations"
-@import "@/assets/styles/Tables"
+@use "@/assets/styles/Animations" as *
+@use "@/assets/styles/Tables" as *
 
 // --- Container ---
 // Override +table's gap/background border trick with explicit borders.

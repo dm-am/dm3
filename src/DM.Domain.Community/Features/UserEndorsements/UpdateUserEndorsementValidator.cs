@@ -14,7 +14,7 @@ internal class UpdateUserEndorsementValidator : AbstractValidator<UpdateUserEndo
             .WithMessage("Укажите рекомендацию");
 
         RuleFor(x => x.Text)
-            .MaximumLength(5000)
+            .MaximumLength(UserEndorsementFieldLimits.TextMaxLength)
             .When(x => !string.IsNullOrEmpty(x.Text))
             .WithMessage("Рекомендация не длиннее 5000 символов");
     }

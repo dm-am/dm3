@@ -41,7 +41,7 @@ internal class TopicLikedNotificationGenerator : BaseNotificationGenerator
             })
             .FirstOrDefaultAsync();
 
-        // The event carries no idempotency key and is replayed by the retry
+        // Every publication carries an EventId since W1.4, but these notifications are not stored, so there is nothing for the key to deduplicate against and is replayed by the retry
         // middleware, by which time the like can be withdrawn or the topic
         // removed. FirstAsync threw on that, the middleware replayed the whole
         // delivery, and the queue stopped draining. Every other generator here

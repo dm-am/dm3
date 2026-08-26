@@ -133,6 +133,27 @@ export function parseStringFromUrl(
 }
 
 // =============================================================================
+// PAGING UTILITIES
+// =============================================================================
+
+/**
+ * Parse the page number out of the `?number=` query parameter.
+ *
+ * Returns undefined for anything that is not a page: a missing parameter, an
+ * empty one, a word, a zero or a negative. Callers that pass the value on to
+ * the API leave it out in that case, and callers that need a page to render
+ * fall back to the first one with `?? 1` — same parse, two readings of the
+ * same absence.
+ */
+export function parsePageNumber(
+  value: string | null | (string | null)[] | undefined,
+): number | undefined {
+  if (!value) return undefined;
+  const parsed = parseInt(String(value), 10);
+  return !isNaN(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+// =============================================================================
 // SORT UTILITIES
 // =============================================================================
 

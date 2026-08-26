@@ -2,6 +2,8 @@ import type {
   ListEnvelope,
   PagingQuery,
   CursorEnvelope,
+  Envelope,
+  QuoteSource,
   Username,
 } from "@/shared/api/models/common";
 import type {
@@ -116,26 +118,38 @@ export default new (class MessagingApi {
   }
 
   public sendMessage(chatId: ChatId, text: string) {
-    return Api.post<Message>(`chats/${chatId}/messages`, { text });
+    return Api.post<Envelope<Message>>(`chats/${chatId}/messages`, { text });
   }
 
   public getMessage(id: MessageId) {
-    return Api.get<Message>(`messages/${id}`);
+    return Api.get<Envelope<Message>>(`messages/${id}`);
   }
 
   /**
    * Get message with BBCode text for editing
    */
   public getMessageForEdit(id: MessageId) {
-    return Api.get<Message>(
+    return Api.get<Envelope<Message>>(
       `messages/${id}`,
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
   }
 
+  /**
+   * Fetch the markup of a quotation of a private message.
+   *
+   * The server composes the whole tag, author included, already filtered for
+   * whoever is asking. The client does not build one out of the rendered page:
+   * that conversion is lossy, and the source of somebody else's message is not
+   * something the browser holds.
+   */
+  public getMessageQuote(id: MessageId) {
+    return Api.get<Envelope<QuoteSource>>(`messages/${id}/quote`);
+  }
+
   public updateMessage(id: MessageId, message: Patch<Message>) {
-    return Api.patch<Message>(`messages/${id}`, message);
+    return Api.patch<Envelope<Message>>(`messages/${id}`, message);
   }
 
   public deleteMessage(id: MessageId) {
@@ -144,7 +158,7 @@ export default new (class MessagingApi {
 
   // Message likes
   public likeMessage(id: MessageId) {
-    return Api.post<Message>(`messages/${id}/likes`);
+    return Api.post<Envelope<Message>>(`messages/${id}/likes`);
   }
 
   public unlikeMessage(id: MessageId) {

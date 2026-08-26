@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using DM.Web.API.Shared.Authentication;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
 
@@ -26,14 +26,6 @@ namespace DM.Web.API.Tests.Shared;
 /// </remarks>
 public class AuthorizedActionsShould
 {
-    private static readonly Type[] MutatingAttributes =
-    [
-        typeof(HttpPostAttribute),
-        typeof(HttpPutAttribute),
-        typeof(HttpPatchAttribute),
-        typeof(HttpDeleteAttribute),
-    ];
-
     /// <summary>
     /// Writes a stranger is allowed to make, and why each of them has to be one.
     /// </summary>
@@ -47,6 +39,11 @@ public class AuthorizedActionsShould
     [
         // There is no session yet — these are the ways one begins.
         "AuthenticationController.Login",
+        // The second half of a login, and by construction there is no session at
+        // this point: the password step of an account with a factor creates none.
+        // What stands in for one is the short-lived challenge cookie, which the
+        // action reads and which is worth nothing without a code to go with it.
+        "AuthenticationController.CompleteTwoFactorLogin",
         "RegistrationController.Register",
         "RegistrationController.Activate",
         "RegistrationController.ResendActivation",
@@ -63,13 +60,8 @@ public class AuthorizedActionsShould
         "WebhookController.HandleWebhook",
     ];
 
-    private static (string Name, MethodInfo Method)[] MutatingActions() => typeof(Startup).Assembly
-        .GetTypes()
-        .Where(type => type.IsClass && !type.IsAbstract && typeof(ControllerBase).IsAssignableFrom(type))
-        .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
-        .Where(method => method.GetCustomAttributes()
-            .Any(attribute => MutatingAttributes.Contains(attribute.GetType())))
-        .Select(method => ($"{method.DeclaringType!.Name}.{method.Name}", method))
+    private static (string Name, MethodInfo Method)[] MutatingActions() => ApiSurface.MutatingActions()
+        .Select(method => (ApiSurface.Named(method), method))
         .ToArray();
 
     private static bool Guarded(MethodInfo method) =>

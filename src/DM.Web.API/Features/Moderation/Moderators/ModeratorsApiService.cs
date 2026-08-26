@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Community.Features.Profiles;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -36,14 +35,14 @@ internal class ModeratorsApiService : IModeratorsApiService
     private readonly ICommunityProfileService _profileService;
     private readonly IBoardService _boardService;
     private readonly IMentorshipService _mentorshipService;
-    private readonly IMapper _mapper;
+    private readonly UserMapper _mapper;
 
     /// <inheritdoc />
     public ModeratorsApiService(
         ICommunityProfileService profileService,
         IBoardService boardService,
         IMentorshipService mentorshipService,
-        IMapper mapper)
+        UserMapper mapper)
     {
         _profileService = profileService;
         _boardService = boardService;
@@ -69,7 +68,7 @@ internal class ModeratorsApiService : IModeratorsApiService
 
         var overviews = users.Select(user => new ModeratorOverview
         {
-            User = _mapper.Map<User>(user),
+            User = _mapper.ToUser(user),
             Boards = boards
                 .Where(b => b.ModeratorIds.Contains(user.UserId))
                 .Select(b => new ModerationZone { Id = b.Id, Title = b.Title })

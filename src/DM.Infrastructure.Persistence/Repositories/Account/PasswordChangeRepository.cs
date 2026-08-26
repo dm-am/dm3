@@ -2,12 +2,12 @@ using System;
 using DM.Domain.Core.Tokens;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Account.Features.PasswordChange;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using Microsoft.EntityFrameworkCore;
+
+using DM.Infrastructure.Persistence.Shared.Users;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
@@ -15,21 +15,16 @@ namespace DM.Infrastructure.Persistence.Repositories.Account;
 internal class PasswordChangeRepository : IPasswordChangeRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     public PasswordChangeRepository(
-        DmDbContext dbContext,
-        IMapper mapper)
+        DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     /// <inheritdoc />
-    public Task<AuthenticatedUser?> FindUser(string username) => _dbContext.Users
-        .Where(u => u.Username.ToLower() == username.ToLower())
-        .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
-        .FirstOrDefaultAsync();
+    public Task<AuthenticatedUser?> FindUser(string username) =>
+        _dbContext.Users.FindAuthenticatedUser(username);
 
     /// <inheritdoc />
     /// <remarks>
@@ -46,7 +41,7 @@ internal class PasswordChangeRepository : IPasswordChangeRepository
                         !t.IsRemoved &&
                         t.CreatedUtc > createdSince)
             .Select(t => t.User)
-            .ProjectTo<AuthenticatedUser>(_mapper.ConfigurationProvider)
+            .ProjectToAuthenticatedUser()
             .FirstOrDefaultAsync();
     }
 

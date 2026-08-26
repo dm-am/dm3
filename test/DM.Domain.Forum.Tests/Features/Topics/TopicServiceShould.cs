@@ -19,27 +19,26 @@ using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Topics;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
-using Moq.Language.Flow;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Forum.Tests.Features.Topics;
 
 public class TopicServiceShould : UnitTestBase
 {
-    private readonly Mock<IBoardService> _boardService;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IAccessPolicyConverter> _accessPolicyConverter;
-    private readonly Mock<ITopicRepository> _repository;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
-    private readonly Mock<IUserLookupService> _userLookupService;
-    private readonly Mock<IEventProducer> _eventProducer;
-    private readonly ISetup<ITopicRepository, Task<Topic>> _createTopicSetup;
+    private readonly IBoardService _boardService;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IAccessPolicyConverter _accessPolicyConverter;
+    private readonly ITopicRepository _repository;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IUserLookupService _userLookupService;
+    private readonly IEventProducer _eventProducer;
     private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly TopicService _service;
 
@@ -47,51 +46,45 @@ public class TopicServiceShould : UnitTestBase
     {
         var createValidator = Mock<IValidator<CreateTopic>>();
         createValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateTopic>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreateTopic>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         var updateValidator = Mock<IValidator<UpdateTopic>>();
         updateValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateTopic>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<UpdateTopic>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _boardService = Mock<IBoardService>();
 
         _accessPolicyConverter = Mock<IAccessPolicyConverter>();
-        _accessPolicyConverter.Setup(c => c.Convert(It.IsAny<UserRole>()))
-            .Returns(BoardAccessPolicy.Guest);
+        _accessPolicyConverter.Convert(Arg.Any<UserRole>()).Returns(BoardAccessPolicy.Guest);
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<ForumIntention>(), It.IsAny<Board>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<TopicIntention>(), It.IsAny<Topic>()));
-        _intentionManager.Setup(m => m.IsAllowed(It.IsAny<ForumIntention>(), It.IsAny<Board>()))
-            .Returns(false);
+        _intentionManager.IsAllowed(Arg.Any<ForumIntention>(), Arg.Any<Board>()).Returns(false);
 
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _repository = Mock<ITopicRepository>();
-        _createTopicSetup = _repository.Setup(r => r.Create(
-            It.IsAny<CreateTopicEntity>(),
-            It.IsAny<Guid>(),
-            It.IsAny<Guid>(),
-            It.IsAny<CancellationToken>()));
-
         _guidFactory = Mock<IGuidFactory>();
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid);
+        _guidFactory.Create().Returns(_ => Guid.NewGuid());
 
         _unreadCountersRepository = Mock<IUnreadCountersRepository>();
-        _unreadCountersRepository.Setup(r => r.CreateMarkerAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
+        _unreadCountersRepository.CreateMarkerAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<UnreadEntryType>())
             .Returns(Task.CompletedTask);
-        _unreadCountersRepository.Setup(r => r.SelectByEntitiesAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
-            .ReturnsAsync((Guid userId, UnreadEntryType type, Guid[] ids) =>
-                ids.ToDictionary(id => id, _ => 0));
+        _unreadCountersRepository.SelectByEntitiesAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<Guid[]>())
+            .Returns(ci =>
+            {
+                var userId = ci.ArgAt<Guid>(0);
+                var type = ci.ArgAt<UnreadEntryType>(1);
+                var ids = ci.ArgAt<Guid[]>(2);
+                return ids.ToDictionary(id => id, _ => 0);
+            });
 
         _userLookupService = Mock<IUserLookupService>();
 
         _eventProducer = Mock<IEventProducer>();
-        _eventProducer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>()))
-            .Returns(Task.CompletedTask);
+        _eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         // Pass-through cache: always delegates to the factory so the
         // service's cacheable fast path still calls the repository in
@@ -99,39 +92,55 @@ public class TopicServiceShould : UnitTestBase
         // underlying read logic.
         var cache = Mock<ICache>();
         cache
-            .Setup(c => c.GetOrCreateAsync(
-                It.IsAny<object>(),
-                It.IsAny<Func<Task<Topic[]>>>(),
-                It.IsAny<TimeSpan>()))
-            .Returns<object, Func<Task<Topic[]>>, TimeSpan>((_, factory, _) => factory());
+            .GetOrCreateAsync(
+                Arg.Any<object>(),
+                Arg.Any<Func<Task<Topic[]>>>(),
+                Arg.Any<TimeSpan>())
+            .Returns(ci => ci.ArgAt<Func<Task<Topic[]>>>(1)());
 
         _service = new TopicService(
-            createValidator.Object,
-            updateValidator.Object,
-            _boardService.Object,
-            _accessPolicyConverter.Object,
-            _intentionManager.Object,
-            _identityProvider.Object,
-            _repository.Object,
-            _unreadCountersRepository.Object,
-            _userLookupService.Object,
-            _eventProducer.Object,
-            _guidFactory.Object,
-            cache.Object);
+            createValidator,
+            updateValidator,
+            _boardService,
+            _accessPolicyConverter,
+            _intentionManager,
+            _identityProvider,
+            _repository,
+            _unreadCountersRepository,
+            _userLookupService,
+            _eventProducer,
+            _guidFactory,
+            cache);
     }
+
+    /// <summary>The store answers a creation with this topic.</summary>
+    private void CreateReturns(Topic topic) =>
+        _repository.Create(
+            Arg.Any<CreateTopicEntity>(),
+            Arg.Any<Guid>(),
+            Arg.Any<Guid>(),
+            Arg.Any<CancellationToken>()).Returns(topic);
+
+    /// <summary>The store refuses a creation with this failure.</summary>
+    private void CreateThrows(Exception failure) =>
+        _repository.Create(
+            Arg.Any<CreateTopicEntity>(),
+            Arg.Any<Guid>(),
+            Arg.Any<Guid>(),
+            Arg.Any<CancellationToken>()).ThrowsAsync(failure);
 
     [Fact]
     public async Task AuthorizeCreateTopicAction()
     {
         var boardId = Guid.NewGuid();
         var board = new Board { Id = boardId, Title = "General" };
-        _boardService.Setup(s => s.GetBoard("General", true)).ReturnsAsync(board);
-        _createTopicSetup.ReturnsAsync(new Topic());
+        _boardService.GetBoard("General", true).Returns(board);
+        CreateReturns(new Topic());
 
         var createTopic = new CreateTopic { BoardTitle = "General", Title = "Test Topic", Text = "Test" };
         await _service.CreateAsync(createTopic);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(ForumIntention.CreateTopic, board), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(ForumIntention.CreateTopic, board);
     }
 
     [Fact]
@@ -140,26 +149,23 @@ public class TopicServiceShould : UnitTestBase
         var boardId = Guid.NewGuid();
         var topicId = Guid.NewGuid();
         var board = new Board { Id = boardId, Title = "General" };
-        _boardService.Setup(s => s.GetBoard("General", true)).ReturnsAsync(board);
+        _boardService.GetBoard("General", true).Returns(board);
 
         // The identifier is minted here and not learnt from the row: the marker is
         // written before the row exists to return one.
-        _guidFactory.Setup(f => f.Create()).Returns(topicId);
+        _guidFactory.Create().Returns(topicId);
 
         var expectedTopic = new Topic { Id = topicId };
-        _createTopicSetup.ReturnsAsync(expectedTopic);
+        CreateReturns(expectedTopic);
 
         var createTopic = new CreateTopic { BoardTitle = "General", Title = "Test Topic", Text = "Test" };
         var result = await _service.CreateAsync(createTopic);
 
         result.Should().Be(expectedTopic);
-        _unreadCountersRepository.Verify(
-            r => r.CreateMarkerAsync(topicId, boardId, UnreadEntryType.Message),
-            Times.Once);
-        _unreadCountersRepository.Verify(
-            r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()),
-            Times.Never,
-            "the row landed, so the reservation was committed");
+        await _unreadCountersRepository.Received(1).CreateMarkerAsync(topicId, boardId, UnreadEntryType.Message);
+        // The row landed, so the reservation was committed.
+        await _unreadCountersRepository.DidNotReceive().DeleteAsync(
+            Arg.Any<Guid>(), Arg.Any<UnreadEntryType>());
     }
 
     [Fact]
@@ -167,10 +173,9 @@ public class TopicServiceShould : UnitTestBase
     {
         var boardId = Guid.NewGuid();
         var topicId = Guid.NewGuid();
-        _boardService.Setup(s => s.GetBoard("General", true))
-            .ReturnsAsync(new Board { Id = boardId, Title = "General" });
-        _guidFactory.Setup(f => f.Create()).Returns(topicId);
-        _createTopicSetup.ThrowsAsync(new InvalidOperationException("storage refused"));
+        _boardService.GetBoard("General", true).Returns(new Board { Id = boardId, Title = "General" });
+        _guidFactory.Create().Returns(topicId);
+        CreateThrows(new InvalidOperationException("storage refused"));
 
         var createTopic = new CreateTopic { BoardTitle = "General", Title = "Test Topic", Text = "Test" };
         await _service.Awaiting(s => s.CreateAsync(createTopic))
@@ -179,10 +184,8 @@ public class TopicServiceShould : UnitTestBase
 
         // Written first and taken back, so the failure loses a topic nobody has
         // seen. The other order left a committed topic whose counters never exist.
-        _unreadCountersRepository.Verify(
-            r => r.CreateMarkerAsync(topicId, boardId, UnreadEntryType.Message), Times.Once);
-        _unreadCountersRepository.Verify(
-            r => r.DeleteAsync(topicId, UnreadEntryType.Message), Times.Once);
+        await _unreadCountersRepository.Received(1).CreateMarkerAsync(topicId, boardId, UnreadEntryType.Message);
+        await _unreadCountersRepository.Received(1).DeleteAsync(topicId, UnreadEntryType.Message);
     }
 
     [Fact]
@@ -191,23 +194,21 @@ public class TopicServiceShould : UnitTestBase
         var boardId = Guid.NewGuid();
         var topicId = Guid.NewGuid();
         var board = new Board { Id = boardId, Title = "General" };
-        _boardService.Setup(s => s.GetBoard("General", true)).ReturnsAsync(board);
-        _createTopicSetup.ReturnsAsync(new Topic { Id = topicId });
+        _boardService.GetBoard("General", true).Returns(board);
+        CreateReturns(new Topic { Id = topicId });
 
         var createTopic = new CreateTopic { BoardTitle = "General", Title = "Test Topic", Text = "Test" };
         await _service.CreateAsync(createTopic);
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.NewTopic, topicId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.NewTopic, topicId);
     }
 
     [Fact]
     public async Task ThrowNotFoundWhenTopicNeverExisted()
     {
         var topicId = Guid.NewGuid();
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Topic)null!);
-        _repository.Setup(r => r.Exists(topicId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns((Topic)null!);
+        _repository.Exists(topicId, Arg.Any<CancellationToken>()).Returns(false);
 
         var act = async () => await _service.GetAsync(topicId);
 
@@ -220,10 +221,8 @@ public class TopicServiceShould : UnitTestBase
     public async Task ThrowGoneWhenTopicWasRemoved()
     {
         var topicId = Guid.NewGuid();
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Topic)null!);
-        _repository.Setup(r => r.Exists(topicId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns((Topic)null!);
+        _repository.Exists(topicId, Arg.Any<CancellationToken>()).Returns(true);
 
         var act = async () => await _service.GetAsync(topicId);
 
@@ -240,15 +239,13 @@ public class TopicServiceShould : UnitTestBase
             Id = topicId,
             Board = new Board { Id = Guid.NewGuid(), Title = "General" }
         };
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(new TopicUpdateResult(topic, true));
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>()).Returns(new TopicUpdateResult(topic, true));
 
         var updateTopic = new UpdateTopic { TopicId = topicId, Title = "Updated Title" };
         await _service.UpdateAsync(updateTopic);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(TopicIntention.Edit, topic), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(TopicIntention.Edit, topic);
     }
 
     [Fact]
@@ -260,15 +257,13 @@ public class TopicServiceShould : UnitTestBase
             Id = topicId,
             Board = new Board { Id = Guid.NewGuid(), Title = "General" }
         };
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(new TopicUpdateResult(topic, true));
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>()).Returns(new TopicUpdateResult(topic, true));
 
         var updateTopic = new UpdateTopic { TopicId = topicId, Title = "Updated Title" };
         await _service.UpdateAsync(updateTopic);
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.ChangedTopic, topicId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.ChangedTopic, topicId);
     }
 
     /// <summary>
@@ -292,15 +287,13 @@ public class TopicServiceShould : UnitTestBase
             Id = topicId,
             Board = new Board { Id = Guid.NewGuid(), Title = "General" }
         };
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(new TopicUpdateResult(topic, false));
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>()).Returns(new TopicUpdateResult(topic, false));
 
         var result = await _service.UpdateAsync(new UpdateTopic { TopicId = topicId, Title = "Same Title" });
 
         result.Should().BeSameAs(topic, "the request is answered either way — it is not an error");
-        _eventProducer.Verify(p => p.SendAsync(EventType.ChangedTopic, It.IsAny<Guid>()), Times.Never);
+        await _eventProducer.DidNotReceive().SendAsync(EventType.ChangedTopic, Arg.Any<Guid>());
     }
 
     /// <summary>
@@ -327,12 +320,15 @@ public class TopicServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = authorId },
             Board = new Board { Id = Guid.NewGuid(), Title = "General" }
         };
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
         UpdateTopicEntity? passed = null;
-        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .Callback((UpdateTopicEntity entity, Guid? _) => passed = entity)
-            .ReturnsAsync(new TopicUpdateResult(topic, true));
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>())
+            .Returns(new TopicUpdateResult(topic, true))
+            .AndDoes(ci =>
+            {
+                var entity = ci.ArgAt<UpdateTopicEntity>(0);
+                passed = entity;
+            });
 
         await _service.UpdateAsync(new UpdateTopic { TopicId = topicId, Title = "Updated Title" });
 
@@ -353,22 +349,17 @@ public class TopicServiceShould : UnitTestBase
         var newBoard = new Board { Id = newBoardId, Title = "NewBoard" };
         var topic = new Topic { Id = topicId, Board = oldBoard };
 
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), newBoardId))
-            .ReturnsAsync(new TopicUpdateResult(topic, true));
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), newBoardId).Returns(new TopicUpdateResult(topic, true));
 
-        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, oldBoard))
-            .Returns(true);
-        _boardService.Setup(s => s.GetBoard("NewBoard", false)).ReturnsAsync(newBoard);
+        _intentionManager.IsAllowed(ForumIntention.AdministrateTopics, oldBoard).Returns(true);
+        _boardService.GetBoard("NewBoard", false).Returns(newBoard);
 
         var updateTopic = new UpdateTopic { TopicId = topicId, BoardTitle = "NewBoard" };
         await _service.UpdateAsync(updateTopic);
 
-        _unreadCountersRepository.Verify(
-            r => r.ChangeParentAsync(oldBoardId, UnreadEntryType.Message, newBoardId),
-            Times.Once);
-        _repository.Verify(r => r.Update(It.IsAny<UpdateTopicEntity>(), newBoardId), Times.Once);
+        await _unreadCountersRepository.Received(1).ChangeParentAsync(oldBoardId, UnreadEntryType.Message, newBoardId);
+        await _repository.Received(1).Update(Arg.Any<UpdateTopicEntity>(), newBoardId);
     }
 
     [Fact]
@@ -380,15 +371,12 @@ public class TopicServiceShould : UnitTestBase
             Id = topicId,
             Board = new Board { Id = Guid.NewGuid(), Title = "General" }
         };
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
-        _repository.Setup(r => r.Delete(topicId, _currentUserId)).Returns(Task.CompletedTask);
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Delete(topicId, _currentUserId).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(topicId);
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, topic.Board),
-            Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(ForumIntention.AdministrateTopics, topic.Board);
     }
 
     [Fact]
@@ -400,19 +388,16 @@ public class TopicServiceShould : UnitTestBase
             Id = topicId,
             Board = new Board { Id = Guid.NewGuid(), Title = "General" }
         };
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
-        _repository.Setup(r => r.Delete(topicId, _currentUserId)).Returns(Task.CompletedTask);
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Delete(topicId, _currentUserId).Returns(Task.CompletedTask);
 
         await _service.DeleteAsync(topicId);
 
         // The author of the removal travels with it: ISoftDeletable promises who deleted the
         // row, and the column stays empty unless the service hands the identity over.
-        _repository.Verify(r => r.Delete(topicId, _currentUserId), Times.Once);
-        _unreadCountersRepository.Verify(
-            r => r.DeleteAsync(topicId, UnreadEntryType.Message),
-            Times.Once);
-        _eventProducer.Verify(p => p.SendAsync(EventType.DeletedTopic, topicId), Times.Once);
+        await _repository.Received(1).Delete(topicId, _currentUserId);
+        await _unreadCountersRepository.Received(1).DeleteAsync(topicId, UnreadEntryType.Message);
+        await _eventProducer.Received(1).SendAsync(EventType.DeletedTopic, topicId);
     }
 
     /// <summary>
@@ -430,15 +415,12 @@ public class TopicServiceShould : UnitTestBase
         var board = new Board { Id = Guid.NewGuid(), Title = "General" };
         var topic = new Topic { Id = topicId, Board = board, IsClosed = false, IsAttached = false };
 
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(new TopicUpdateResult(topic, true));
-        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
-            .Returns(false);
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>()).Returns(new TopicUpdateResult(topic, true));
+        _intentionManager.IsAllowed(ForumIntention.AdministrateTopics, board).Returns(false);
         _intentionManager
-            .Setup(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board))
-            .Throws(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
+            .When(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board))
+            .Throw(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
 
         var act = () => _service.UpdateAsync(new UpdateTopic
         {
@@ -448,8 +430,8 @@ public class TopicServiceShould : UnitTestBase
         });
 
         await act.Should().ThrowAsync<HttpException>();
-        _repository.Verify(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()), Times.Never,
-            "a refused change writes nothing");
+        // A refused change writes nothing.
+        await _repository.DidNotReceive().Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>());
     }
 
     /// <summary>
@@ -463,12 +445,9 @@ public class TopicServiceShould : UnitTestBase
         var board = new Board { Id = Guid.NewGuid(), Title = "General" };
         var topic = new Topic { Id = topicId, Board = board, IsClosed = true, IsAttached = false };
 
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(new TopicUpdateResult(topic, true));
-        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
-            .Returns(false);
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>()).Returns(new TopicUpdateResult(topic, true));
+        _intentionManager.IsAllowed(ForumIntention.AdministrateTopics, board).Returns(false);
 
         await _service.UpdateAsync(new UpdateTopic
         {
@@ -477,8 +456,7 @@ public class TopicServiceShould : UnitTestBase
             IsAttached = false
         });
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board), Times.Never);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(ForumIntention.AdministrateTopics, board);
     }
 
     /// <summary>
@@ -497,15 +475,12 @@ public class TopicServiceShould : UnitTestBase
         var board = new Board { Id = Guid.NewGuid(), Title = "General" };
         var topic = new Topic { Id = topicId, Board = board, IsClosed = false, IsAttached = false };
 
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(new TopicUpdateResult(topic, true));
-        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
-            .Returns(false);
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>()).Returns(new TopicUpdateResult(topic, true));
+        _intentionManager.IsAllowed(ForumIntention.AdministrateTopics, board).Returns(false);
         _intentionManager
-            .Setup(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board))
-            .Throws(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
+            .When(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board))
+            .Throw(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
 
         var act = () => _service.UpdateAsync(new UpdateTopic
         {
@@ -514,8 +489,8 @@ public class TopicServiceShould : UnitTestBase
         });
 
         await act.Should().ThrowAsync<HttpException>();
-        _repository.Verify(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()), Times.Never,
-            "a refused move writes nothing");
+        // A refused move writes nothing.
+        await _repository.DidNotReceive().Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>());
     }
 
     /// <summary>
@@ -529,12 +504,9 @@ public class TopicServiceShould : UnitTestBase
         var board = new Board { Id = Guid.NewGuid(), Title = "General" };
         var topic = new Topic { Id = topicId, Board = board, IsClosed = false, IsAttached = false };
 
-        _repository.Setup(r => r.Get(topicId, It.IsAny<BoardAccessPolicy>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(topic);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateTopicEntity>(), It.IsAny<Guid?>()))
-            .ReturnsAsync(new TopicUpdateResult(topic, true));
-        _intentionManager.Setup(m => m.IsAllowed(ForumIntention.AdministrateTopics, board))
-            .Returns(false);
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>()).Returns(new TopicUpdateResult(topic, true));
+        _intentionManager.IsAllowed(ForumIntention.AdministrateTopics, board).Returns(false);
 
         await _service.UpdateAsync(new UpdateTopic
         {
@@ -542,8 +514,7 @@ public class TopicServiceShould : UnitTestBase
             BoardTitle = board.Title
         });
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board), Times.Never);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(ForumIntention.AdministrateTopics, board);
     }
 
     /// <summary>
@@ -556,18 +527,16 @@ public class TopicServiceShould : UnitTestBase
         var board = new Board { Id = Guid.NewGuid(), Title = "General" };
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
-        _boardService.Setup(s => s.GetBoard("General", true)).ReturnsAsync(board);
-        _repository.Setup(r => r.GetAttachedTopicIds(board.Id, default))
-            .ReturnsAsync(new[] { first, second });
+        _boardService.GetBoard("General", true).Returns(board);
+        _repository.GetAttachedTopicIds(board.Id, default).Returns(new[] { first, second });
 
         var order = new[] { second, first };
         await _service.ReorderPinnedAsync("General", order);
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board), Times.Once);
-        _repository.Verify(r => r.ReplaceAttachOrder(board.Id, order, default), Times.Once,
-            "the board travels with the order: keyed by topic id alone, the write would " +
-            "renumber the pinned topics of whatever board the body named");
+        _intentionManager.Received(1).ThrowIfForbidden(ForumIntention.AdministrateTopics, board);
+        // The board travels with the order: keyed by topic id alone, the write would
+        // renumber the pinned topics of whatever board the body named.
+        await _repository.Received(1).ReplaceAttachOrder(board.Id, order, default);
     }
 
     /// <summary>
@@ -581,17 +550,16 @@ public class TopicServiceShould : UnitTestBase
         var board = new Board { Id = Guid.NewGuid(), Title = "General" };
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
-        _boardService.Setup(s => s.GetBoard("General", true)).ReturnsAsync(board);
-        _repository.Setup(r => r.GetAttachedTopicIds(board.Id, default))
-            .ReturnsAsync(new[] { first, second });
+        _boardService.GetBoard("General", true).Returns(board);
+        _repository.GetAttachedTopicIds(board.Id, default).Returns(new[] { first, second });
 
         var act = () => _service.ReorderPinnedAsync("General", new[] { second });
 
         var refusal = await act.Should().ThrowAsync<HttpBadRequestException>();
         refusal.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        _repository.Verify(
-            r => r.ReplaceAttachOrder(It.IsAny<Guid>(), It.IsAny<IReadOnlyList<Guid>>(), default),
-            Times.Never, "a refused order writes nothing");
+        // A refused order writes nothing.
+        await _repository.DidNotReceive().ReplaceAttachOrder(
+            Arg.Any<Guid>(), Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -604,15 +572,13 @@ public class TopicServiceShould : UnitTestBase
         var board = new Board { Id = Guid.NewGuid(), Title = "General" };
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
-        _boardService.Setup(s => s.GetBoard("General", true)).ReturnsAsync(board);
-        _repository.Setup(r => r.GetAttachedTopicIds(board.Id, default))
-            .ReturnsAsync(new[] { first, second });
+        _boardService.GetBoard("General", true).Returns(board);
+        _repository.GetAttachedTopicIds(board.Id, default).Returns(new[] { first, second });
 
         var act = () => _service.ReorderPinnedAsync("General", new[] { first, first });
 
         await act.Should().ThrowAsync<HttpBadRequestException>();
-        _repository.Verify(
-            r => r.ReplaceAttachOrder(It.IsAny<Guid>(), It.IsAny<IReadOnlyList<Guid>>(), default),
-            Times.Never);
+        await _repository.DidNotReceive().ReplaceAttachOrder(
+            Arg.Any<Guid>(), Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>());
     }
 }

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -13,12 +13,12 @@ namespace DM.Architecture.Tests;
 /// </summary>
 /// <remarks>
 /// Everything the request holds is scoped to the request: the database context,
-/// the identity, and — the one that bites — the mail sender, which takes an AMQP
-/// channel out of the pool and gives it back in Dispose. A task handed off with
+/// the identity, and — the one that bites — the mail sender, which opens an AMQP
+/// channel on its first send and closes it in Dispose. A task handed off with
 /// no one waiting for it outlives that scope with nothing ordering the two, so
 /// the losing side of the race publishes through a disposed sender. Either it
-/// throws where nobody is listening, or it sends Jamq to retake a channel that
-/// nobody is left to return — the pool exhaustion that
+/// throws where nobody is listening, or it reopens a channel that nobody is
+/// left to close — the channel leak that
 /// <see cref="MessageProducerOwnershipShould"/> exists to prevent, arriving by a
 /// different door.
 ///

@@ -3,8 +3,8 @@ using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Account.Features.Security;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Authentication;
@@ -30,13 +30,13 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
     private const string NewAddress = "198.51.100.9";
 
     private readonly Guid _userId = Guid.NewGuid();
-    private readonly Mock<ISecurityAuditRepository> _auditService;
+    private readonly ISecurityAuditRepository _auditService;
     private readonly SuspiciousLoginDetector _detector;
 
     public SuspiciousLoginDetectorShould()
     {
         _auditService = Mock<ISecurityAuditRepository>();
-        _detector = new SuspiciousLoginDetector(_auditService.Object);
+        _detector = new SuspiciousLoginDetector(_auditService);
     }
 
     [Fact]
@@ -105,10 +105,10 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
         var suspicious = await _detector.IsSuspiciousAsync(_userId, NewAddress, "agent");
 
         suspicious.Should().BeTrue("the guessing did not make the new address the owner's");
-        _auditService.Verify(
-            s => s.GetByTypesAsync(It.IsAny<Guid>(), SecurityEventCategories.Login, It.IsAny<int>()),
-            Times.Never,
-            "the mixed trail spends the window on entries this cannot use");
+        // The mixed trail spends the window on entries this cannot use, so there is
+        // no second look for more of them.
+        await _auditService.DidNotReceive().GetByTypesAsync(
+            Arg.Any<Guid>(), SecurityEventCategories.Login, Arg.Any<int>());
     }
 
     [Fact]
@@ -123,9 +123,8 @@ public class SuspiciousLoginDetectorShould : UnitTestBase
 
     /// <param name="newestFirst">The trail as the repository returns it</param>
     private void Trail(params SecurityAuditEntry[] newestFirst) =>
-        _auditService.Setup(s => s.GetByTypesAsync(
-                _userId, SecurityEventCategories.SuccessfulLogins, It.IsAny<int>()))
-            .ReturnsAsync(newestFirst);
+        _auditService.GetByTypesAsync(
+                _userId, SecurityEventCategories.SuccessfulLogins, Arg.Any<int>()).Returns(newestFirst);
 
     private static SecurityAuditEntry Entry(SecurityEventType type, string address) =>
         new() { EventType = type, IpAddress = address };

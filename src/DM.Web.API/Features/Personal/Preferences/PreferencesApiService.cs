@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.Profiles;
 using ServiceUserSettings = DM.Domain.Core.Identity.UserSettings;
@@ -14,13 +13,13 @@ internal class PreferencesApiService : IPreferencesApiService
 {
     private readonly IUserService _userService;
     private readonly IIdentityProvider _identityProvider;
-    private readonly IMapper _mapper;
+    private readonly PreferencesMapper _mapper;
 
     /// <inheritdoc />
     public PreferencesApiService(
         IUserService userService,
         IIdentityProvider identityProvider,
-        IMapper mapper)
+        PreferencesMapper mapper)
     {
         _userService = userService;
         _identityProvider = identityProvider;
@@ -34,7 +33,7 @@ internal class PreferencesApiService : IPreferencesApiService
         var user = await _userService.GetDetailsAsync(currentUser.Username);
 
         var preferences = user.Settings != null
-            ? _mapper.Map<Preferences>(user.Settings)
+            ? _mapper.ToPreferences(user.Settings)
             : new Preferences { Theme = Theme.Light, Paging = new Paging() };
 
         return preferences;
@@ -65,10 +64,10 @@ internal class PreferencesApiService : IPreferencesApiService
         var updateUser = new UpdateUser
         {
             Username = currentUser.Username,
-            Settings = _mapper.Map<ServiceUserSettings>(merged)
+            Settings = _mapper.ToUserSettings(merged)
         };
 
         var updatedUser = await _userService.UpdateAsync(updateUser);
-        return _mapper.Map<Preferences>(updatedUser.Settings);
+        return _mapper.ToPreferences(updatedUser.Settings);
     }
 }

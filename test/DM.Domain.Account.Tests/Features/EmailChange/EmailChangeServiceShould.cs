@@ -14,26 +14,27 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.EmailChange;
 
 public class EmailChangeServiceShould : UnitTestBase
 {
-    private readonly Mock<IValidator<UserEmailChange>> _validator;
-    private readonly Mock<ITokenFactory> _tokenFactory;
-    private readonly Mock<IEmailChangeRepository> _repository;
-    private readonly Mock<IEmailChangeConfirmationRepository> _confirmationRepository;
-    private readonly Mock<IEmailChangeMailSender> _mailSender;
-    private readonly Mock<IEmailChangeWarningMailSender> _warningMailSender;
-    private readonly Mock<IEventProducer> _eventProducer;
-    private readonly Mock<ISecurityAuditRepository> _auditService;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IValidator<UserEmailChange> _validator;
+    private readonly ITokenFactory _tokenFactory;
+    private readonly IEmailChangeRepository _repository;
+    private readonly IEmailChangeConfirmationRepository _confirmationRepository;
+    private readonly IEmailChangeMailSender _mailSender;
+    private readonly IEmailChangeWarningMailSender _warningMailSender;
+    private readonly IEventProducer _eventProducer;
+    private readonly ISecurityAuditRepository _auditService;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly EmailChangeService _service;
 
     public EmailChangeServiceShould()
@@ -52,23 +53,22 @@ public class EmailChangeServiceShould : UnitTestBase
             EmailChangeTokenLifetimeHours = 24
         });
 
-        _validator.Setup(v => v.ValidateAsync(
-                It.IsAny<ValidationContext<UserEmailChange>>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _validator.ValidateAsync(
+                Arg.Any<ValidationContext<UserEmailChange>>(),
+                Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _service = new EmailChangeService(
-            _validator.Object,
-            _tokenFactory.Object,
-            _repository.Object,
-            _confirmationRepository.Object,
-            _mailSender.Object,
-            _warningMailSender.Object,
-            _eventProducer.Object,
-            _auditService.Object,
-            _dateTimeProvider.Object,
+            _validator,
+            _tokenFactory,
+            _repository,
+            _confirmationRepository,
+            _mailSender,
+            _warningMailSender,
+            _eventProducer,
+            _auditService,
+            _dateTimeProvider,
             config);
     }
 
@@ -81,7 +81,7 @@ public class EmailChangeServiceShould : UnitTestBase
             Email = "new@example.com"
         };
 
-        _repository.Setup(r => r.FindUser(emailChange.Username)).ReturnsAsync((AuthenticatedUser?)null);
+        _repository.FindUser(emailChange.Username).Returns((AuthenticatedUser?)null);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.Change(emailChange));
@@ -116,19 +116,20 @@ public class EmailChangeServiceShould : UnitTestBase
             Type = TokenType.EmailChange
         };
 
-        _repository.Setup(r => r.FindUser(emailChange.Username)).ReturnsAsync(user);
-        _tokenFactory.Setup(f => f.Create(userId, TokenType.EmailChange)).Returns(token);
+        _repository.FindUser(emailChange.Username).Returns(user);
+        _tokenFactory.Create(userId, TokenType.EmailChange).Returns(token);
 
         var result = await _service.Change(emailChange);
 
         result.UserId.Should().Be(userId);
         result.Username.Should().Be("testuser");
-        _repository.Verify(r => r.InvalidateOldEmailChangeTokens(userId), Times.Once);
-        _repository.Verify(r => r.RequestChange(userId, emailChange.Email, token), Times.Once,
-                        "запрос кладет адрес в ожидание: аккаунт отвечает по старому, пока ссылка не открыта");
-        _mailSender.Verify(m => m.Send(emailChange.Email, emailChange.Username, secret), Times.Once);
-        _mailSender.Verify(m => m.Send(emailChange.Email, emailChange.Username, tokenId), Times.Never);
-        _eventProducer.Verify(e => e.SendAsync(EventType.EmailChanged, userId), Times.Once);
+        await _repository.Received(1).InvalidateOldEmailChangeTokens(userId);
+        // The request puts the address in waiting: the account keeps answering by the
+        // old one until the link is opened.
+        await _repository.Received(1).RequestChange(userId, emailChange.Email, token);
+        await _mailSender.Received(1).Send(emailChange.Email, emailChange.Username, secret);
+        await _mailSender.DidNotReceive().Send(emailChange.Email, emailChange.Username, tokenId);
+        await _eventProducer.Received(1).SendAsync(EventType.EmailChanged, userId);
     }
 
     [Fact]
@@ -158,12 +159,12 @@ public class EmailChangeServiceShould : UnitTestBase
             Type = TokenType.EmailChange
         };
 
-        _repository.Setup(r => r.FindUser(emailChange.Username)).ReturnsAsync(user);
-        _tokenFactory.Setup(f => f.Create(userId, TokenType.EmailChange)).Returns(token);
+        _repository.FindUser(emailChange.Username).Returns(user);
+        _tokenFactory.Create(userId, TokenType.EmailChange).Returns(token);
 
         await _service.Change(emailChange);
 
-        _warningMailSender.Verify(w => w.SendAsync(user.Email!, emailChange.Username, emailChange.Email), Times.Once);
+        await _warningMailSender.Received(1).SendAsync(user.Email!, emailChange.Username, emailChange.Email);
     }
 
     [Fact]
@@ -171,15 +172,14 @@ public class EmailChangeServiceShould : UnitTestBase
     {
         var tokenId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
-        _confirmationRepository.Setup(r => r.FindEmailChangeTokenOwner(tokenId, It.IsAny<DateTimeOffset>()))
-            .ReturnsAsync(ownerId);
-        _repository.Setup(r => r.ApplyPendingEmail(ownerId)).ReturnsAsync(true);
+        _confirmationRepository.FindEmailChangeTokenOwner(tokenId, Arg.Any<DateTimeOffset>()).Returns(ownerId);
+        _repository.ApplyPendingEmail(ownerId).Returns(true);
 
         await _service.Confirm(tokenId);
 
-        _repository.Verify(r => r.ApplyPendingEmail(ownerId), Times.Once,
-            "подтверждение и есть тот момент, когда адрес меняется");
-        _confirmationRepository.Verify(r => r.MarkTokenUsed(tokenId), Times.Once);
+        // Confirmation is the moment the address changes.
+        await _repository.Received(1).ApplyPendingEmail(ownerId);
+        await _confirmationRepository.Received(1).MarkTokenUsed(tokenId);
     }
 
     [Fact]
@@ -190,23 +190,21 @@ public class EmailChangeServiceShould : UnitTestBase
         // to confirm.
         var tokenId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
-        _confirmationRepository.Setup(r => r.FindEmailChangeTokenOwner(tokenId, It.IsAny<DateTimeOffset>()))
-            .ReturnsAsync(ownerId);
-        _repository.Setup(r => r.ApplyPendingEmail(ownerId)).ReturnsAsync(false);
+        _confirmationRepository.FindEmailChangeTokenOwner(tokenId, Arg.Any<DateTimeOffset>()).Returns(ownerId);
+        _repository.ApplyPendingEmail(ownerId).Returns(false);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.Confirm(tokenId));
 
         exception.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        _confirmationRepository.Verify(r => r.MarkTokenUsed(It.IsAny<Guid>()), Times.Never);
+        await _confirmationRepository.DidNotReceive().MarkTokenUsed(Arg.Any<Guid>());
     }
 
     [Fact]
     public async Task ThrowWhenConfirmingInvalidToken()
     {
         var tokenId = Guid.NewGuid();
-        _confirmationRepository.Setup(r => r.FindEmailChangeTokenOwner(tokenId, It.IsAny<DateTimeOffset>()))
-            .ReturnsAsync((Guid?)null);
+        _confirmationRepository.FindEmailChangeTokenOwner(tokenId, Arg.Any<DateTimeOffset>()).Returns((Guid?)null);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.Confirm(tokenId));

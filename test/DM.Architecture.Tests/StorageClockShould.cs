@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -19,7 +19,7 @@ namespace DM.Architecture.Tests;
 /// the same file, so one class carried two different answers to what "now" means.
 ///
 /// Read out of the sources rather than measured, for the same reason SeedDeterminismShould is:
-/// the property belongs to the code, while measuring it would need PostgreSQL and MongoDB up.
+/// the property belongs to the code, while measuring it would need PostgreSQL up.
 /// Comments are stripped first, so the paragraph explaining why a call is absent does not
 /// count as the call.
 /// </remarks>

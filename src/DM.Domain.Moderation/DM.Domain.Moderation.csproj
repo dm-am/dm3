@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
     </PropertyGroup>
 
     <ItemGroup>
@@ -13,10 +13,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- Autofac only for the module that declares this assembly's lifetimes. No
-             options packages: this assembly reads no configuration and ships no
+        <!-- No options packages: this assembly reads no configuration and ships no
              configuration extension, which is what the account domain has them for. -->
-        <PackageReference Include="Autofac" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
         <PackageReference Include="FluentValidation" />
     </ItemGroup>
 </Project>

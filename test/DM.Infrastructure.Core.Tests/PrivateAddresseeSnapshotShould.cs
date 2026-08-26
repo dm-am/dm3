@@ -1,9 +1,12 @@
 using System;
+using System.Text.Json;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Infrastructure.Core.Parsing;
-using FluentAssertions;
+using DM.Testing.Dsl;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
@@ -30,12 +33,42 @@ public class PrivateAddresseeSnapshotShould
     private static readonly Guid BorisOwner = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid Stranger = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
+    private static readonly Guid AnnaCharacter = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000001");
+    private static readonly Guid BorisCharacter = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000002");
+
     /// <summary>Characters with access to the room the post goes into.</summary>
     private static readonly PrivateAddressee[] Roster =
     {
-        new("Анна", AnnaOwner),
-        new("Борис", BorisOwner)
+        new(AnnaCharacter, "Анна", AnnaOwner),
+        new(BorisCharacter, "Борис", BorisOwner)
     };
+
+    /// <summary>
+    /// The room as it stood when the post was written: Anna's character is
+    /// called "Чак".
+    /// </summary>
+    private static readonly PrivateAddressee[] RosterBeforeTheRenames =
+    {
+        new(AnnaCharacter, "Чак", AnnaOwner)
+    };
+
+    /// <summary>
+    /// The same room after two renames: Anna's character is now "Владимир", and
+    /// the name it gave up has been taken by a character of Boris's.
+    /// </summary>
+    private static readonly PrivateAddressee[] RosterAfterTheRenames =
+    {
+        new(AnnaCharacter, "Владимир", AnnaOwner),
+        new(BorisCharacter, "Чак", BorisOwner)
+    };
+
+    /// <summary>The same room, after only the first of those renames.</summary>
+    private static readonly PrivateAddressee[] RosterAfterTheFirstRename =
+    {
+        new(AnnaCharacter, "Владимир", AnnaOwner)
+    };
+
+    private const string AddressedToChuck = "[private=Чак]секрет[/private]";
 
     /// <summary>
     /// Every spelling a client can produce, including the one-sided quote that
@@ -136,6 +169,157 @@ public class PrivateAddresseeSnapshotShould
         PrivateAddresseeSnapshot.Parse(rebuilt).Should().NotContainKey("Анна");
     }
 
+    /// <summary>
+    /// A name is not an identity. Written into a post it points at whoever
+    /// carries it that day, and the post keeps the answer forever - so the same
+    /// key can mean one character in the block it was frozen for and another in
+    /// a block written later, and no block says which save wrote it.
+    /// </summary>
+    /// <remarks>
+    /// Nothing leaks either way: both characters read the room. What breaks is
+    /// delivery - the secret goes to the player the author did not name and
+    /// misses the one they did - so the doubt is put to the author instead of
+    /// being guessed at.
+    /// </remarks>
+    [Fact]
+    public void RefuseASaveWhenTheNameNowBelongsToAnotherCharacter()
+    {
+        var frozen = PrivateAddresseeSnapshot.Build(AddressedToChuck, RosterBeforeTheRenames);
+
+        var act = () => PrivateAddresseeSnapshot.Build(
+            AddressedToChuck, frozen, RosterAfterTheRenames);
+
+        act.Should().Throw<HttpException>()
+            .WithMessage(PrivateAddresseeSnapshot.DescribeRenameRefusal("Чак"));
+    }
+
+    /// <summary>
+    /// Not a refusal: the name still points at the character it was frozen to,
+    /// so nothing is in doubt and the frozen answer stands.
+    /// </summary>
+    [Fact]
+    public void KeepTheFrozenAddresseeWhenTheNameStillMeansTheSameCharacter()
+    {
+        var frozen = PrivateAddresseeSnapshot.Build(AddressedToChuck, RosterBeforeTheRenames);
+
+        var rebuilt = PrivateAddresseeSnapshot.Build(
+            AddressedToChuck, frozen, RosterBeforeTheRenames);
+
+        rebuilt.Should().Be(frozen);
+        Render(AddressedToChuck, rebuilt, AnnaOwner).Should().Contain("секрет");
+    }
+
+    /// <summary>
+    /// Not a refusal: the name means nobody today, which is the ordinary shape
+    /// of addressee-forever. The reader it was frozen to keeps the block.
+    /// </summary>
+    [Fact]
+    public void KeepTheFrozenAddresseeWhenTheNameMeansNobodyToday()
+    {
+        var frozen = PrivateAddresseeSnapshot.Build(AddressedToChuck, RosterBeforeTheRenames);
+
+        var rebuilt = PrivateAddresseeSnapshot.Build(
+            AddressedToChuck, frozen, RosterAfterTheFirstRename);
+
+        Render(AddressedToChuck, rebuilt, AnnaOwner).Should().Contain("секрет");
+        Render(AddressedToChuck, rebuilt, BorisOwner).Should().NotContain("секрет");
+    }
+
+    /// <summary>
+    /// Not a refusal: the author rewrote the tag with the addressee's current
+    /// name. That is a key the post has never seen, it resolves against today's
+    /// roster, and it lands on the same reader.
+    /// </summary>
+    [Fact]
+    public void ResolveTheCurrentNameOfTheSameCharacterAsANewKey()
+    {
+        var frozen = PrivateAddresseeSnapshot.Build(AddressedToChuck, RosterBeforeTheRenames);
+        const string renamed = "[private=Владимир]секрет[/private]";
+
+        var rebuilt = PrivateAddresseeSnapshot.Build(renamed, frozen, RosterAfterTheRenames);
+
+        PrivateAddresseeSnapshot.Parse(rebuilt).Should().ContainKey("Владимир")
+            .WhoseValue.Should().BeEquivalentTo(new[] { AnnaOwner });
+        Render(renamed, rebuilt, AnnaOwner).Should().Contain("секрет");
+        Render(renamed, rebuilt, BorisOwner).Should().NotContain("секрет");
+    }
+
+    /// <summary>
+    /// Rows written before the character was recorded are in the database. They
+    /// still read, they still deliver, and they raise no refusal: the post
+    /// cannot say which character the name was frozen to, and unknown is not a
+    /// mismatch.
+    /// </summary>
+    [Fact]
+    public void ReadASnapshotWrittenBeforeTheCharacterWasRecorded()
+    {
+        var legacy = "{\"Чак\":[\"" + AnnaOwner + "\"]}";
+
+        PrivateAddresseeSnapshot.Parse(legacy).Should().ContainKey("Чак")
+            .WhoseValue.Should().BeEquivalentTo(new[] { AnnaOwner });
+        Render(AddressedToChuck, legacy, AnnaOwner).Should().Contain("секрет");
+
+        var rebuilt = PrivateAddresseeSnapshot.Build(
+            AddressedToChuck, legacy, RosterAfterTheRenames);
+
+        PrivateAddresseeSnapshot.Parse(rebuilt).Should().ContainKey("Чак")
+            .WhoseValue.Should().BeEquivalentTo(new[] { AnnaOwner });
+        // Nobody is named, so the line falls back to the author's own text -
+        // exactly what it printed before the snapshot recorded any name.
+        Render(AddressedToChuck, rebuilt, AnnaOwner).Should().Contain("Получатели: Чак");
+    }
+
+    /// <summary>
+    /// The recipients line is the reader's only statement of who else is in on
+    /// the block. Built from the tag text it names whoever the author typed,
+    /// including names that reached nobody.
+    /// </summary>
+    [Fact]
+    public void NameOnlyTheResolvedAddresseesInTheRecipientsLine()
+    {
+        const string text = "[private=\"Анна, Виктор\"]секрет[/private]";
+        var snapshot = PrivateAddresseeSnapshot.Build(text, Roster);
+
+        var html = Render(text, snapshot, AnnaOwner);
+
+        html.Should().Contain("Получатели: Анна");
+        html.Should().NotContain("Виктор");
+    }
+
+    /// <summary>
+    /// After a rename the line names the addressee as they are called now, while
+    /// the tag keeps the name the author typed: the text is theirs, the line is
+    /// the reader's.
+    /// </summary>
+    [Fact]
+    public void NameTheAddresseeAsTheyAreCalledNowInTheRecipientsLine()
+    {
+        var frozen = PrivateAddresseeSnapshot.Build(AddressedToChuck, RosterBeforeTheRenames);
+
+        var rebuilt = PrivateAddresseeSnapshot.Build(
+            AddressedToChuck, frozen, RosterAfterTheFirstRename);
+
+        Render(AddressedToChuck, rebuilt, AnnaOwner).Should().Contain("Получатели: Владимир");
+        RenderForAuthorEdit(AddressedToChuck).Should().Contain("data-bb-addressees=\"Чак\"");
+    }
+
+    /// <summary>
+    /// The stored shape is a contract with rows nobody is going to rewrite, so
+    /// it is pinned here rather than left to whatever the writer happens to
+    /// emit.
+    /// </summary>
+    [Fact]
+    public void RecordTheCharacterBesideItsOwner()
+    {
+        var snapshot = PrivateAddresseeSnapshot.Build(AddressedToChuck, RosterBeforeTheRenames);
+
+        using var document = JsonDocument.Parse(snapshot);
+        var entry = document.RootElement.GetProperty("Чак")[0];
+        entry.GetProperty("character").GetGuid().Should().Be(AnnaCharacter);
+        entry.GetProperty("name").GetString().Should().Be("Чак");
+        entry.GetProperty("owner").GetGuid().Should().Be(AnnaOwner);
+    }
+
     [Fact]
     public void ReadBackNothingFromAMalformedSnapshot()
     {
@@ -148,6 +332,7 @@ public class PrivateAddresseeSnapshotShould
 
     private string Render(string text, string snapshotJson, Guid viewerId)
     {
+        var snapshot = PrivateAddresseeSnapshot.Read(snapshotJson);
         var ctx = new RenderContext
         {
             Audience = RenderAudience.Display,
@@ -160,18 +345,27 @@ public class PrivateAddresseeSnapshotShould
                 AccessPolicy = AccessPolicy.NotSpecified
             },
             PostAuthorUserId = AuthorId,
-            PrivateAddresseeOwnerUserIdsByAttribute = PrivateAddresseeSnapshot.Parse(snapshotJson)
+            PrivateAddresseeOwnerUserIdsByAttribute = snapshot.OwnerUserIdsByAttribute,
+            PrivateAddresseeNamesByAttribute = snapshot.AddresseeNamesByAttribute
         };
 
         var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
         return wrapper.RenderHtml(text, ctx);
     }
 
-    private sealed class TestSubject : IAuthorizationSubject
+    /// <summary>The text as its own author gets it back into the composer.</summary>
+    private string RenderForAuthorEdit(string text)
     {
-        public Guid UserId { get; init; }
-        public UserRole Role { get; init; }
-        public bool IsAuthenticated { get; init; }
-        public AccessPolicy AccessPolicy { get; init; }
+        var author = new TestSubject
+        {
+            UserId = AuthorId,
+            Role = UserRole.RegularUser,
+            IsAuthenticated = true,
+            AccessPolicy = AccessPolicy.NotSpecified
+        };
+
+        var wrapper = (BbParserWrapper)_parserProvider.GetForAuthorEdit(BbSurface.GamePost);
+        return wrapper.RenderHtml(text, RenderContext.ForAuthorEdit(author, BbSurface.GamePost));
     }
+
 }

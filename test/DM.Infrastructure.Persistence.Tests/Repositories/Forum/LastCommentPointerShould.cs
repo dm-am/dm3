@@ -7,7 +7,7 @@ using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence.Repositories.Blog;
 using DM.Infrastructure.Persistence.Repositories.Forum;
 using DM.Infrastructure.Persistence.Repositories.Game;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
@@ -120,16 +120,16 @@ public class LastCommentPointerShould
     });
 
     private static TopicCommentRepository Topics(DmDbContext context) =>
-        new(context, null!, null!, null!);
+        new(context, null!, null!);
 
     private static BlogCommentRepository Blogs(DmDbContext context) =>
-        new(context, null!, null!, null!);
+        new(context, null!, null!);
 
     private static PublicationCommentRepository Publications(DmDbContext context) =>
-        new(context, null!, null!, null!);
+        new(context, null!, null!);
 
     private static GameCommentRepository Games(DmDbContext context) =>
-        new(context, null!, null!);
+        new(context, null!);
 
     [Fact]
     public async Task StayOnTheTopicWhenAnEarlierCommentGoes()

@@ -401,7 +401,7 @@ export function initNsfw(container: HTMLElement | null): void {
     // Resolve content, overlay and wrappers. On first init the
     // .nsfw-spoiler directly follows the head and gets wrapped; on re-init
     // after cleanup the structure already exists and is reused.
-    let nsfwContent = head.nextElementSibling as HTMLElement | null;
+    const nsfwContent = head.nextElementSibling as HTMLElement | null;
     let collapse: HTMLElement;
     let overlay: HTMLElement;
 
@@ -417,7 +417,6 @@ export function initNsfw(container: HTMLElement | null): void {
         ":scope > .nsfw-overlay",
       );
       if (!existingContent || !existingOverlay) return;
-      nsfwContent = existingContent;
       overlay = existingOverlay;
     } else if (nsfwContent?.classList.contains("nsfw-spoiler")) {
       // Wrapper for overlay positioning. No margin/border/padding here: the

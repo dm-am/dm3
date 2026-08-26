@@ -16,13 +16,4 @@ public interface ITokenFactory
     /// <param name="type">Token type</param>
     /// <returns>New token DTO</returns>
     CreateToken Create(Guid userId, TokenType type);
-
-    /// <summary>
-    /// Create a new token for a user with entity reference
-    /// </summary>
-    /// <param name="userId">User identifier</param>
-    /// <param name="entityId">Related entity identifier (game, blog, etc.)</param>
-    /// <param name="type">Token type</param>
-    /// <returns>New token DTO</returns>
-    CreateToken Create(Guid userId, Guid entityId, TokenType type);
 }

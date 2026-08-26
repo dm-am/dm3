@@ -1,3 +1,4 @@
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
@@ -16,19 +17,25 @@ internal class UpdatePublicationValidator : AbstractValidator<UpdatePublication>
         {
             RuleFor(x => x.Title)
                 .NotEmpty().WithMessage(ValidationError.Empty)
-                .MaximumLength(300).WithMessage(ValidationError.Long);
+                .MaximumLength(PublicationFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long);
         });
 
         When(x => x.Content != null, () =>
         {
             RuleFor(x => x.Content)
                 .NotEmpty().WithMessage(ValidationError.Empty);
+
+            // The Comment surface does not declare [private], and an edit is
+            // the other way the tag gets into a stored publication.
+            RuleFor(x => x.Content)
+                .Must(content => !PrivateBlockMarkup.ContainsPrivateMarkup(content))
+                .WithMessage(x => PrivateBlockMarkup.DescribeSurfaceRefusal(x.Content));
         });
 
         When(x => x.Preview != null, () =>
         {
             RuleFor(x => x.Preview)
-                .MaximumLength(500).WithMessage(ValidationError.Long);
+                .MaximumLength(PublicationFieldLimits.PreviewMaxLength).WithMessage(ValidationError.Long);
         });
     }
 }

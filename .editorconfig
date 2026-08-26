@@ -23,6 +23,50 @@ indent_size = 4
 # wrapped across lines still builds.
 dotnet_diagnostic.CA2254.severity = error
 
+# Mapperly's replacement for AutoMapper's AssertConfigurationIsValid, moved
+# from a runtime test to the compiler. RMG012 (target member has no source)
+# and RMG020 (source member is not mapped) are the two halves of the old
+# runtime assertion: a field renamed on one side alone fails the build instead
+# of silently dropping data. RMG068 (queryable projection cannot inline a
+# mapping) is the EF-specific half: a non-inlined projection compiles, then
+# either throws at query translation or degrades into client evaluation and
+# N+1 - the exact failure mode the TagWith SQL checks hunt for after the fact.
+dotnet_diagnostic.RMG012.severity = error
+dotnet_diagnostic.RMG020.severity = error
+dotnet_diagnostic.RMG068.severity = error
+
+# RMG090 fires when a mapping whose result is nullable feeds a target that is
+# not, which is the shape a `Use = nameof(...OrNull)` hop has whenever the
+# member it fills was declared `= null!`. Mapperly's answer to that at runtime
+# is to throw, so the whole response 500s on a row that merely has nobody in
+# one field - the game details page did exactly that for every game holding an
+# NPC, whose character rows carry no author by design. The diagnostic ships as
+# informational, which under TreatWarningsAsErrors means invisible; raised to
+# error it is a build failure at the mapping that declares the lie.
+#
+# Its neighbour RMG089 (a nullable source MEMBER into a non-nullable target
+# member) is deliberately not raised yet: it reports thirteen further
+# mismatches across forum, profile, post and game write models, each of which
+# is a contract decision of its own rather than a mechanical fix. They are a
+# wave, not a side effect of this one.
+dotnet_diagnostic.RMG090.severity = error
+
+# Test sources
+[test/**.cs]
+# xUnit1051 arrived with xUnit v3 and asks every call that takes a
+# CancellationToken to be handed TestContext.Current.CancellationToken. It fires
+# on roughly eight hundred call sites across fifty one files here, and severity is
+# the only knob the rule has. What it buys is responsive cancellation of a test
+# that has run past its deadline - and a deadline is what this suite does not set:
+# no Fact declares a Timeout, so per-test deadlines never fire. What remains is
+# faster teardown when the whole run is cancelled (Ctrl+C, an aborted CI job) -
+# real, but marginal for calls this short. Under TreatWarningsAsErrors the choice was a mechanical rewrite of
+# eight hundred argument lists inside a framework migration, or this line. Lowered
+# to a suggestion rather than turned off: the editor still offers the fix, so the
+# calls converge on it as they are edited, and the day a Timeout is declared the
+# threading is worth doing for real.
+dotnet_diagnostic.xUnit1051.severity = suggestion
+
 # Solution files
 [*.sln]
 indent_style = tab

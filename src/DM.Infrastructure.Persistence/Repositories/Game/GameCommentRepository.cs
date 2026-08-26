@@ -3,8 +3,6 @@ using DM.Domain.Core.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -21,16 +19,13 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 internal class GameCommentRepository : IGameCommentRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IGuidFactory _guidFactory;
 
     public GameCommentRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IGuidFactory guidFactory)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _guidFactory = guidFactory;
     }
 
@@ -40,11 +35,11 @@ internal class GameCommentRepository : IGameCommentRepository
 
     /// <inheritdoc />
     public Task<IEnumerable<Comment>> Get(Guid gameId, CommentsQuery query, PagingData paging, IReadOnlyCollection<Guid>? excludeUserIds = null) =>
-        CommentQueries.Page(_dbContext, _mapper, gameId, query, paging, excludeUserIds, "DM.GameComments.List");
+        CommentQueries.Page(_dbContext, gameId, query, paging, excludeUserIds, "DM.GameComments.List");
 
     /// <inheritdoc />
     public Task<Comment?> Get(Guid commentId) =>
-        CommentQueries.Single(_dbContext, _mapper, commentId, "DM.GameComments.Get");
+        CommentQueries.Single(_dbContext, commentId, "DM.GameComments.Get");
 
     /// <inheritdoc />
     public async Task<Comment> Create(CreateGameCommentEntity createComment)
@@ -74,31 +69,14 @@ internal class GameCommentRepository : IGameCommentRepository
         return await _dbContext.Comments
             .TagWith("DM.GameComments.Created")
             .Where(c => c.CommentId == createComment.CommentId)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
+            .ProjectToComment()
             .FirstAsync();
     }
 
     /// <inheritdoc />
-    public async Task<Comment> Update(UpdateGameCommentEntity updateComment)
-    {
-        var comment = await _dbContext.Comments.FindAsync(updateComment.CommentId);
-        if (comment != null)
-        {
-            comment.Text = updateComment.Text;
-            // The comment row keeps no modification stamp: ModifiedUtc is derived
-            // from the newest entry of this history, and the client draws its
-            // "edited" mark from that. Written here rather than at the call site so
-            // the text and its trace go in one SaveChanges.
-            CommentEdits.Record(_dbContext, _guidFactory, updateComment.CommentId, updateComment.EditorUserId, updateComment.ModifiedUtc);
-            await _dbContext.SaveChangesAsync();
-        }
-
-        return await _dbContext.Comments
-            .TagWith("DM.GameComments.Updated")
-            .Where(c => c.CommentId == updateComment.CommentId)
-            .ProjectTo<Comment>(_mapper.ConfigurationProvider)
-            .FirstAsync();
-    }
+    public Task<Comment> Update(UpdateGameCommentEntity updateComment)
+        => CommentWrites.Update(_dbContext, _guidFactory, updateComment.CommentId, updateComment.Text,
+            updateComment.EditorUserId, updateComment.ModifiedUtc, "DM.GameComments.Updated");
 
     /// <inheritdoc />
     public async Task<GameCommentToDelete?> GetForDelete(Guid commentId)
@@ -106,7 +84,7 @@ internal class GameCommentRepository : IGameCommentRepository
         var comment = await _dbContext.Comments
             .TagWith("DM.GameComments.GetForDelete")
             .Where(c => !c.IsRemoved && c.CommentId == commentId)
-            .ProjectTo<GameCommentToDelete>(_mapper.ConfigurationProvider)
+            .ProjectToGameCommentToDelete()
             .FirstOrDefaultAsync();
 
         if (comment == null) return null;

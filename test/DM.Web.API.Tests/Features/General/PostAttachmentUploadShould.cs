@@ -17,10 +17,11 @@ using DM.Domain.Personal.Features.Profiles;
 using DM.Testing;
 using DM.Testing.Dsl;
 using DM.Web.API.Features.General.Upload;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
@@ -41,10 +42,10 @@ public class PostAttachmentUploadShould : UnitTestBase
 {
     private readonly Guid _userId = Guid.NewGuid();
     private readonly Guid _postId = Guid.NewGuid();
-    private readonly Mock<IObjectStorage> _objectStorage;
-    private readonly Mock<IImageProcessingService> _imageProcessing;
-    private readonly Mock<IUploadRepository> _repository;
-    private readonly Mock<IIntentionManager> _intentionManager;
+    private readonly IObjectStorage _objectStorage;
+    private readonly IImageProcessingService _imageProcessing;
+    private readonly IUploadRepository _repository;
+    private readonly IIntentionManager _intentionManager;
 
     public PostAttachmentUploadShould()
     {
@@ -52,13 +53,13 @@ public class PostAttachmentUploadShould : UnitTestBase
 
         _imageProcessing = Mock<IImageProcessingService>();
         _imageProcessing
-            .Setup(s => s.ProcessAsync(
-                It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<UploadType>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ProcessedImage([1, 2, 3], "image/png", ".png", 1600, 1200));
+            .ProcessAsync(
+                Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<UploadType>(), Arg.Any<CancellationToken>()).Returns(new ProcessedImage([1, 2, 3], "image/png", ".png", 1600, 1200));
 
         _repository = Mock<IUploadRepository>();
-        _repository.Setup(r => r.AddAsync(It.IsAny<NewUpload>()))
-            .ReturnsAsync((NewUpload u) => new StoredUpload
+        _repository.AddAsync(Arg.Any<NewUpload>()).Returns(ci =>
+        {
+            var u = ci.ArgAt<NewUpload>(0); return new StoredUpload
             {
                 Id = u.Id,
                 UserId = u.UserId,
@@ -71,7 +72,8 @@ public class PostAttachmentUploadShould : UnitTestBase
                 Url = u.Url,
                 CreatedUtc = u.CreatedUtc,
                 ConfirmedUtc = u.ConfirmedUtc,
-            });
+            };
+        });
 
         _intentionManager = Mock<IIntentionManager>();
     }
@@ -110,8 +112,7 @@ public class PostAttachmentUploadShould : UnitTestBase
     [Fact]
     public async Task RefuseAFourthFileOnAPost()
     {
-        _repository.Setup(r => r.CountPostAttachmentsAsync(_postId))
-            .ReturnsAsync(UploadPolicy.MaxPostAttachments);
+        _repository.CountPostAttachmentsAsync(_postId).Returns(UploadPolicy.MaxPostAttachments);
         var service = Service(new AllowingAuthorizer(UploadType.PostAttachment));
 
         var act = () => service.DirectUpload(File(), UploadType.PostAttachment, _postId);
@@ -123,8 +124,7 @@ public class PostAttachmentUploadShould : UnitTestBase
     [Fact]
     public async Task AcceptTheLastFileTheLimitAllows()
     {
-        _repository.Setup(r => r.CountPostAttachmentsAsync(_postId))
-            .ReturnsAsync(UploadPolicy.MaxPostAttachments - 1);
+        _repository.CountPostAttachmentsAsync(_postId).Returns(UploadPolicy.MaxPostAttachments - 1);
         var service = Service(new AllowingAuthorizer(UploadType.PostAttachment));
 
         var act = () => service.DirectUpload(File(), UploadType.PostAttachment, _postId);
@@ -143,7 +143,7 @@ public class PostAttachmentUploadShould : UnitTestBase
 
         await service.DirectUpload(File(), UploadType.UserAvatar, _userId);
 
-        _repository.Verify(r => r.CountPostAttachmentsAsync(It.IsAny<Guid>()), Times.Never);
+        await _repository.DidNotReceive().CountPostAttachmentsAsync(Arg.Any<Guid>());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -168,7 +168,7 @@ public class PostAttachmentUploadShould : UnitTestBase
 
         result.Url.Should().BeNull();
         result.ContentUrl.Should().Be($"/v1/uploads/{result.Id:D}/content");
-        _objectStorage.Verify(s => s.BuildPublicUrl(It.IsAny<string>()), Times.Never);
+        _objectStorage.DidNotReceive().BuildPublicUrl(Arg.Any<string>());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -186,14 +186,12 @@ public class PostAttachmentUploadShould : UnitTestBase
         var uploadId = Guid.NewGuid();
         StoredAttachment(uploadId);
         _intentionManager
-            .Setup(m => m.IsAllowed(UploadIntention.Delete, It.IsAny<StoredUpload>()))
-            .Returns(false);
+            .IsAllowed(UploadIntention.Delete, Arg.Any<StoredUpload>()).Returns(false);
         var service = Service(new AllowingAuthorizer(UploadType.PostAttachment, mayDetach: true));
 
         await service.DeleteUpload(uploadId);
 
-        _repository.Verify(
-            r => r.SoftDeleteAsync(uploadId, _userId, It.IsAny<DateTimeOffset>()), Times.Once);
+        await _repository.Received(1).SoftDeleteAsync(uploadId, _userId, Arg.Any<DateTimeOffset>());
     }
 
     [Fact]
@@ -202,19 +200,16 @@ public class PostAttachmentUploadShould : UnitTestBase
         var uploadId = Guid.NewGuid();
         StoredAttachment(uploadId);
         _intentionManager
-            .Setup(m => m.IsAllowed(UploadIntention.Delete, It.IsAny<StoredUpload>()))
-            .Returns(false);
+            .IsAllowed(UploadIntention.Delete, Arg.Any<StoredUpload>()).Returns(false);
         _intentionManager
-            .Setup(m => m.ThrowIfForbidden(UploadIntention.Delete, It.IsAny<StoredUpload>()))
-            .Throws(new HttpException(HttpStatusCode.Forbidden, "Недостаточно прав для этого действия"));
+            .When(m => m.ThrowIfForbidden(UploadIntention.Delete, Arg.Any<StoredUpload>()))
+            .Throw(new HttpException(HttpStatusCode.Forbidden, "Недостаточно прав для этого действия"));
         var service = Service(new AllowingAuthorizer(UploadType.PostAttachment, mayDetach: false));
 
         var act = () => service.DeleteUpload(uploadId);
 
         await act.Should().ThrowAsync<HttpException>();
-        _repository.Verify(
-            r => r.SoftDeleteAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<DateTimeOffset>()),
-            Times.Never);
+        await _repository.DidNotReceive().SoftDeleteAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<DateTimeOffset>());
     }
 
     /// <summary>
@@ -227,62 +222,57 @@ public class PostAttachmentUploadShould : UnitTestBase
         var uploadId = Guid.NewGuid();
         StoredAttachment(uploadId);
         _intentionManager
-            .Setup(m => m.IsAllowed(UploadIntention.Delete, It.IsAny<StoredUpload>()))
-            .Returns(true);
+            .IsAllowed(UploadIntention.Delete, Arg.Any<StoredUpload>()).Returns(true);
         var refusing = new AllowingAuthorizer(UploadType.PostAttachment, mayDetach: false);
         var service = Service(refusing);
 
         await service.DeleteUpload(uploadId);
 
         refusing.DetachAsked.Should().BeFalse();
-        _repository.Verify(
-            r => r.SoftDeleteAsync(uploadId, _userId, It.IsAny<DateTimeOffset>()), Times.Once);
+        await _repository.Received(1).SoftDeleteAsync(uploadId, _userId, Arg.Any<DateTimeOffset>());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
 
     private void StoredAttachment(Guid uploadId) =>
-        _repository.Setup(r => r.GetAsync(uploadId))
-            .ReturnsAsync(new StoredUpload
-            {
-                Id = uploadId,
-                UserId = Guid.NewGuid(),
-                Type = UploadType.PostAttachment,
-                TargetId = _postId,
-                FileName = "karta.png",
-                ContentType = "image/png",
-                Status = UploadStatus.Confirmed,
-            });
+        _repository.GetAsync(uploadId).Returns(new StoredUpload
+        {
+            Id = uploadId,
+            UserId = Guid.NewGuid(),
+            Type = UploadType.PostAttachment,
+            TargetId = _postId,
+            FileName = "karta.png",
+            ContentType = "image/png",
+            Status = UploadStatus.Confirmed,
+        });
 
     private void VerifyNothingWasProcessedOrStored()
     {
-        _imageProcessing.Verify(s => s.ProcessAsync(
-                It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<UploadType>(), It.IsAny<CancellationToken>()),
-            Times.Never);
-        _objectStorage.Verify(s => s.PutAsync(
-                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
-        _repository.Verify(r => r.AddAsync(It.IsAny<NewUpload>()), Times.Never);
+        _imageProcessing.DidNotReceive().ProcessAsync(
+                Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<UploadType>(), Arg.Any<CancellationToken>());
+        _objectStorage.DidNotReceive().PutAsync(
+                Arg.Any<string>(), Arg.Any<byte[]>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        _repository.DidNotReceive().AddAsync(Arg.Any<NewUpload>());
     }
 
     private UploadApiService Service(params IUploadTargetAuthorizer[] authorizers)
     {
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(Identities.User(_userId));
+        identityProvider.Current.Returns(Identities.User(_userId));
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Setup(p => p.Now).Returns(DateTimeOffset.UtcNow);
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         return new UploadApiService(
-            _repository.Object,
-            identityProvider.Object,
-            _intentionManager.Object,
-            Mock<IUserService>().Object,
-            dateTimeProvider.Object,
-            _objectStorage.Object,
-            _imageProcessing.Object,
-            Mock<ICache>().Object,
-            Mock<IHttpContextAccessor>().Object,
+            _repository,
+            identityProvider,
+            _intentionManager,
+            Mock<IUserService>(),
+            dateTimeProvider,
+            _objectStorage,
+            _imageProcessing,
+            Mock<ICache>(),
+            Mock<IHttpContextAccessor>(),
             authorizers,
             Options.Create(new CdnConfiguration
             {

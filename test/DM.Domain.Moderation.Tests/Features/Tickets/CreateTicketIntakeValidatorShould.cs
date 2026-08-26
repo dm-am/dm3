@@ -5,29 +5,29 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Moderation.Features.Tickets;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tickets;
 
 public class CreateTicketIntakeValidatorShould : UnitTestBase
 {
-    private readonly Mock<IIdentityProvider> _identityProvider;
+    private readonly IIdentityProvider _identityProvider;
     private readonly CreateTicketIntakeValidator _validator;
 
     public CreateTicketIntakeValidatorShould()
     {
         _identityProvider = Mock<IIdentityProvider>();
-        _validator = new CreateTicketIntakeValidator(_identityProvider.Object);
+        _validator = new CreateTicketIntakeValidator(_identityProvider);
     }
 
     private void SetGuest() =>
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Current.Returns(Identity.Guest());
 
     private void SetAuthenticated() =>
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Success(
+        _identityProvider.Current.Returns(Identity.Success(
             new AuthenticatedUser { UserId = Guid.NewGuid(), Role = UserRole.RegularUser, Username = "User" },
             new Session { Id = Guid.NewGuid() },
             new UserSettings(),

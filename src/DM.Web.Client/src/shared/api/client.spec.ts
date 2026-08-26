@@ -270,7 +270,7 @@ describe("Api.establishHubConnection", () => {
     } as never);
 
     const { default: api } = await import("./client");
-    await api.establishHubConnection("whatsup");
+    await api.establishHubConnection("hubs/notifications");
 
     return hub.policy as RetryPolicy | undefined;
   }

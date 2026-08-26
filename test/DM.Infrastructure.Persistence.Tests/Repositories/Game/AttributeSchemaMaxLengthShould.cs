@@ -1,10 +1,11 @@
 using System;
-using AutoMapper;
+using System.Linq;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence.Repositories.Game;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
+using DbSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
 using DbSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
 using DtoSpecification = DM.Domain.Game.Features.Games.AttributeSpecification;
 
@@ -28,30 +29,29 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Game;
 /// </remarks>
 public class AttributeSchemaMaxLengthShould
 {
-    private readonly MapperConfiguration _configuration = new(cfg =>
-    {
-        cfg.AddProfile<AttributeSchemaMappingProfile>();
-    });
-
-    private readonly IMapper _mapper;
-
-    public AttributeSchemaMaxLengthShould() => _mapper = _configuration.CreateMapper();
-
-    private DtoSpecification RoundTrip(AttributeSpecificationType type, int? maxLength) =>
-        _mapper.Map<DtoSpecification>(new DbSpecification
+    private static DtoSpecification RoundTrip(AttributeSpecificationType type, int? maxLength) =>
+        new DbSchema
         {
-            Id = Guid.NewGuid(),
-            Title = "Race",
-            Order = 0,
-            Constraints = AttributeSchemaRepository.BuildConstraints(
-                new CreateAttributeSpecification
+            AttributeSchemaId = Guid.NewGuid(),
+            Title = "Схема",
+            Specifications =
+            [
+                new DbSpecification
                 {
+                    Id = Guid.NewGuid(),
                     Title = "Race",
-                    Type = type,
-                    MaxLength = maxLength
-                },
-                required: false)
-        });
+                    Order = 0,
+                    Constraints = AttributeSchemaRepository.BuildConstraints(
+                        new CreateAttributeSpecification
+                        {
+                            Title = "Race",
+                            Type = type,
+                            MaxLength = maxLength
+                        },
+                        required: false)
+                }
+            ]
+        }.ToAttributeSchema().Specifications.Single();
 
     [Theory]
     [InlineData(AttributeSpecificationType.Text)]

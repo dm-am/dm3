@@ -105,7 +105,7 @@ public interface IAuthenticationRepository
 
     /// <summary>
     /// Remove every session that had expired by <paramref name="now" />, across all
-    /// accounts, and delete the documents left holding none.
+    /// accounts.
     /// </summary>
     /// <param name="now">Moment the pass runs at; expiration is compared against it.</param>
     /// <param name="cancellationToken">Cancellation token.</param>

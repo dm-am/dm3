@@ -1,53 +1,18 @@
 using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Blog.Features.Popularity;
 using DM.Domain.Community.Features.Polls;
 using DM.Domain.Game.Features.Popularity;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
-using DM.Domain.Personal.Features.Profiles;
-using DM.Domain.Personal.Authorization;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Uploads;
-using DM.Infrastructure.Core.Storage;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using DM.Infrastructure.Persistence.Entities.Blog;
-using DM.Infrastructure.Persistence.Entities.Forum;
-using DM.Infrastructure.Persistence.Entities.Game.Characters;
-using DM.Infrastructure.Persistence.Entities.Game.Links;
-using DM.Infrastructure.Persistence.Entities.Game.Posts;
-using DM.Infrastructure.Persistence.Entities.Messaging;
 using DM.Infrastructure.Persistence.Entities.Moderation;
-using DM.Infrastructure.Persistence.Entities.Personal.Notepads;
-using DM.Infrastructure.Persistence.Entities.Shared;
-using DM.Infrastructure.Persistence.Entities.Community;
-using DM.Infrastructure.Persistence.Entities.Subscriptions;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
-using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
-using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
-using DbAttributeSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
-using DbStringConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.StringAttributeConstraints;
-using DbBbCodeConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.BbCodeAttributeConstraints;
-using DbListConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeConstraints;
-using DbListValueKind = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListValueKind;
-using DbListAttributeValue = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeValue;
-using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
-using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
-using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
-using DbUsernameHistory = DM.Infrastructure.Persistence.Entities.Account.UsernameHistory;
-using DbUserContact = DM.Infrastructure.Persistence.Entities.Account.UserContact;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Tools.Seeder.Seeding;
@@ -60,7 +25,6 @@ namespace DM.Tools.Seeder.Seeding;
 internal sealed partial class DataSeeder
 {
     private readonly DmDbContext _dbContext;
-    private readonly DmMongoClient _mongoClient;
     private readonly ISecurityManager _securityManager;
     private readonly IGuidFactory _guidFactory;
     private readonly IPollRepository _pollRepository;
@@ -88,7 +52,6 @@ internal sealed partial class DataSeeder
     /// </summary>
     public DataSeeder(
         DmDbContext dbContext,
-        DmMongoClient mongoClient,
         ISecurityManager securityManager,
         IGuidFactory guidFactory,
         SeedDeterminism determinism,
@@ -101,7 +64,6 @@ internal sealed partial class DataSeeder
         IOptions<CdnConfiguration> cdnOptions)
     {
         _dbContext = dbContext;
-        _mongoClient = mongoClient;
         _securityManager = securityManager;
         _guidFactory = guidFactory;
         _pollRepository = pollRepository;
@@ -193,9 +155,9 @@ internal sealed partial class DataSeeder
         await AssignBoardModerators(users, result);
 
         // ═══════════════════════════════════════════════════════════════════
-        // 3. SEED SYSTEM ATTRIBUTE SCHEMA (MongoDB) + CREATE GAMES
+        // 3. SEED SYSTEM ATTRIBUTE SCHEMA + CREATE GAMES
         // The system "Классическая схема" must exist before games reference it
-        // via AttributeSchemaId. Idempotent upsert — survives PG reseed.
+        // via AttributeSchemaId (a real FK now). Idempotent upsert.
         // ═══════════════════════════════════════════════════════════════════
         await SeedSystemAttributeSchemaAsync(result);
         var gameIds = await CreateGames(users, now, result);
@@ -224,7 +186,7 @@ internal sealed partial class DataSeeder
         await CreateUserSubscriptions(users, result);
 
         // ═══════════════════════════════════════════════════════════════════
-        // 8. CREATE POLLS (MongoDB)
+        // 8. CREATE POLLS
         // ═══════════════════════════════════════════════════════════════════
         await CreatePolls(users, now, result);
 

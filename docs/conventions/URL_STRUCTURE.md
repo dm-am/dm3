@@ -4,10 +4,12 @@
 
 ```mermaid
 flowchart LR
-    q{"Кто создает<br/>новую сущность?"}
-    q -->|"админы, штук мало"| a["Alias<br/>/forum/general"]
-    q -->|"пользователи, много"| b["PublicId<br/>/game/aaaaa"]
-    q -->|"живет внутри другой"| c["Numeric<br/>/forum/general/4"]
+    q{"Что адресуем?"}
+    q -->|"пользователя"| n["Username<br/>/users/Adam%20Advena"]
+    q -->|"созданное админами,<br/>штук мало"| a["Alias<br/>/forum/general"]
+    q -->|"созданное пользователями,<br/>штук много"| b["PublicId<br/>/game/aaaaa"]
+    q -->|"живущее внутри другой сущности"| c["Numeric<br/>/forum/general/4"]
+    q -->|"одноразовую операцию<br/>по ссылке из письма"| t["Token<br/>/activate#token=..."]
 ```
 
 ---

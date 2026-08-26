@@ -16,8 +16,8 @@ import {
   type Game,
 } from "@/entities/game";
 import { GamesFilter, useGamesFilter } from "@/features/game-filter";
-import type { GamesSearchParams } from "@/features/game-filter";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
+import { stableCacheKey } from "@/shared/lib/utils/keyedCache";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 
 const gamesStore = useGamesStore();
@@ -135,32 +135,9 @@ const currentSort = computed<SortState | undefined>(() => {
 // Computed games array
 const games = computed(() => searchResult.value?.resources ?? []);
 
-// Create stable key for search params (must include ALL filter params)
-function createParamsKey(params: GamesSearchParams): string {
-  return JSON.stringify({
-    search: params.search || "",
-    status: params.status || "",
-    recruitmentFilter: params.recruitmentFilter || "",
-    closedReasonFilter: params.closedReasonFilter || "",
-    requiredTags: params.requiredTags?.slice().sort() || [],
-    excludedTags: params.excludedTags?.slice().sort() || [],
-    hostUsernames: params.hostUsernames?.slice().sort() || [],
-    createdFromUtc: params.createdFromUtc || "",
-    createdToUtc: params.createdToUtc || "",
-    activatedFromUtc: params.activatedFromUtc || "",
-    activatedToUtc: params.activatedToUtc || "",
-    closedFromUtc: params.closedFromUtc || "",
-    closedToUtc: params.closedToUtc || "",
-    recruitmentStartedFromUtc: params.recruitmentStartedFromUtc || "",
-    recruitmentStartedToUtc: params.recruitmentStartedToUtc || "",
-    sortBy: params.sortBy || "created",
-    sortOrder: params.sortOrder || "desc",
-    number: params.number || 1,
-    size: params.size || 20,
-  });
-}
-
-const paramsKey = computed(() => createParamsKey(searchParams.value));
+// Refetch whenever the cache key (covering every filter param) changes.
+// Shares the store's key builder so the widget and store never diverge.
+const paramsKey = computed(() => stableCacheKey(searchParams.value));
 
 // Build a tag-click destination that PRESERVES the current query (adds the
 // clicked tag to requiredTags) instead of resetting all other filters.
@@ -369,7 +346,7 @@ function pagingAnchor(): HTMLElement | null {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Skeleton" as *
 
 .games-data-table
   width: 100%

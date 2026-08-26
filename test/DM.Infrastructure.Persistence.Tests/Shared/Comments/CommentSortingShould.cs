@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Shared.Comments;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;

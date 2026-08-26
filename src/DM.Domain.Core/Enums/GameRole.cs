@@ -1,7 +1,17 @@
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
-/// User's role in a game (mutually exclusive, ordered by privilege level)
+/// One of the roles a user may hold in a game.
+///
+/// Not mutually exclusive, and not a privilege ladder: a user holds a SET of
+/// these at once - GameRoleExtensions.GetRoles returns a collection and every
+/// resolver asks it with Contains, never with a comparison. The master of a
+/// game is also a player in it whenever a character of theirs was accepted.
+/// The numbering orders the declarations and nothing else; do not compare by it.
+///
+/// Applicant is declared and never assigned: an application in review puts
+/// nobody into any role. It stays because the value names a filter of the
+/// users endpoint, and renumbering the rest to remove it would buy nothing.
 /// </summary>
 public enum GameRole
 {

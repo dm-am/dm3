@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.Messages;
@@ -9,9 +8,9 @@ using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Repositories.Messaging;
 using DM.Infrastructure.Persistence.Shared.Users;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using Moq;
+using NSubstitute;
 using Xunit;
 using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
 using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
@@ -51,12 +50,6 @@ public class MessageEditRecordShould : UnitTestBase
         .UseInMemoryDatabase(_databaseName)
         .Options);
 
-    private static IMapper Mapper() => new MapperConfiguration(cfg =>
-    {
-        cfg.AddProfile<GeneralUserMappingProfile>();
-        cfg.AddProfile<MessagingMappingProfile>();
-    }).CreateMapper();
-
     private DmDbContext Seeded()
     {
         var context = Context();
@@ -84,10 +77,10 @@ public class MessageEditRecordShould : UnitTestBase
     private MessageRepository Repository(DmDbContext context)
     {
         var clock = Mock<IDateTimeProvider>();
-        clock.SetupGet(c => c.Now).Returns(Edited);
+        clock.Now.Returns(Edited);
         var guids = Mock<IGuidFactory>();
-        guids.Setup(g => g.Create()).Returns(EditId);
-        return new MessageRepository(context, Mapper(), Mock<ICursorService>().Object, clock.Object, guids.Object);
+        guids.Create().Returns(EditId);
+        return new MessageRepository(context, Mock<ICursorService>(), clock, guids);
     }
 
     [Fact]

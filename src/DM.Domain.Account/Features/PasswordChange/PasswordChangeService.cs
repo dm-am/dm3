@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Account.Features.Security;
+using DM.Domain.Account.Features.TwoFactor;
 using DM.Domain.Core.Identity;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Core.Enums;
@@ -28,6 +29,7 @@ internal class PasswordChangeService : IPasswordChangeService
     private readonly IPasswordChangeMailSender _notificationSender;
     private readonly ISecurityAuditRepository _auditService;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ITwoFactorRepository _twoFactorRepository;
     private readonly TokenConfiguration _tokenConfig;
 
     /// <inheritdoc />
@@ -42,6 +44,7 @@ internal class PasswordChangeService : IPasswordChangeService
         IPasswordChangeMailSender notificationSender,
         ISecurityAuditRepository auditService,
         IDateTimeProvider dateTimeProvider,
+        ITwoFactorRepository twoFactorRepository,
         IOptions<TokenConfiguration> tokenOptions)
     {
         _validator = validator;
@@ -54,6 +57,7 @@ internal class PasswordChangeService : IPasswordChangeService
         _notificationSender = notificationSender;
         _auditService = auditService;
         _dateTimeProvider = dateTimeProvider;
+        _twoFactorRepository = twoFactorRepository;
         _tokenConfig = tokenOptions.Value;
     }
 
@@ -124,6 +128,13 @@ internal class PasswordChangeService : IPasswordChangeService
 
         var (hash, salt) = _securityManager.GeneratePassword(passwordChange.NewPassword);
         await _repository.UpdatePassword(user.UserId, hash, salt, passwordChange.Token);
+
+        // Any login begun with the old password dies with it. Changing a
+        // password is a statement that the account may be compromised, and a
+        // half-finished sign-in that outlived the statement is a sign-in the
+        // statement did not cover. Both routes reach this line: the form inside
+        // a session and the link out of the mailbox.
+        await _twoFactorRepository.RemoveChallengesOf(user.UserId);
 
         // When changing via token, user is not authenticated - logout all sessions
         // When changing via old password, user is authenticated - keep current session

@@ -1,5 +1,5 @@
 using DM.Domain.Core.Dto;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Core.Tests.Dto;

@@ -11,11 +11,6 @@ namespace DM.Domain.Game.Features.Characters;
 public static class AttributeValidationError
 {
     /// <summary>
-    /// Value only should be present when game has schema
-    /// </summary>
-    public static string NoSchema => "Game has no schema, so no attributes needed";
-
-    /// <summary>
     /// Value should be of one of game specifications
     /// </summary>
     public static string InvalidSpecification => "Value specification should be present in the game schema";

@@ -15,36 +15,36 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostReviews;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostReviews;
 
 public class PostReviewServiceShould : UnitTestBase
 {
-    private readonly Mock<IValidator<CreatePostReview>> _createValidator;
-    private readonly Mock<IValidator<UpdatePostReview>> _updateValidator;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IPostReviewRepository> _repository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IGameBlacklistRepository> _blacklistRepository;
+    private readonly IValidator<CreatePostReview> _createValidator;
+    private readonly IValidator<UpdatePostReview> _updateValidator;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IPostReviewRepository _repository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IGameBlacklistRepository _blacklistRepository;
     private readonly PostReviewService _service;
     private readonly Guid _currentUserId;
 
     public PostReviewServiceShould()
     {
         _createValidator = Mock<IValidator<CreatePostReview>>();
-        _createValidator.Setup(v => v.ValidateAsync(It.IsAny<CreatePostReview>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _createValidator.ValidateAsync(Arg.Any<CreatePostReview>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _updateValidator = Mock<IValidator<UpdatePostReview>>();
-        _updateValidator.Setup(v => v.ValidateAsync(It.IsAny<UpdatePostReview>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _updateValidator.ValidateAsync(Arg.Any<UpdatePostReview>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _intentionManager = Mock<IIntentionManager>();
 
@@ -55,28 +55,28 @@ public class PostReviewServiceShould : UnitTestBase
         // Past probation by default. Zero is the newbie answer, and every case
         // about a newbie says so for itself; leaving it as the default made the
         // probation rule fire in cases that are not about it at all.
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
 
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _guidFactory = Mock<IGuidFactory>();
-        _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _blacklistRepository = Mock<IGameBlacklistRepository>();
 
         _service = new PostReviewService(
-            _createValidator.Object,
-            _updateValidator.Object,
-            _intentionManager.Object,
-            _repository.Object,
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
-            _blacklistRepository.Object);
+            _createValidator,
+            _updateValidator,
+            _intentionManager,
+            _repository,
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider,
+            _blacklistRepository);
     }
 
     [Fact]
@@ -88,8 +88,7 @@ public class PostReviewServiceShould : UnitTestBase
 
         SetupSuccessfulCreate(postId, postAuthorId, gameId);
         _blacklistRepository
-            .Setup(r => r.IsBlocked(gameId, _currentUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .IsBlocked(gameId, _currentUserId, Arg.Any<CancellationToken>()).Returns(true);
 
         var act = async () => await _service.CreateAsync(
             new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
@@ -113,15 +112,15 @@ public class PostReviewServiceShould : UnitTestBase
 
         await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(PostReviewIntention.Create), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(PostReviewIntention.Create);
     }
 
     [Fact]
     public async Task ThrowNotFoundWhenPostDoesNotExist()
     {
         var postId = Guid.NewGuid();
-        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync((PostInfo?)null);
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
+        _repository.GetPostInfoAsync(postId, _currentUserId).Returns((PostInfo?)null);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
 
         var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
@@ -136,8 +135,8 @@ public class PostReviewServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var postInfo = new PostInfo { AuthorId = _currentUserId, GameId = gameId };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
+        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
 
         var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
@@ -153,8 +152,8 @@ public class PostReviewServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(50); // Newbie
+        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(50); // Newbie
 
         var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
@@ -171,11 +170,11 @@ public class PostReviewServiceShould : UnitTestBase
         var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
         var expectedReview = new PostReview { Id = Guid.NewGuid(), PostId = postId };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(50); // Newbie
-        _repository.Setup(r => r.ExistsAsync(_currentUserId, postId)).ReturnsAsync(false);
-        _repository.Setup(r => r.HasRecentReviewInGameAsync(_currentUserId, gameId, It.IsAny<DateTimeOffset>())).ReturnsAsync(false);
-        _repository.Setup(r => r.CreateAsync(It.IsAny<CreatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(expectedReview);
+        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(50); // Newbie
+        _repository.ExistsAsync(_currentUserId, postId).Returns(false);
+        _repository.HasRecentReviewInGameAsync(_currentUserId, gameId, Arg.Any<DateTimeOffset>()).Returns(false);
+        _repository.CreateAsync(Arg.Any<CreatePostReviewEntity>(), Arg.Any<int>()).Returns(expectedReview);
 
         var result = await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Neutral });
 
@@ -190,9 +189,9 @@ public class PostReviewServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.ExistsAsync(_currentUserId, postId)).ReturnsAsync(true);
+        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.ExistsAsync(_currentUserId, postId).Returns(true);
 
         var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
@@ -208,10 +207,10 @@ public class PostReviewServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.ExistsAsync(_currentUserId, postId)).ReturnsAsync(false);
-        _repository.Setup(r => r.HasRecentReviewInGameAsync(_currentUserId, gameId, It.IsAny<DateTimeOffset>())).ReturnsAsync(true);
+        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.ExistsAsync(_currentUserId, postId).Returns(false);
+        _repository.HasRecentReviewInGameAsync(_currentUserId, gameId, Arg.Any<DateTimeOffset>()).Returns(true);
 
         var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
@@ -236,7 +235,7 @@ public class PostReviewServiceShould : UnitTestBase
 
         await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
-        _repository.Verify(r => r.GetPostInfoAsync(postId, _currentUserId), Times.Once);
+        await _repository.Received(1).GetPostInfoAsync(postId, _currentUserId);
     }
 
     /// <summary>
@@ -261,8 +260,8 @@ public class PostReviewServiceShould : UnitTestBase
 
         await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
-        _repository.Verify(r => r.CreateAsync(
-            It.Is<CreatePostReviewEntity>(e => e.PostAuthorId == postAuthorId), 1), Times.Once);
+        await _repository.Received(1).CreateAsync(
+            Arg.Is<CreatePostReviewEntity>(e => e.PostAuthorId == postAuthorId), 1);
     }
 
     [Fact]
@@ -276,8 +275,8 @@ public class PostReviewServiceShould : UnitTestBase
 
         await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Negative });
 
-        _repository.Verify(r => r.CreateAsync(
-            It.Is<CreatePostReviewEntity>(e => e.PostAuthorId == postAuthorId), -1), Times.Once);
+        await _repository.Received(1).CreateAsync(
+            Arg.Is<CreatePostReviewEntity>(e => e.PostAuthorId == postAuthorId), -1);
     }
 
     [Fact]
@@ -291,7 +290,7 @@ public class PostReviewServiceShould : UnitTestBase
 
         await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Neutral });
 
-        _repository.Verify(r => r.CreateAsync(It.IsAny<CreatePostReviewEntity>(), 0), Times.Once);
+        await _repository.Received(1).CreateAsync(Arg.Any<CreatePostReviewEntity>(), 0);
     }
 
     #endregion
@@ -304,7 +303,7 @@ public class PostReviewServiceShould : UnitTestBase
         var postId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
         ReachablePost(postId);
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync((PostReview?)null);
+        _repository.GetAsync(reviewId).Returns((PostReview?)null);
 
         var act = async () => await _service.GetAsync(postId, reviewId);
 
@@ -319,7 +318,7 @@ public class PostReviewServiceShould : UnitTestBase
         var reviewId = Guid.NewGuid();
         var review = new PostReview { Id = reviewId, PostId = postId };
         ReachablePost(postId);
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
 
         var result = await _service.GetAsync(postId, reviewId);
 
@@ -340,13 +339,13 @@ public class PostReviewServiceShould : UnitTestBase
     {
         var postId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
-        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync((PostInfo?)null);
+        _repository.GetPostInfoAsync(postId, _currentUserId).Returns((PostInfo?)null);
 
         var act = async () => await _service.GetAsync(postId, reviewId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
-        _repository.Verify(r => r.GetAsync(reviewId), Times.Never);
+        await _repository.DidNotReceive().GetAsync(reviewId);
     }
 
     /// <summary>
@@ -358,8 +357,7 @@ public class PostReviewServiceShould : UnitTestBase
         var postId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
         ReachablePost(postId);
-        _repository.Setup(r => r.GetAsync(reviewId))
-            .ReturnsAsync(new PostReview { Id = reviewId, PostId = Guid.NewGuid() });
+        _repository.GetAsync(reviewId).Returns(new PostReview { Id = reviewId, PostId = Guid.NewGuid() });
 
         var act = async () => await _service.GetAsync(postId, reviewId);
 
@@ -368,8 +366,8 @@ public class PostReviewServiceShould : UnitTestBase
     }
 
     private void ReachablePost(Guid postId) =>
-        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId))
-            .ReturnsAsync(new PostInfo { AuthorId = Guid.NewGuid(), GameId = Guid.NewGuid() });
+        _repository.GetPostInfoAsync(postId, _currentUserId)
+            .Returns(new PostInfo { AuthorId = Guid.NewGuid(), GameId = Guid.NewGuid() });
 
     #endregion
 
@@ -387,12 +385,12 @@ public class PostReviewServiceShould : UnitTestBase
             Sign = ReviewSign.Neutral,
             CreatedUtc = DateTimeOffset.UtcNow
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
 
         await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(PostReviewIntention.Edit, review), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(PostReviewIntention.Edit, review);
     }
 
     [Fact]
@@ -407,7 +405,7 @@ public class PostReviewServiceShould : UnitTestBase
             Sign = ReviewSign.Neutral,
             CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-16) // Past edit window
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
 
         var act = async () => await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
 
@@ -424,11 +422,15 @@ public class PostReviewServiceShould : UnitTestBase
     {
         var reviewId = Guid.NewGuid();
         var review = EditableReview(reviewId);
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
         UpdatePostReviewEntity? written = null;
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
-            .Callback<UpdatePostReviewEntity, int>((e, _) => written = e)
-            .ReturnsAsync(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>())
+            .Returns(review)
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdatePostReviewEntity>(0);
+                written = e;
+            });
 
         await _service.UpdateAsync(new UpdatePostReview
         {
@@ -452,11 +454,15 @@ public class PostReviewServiceShould : UnitTestBase
     {
         var reviewId = Guid.NewGuid();
         var review = EditableReview(reviewId);
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
         UpdatePostReviewEntity? written = null;
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
-            .Callback<UpdatePostReviewEntity, int>((e, _) => written = e)
-            .ReturnsAsync(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>())
+            .Returns(review)
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdatePostReviewEntity>(0);
+                written = e;
+            });
 
         await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
 
@@ -474,11 +480,15 @@ public class PostReviewServiceShould : UnitTestBase
     {
         var reviewId = Guid.NewGuid();
         var review = EditableReview(reviewId);
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
         UpdatePostReviewEntity? written = null;
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
-            .Callback<UpdatePostReviewEntity, int>((e, _) => written = e)
-            .ReturnsAsync(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>())
+            .Returns(review)
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdatePostReviewEntity>(0);
+                written = e;
+            });
 
         await _service.UpdateAsync(new UpdatePostReview
         {
@@ -498,15 +508,15 @@ public class PostReviewServiceShould : UnitTestBase
     {
         var reviewId = Guid.NewGuid();
         var review = EditableReview(reviewId, ReviewSign.Neutral);
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(10);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(10);
 
         var act = async () => await _service.UpdateAsync(
             new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()), Times.Never);
+        await _repository.DidNotReceive().UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>());
     }
 
     /// <summary>
@@ -517,9 +527,9 @@ public class PostReviewServiceShould : UnitTestBase
     {
         var reviewId = Guid.NewGuid();
         var review = EditableReview(reviewId, ReviewSign.Neutral);
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(10);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(10);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
 
         await _service.UpdateAsync(new UpdatePostReview
         {
@@ -528,7 +538,7 @@ public class PostReviewServiceShould : UnitTestBase
             Text = "Поправил опечатку"
         });
 
-        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()), Times.Once);
+        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>());
     }
 
     [Fact]
@@ -544,8 +554,8 @@ public class PostReviewServiceShould : UnitTestBase
             Sign = ReviewSign.Positive,
             CreatedUtc = DateTimeOffset.UtcNow
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
 
         await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Negative });
 
@@ -553,9 +563,9 @@ public class PostReviewServiceShould : UnitTestBase
         // sign taken back and the new one applied. One number, on the call that
         // writes the sign — the two deltas used to be two commits of their own,
         // both before the row they belong to was written.
-        _repository.Verify(r => r.UpdateAsync(
-            It.Is<UpdatePostReviewEntity>(e => e.Sign == ReviewSign.Negative), -2), Times.Once);
-        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()), Times.Once);
+        await _repository.Received(1).UpdateAsync(
+            Arg.Is<UpdatePostReviewEntity>(e => e.Sign == ReviewSign.Negative), -2);
+        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>());
     }
 
     /// <summary>
@@ -566,13 +576,12 @@ public class PostReviewServiceShould : UnitTestBase
     {
         var reviewId = Guid.NewGuid();
         var review = EditableReview(reviewId);
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
-            .ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
 
         await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Text = "Поправил опечатку" });
 
-        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), 0), Times.Once);
+        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), 0);
     }
 
     #endregion
@@ -591,12 +600,12 @@ public class PostReviewServiceShould : UnitTestBase
             PostAuthor = new GeneralUser { UserId = postAuthorId },
             Sign = ReviewSign.Neutral
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
 
         await _service.DeleteAsync(reviewId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(PostReviewIntention.Delete, review), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(PostReviewIntention.Delete, review);
     }
 
     [Fact]
@@ -611,15 +620,15 @@ public class PostReviewServiceShould : UnitTestBase
             PostAuthor = new GeneralUser { UserId = postAuthorId },
             Sign = ReviewSign.Positive
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
 
         await _service.DeleteAsync(reviewId);
 
         // On the removal itself, so the counter and the flag land together
-        _repository.Verify(r => r.UpdateAsync(
-            It.Is<UpdatePostReviewEntity>(e => e.IsRemoved == true), -1), Times.Once);
-        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()), Times.Once);
+        await _repository.Received(1).UpdateAsync(
+            Arg.Is<UpdatePostReviewEntity>(e => e.IsRemoved == true), -1);
+        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>());
     }
 
     /// <summary>
@@ -637,13 +646,12 @@ public class PostReviewServiceShould : UnitTestBase
             PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
             Sign = ReviewSign.Neutral
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
-            .ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
 
         await _service.DeleteAsync(reviewId);
 
-        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), 0), Times.Once);
+        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), 0);
     }
 
     /// <summary>
@@ -661,11 +669,15 @@ public class PostReviewServiceShould : UnitTestBase
             PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
             Sign = ReviewSign.Negative
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
         UpdatePostReviewEntity? written = null;
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>()))
-            .Callback<UpdatePostReviewEntity, int>((e, _) => written = e)
-            .ReturnsAsync(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>())
+            .Returns(review)
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdatePostReviewEntity>(0);
+                written = e;
+            });
 
         await _service.DeleteAsync(reviewId);
 
@@ -692,13 +704,13 @@ public class PostReviewServiceShould : UnitTestBase
             Sign = ReviewSign.Positive,
             CreatedUtc = DateTimeOffset.UtcNow.AddDays(-30)
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
 
         await _service.DeleteAsync(reviewId);
 
-        _repository.Verify(r => r.UpdateAsync(
-            It.Is<UpdatePostReviewEntity>(e => e.IsRemoved == true), -1), Times.Once);
+        await _repository.Received(1).UpdateAsync(
+            Arg.Is<UpdatePostReviewEntity>(e => e.IsRemoved == true), -1);
     }
 
     #endregion
@@ -753,10 +765,10 @@ public class PostReviewServiceShould : UnitTestBase
             PostAuthor = new GeneralUser { UserId = postAuthorId }
         };
 
-        _repository.Setup(r => r.GetPostInfoAsync(postId, _currentUserId)).ReturnsAsync(postInfo);
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.ExistsAsync(_currentUserId, postId)).ReturnsAsync(false);
-        _repository.Setup(r => r.HasRecentReviewInGameAsync(_currentUserId, gameId, It.IsAny<DateTimeOffset>())).ReturnsAsync(false);
-        _repository.Setup(r => r.CreateAsync(It.IsAny<CreatePostReviewEntity>(), It.IsAny<int>())).ReturnsAsync(expectedReview);
+        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.ExistsAsync(_currentUserId, postId).Returns(false);
+        _repository.HasRecentReviewInGameAsync(_currentUserId, gameId, Arg.Any<DateTimeOffset>()).Returns(false);
+        _repository.CreateAsync(Arg.Any<CreatePostReviewEntity>(), Arg.Any<int>()).Returns(expectedReview);
     }
 }

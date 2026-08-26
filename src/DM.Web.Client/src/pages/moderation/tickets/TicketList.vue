@@ -11,6 +11,8 @@
 import { computed, onMounted, ref } from "vue";
 import {
   ticketApi,
+  TICKET_STATUS_LABELS,
+  TICKET_SUBTYPE_LABELS,
   type Ticket,
   type TicketStatus,
   type TicketSubtype,
@@ -19,11 +21,7 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import TicketCard from "./TicketCard.vue";
-import {
-  TICKET_STATUS_LABELS,
-  TICKET_STATUS_ORDER,
-  TICKET_SUBTYPE_LABELS,
-} from "../lib/labels";
+import { TICKET_STATUS_ORDER } from "../lib/labels";
 
 const props = defineProps<{
   /** Subtype group shown on this page (support vs complaints). */
@@ -149,7 +147,7 @@ const isEmpty = computed(() => !loading.value && tickets.value.length === 0);
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Skeleton" as *
 
 .filters
   display: flex

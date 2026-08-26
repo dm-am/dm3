@@ -4,7 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -94,7 +94,7 @@ public class ApiServiceBoundaryShould
     /// </summary>
     [Fact]
     public void FindEveryApiServiceOfTheHost() =>
-        Sources(RepositoryRoot, "*ApiService.cs").Should().HaveCountGreaterOrEqualTo(75,
+        Sources(RepositoryRoot, "*ApiService.cs").Should().HaveCountGreaterThanOrEqualTo(75,
             "the host declares an interface and a class per feature, and a rule that " +
             "found neither would be green for that reason alone");
 

@@ -9,8 +9,6 @@
  * Editing — through code.
  */
 
-import { onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import {
   ExpandableList,
@@ -23,10 +21,7 @@ import RulesExternalLinks from "./RulesExternalLinks.vue";
 import RulesBans from "./RulesBans.vue";
 import RulesAuthors from "./RulesAuthors.vue";
 import RulesStaffTable from "./RulesStaffTable.vue";
-import type { ExpandableListExpose } from "./expandableListRef";
-
-const route = useRoute();
-const penaltiesListRef = ref<ExpandableListExpose | null>(null);
+import { useExpandOnHash } from "./expandableListRef";
 
 // Type alias (not interface) so the implicit index signature satisfies
 // the ExpandableItem constraint of ExpandableList.
@@ -86,16 +81,7 @@ const penaltyColumns: ExpandableListColumn<Penalty>[] = [
   { key: "points", label: "Баллы", width: "80px", align: "center", bold: true },
 ];
 
-// Deep-link support: #<item-id> (e.g. "#hacking") auto-expands the matching
-// penalty row on mount. Scrolling itself is handled globally by the router
-// (router.ts already does document.getElementById(hash) on every
-// navigation) — this only adds the expand-on-arrival behavior.
-onMounted(() => {
-  const id = route.hash.slice(1);
-  if (id && penalties.some((penalty) => penalty.id === id)) {
-    penaltiesListRef.value?.expandItem(id);
-  }
-});
+const penaltiesListRef = useExpandOnHash(penalties);
 </script>
 
 <template>

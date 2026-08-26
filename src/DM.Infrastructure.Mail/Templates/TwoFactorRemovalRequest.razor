@@ -1,0 +1,40 @@
+@*
+    Письмо по запросу на снятие второго фактора. Переход по ссылке фактор не
+    снимает: он назначает снятие через отложенный срок и высылает второе письмо
+    с отменой.
+*@
+<EmailLayout Title="Запрос на снятие второго фактора">
+    <p style="@EmailConstants.ParagraphStyles">
+        Здравствуйте, @Model.Username!
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Мы получили запрос на снятие второго фактора с вашей учетной записи.
+    </p>
+
+    <a href="@Model.ConfirmationLinkUrl" style="@EmailConstants.ButtonStyles">Подтвердить запрос</a>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Если кнопка не работает, откройте ссылку вручную:<br/>
+        <a href="@Model.ConfirmationLinkUrl">@Model.ConfirmationLinkUrl</a>
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Переход по ссылке не снимает второй фактор сразу: он назначает снятие и
+        завершает все сессии учетной записи. До назначенного срока снятие можно
+        отменить ссылкой из второго письма или любым входом со вторым фактором.
+    </p>
+
+    <p style="@EmailConstants.ParagraphStyles">
+        Если запрос делали не вы, ничего делать не нужно: второй фактор останется
+        на месте.
+    </p>
+</EmailLayout>
+
+@code {
+
+    /// <summary>Данные письма</summary>
+    [Parameter]
+    public TwoFactorRemovalRequestViewModel Model { get; set; } = null!;
+
+}

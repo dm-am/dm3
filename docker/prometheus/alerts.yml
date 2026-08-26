@@ -121,19 +121,6 @@ groups:
           summary: "PostgreSQL is down"
           description: "PostgreSQL exporter reports database is unreachable."
 
-      # The second store, on the same footing as the first. Its only signal used to
-      # be the readiness probe, which nothing polls: it stopping produced no alert
-      # at all, while the unread counters, the security journal and the session
-      # store all live there.
-      - alert: MongoDown
-        expr: mongodb_up == 0 or absent(mongodb_up)
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "MongoDB is down"
-          description: "The document store is unreachable. Unread badges, the security journal and sessions are all in it."
-
       - alert: HighMemoryUsage
         expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
         for: 5m
@@ -298,17 +285,43 @@ groups:
       # The publishing side of the same trade. SYSTEM.md says an event is not the
       # carrier of the fact, so the producer swallows a refusal rather than turning
       # a committed write into a 500. That only holds while the swallowing is
-      # visible: without this rule a broker refusing every publish looks exactly
-      # like a quiet site, and the first symptom is a user asking why notifications
-      # stopped.
+      # visible: without this rule the swallowed losses look exactly like a quiet
+      # site, and the first symptom is a user asking why notifications stopped.
       - alert: EventsNotPublished
         expr: sum by (event) (rate(dm_messaging_publish_failed_total[5m])) > 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Events of type {{ $labels.event }} are not reaching the broker"
-          description: "The producer is failing to publish and the callers do not see it by design. Nothing will retry these: no notification and no letter for the writes they belong to."
+          summary: "Events of type {{ $labels.event }} did not reach the outbox"
+          description: "Since the outbox these are the irrecoverable losses only: an outbox insert refused right after the domain commit, or the login-warning letter. Nothing stored them and nothing will retry them. A broker refusal is not here anymore - that is a delay, watched by OutboxBacklogAging."
+
+      # A broker refusal stopped being a loss when the outbox landed: the rows
+      # wait, the relay retries every second, and what matters is how long the
+      # oldest one has been waiting. Five minutes is longer than any deploy's
+      # broker restart, so this firing means the broker is properly down or the
+      # relay is jammed on a row it cannot assemble - either way a human call.
+      - alert: OutboxBacklogAging
+        expr: dm_messaging_outbox_lag_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Domain events are stuck in the outbox"
+          description: "The oldest unpublished event has waited over 5 minutes. Nothing is lost: the rows stay until published, but no notification, letter or badge goes out for them. Broker down longer than a deploy, or the relay jammed on one row - Attempts and LastError on the oldest rows say which."
+
+      # The gauge above is written by the relay itself, so a stalled relay loop
+      # in a live process freezes it at its last value - a zero that masks a
+      # growing backlog. The pass counter ticks on an empty backlog too, which
+      # is what makes its silence meaningful.
+      - alert: OutboxRelayStalled
+        expr: increase(dm_messaging_outbox_relay_passes_total[10m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The outbox relay is not making passes"
+          description: "The API process is up and its relay loop has not completed a pass in 10 minutes, so nothing publishes domain events at all and the lag gauge cannot be trusted - it is only as fresh as the last pass."
 
       # The far end of the same road. The message left the broker, reached a
       # sender, and the channel refused it - a bot token revoked, a relay

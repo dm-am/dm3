@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace DM.Web.API.Shared.Authentication.Credentials;
 
 /// <summary>
@@ -11,16 +9,11 @@ public class LoginCredentials : AuthCredentials
     /// User email address
     /// </summary>
     /// <example>john@example.com</example>
-    [Required(ErrorMessage = "Введите почту")]
-    [StringLength(100, MinimumLength = 1, ErrorMessage = "Почта от 1 до 100 символов")]
-    [EmailAddress(ErrorMessage = "Неверный формат почты")]
     public string Email { get; set; } = "";
 
     /// <summary>
     /// User password
     /// </summary>
-    [Required(ErrorMessage = "Введите пароль")]
-    [StringLength(128, MinimumLength = 1, ErrorMessage = "Пароль от 1 до 128 символов")]
     public string Password { get; set; } = "";
 
     /// <summary>

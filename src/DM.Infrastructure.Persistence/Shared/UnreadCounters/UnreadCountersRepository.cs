@@ -1,30 +1,42 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Tracing;
-using DM.Infrastructure.Persistence.Entities.Shared;
-using DM.Infrastructure.Persistence.MongoIntegration;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using MongoDB.Driver;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace DM.Infrastructure.Persistence.Shared.UnreadCounters;
 
 using IUnreadCountersRepository = DM.Domain.Core.UnreadCounters.IUnreadCountersRepository;
 
 /// <inheritdoc cref="IUnreadCountersRepository" />
-internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounter>, IUnreadCountersRepository
+/// <remarks>
+/// The primary key of the table is the triple every write addresses, and every
+/// write that can meet an existing marker is INSERT ... ON CONFLICT: the server
+/// settles encountering upserts atomically, so the client-side duplicate-key
+/// retry this repository used to carry is gone. The IsRemoved predicates are
+/// spelled out per read — the entity opts out of the global soft-delete filter,
+/// because the upsert paths deliberately revive tombstones while the flush
+/// paths must ignore them.
+/// </remarks>
+internal class UnreadCountersRepository : IUnreadCountersRepository
 {
+    private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<UnreadCountersRepository> _logger;
 
     /// <inheritdoc />
-    public UnreadCountersRepository(DmMongoClient client,
+    public UnreadCountersRepository(DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider,
-        ILogger<UnreadCountersRepository> logger) : base(client)
+        ILogger<UnreadCountersRepository> logger)
     {
+        _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
         _logger = logger;
     }
@@ -34,13 +46,14 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     {
         // Upsert, not insert: a user can be counted in for an entity they already
         // have a marker in — removed from a group chat once and added back — and
-        // the unique index refuses the second document. Replacing gives what the
-        // second insert used to give anyway: the aggregate reads take Min(Counter)
-        // and answered with the fresh zero.
+        // the primary key refuses a second row. Resetting gives what the second
+        // insert used to give anyway: the aggregate reads take Min(Counter) and
+        // answered with the fresh zero. The reset also revives a tombstone on
+        // purpose — the marker belongs to a participant added back.
         var rightNow = _dateTimeProvider.Now.UtcDateTime;
         var markers = userIds
             .Distinct()
-            .Select(id => Upsert(new UnreadCounter
+            .Select(id => new Entities.Shared.UnreadCounter
             {
                 UserId = id,
                 EntityId = entityId,
@@ -48,25 +61,24 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                 EntryType = entryType,
                 LastReadUtc = rightNow,
                 Counter = 0
-            }))
+            })
             .ToArray();
 
-        // A bulk write refuses an empty batch, and nobody to count for is not an
-        // error: the callers happen to guard it, nothing makes them.
+        // Nobody to count for is not an error: the callers happen to guard it,
+        // nothing makes them.
         return markers.Length == 0
             ? Task.CompletedTask
-            : UpsertAsync(() => Collection.BulkWriteAsync(markers));
+            : UpsertMarkersAsync(markers);
     }
 
     /// <inheritdoc />
     public Task CreateMarkerAsync(Guid entityId, Guid parentId, UnreadEntryType entryType)
     {
-        // Same reason as above: the anonymous marker is addressed by the key the
-        // unique index enforces, so a repeated create resets it instead of failing
-        // on it.
-        return UpsertAsync(() => Collection.ReplaceOneAsync(
-            Key(Guid.Empty, entityId, entryType),
-            new UnreadCounter
+        // Same reason as above: the anonymous marker is addressed by the primary
+        // key, so a repeated create resets it instead of failing on it.
+        return UpsertMarkersAsync(new[]
+        {
+            new Entities.Shared.UnreadCounter
             {
                 UserId = Guid.Empty,
                 EntityId = entityId,
@@ -74,8 +86,8 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                 EntryType = entryType,
                 LastReadUtc = _dateTimeProvider.Now.UtcDateTime,
                 Counter = 0
-            },
-            new ReplaceOptions { IsUpsert = true }));
+            }
+        });
     }
 
     /// <inheritdoc />
@@ -83,37 +95,33 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
 
     /// <inheritdoc />
     public Task IncrementAsync(Guid entityId, UnreadEntryType entryType) =>
-        CountedAsync("increment", entityId, entryType, () => Collection.UpdateManyAsync(
-            Filter.Eq(c => c.EntityId, entityId) &
-            Filter.Eq(c => c.EntryType, entryType),
-            UpdateBuilder.Inc(c => c.Counter, 1)));
+        CountedAsync("increment", entityId, entryType, () => _dbContext.UnreadCounters
+            .Where(c => c.EntityId == entityId && c.EntryType == entryType)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.Counter, c => c.Counter + 1)));
 
     /// <inheritdoc />
     public Task IncrementExcludingAsync(Guid entityId, UnreadEntryType entryType, Guid excludeUserId) =>
-        CountedAsync("increment_excluding", entityId, entryType, () => Collection.UpdateManyAsync(
-            Filter.Eq(c => c.EntityId, entityId) &
-            Filter.Eq(c => c.EntryType, entryType) &
-            Filter.Ne(c => c.UserId, excludeUserId),
-            UpdateBuilder.Inc(c => c.Counter, 1)));
+        CountedAsync("increment_excluding", entityId, entryType, () => _dbContext.UnreadCounters
+            .Where(c => c.EntityId == entityId && c.EntryType == entryType && c.UserId != excludeUserId)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.Counter, c => c.Counter + 1)));
 
     /// <inheritdoc />
     public Task DecrementAsync(Guid entityId, UnreadEntryType entryType, DateTimeOffset createDate) =>
-        CountedAsync("decrement", entityId, entryType, () => Collection.UpdateManyAsync(
-            Filter.Eq(c => c.EntityId, entityId) &
-            Filter.Eq(c => c.EntryType, entryType) &
-            Filter.Lt(c => c.LastReadUtc, createDate.UtcDateTime),
-            UpdateBuilder.Inc(c => c.Counter, -1)));
+        CountedAsync("decrement", entityId, entryType, () => _dbContext.UnreadCounters
+            .Where(c => c.EntityId == entityId && c.EntryType == entryType &&
+                        c.LastReadUtc < createDate.UtcDateTime)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.Counter, c => c.Counter - 1)));
 
     /// <summary>
     /// Runs one adjustment of an existing marker and keeps its failure to itself.
     /// </summary>
     /// <remarks>
     /// Every caller of these three reaches them after its own write has been
-    /// committed to PostgreSQL, and there is no transaction spanning the two
-    /// stores. So an exception here does not undo anything - it travels up through
-    /// a service that has already committed, and the caller is answered with a
-    /// failure for work that was in fact done. The reader then sees the post they
-    /// wrote, plus an error saying it was not written, and a retry writes it twice.
+    /// committed, and the increment is not part of that transaction. So an
+    /// exception here does not undo anything - it travels up through a service
+    /// that has already committed, and the caller is answered with a failure for
+    /// work that was in fact done. The reader then sees the post they wrote,
+    /// plus an error saying it was not written, and a retry writes it twice.
     ///
     /// Losing the count is the smaller loss, and it is bounded: the badge is a
     /// derived number, one "mark as read" resets it, and nothing else is built on
@@ -136,7 +144,7 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         catch (Exception exception)
         {
             StorageMetrics.WriteLost.Add(1,
-                StorageMetrics.Store(StorageMetrics.DocumentStore),
+                StorageMetrics.Store(StorageMetrics.RelationalStore),
                 StorageMetrics.Operation($"unread_counters.{operation}"),
                 new KeyValuePair<string, object?>("reason", exception.GetType().Name));
             _logger.LogWarning(exception,
@@ -151,15 +159,14 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     {
         // Stamped, not only flagged. The tombstone keeps a deleted entity from
         // coming back through "mark as read" — both flush paths look for a live
-        // marker to copy the parent from — and that job is over in minutes, while
-        // the document used to stay forever: every topic, room and conversation
-        // ever deleted kept one marker per user who had opened it, and nothing
-        // collected them. The moment of removal is what the collection's TTL index
-        // reads, so the tombstone now expires on its own.
-        return Collection.UpdateManyAsync(
-            Filter.Eq(c => c.EntityId, entityId) &
-            Filter.Eq(c => c.EntryType, entryType),
-            Tombstone());
+        // marker to copy the parent from — and that job is over in minutes,
+        // while the row used to stay forever. The moment of removal is what the
+        // retention sweep reads, so the tombstone now expires on its own.
+        return _dbContext.UnreadCounters
+            .Where(c => c.EntityId == entityId && c.EntryType == entryType)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.IsRemoved, true)
+                .SetProperty(c => c.RemovedUtc, _dateTimeProvider.Now.UtcDateTime));
     }
 
     /// <inheritdoc />
@@ -171,51 +178,21 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         // not one for CreateMarkerAsync above.
         return readers.Length == 0
             ? Task.CompletedTask
-            : Collection.UpdateManyAsync(
-                Filter.In(c => c.UserId, readers) &
-                Filter.Eq(c => c.EntityId, entityId) &
-                Filter.Eq(c => c.EntryType, entryType),
-                Tombstone());
+            : _dbContext.UnreadCounters
+                .Where(c => readers.Contains(c.UserId) && c.EntityId == entityId && c.EntryType == entryType)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(c => c.IsRemoved, true)
+                    .SetProperty(c => c.RemovedUtc, _dateTimeProvider.Now.UtcDateTime));
     }
-
-    /// <summary>
-    /// What a marker that no longer counts anything looks like.
-    /// </summary>
-    /// <remarks>
-    /// One spelling for both removals: the stamp is what the collection's expiry
-    /// index reads, so a second copy of this that forgot it would leave the
-    /// document behind forever.
-    /// </remarks>
-    private UpdateDefinition<UnreadCounter> Tombstone() => UpdateBuilder
-        .Set(c => c.IsRemoved, true)
-        .Set(c => c.RemovedUtc, _dateTimeProvider.Now.UtcDateTime);
 
     /// <inheritdoc />
     public async Task<IDictionary<Guid, int>> SelectByParentsAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] parentIds)
     {
-        var userIds = new[] { userId, Guid.Empty }.Distinct();
-        var counters = (await Collection.Aggregate()
-                .Match(
-                    Filter.In(c => c.UserId, userIds) &
-                    Filter.In(c => c.ParentId, parentIds) &
-                    Filter.Eq(c => c.EntryType, entryType) &
-                    Filter.Eq(c => c.IsRemoved, false))
-                .Group(c => c.EntityId,
-                    g => new UnreadCounter
-                    {
-                        EntityId = g.First().EntityId,
-                        ParentId = g.First().ParentId,
-                        Counter = g.Min(c => c.Counter)
-                    })
-                .Group(c => c.ParentId,
-                    g => new UnreadCounter
-                    {
-                        EntityId = g.First().ParentId,
-                        Counter = g.Sum(c => c.Counter > 0 ? 1 : 0)
-                    })
+        var counters = (await AggregateByParents(userId, entryType, parentIds)
+                .Select(g => new { ParentId = g.Key, Counter = g.Count(e => e.Counter > 0) })
                 .ToListAsync())
-            .ToDictionary(c => c.EntityId, c => c.Counter);
+            .ToDictionary(c => c.ParentId, c => c.Counter);
         return parentIds.ToDictionary(id => id, id => counters.TryGetValue(id, out var counter) ? counter : 0);
     }
 
@@ -223,48 +200,61 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     public async Task<IDictionary<Guid, int>> SelectTotalUnreadByParentsAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] parentIds)
     {
-        var userIds = new[] { userId, Guid.Empty }.Distinct();
-        var counters = (await Collection.Aggregate()
-                .Match(
-                    Filter.In(c => c.UserId, userIds) &
-                    Filter.In(c => c.ParentId, parentIds) &
-                    Filter.Eq(c => c.EntryType, entryType) &
-                    Filter.Eq(c => c.IsRemoved, false))
-                .Group(c => c.EntityId,
-                    g => new UnreadCounter
-                    {
-                        EntityId = g.First().EntityId,
-                        ParentId = g.First().ParentId,
-                        Counter = g.Min(c => c.Counter)
-                    })
-                .Group(c => c.ParentId,
-                    g => new UnreadCounter
-                    {
-                        EntityId = g.First().ParentId,
-                        Counter = g.Sum(c => c.Counter) // SUM instead of COUNT
-                    })
+        var counters = (await AggregateByParents(userId, entryType, parentIds)
+                .Select(g => new { ParentId = g.Key, Counter = g.Sum(e => e.Counter) })
                 .ToListAsync())
-            .ToDictionary(c => c.EntityId, c => c.Counter);
+            .ToDictionary(c => c.ParentId, c => c.Counter);
         return parentIds.ToDictionary(id => id, id => counters.TryGetValue(id, out var counter) ? counter : 0);
+    }
+
+    /// <summary>
+    /// One value per entity under the asked-for parents, grouped back under the
+    /// parent for the caller's aggregate. Min over the user's own marker and
+    /// the anonymous one keeps the semantics the aggregates always had: the
+    /// reader's own state wins where both exist.
+    /// </summary>
+    private IQueryable<IGrouping<Guid, EntityAggregate>> AggregateByParents(
+        Guid userId, UnreadEntryType entryType, Guid[] parentIds)
+    {
+        var userIds = new[] { userId, Guid.Empty }.Distinct().ToArray();
+        // Grouped by the pair rather than by the entity alone: the rows of one
+        // entity in this filtered set share their parent (a topic is parented
+        // by its board for the reader and for the anonymous marker alike), and
+        // the server has no aggregate to pick a uuid out of a group with.
+        return _dbContext.UnreadCounters
+            .TagWith("DM.UnreadCounters.ByParents")
+            .Where(c => userIds.Contains(c.UserId) &&
+                        parentIds.Contains(c.ParentId) &&
+                        c.EntryType == entryType &&
+                        !c.IsRemoved)
+            .GroupBy(c => new { c.ParentId, c.EntityId })
+            .Select(g => new EntityAggregate
+            {
+                ParentId = g.Key.ParentId,
+                Counter = g.Min(c => c.Counter)
+            })
+            .GroupBy(e => e.ParentId);
+    }
+
+    private sealed class EntityAggregate
+    {
+        public Guid ParentId { get; init; }
+        public int Counter { get; init; }
     }
 
     /// <inheritdoc />
     public async Task<IDictionary<Guid, int>> SelectByEntitiesAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] entityIds)
     {
-        var userIds = new[] { userId, Guid.Empty }.Distinct();
-        var counters = (await Collection.Aggregate()
-                .Match(
-                    Filter.In(c => c.UserId, userIds) &
-                    Filter.In(c => c.EntityId, entityIds) &
-                    Filter.Eq(c => c.EntryType, entryType) &
-                    Filter.Eq(c => c.IsRemoved, false))
-                .Group(c => c.EntityId,
-                    g => new UnreadCounter
-                    {
-                        EntityId = g.First().EntityId,
-                        Counter = g.Min(c => c.Counter)
-                    })
+        var userIds = new[] { userId, Guid.Empty }.Distinct().ToArray();
+        var counters = (await _dbContext.UnreadCounters
+                .TagWith("DM.UnreadCounters.ByEntities")
+                .Where(c => userIds.Contains(c.UserId) &&
+                            entityIds.Contains(c.EntityId) &&
+                            c.EntryType == entryType &&
+                            !c.IsRemoved)
+                .GroupBy(c => c.EntityId)
+                .Select(g => new { EntityId = g.Key, Counter = g.Min(c => c.Counter) })
                 .ToListAsync())
             .ToDictionary(c => c.EntityId, c => c.Counter);
         return entityIds.ToDictionary(id => id, id => counters.TryGetValue(id, out var counter) ? counter : 0);
@@ -286,18 +276,14 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         // participant's identifier, and the conversation then matched neither of
         // them in a parent-scoped read — it did not move to the wrong total, it
         // dropped out of every total.
-        var own = await Collection.Find(
-                Key(userId, entityId, entryType) &
-                Filter.Eq(c => c.IsRemoved, false))
-            .FirstOrDefaultAsync();
-
-        if (own != null)
+        var flushedOwn = await _dbContext.UnreadCounters
+            .Where(c => c.UserId == userId && c.EntityId == entityId && c.EntryType == entryType &&
+                        !c.IsRemoved)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.Counter, 0)
+                .SetProperty(c => c.LastReadUtc, _dateTimeProvider.Now.UtcDateTime));
+        if (flushedOwn > 0)
         {
-            await Collection.UpdateOneAsync(
-                Key(userId, entityId, entryType) & Filter.Eq(c => c.IsRemoved, false),
-                UpdateBuilder
-                    .Set(c => c.Counter, 0)
-                    .Set(c => c.LastReadUtc, _dateTimeProvider.Now.UtcDateTime));
             return;
         }
 
@@ -306,33 +292,31 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
         // entity was never counted for anyone — there is nothing to mark as read,
         // and writing a marker with an invented ParentId would hide it from
         // FlushAllAsync, which filters by exactly that field.
-        // Mongo has no global soft-delete filter of its own, so IsRemoved has to be
-        // spelled out. Without it a deleted entity still finds its own tombstoned
-        // counter here, and the upsert below writes a live row back — the entity
-        // returns to the sidebar with a fresh marker.
-        var counter = await Collection.Find(
-                Filter.Eq(c => c.EntityId, entityId) &
-                Filter.Eq(c => c.EntryType, entryType) &
-                Filter.Eq(c => c.IsRemoved, false))
+        // The IsRemoved predicate is spelled out on purpose: a deleted entity
+        // still finds its own tombstoned counter here, and the upsert below
+        // would write a live row back — the entity returns to the sidebar with
+        // a fresh marker.
+        var counter = await _dbContext.UnreadCounters
+            .TagWith("DM.UnreadCounters.FlushDonor")
+            .Where(c => c.EntityId == entityId && c.EntryType == entryType && !c.IsRemoved)
             .FirstOrDefaultAsync();
         if (counter == null)
         {
             return;
         }
 
-        await UpsertAsync(() => Collection
-            .ReplaceOneAsync(
-                Key(userId, entityId, entryType),
-                new UnreadCounter
-                {
-                    UserId = userId,
-                    EntityId = entityId,
-                    ParentId = counter.ParentId,
-                    EntryType = entryType,
-                    LastReadUtc = _dateTimeProvider.Now.UtcDateTime,
-                    Counter = 0
-                },
-                new ReplaceOptions { IsUpsert = true }));
+        await UpsertMarkersAsync(new[]
+        {
+            new Entities.Shared.UnreadCounter
+            {
+                UserId = userId,
+                EntityId = entityId,
+                ParentId = counter.ParentId,
+                EntryType = entryType,
+                LastReadUtc = _dateTimeProvider.Now.UtcDateTime,
+                Counter = 0
+            }
+        });
     }
 
     /// <inheritdoc />
@@ -340,14 +324,16 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     {
         // Same reason as FlushAsync: a deleted entity must not come back through
         // "mark everything as read".
-        var entityIds = await Collection.Distinct(c => c.EntityId,
-                Filter.Eq(c => c.ParentId, parentId) &
-                Filter.Eq(c => c.EntryType, entryType) &
-                Filter.Eq(c => c.IsRemoved, false))
+        var entityIds = await _dbContext.UnreadCounters
+            .TagWith("DM.UnreadCounters.FlushAll")
+            .Where(c => c.ParentId == parentId && c.EntryType == entryType && !c.IsRemoved)
+            .Select(c => c.EntityId)
+            .Distinct()
             .ToListAsync();
+
         var rightNow = _dateTimeProvider.Now.UtcDateTime;
         var markers = entityIds
-            .Select(id => Upsert(new UnreadCounter
+            .Select(id => new Entities.Shared.UnreadCounter
             {
                 UserId = userId,
                 EntityId = id,
@@ -355,43 +341,35 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
                 EntryType = entryType,
                 LastReadUtc = rightNow,
                 Counter = 0
-            }))
+            })
             .ToArray();
 
         // Nothing unread under this parent is the ordinary state of a user who
-        // reads everything, and a bulk write refuses an empty batch.
+        // reads everything.
         if (markers.Length == 0)
         {
             return;
         }
 
-        await UpsertAsync(() => Collection.BulkWriteAsync(markers));
+        await UpsertMarkersAsync(markers);
     }
 
     /// <inheritdoc />
     public async Task ChangeParentAsync(Guid parentId, UnreadEntryType entryType, Guid newParentId)
     {
-        await Collection.UpdateManyAsync(
-            Filter.Eq(c => c.ParentId, parentId) &
-            Filter.Eq(c => c.EntryType, entryType),
-            UpdateBuilder.Set(c => c.ParentId, newParentId));
+        await _dbContext.UnreadCounters
+            .Where(c => c.ParentId == parentId && c.EntryType == entryType)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.ParentId, newParentId));
     }
 
     /// <inheritdoc />
     public async Task<DateTime?> GetLastReadTimeAsync(Guid userId, Guid entityId, UnreadEntryType entryType)
     {
-        // Sorted, and not "whichever document comes back first": the unique index
-        // on (UserId, EntityId, EntryType) makes one marker the only lawful state,
-        // but a database that predates the index keeps what it already had — the
-        // startup assertion logs the conflict and moves on. The latest read is the
-        // answer - the same one the aggregate reads reach through Min(Counter).
-        var counter = await Collection
-            .Find(
-                Filter.Eq(c => c.UserId, userId) &
-                Filter.Eq(c => c.EntityId, entityId) &
-                Filter.Eq(c => c.EntryType, entryType) &
-                Filter.Eq(c => c.IsRemoved, false))
-            .SortByDescending(c => c.LastReadUtc)
+        // At most one row: the triple is the primary key.
+        var counter = await _dbContext.UnreadCounters
+            .TagWith("DM.UnreadCounters.LastRead")
+            .Where(c => c.UserId == userId && c.EntityId == entityId && c.EntryType == entryType &&
+                        !c.IsRemoved)
             .FirstOrDefaultAsync();
 
         return counter?.LastReadUtc;
@@ -400,57 +378,57 @@ internal class UnreadCountersRepository : MongoCollectionRepository<UnreadCounte
     /// <inheritdoc />
     public async Task<IDictionary<Guid, DateTime>> GetLastReadTimesAsync(Guid userId, UnreadEntryType entryType, params Guid[] entityIds)
     {
-        var counters = await Collection
-            .Find(
-                Filter.Eq(c => c.UserId, userId) &
-                Filter.In(c => c.EntityId, entityIds) &
-                Filter.Eq(c => c.EntryType, entryType) &
-                Filter.Eq(c => c.IsRemoved, false))
+        var counters = await _dbContext.UnreadCounters
+            .TagWith("DM.UnreadCounters.LastReads")
+            .Where(c => c.UserId == userId &&
+                        entityIds.Contains(c.EntityId) &&
+                        c.EntryType == entryType &&
+                        !c.IsRemoved)
             .ToListAsync();
 
-        // Grouped for the same reason: a plain ToDictionary throws on a duplicated
-        // entity, and the caller is the jump to the first unread post, which would
-        // then fail whole on a database whose unique index was never created.
-        return counters
-            .GroupBy(c => c.EntityId)
-            .ToDictionary(g => g.Key, g => g.Max(c => c.LastReadUtc));
+        return counters.ToDictionary(c => c.EntityId, c => c.LastReadUtc);
     }
 
     /// <summary>
-    /// The key the collection's unique index enforces. Every write that can meet
-    /// an existing marker addresses it by exactly this triple, so the filter is
-    /// spelled out once and cannot drift between the write paths.
+    /// The one spelling of "this marker starts over": INSERT ... ON CONFLICT on
+    /// the primary key, resetting the counter, the read moment and the
+    /// tombstone. Atomic on the server against a concurrent upsert of the same
+    /// key — two tabs, a double click on "mark as read", a retried request over
+    /// a mobile network — so no client retry exists to get wrong.
     /// </summary>
-    private static FilterDefinition<UnreadCounter> Key(Guid userId, Guid entityId, UnreadEntryType entryType) =>
-        Filter.Eq(c => c.UserId, userId) &
-        Filter.Eq(c => c.EntityId, entityId) &
-        Filter.Eq(c => c.EntryType, entryType);
-
-    private static ReplaceOneModel<UnreadCounter> Upsert(UnreadCounter marker) =>
-        new(Key(marker.UserId, marker.EntityId, marker.EntryType), marker) { IsUpsert = true };
-
-    /// <summary>
-    /// An upsert is not atomic against another upsert on the same key: both can
-    /// find no document, both then insert, and the unique index refuses the second
-    /// one. Two tabs, a double click on "mark as read" or a retried request over a
-    /// mobile network is exactly that race. One retry settles it — the winner's
-    /// document is in place by then, so the retry matches it and replaces instead
-    /// of inserting.
-    /// </summary>
-    private static async Task UpsertAsync(Func<Task> write)
+    private async Task UpsertMarkersAsync(IReadOnlyList<Entities.Shared.UnreadCounter> markers)
     {
-        try
+        var sql = new StringBuilder(
+            """
+            INSERT INTO "UnreadCounters" ("UserId", "EntityId", "EntryType", "ParentId", "LastReadUtc", "Counter", "IsRemoved", "RemovedUtc")
+            VALUES
+            """);
+        var parameters = new List<NpgsqlParameter>(markers.Count * 5);
+
+        for (var i = 0; i < markers.Count; i++)
         {
-            await write();
+            var marker = markers[i];
+            var p = i * 5;
+            sql.Append(i == 0 ? " " : ", ");
+            sql.Append($"(@p{p}, @p{p + 1}, @p{p + 2}, @p{p + 3}, @p{p + 4}, 0, FALSE, NULL)");
+            parameters.Add(new NpgsqlParameter($"p{p}", marker.UserId));
+            parameters.Add(new NpgsqlParameter($"p{p + 1}", marker.EntityId));
+            parameters.Add(new NpgsqlParameter($"p{p + 2}", (int)marker.EntryType));
+            parameters.Add(new NpgsqlParameter($"p{p + 3}", marker.ParentId));
+            parameters.Add(new NpgsqlParameter($"p{p + 4}", NpgsqlDbType.TimestampTz) { Value = marker.LastReadUtc });
         }
-        catch (MongoWriteException e) when (e.WriteError?.Category == ServerErrorCategory.DuplicateKey)
-        {
-            await write();
-        }
-        catch (MongoBulkWriteException e) when (
-            e.WriteErrors.Any(error => error.Category == ServerErrorCategory.DuplicateKey))
-        {
-            await write();
-        }
+
+        sql.Append(
+            """
+
+            ON CONFLICT ("UserId", "EntityId", "EntryType") DO UPDATE SET
+                "ParentId" = EXCLUDED."ParentId",
+                "LastReadUtc" = EXCLUDED."LastReadUtc",
+                "Counter" = 0,
+                "IsRemoved" = FALSE,
+                "RemovedUtc" = NULL
+            """);
+
+        await _dbContext.Database.ExecuteSqlRawAsync(sql.ToString(), parameters);
     }
 }

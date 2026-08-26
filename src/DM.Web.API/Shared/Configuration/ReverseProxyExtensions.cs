@@ -44,24 +44,26 @@ public static class ReverseProxyExtensions
 
             // The framework defaults trust loopback. Only the deployment knows where
             // its proxy actually lives, so nothing is trusted implicitly.
-            options.KnownNetworks.Clear();
+            options.KnownIPNetworks.Clear();
             options.KnownProxies.Clear();
             foreach (var network in trustedNetworks)
             {
-                options.KnownNetworks.Add(network);
+                options.KnownIPNetworks.Add(network);
             }
         });
     }
 
-    private static IPNetwork ParseNetwork(string value)
+    private static System.Net.IPNetwork ParseNetwork(string value)
     {
         if (!System.Net.IPNetwork.TryParse(value, out var network))
         {
             throw new InvalidOperationException(
                 $"{nameof(ReverseProxyConfiguration)}:{nameof(ReverseProxyConfiguration.TrustedNetworks)} " +
-                $"contains \"{value}\", which is not a CIDR network");
+                $"contains \"{value}\", which is not a canonical CIDR network. " +
+                "The address part has to be the network itself, host bits cleared: " +
+                "172.28.0.0/16, not 172.28.0.1/16");
         }
 
-        return new IPNetwork(network.BaseAddress, network.PrefixLength);
+        return network;
     }
 }

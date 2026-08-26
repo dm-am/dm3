@@ -65,6 +65,12 @@ html.theme_Light {
   --tooltip-link-hover: #9cc8f0;
   --overlay-bg: rgba(0, 0, 0, 0.25);
   --overlay-subtle: rgba(0, 0, 0, 0.05);
+  /* The faintest wash the palette owns: a surface that has to be told apart
+     from the one under it and nothing more. The alpha is the light theme's
+     --bg-element-overlay, and it is the same number in both palettes on
+     purpose — the two themes must give the wash the same weight, which the
+     0.024 / 0.07 pair of --bg-element-overlay does not. */
+  --overlay-faint: rgba(0, 0, 0, 0.024);
   --selected-overlay: rgba(0, 0, 0, 0.02);
   --hover-overlay: rgba(0, 0, 0, 0.05);
   --active-overlay: rgba(0, 0, 0, 0.08);
@@ -167,6 +173,8 @@ html.theme_Dark {
   --tooltip-link-hover: #9cc8f0;
   --overlay-bg: rgba(0, 0, 0, 0.4);
   --overlay-subtle: rgba(255, 255, 255, 0.05);
+  /* Same alpha as the light theme, rationale in the light theme block. */
+  --overlay-faint: rgba(255, 255, 255, 0.024);
   --selected-overlay: rgba(255, 255, 255, 0.03);
   --hover-overlay: rgba(255, 255, 255, 0.08);
   --active-overlay: rgba(255, 255, 255, 0.12);

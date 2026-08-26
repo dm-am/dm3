@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using DM.Web.API.Shared.RateLimiting;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Xunit;
@@ -58,6 +58,20 @@ public class RateLimitPolicyBindingShould
         ["Account.Deactivation.DeactivationController"] = RateLimitPolicies.Auth,
         ["Account.Recovery.RecoveryController"] = RateLimitPolicies.Auth,
         ["Account.Registration.RegistrationController"] = RateLimitPolicies.Auth,
+        // The second factor is counted per endpoint because it is counted per two
+        // different things. What the owner does to his own factor carries a
+        // session and spends his own budget; the mailed removal path carries
+        // nothing and spends the address budget of the credential surface, which
+        // is the only budget an anonymous caller can be held to.
+        ["Account.TwoFactor.TwoFactorController.CancelTwoFactorRemoval"] = RateLimitPolicies.Auth,
+        ["Account.TwoFactor.TwoFactorController.ClearTwoFactorForColleague"] = RateLimitPolicies.TwoFactor,
+        ["Account.TwoFactor.TwoFactorController.ConfirmTwoFactor"] = RateLimitPolicies.TwoFactor,
+        ["Account.TwoFactor.TwoFactorController.DisableTwoFactor"] = RateLimitPolicies.TwoFactor,
+        ["Account.TwoFactor.TwoFactorController.GetTwoFactorStatus"] = RateLimitPolicies.TwoFactor,
+        ["Account.TwoFactor.TwoFactorController.ReissueRecoveryCodes"] = RateLimitPolicies.TwoFactor,
+        ["Account.TwoFactor.TwoFactorController.RequestTwoFactorRemoval"] = RateLimitPolicies.Auth,
+        ["Account.TwoFactor.TwoFactorController.ScheduleTwoFactorRemoval"] = RateLimitPolicies.Auth,
+        ["Account.TwoFactor.TwoFactorController.SetupTwoFactor"] = RateLimitPolicies.TwoFactor,
         ["Blog.Blacklists.BlogBlacklistController"] = RateLimitPolicies.Default,
         ["Blog.Blogs.BlogController.DeleteBlog"] = RateLimitPolicies.Default,
         ["Blog.Blogs.BlogController.DeleteRubric"] = RateLimitPolicies.Default,
@@ -99,8 +113,7 @@ public class RateLimitPolicyBindingShould
     {
         var applied = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        var controllers = typeof(Startup).Assembly.GetTypes()
-            .Where(t => t.IsClass && !t.IsAbstract && typeof(ControllerBase).IsAssignableFrom(t));
+        var controllers = ApiSurface.Controllers();
 
         foreach (var controller in controllers)
         {
@@ -110,8 +123,7 @@ public class RateLimitPolicyBindingShould
                 applied[Named(controller)] = onController.PolicyName;
             }
 
-            var actions = controller.GetMethods(
-                BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+            var actions = controller.GetMethods(ApiSurface.ActionBinding);
             foreach (var action in actions)
             {
                 var onAction = action.GetCustomAttribute<EnableRateLimitingAttribute>();
@@ -166,4 +178,83 @@ public class RateLimitPolicyBindingShould
             "a policy AddDmRateLimiting never registered, and a constant nothing asks " +
             "for is a limiter registered for no endpoint");
     }
+
+    /// <summary>
+    /// A name an endpoint asks for and a limiter the host registers are two
+    /// separate lists, and only the second one counts anything.
+    /// </summary>
+    /// <remarks>
+    /// The third side of the triangle the two tests above draw. A constant that
+    /// no policy record declares is not a compile error and not a startup error:
+    /// it throws on the first request to the endpoint that asks for it, which in
+    /// a suite running with the limiter switched off is the first request in
+    /// production.
+    /// </remarks>
+    [Fact]
+    public void RegisterALimiterForEveryPolicyAnEndpointAsksFor()
+    {
+        RateLimitingExtensions.Policies.Select(policy => policy.Name)
+            .Should().Contain(Applied().Values.Distinct(),
+                "an endpoint asking by name for a policy the host never registered " +
+                "answers 500, and it does so only in a deployment that counts");
+    }
+
+    /// <summary>
+    /// Whose minute the second factor's own settings spend.
+    /// </summary>
+    /// <remarks>
+    /// Asserted because the failure is invisible from every direction. The whole
+    /// controller sat in the credential budget - five requests per address per
+    /// minute, the number sized for online password guessing - and switching a
+    /// factor on costs four requests in one sitting, after the sign-in that got
+    /// the person there has spent one of the five. One mistyped confirmation code
+    /// answered 429; behind carrier-grade NAT, where one address is a
+    /// neighbourhood, so did the first request. The integration suite could not
+    /// see any of it: it runs with the limiter switched off, which is why this is
+    /// asserted on the table rather than by counting to 429.
+    /// </remarks>
+    [Fact]
+    public void CountTheFactorsOwnSettingsPerAccountAndNotPerAddress()
+    {
+        Declared(RateLimitPolicies.TwoFactor).Partition
+            .Should().Be(RateLimitingExtensions.Partition.AccountThenAddress,
+                "every one of these endpoints carries a session, and the person behind " +
+                "an office or a carrier address is one account however many neighbours " +
+                "share the address with him");
+
+        Declared(RateLimitPolicies.TwoFactor).PermitLimit
+            .Should().BeGreaterThan(Declared(RateLimitPolicies.Auth).PermitLimit,
+                "switching the factor on is four requests in one sitting and a mistyped " +
+                "code has to cost a refusal that says the code was wrong, not a 429 that " +
+                "says nothing");
+    }
+
+    /// <summary>
+    /// The mailed removal path stays on the address budget.
+    /// </summary>
+    /// <remarks>
+    /// It is reachable without a session, so there is no account to hold it to,
+    /// and it is a guessing surface plus a way to make the site send letters.
+    /// Moving it into the per-account policy next door would count it per address
+    /// anyway - the fallback for guests - but at the laxer number.
+    /// </remarks>
+    [Fact]
+    public void CountTheMailedRemovalPathPerAddress()
+    {
+        var mailed = Applied()
+            .Where(pair => pair.Key.Contains("TwoFactorRemoval", StringComparison.Ordinal))
+            .Select(pair => pair.Value)
+            .Distinct();
+
+        mailed.Should().NotBeEmpty("the mailed removal path exists");
+        foreach (var policy in mailed)
+        {
+            Declared(policy).Partition.Should().Be(RateLimitingExtensions.Partition.Address,
+                "an anonymous caller is known by nothing but the address it arrives from");
+        }
+    }
+
+    /// <summary>The registered limiter behind a policy name.</summary>
+    private static RateLimitingExtensions.Policy Declared(string name) =>
+        RateLimitingExtensions.Policies.Single(policy => policy.Name == name);
 }

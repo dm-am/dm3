@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using AutoMapper;
+using System.Linq;
 using DM.Web.API.Features.Community.Awards;
 using DM.Web.API.Shared.Dto;
 using IAwardService = DM.Domain.Community.Features.Awards.IAwardService;
@@ -16,44 +16,49 @@ namespace DM.Web.API.Features.Moderation.Awards;
 internal class AwardCatalogApiService : IAwardCatalogApiService
 {
     private readonly IAwardService _awardService;
-    private readonly IMapper _mapper;
+    private readonly AwardMapper _mapper;
+    private readonly ModerationAwardMapper _moderationMapper;
 
     /// <inheritdoc />
-    public AwardCatalogApiService(IAwardService awardService, IMapper mapper)
+    public AwardCatalogApiService(
+        IAwardService awardService,
+        AwardMapper mapper,
+        ModerationAwardMapper moderationMapper)
     {
         _awardService = awardService;
         _mapper = mapper;
+        _moderationMapper = moderationMapper;
     }
 
     /// <inheritdoc />
     public async Task<ListEnvelope<AwardType>> GetTypes()
     {
         var types = await _awardService.GetTypesAsync(includeInactive: true);
-        return new ListEnvelope<AwardType>(_mapper.Map<IEnumerable<AwardType>>(types));
+        return new ListEnvelope<AwardType>(types.Select(_mapper.ToAwardType));
     }
 
     /// <inheritdoc />
     public async Task<ListEnvelope<ContestSeries>> GetSeries()
     {
         var series = await _awardService.GetSeriesAsync(includeInactive: true);
-        return new ListEnvelope<ContestSeries>(_mapper.Map<IEnumerable<ContestSeries>>(series));
+        return new ListEnvelope<ContestSeries>(series.Select(_mapper.ToContestSeries));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<AwardType>> CreateType(CreateAwardTypeRequest request)
     {
-        var domain = _mapper.Map<DomainCreateAwardType>(request);
+        var domain = _mapper.ToCreateAwardType(request);
         var created = await _awardService.CreateTypeAsync(domain);
-        return new Envelope<AwardType>(_mapper.Map<AwardType>(created));
+        return new Envelope<AwardType>(_mapper.ToAwardType(created));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<AwardType>> UpdateType(Guid id, UpdateAwardTypeRequest request)
     {
-        var domain = _mapper.Map<DomainUpdateAwardType>(request);
+        var domain = _mapper.ToUpdateAwardType(request);
         domain.Id = id;
         var updated = await _awardService.UpdateTypeAsync(domain);
-        return new Envelope<AwardType>(_mapper.Map<AwardType>(updated));
+        return new Envelope<AwardType>(_mapper.ToAwardType(updated));
     }
 
     /// <inheritdoc />
@@ -63,24 +68,24 @@ internal class AwardCatalogApiService : IAwardCatalogApiService
     public async Task<ListEnvelope<ContestSeriesAward>> GetSeriesAwards(Guid seriesId)
     {
         var awards = await _awardService.GetSeriesAwardsAsync(seriesId);
-        return new ListEnvelope<ContestSeriesAward>(_mapper.Map<IEnumerable<ContestSeriesAward>>(awards));
+        return new ListEnvelope<ContestSeriesAward>(awards.Select(_moderationMapper.ToContestSeriesAward));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<ContestSeries>> CreateSeries(CreateContestSeriesRequest request)
     {
-        var domain = _mapper.Map<DomainCreateContestSeries>(request);
+        var domain = _mapper.ToCreateContestSeries(request);
         var created = await _awardService.CreateSeriesAsync(domain);
-        return new Envelope<ContestSeries>(_mapper.Map<ContestSeries>(created));
+        return new Envelope<ContestSeries>(_mapper.ToContestSeries(created));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<ContestSeries>> UpdateSeries(Guid id, UpdateContestSeriesRequest request)
     {
-        var domain = _mapper.Map<DomainUpdateContestSeries>(request);
+        var domain = _mapper.ToUpdateContestSeries(request);
         domain.Id = id;
         var updated = await _awardService.UpdateSeriesAsync(domain);
-        return new Envelope<ContestSeries>(_mapper.Map<ContestSeries>(updated));
+        return new Envelope<ContestSeries>(_mapper.ToContestSeries(updated));
     }
 
     /// <inheritdoc />

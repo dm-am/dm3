@@ -4,8 +4,8 @@ using System.Linq;
 using ArchUnitNET.Domain;
 using ArchUnitNET.Fluent;
 using ArchUnitNET.Loader;
-using ArchUnitNET.xUnit;
-using FluentAssertions;
+using ArchUnitNET.xUnitV3;
+using AwesomeAssertions;
 using Xunit;
 using static ArchUnitNET.Fluent.ArchRuleDefinition;
 using ArchitectureModel = ArchUnitNET.Domain.Architecture;
@@ -19,7 +19,7 @@ namespace DM.Architecture.Tests;
 /// <remarks>
 /// The sibling rule names one shape — a class called *ApiService — and the host
 /// is much more than those. Ten background jobs sat outside it: nine of them held
-/// DmDbContext or DmMongoClient and wrote product rules inline, so the definition
+/// a store client and wrote product rules inline, so the definition
 /// of popularity, the lifetime of a token and the threshold for prodding a player
 /// about an owed post existed only inside a running host. None could be called
 /// from anywhere else, none could be covered by a domain test, and the seeder
@@ -56,22 +56,6 @@ public class HostStorageBoundaryShould
         "WarmupService",
     ];
 
-    /// <summary>
-    /// Classes outside the persistence project that derive the Mongo collection
-    /// base, with the reason each is still there.
-    /// </summary>
-    /// <remarks>
-    /// Both are notification senders of the dispatcher, and both read the same
-    /// settings document through a view of their own. They are named here so the
-    /// rule covers everything else: the HTTP host used to hold a third one, and
-    /// nothing said a word about it.
-    /// </remarks>
-    private static readonly string[] MongoBaseOutsidePersistence =
-    [
-        "DM.Workers.NotificationDispatcher.Bot.NotificationBotSender",
-        "DM.Workers.NotificationDispatcher.Email.NotificationEmailSender",
-    ];
-
     private static bool IsHost(IType type) =>
         type.Assembly.Name.StartsWith("DM.Web.API", StringComparison.Ordinal);
 
@@ -87,8 +71,7 @@ public class HostStorageBoundaryShould
 
     private static readonly IObjectProvider<IType> StoreHandles = Types()
         .That().HaveFullName("DM.Infrastructure.Persistence.DmDbContext")
-        .Or().HaveFullName("DM.Infrastructure.Persistence.MongoIntegration.DmMongoClient")
-        .As("the store handles");
+        .As("the store handle");
 
     private static readonly IObjectProvider<IType> PersistenceEntities = Types()
         .That().FollowCustomPredicate(
@@ -110,19 +93,19 @@ public class HostStorageBoundaryShould
         HostClassesOutsideBootstrap.GetObjects(Solution).Should().HaveCountGreaterThan(100,
             "the exemption list names three types, so removing them must not empty the set");
 
-        StoreHandles.GetObjects(Solution).Should().HaveCount(2,
-            "both handles must be in the model; a rule whose target is absent passes " +
+        StoreHandles.GetObjects(Solution).Should().HaveCount(1,
+            "the handle must be in the model; a rule whose target is absent passes " +
             "without checking anything");
 
         PersistenceEntities.GetObjects(Solution).Should().HaveCountGreaterThan(50,
-            "the entity namespace holds the whole relational and document model");
+            "the entity namespace holds the whole relational model");
     }
 
     [Fact]
     public void KeepTheWholeHostOffTheStoreHandles() =>
         Classes().That().Are(HostClassesOutsideBootstrap)
             .Should().NotDependOnAny(StoreHandles)
-            .Because("a type of the host that holds the context or the Mongo client has " +
+            .Because("a type of the host that holds the context has " +
                      "taken over a decision the domain also makes, and the rule it writes " +
                      "inline cannot be called or tested without starting a host")
             .Check(Solution);
@@ -131,7 +114,7 @@ public class HostStorageBoundaryShould
     public void KeepTheWholeHostOffThePersistenceEntities() =>
         Classes().That().Are(HostClassesOutsideBootstrap)
             .Should().NotDependOnAny(PersistenceEntities)
-            .Because("an EF or Mongo entity is the store's own shape; the host that maps " +
+            .Because("an EF entity is the store's own shape; the host that maps " +
                      "one into a response has bound the wire format to the table, and the " +
                      "settings document it did that with was read and rewritten whole on " +
                      "every call")
@@ -187,36 +170,6 @@ public class HostStorageBoundaryShould
             "that reaches into the store writes a rule only a running host can execute, " +
             "and the definition of popularity, the lifetime of a token and the threshold " +
             "for prodding a player all lived there");
-    }
-
-    /// <summary>
-    /// The Mongo collection base belongs to the persistence project. A class
-    /// elsewhere that derives it is a repository living outside the layer that
-    /// owns repositories, with its own idea of the document it shares.
-    /// </summary>
-    [Fact]
-    public void LeaveTheMongoCollectionBaseToThePersistenceProject()
-    {
-        var derived = Solution.Classes
-            .Where(c => c.BaseClass != null &&
-                        c.BaseClass.Name.StartsWith("MongoCollectionRepository", StringComparison.Ordinal))
-            .ToList();
-
-        derived.Should().NotBeEmpty(
-            "the persistence project derives this base several times over, and finding " +
-            "none means the rule matches on a name that no longer exists");
-
-        var offenders = derived
-            .Where(c => !c.Assembly.Name.StartsWith("DM.Infrastructure.Persistence", StringComparison.Ordinal))
-            .Select(c => c.FullName)
-            .Where(name => !MongoBaseOutsidePersistence.Any(known =>
-                name.StartsWith(known, StringComparison.Ordinal)))
-            .OrderBy(name => name, StringComparer.Ordinal)
-            .ToList();
-
-        offenders.Should().BeEmpty(
-            "a collection is one shape, and every class that opens it with a view of its " +
-            "own is free to disagree with the others about what the document holds");
     }
 
     private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;

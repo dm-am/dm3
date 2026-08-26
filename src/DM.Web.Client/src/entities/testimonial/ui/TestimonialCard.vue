@@ -103,7 +103,7 @@ defineExpose({
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 // Recipient link in the "<author> о <recipient>" footer line (both profile
 // recommendation lists): recedes to the muted treatment so the

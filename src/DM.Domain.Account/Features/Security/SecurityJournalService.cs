@@ -42,6 +42,7 @@ internal class SecurityJournalService : ISecurityJournalService
             SecurityLogType.Login => await _repository.GetByTypesAsync(userId, SecurityEventCategories.Login, take),
             SecurityLogType.Password => await _repository.GetByTypesAsync(userId, SecurityEventCategories.Password, take),
             SecurityLogType.Session => await _repository.GetByTypesAsync(userId, SecurityEventCategories.Session, take),
+            SecurityLogType.TwoFactor => await _repository.GetByTypesAsync(userId, SecurityEventCategories.TwoFactor, take),
             _ => await _repository.GetRecentEventsAsync(userId, take)
         };
     }

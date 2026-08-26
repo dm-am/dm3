@@ -7,6 +7,12 @@
 // See UI_STANDARDS.md for documentation.
 // =============================================================================
 
+// A partial is not a compilation entry, so vite's injection of the shared layer
+// never reached it: until the module system it read $minor and $bg-element out
+// of whatever file happened to include it.
+@use "Variables" as *
+@use "Themes" as *
+
 // -----------------------------------------------------------------------------
 // Shimmer Mixin
 // -----------------------------------------------------------------------------

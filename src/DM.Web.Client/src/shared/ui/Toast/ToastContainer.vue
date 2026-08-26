@@ -43,7 +43,7 @@ const { toasts, dismiss, pause, resume } = useToast();
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/ZIndex"
+@use "@/assets/styles/ZIndex" as *
 
 // Pinned to the bottom-right corner, and so is the ScrollNav rail — which
 // sits on $z-sticky, two tiers below the toast. A toast used to land on top

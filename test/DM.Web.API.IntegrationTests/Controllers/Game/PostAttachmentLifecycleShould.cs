@@ -1,7 +1,7 @@
 using System.Net;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;

@@ -11,19 +11,20 @@ using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Deactivation;
 
 public class DeactivationServiceShould : UnitTestBase
 {
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<ISecurityManager> _securityManager;
-    private readonly Mock<IAuthenticationService> _authenticationService;
-    private readonly Mock<IEventProducer> _eventProducer;
-    private readonly Mock<IDeactivationRepository> _repository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly ISecurityManager _securityManager;
+    private readonly IAuthenticationService _authenticationService;
+    private readonly IEventProducer _eventProducer;
+    private readonly IDeactivationRepository _repository;
     private readonly DeactivationService _service;
 
     public DeactivationServiceShould()
@@ -35,17 +36,17 @@ public class DeactivationServiceShould : UnitTestBase
         _repository = Mock<IDeactivationRepository>();
 
         _service = new DeactivationService(
-            _identityProvider.Object,
-            _securityManager.Object,
-            _authenticationService.Object,
-            _eventProducer.Object,
-            _repository.Object);
+            _identityProvider,
+            _securityManager,
+            _authenticationService,
+            _eventProducer,
+            _repository);
     }
 
     [Fact]
     public async Task ThrowWhenUserIsNotAuthenticated()
     {
-        _identityProvider.Setup(p => p.Current).Returns(Identity.Guest());
+        _identityProvider.Current.Returns(Identity.Guest());
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.Deactivate("password"));
@@ -63,8 +64,8 @@ public class DeactivationServiceShould : UnitTestBase
             UserSettings.Default,
             "token");
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _repository.Setup(r => r.GetUserCredentials(userId, It.IsAny<CancellationToken>())).ReturnsAsync((UserCredentials?)null);
+        _identityProvider.Current.Returns(identity);
+        _repository.GetUserCredentials(userId, Arg.Any<CancellationToken>()).Returns((UserCredentials?)null);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.Deactivate("password"));
@@ -88,10 +89,9 @@ public class DeactivationServiceShould : UnitTestBase
             PasswordHash = "hash"
         };
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _repository.Setup(r => r.GetUserCredentials(userId, It.IsAny<CancellationToken>())).ReturnsAsync(credentials);
-        _securityManager.Setup(s => s.ComparePasswords("wrongpassword", credentials.Salt, credentials.PasswordHash))
-            .Returns(false);
+        _identityProvider.Current.Returns(identity);
+        _repository.GetUserCredentials(userId, Arg.Any<CancellationToken>()).Returns(credentials);
+        _securityManager.ComparePasswords("wrongpassword", credentials.Salt, credentials.PasswordHash).Returns(false);
 
         var exception = await Assert.ThrowsAsync<HttpBadRequestException>(
             () => _service.Deactivate("wrongpassword"));
@@ -115,15 +115,14 @@ public class DeactivationServiceShould : UnitTestBase
             PasswordHash = "hash"
         };
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _repository.Setup(r => r.GetUserCredentials(userId, It.IsAny<CancellationToken>())).ReturnsAsync(credentials);
-        _securityManager.Setup(s => s.ComparePasswords("correctpassword", credentials.Salt, credentials.PasswordHash))
-            .Returns(true);
+        _identityProvider.Current.Returns(identity);
+        _repository.GetUserCredentials(userId, Arg.Any<CancellationToken>()).Returns(credentials);
+        _securityManager.ComparePasswords("correctpassword", credentials.Salt, credentials.PasswordHash).Returns(true);
 
         await _service.Deactivate("correctpassword");
 
-        _repository.Verify(r => r.DeactivateUser(userId, It.IsAny<CancellationToken>()), Times.Once);
-        _authenticationService.Verify(a => a.LogoutAll(userId), Times.Once);
-        _eventProducer.Verify(e => e.SendAsync(EventType.AccountDeactivated, userId), Times.Once);
+        await _repository.Received(1).DeactivateUser(userId, Arg.Any<CancellationToken>());
+        await _authenticationService.Received(1).LogoutAll(userId);
+        await _eventProducer.Received(1).SendAsync(EventType.AccountDeactivated, userId);
     }
 }

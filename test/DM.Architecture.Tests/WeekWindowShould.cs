@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -34,7 +34,7 @@ public class WeekWindowShould
     public void BeSevenRollingDaysOnTheClient()
     {
         var source = Read("src", "DM.Web.Client", "src", "shared", "lib", "utils", "datetime.ts");
-        var body = Between(source, "export function getWeekStartUtc()", "\n}");
+        var body = SourceText.Between(source, "export function getWeekStartUtc()", "\n}");
 
         body.Should().NotContain("getUTCDay",
             "a calendar boundary leaves the block empty every Monday morning");
@@ -47,7 +47,7 @@ public class WeekWindowShould
     public void BeTheSameSevenDaysInTheSeeder()
     {
         var source = Read("src", "DM.Tools.Seeder", "Seeding", "DataSeeder.cs");
-        var body = Between(source, "private static DateTimeOffset WeekStartUtc", ";");
+        var body = SourceText.Between(source, "private static DateTimeOffset WeekStartUtc", ";");
 
         body.Should().NotContain("DayOfWeek",
             "the seeder placed its showcase post against a calendar boundary the client " +
@@ -61,12 +61,4 @@ public class WeekWindowShould
     /// Text between an opening marker and the first terminator after it. Enough
     /// to read one small function, and it fails loudly when the function is gone.
     /// </summary>
-    private static string Between(string source, string start, string end)
-    {
-        var from = source.IndexOf(start, StringComparison.Ordinal);
-        from.Should().BeGreaterThan(-1, $"the source must still declare {start}");
-        var to = source.IndexOf(end, from + start.Length, StringComparison.Ordinal);
-        to.Should().BeGreaterThan(-1, $"the declaration of {start} must be terminated");
-        return source[from..to];
-    }
 }

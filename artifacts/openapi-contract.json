@@ -11,6 +11,7 @@
   ],
   "DM.Web.API.Features.Account.Authentication.LoginResponse": [
     "preferences",
+    "twoFactorRequired",
     "user"
   ],
   "DM.Web.API.Features.Account.Authentication.Session": [
@@ -21,6 +22,9 @@
     "ipAddress",
     "isCurrent",
     "persistent"
+  ],
+  "DM.Web.API.Features.Account.Authentication.TwoFactorLoginRequest": [
+    "code"
   ],
   "DM.Web.API.Features.Account.Availability.EmailAvailabilityRequest": [
     "email"
@@ -101,13 +105,41 @@
     "email"
   ],
   "DM.Web.API.Features.Account.Security.SecurityEvent": [
-    "description",
     "details",
     "deviceInfo",
     "eventType",
     "id",
     "ipAddress",
     "timestampUtc"
+  ],
+  "DM.Web.API.Features.Account.TwoFactor.RecoveryCodesResponse": [
+    "codes"
+  ],
+  "DM.Web.API.Features.Account.TwoFactor.TwoFactorConfirmRequest": [
+    "code"
+  ],
+  "DM.Web.API.Features.Account.TwoFactor.TwoFactorConfirmedActionRequest": [
+    "code",
+    "password"
+  ],
+  "DM.Web.API.Features.Account.TwoFactor.TwoFactorRemovalRequest": [
+    "email"
+  ],
+  "DM.Web.API.Features.Account.TwoFactor.TwoFactorSetupRequest": [
+    "password"
+  ],
+  "DM.Web.API.Features.Account.TwoFactor.TwoFactorSetupResponse": [
+    "otpAuthUri",
+    "secret"
+  ],
+  "DM.Web.API.Features.Account.TwoFactor.TwoFactorStatusResponse": [
+    "enabled",
+    "enabledUtc",
+    "lastVerifiedUtc",
+    "privilegeWithheld",
+    "recoveryCodesLeft",
+    "removalDueUtc",
+    "required"
   ],
   "DM.Web.API.Features.Blog.Blacklists.BlockUserRequest": [
     "username"
@@ -496,6 +528,7 @@
     "lastActivityUtc",
     "likesReceived",
     "picture",
+    "privilegeWithheld",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -545,6 +578,7 @@
     "picture",
     "postReviewsGiven",
     "postReviewsReceived",
+    "privilegeWithheld",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -1373,6 +1407,7 @@
     "picture",
     "postReviewsGiven",
     "postReviewsReceived",
+    "privilegeWithheld",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -1737,6 +1772,7 @@
     "picture",
     "postReviewsGiven",
     "postReviewsReceived",
+    "privilegeWithheld",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -1805,11 +1841,16 @@
     "surface",
     "value"
   ],
+  "DM.Web.API.Shared.BbRendering.QuoteSource": [
+    "privateTextStripped",
+    "text"
+  ],
   "DM.Web.API.Shared.BbRendering.RenderContextEnvelope": [
     "gameId",
     "gameLeadUserIds",
     "postAuthorUserId",
     "postSharePrivateWithAll",
+    "privateAddresseeNamesByAttribute",
     "privateAddresseeOwnerUserIdsByAttribute",
     "roomViewPrivateText",
     "surface"
@@ -1859,6 +1900,18 @@
     "comments",
     "paging",
     "totalLikes"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Account.Authentication.LoginResponse, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Account.TwoFactor.RecoveryCodesResponse, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Account.TwoFactor.TwoFactorSetupResponse, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Account.TwoFactor.TwoFactorStatusResponse, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Blog.Blogs.Blog, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
@@ -1990,6 +2043,9 @@
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Personal.Notepads.NotepadEntryResponse, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Shared.BbRendering.QuoteSource, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Shared.Dto.Comment, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [

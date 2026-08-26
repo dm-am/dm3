@@ -16,6 +16,8 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ticketApi,
+  TICKET_STATUS_LABELS,
+  TICKET_SUBTYPE_LABELS,
   type Ticket,
   type TicketStatus,
   type TicketSubtype,
@@ -32,29 +34,12 @@ import { Paging } from "@/shared/ui/Paging";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { LeadText, SecondaryText } from "@/shared/ui/Layout";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { parsePageNumber } from "@/shared/lib/filters";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 
 const route = useRoute();
 const router = useRouter();
 const { entitiesPerPage } = usePaging();
-
-// Labels mirror the backend enum Descriptions (TicketSubtype/TicketStatus)
-const SUBTYPE_LABELS: Record<TicketSubtype, string> = {
-  UserComplaint: "Жалоба на пользователя",
-  ModeratorDecisionComplaint: "Жалоба на решение младшего модератора",
-  SeniorModeratorDecisionComplaint: "Жалоба на решение старшего модератора",
-  SiteImprovementSuggestion: "Предложение по улучшению сайта",
-  Bug: "Ошибка",
-  AccessRecovery: "Восстановление доступа",
-  RegistrationIssue: "Проблемы с регистрацией",
-};
-
-const STATUS_LABELS: Record<TicketStatus, string> = {
-  WaitingForModeration: "Ожидает ответа модерации",
-  WaitingForUser: "Ожидает ответа пользователя",
-  Closed: "Закрыто",
-  Spam: "Спам",
-};
 
 // Status color contract from doc 4.2.2.23: green / normal / gray / red
 const STATUS_CLASSES: Record<TicketStatus, string> = {
@@ -70,9 +55,9 @@ const statusFilter = ref("");
 
 const subtypeOptions: SelectOption[] = [
   { value: "", label: "Все типы" },
-  ...(Object.keys(SUBTYPE_LABELS) as TicketSubtype[]).map((value) => ({
+  ...(Object.keys(TICKET_SUBTYPE_LABELS) as TicketSubtype[]).map((value) => ({
     value,
-    label: SUBTYPE_LABELS[value],
+    label: TICKET_SUBTYPE_LABELS[value],
   })),
 ];
 
@@ -80,9 +65,12 @@ const subtypeOptions: SelectOption[] = [
 // waiting for the user / closed (spam tickets still show under "all")
 const statusOptions: SelectOption[] = [
   { value: "", label: "Все статусы" },
-  { value: "WaitingForModeration", label: STATUS_LABELS.WaitingForModeration },
-  { value: "WaitingForUser", label: STATUS_LABELS.WaitingForUser },
-  { value: "Closed", label: STATUS_LABELS.Closed },
+  {
+    value: "WaitingForModeration",
+    label: TICKET_STATUS_LABELS.WaitingForModeration,
+  },
+  { value: "WaitingForUser", label: TICKET_STATUS_LABELS.WaitingForUser },
+  { value: "Closed", label: TICKET_STATUS_LABELS.Closed },
 ];
 
 // --- Data ---
@@ -92,10 +80,7 @@ const loadError = ref<string | null>(null);
 
 // The page lives in the address bar, so a reload and a shared link land on the
 // page that was being read.
-const pageNumber = computed(() => {
-  const n = parseInt(String(route.query.number ?? "1"), 10);
-  return Number.isFinite(n) && n > 0 ? n : 1;
-});
+const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
 async function fetch() {
   loading.value = true;
@@ -157,9 +142,9 @@ type TicketItem = ExpandableItem & {
 const items = computed<TicketItem[]>(() =>
   allTickets.value.map((t) => ({
     id: t.id,
-    subject: t.comment || SUBTYPE_LABELS[t.subtype],
-    subtypeLabel: SUBTYPE_LABELS[t.subtype],
-    statusLabel: STATUS_LABELS[t.status],
+    subject: t.comment || TICKET_SUBTYPE_LABELS[t.subtype],
+    subtypeLabel: TICKET_SUBTYPE_LABELS[t.subtype],
+    statusLabel: TICKET_STATUS_LABELS[t.status],
     createdLabel: formatDateFull(t.createdUtc),
     ticket: t,
   })),

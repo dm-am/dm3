@@ -6,23 +6,23 @@ using DM.Testing.Dsl;
 using DM.Domain.Core.Enums;
 using DM.Domain.Community.Features.Polls;
 using DM.Domain.Core.Abstractions;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Authorization;
 
 public class PollIntentionResolverShould
 {
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly PollIntentionResolver _resolver;
     private readonly DateTimeOffset _now = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
 
     public PollIntentionResolverShould()
     {
-        _dateTimeProvider = new Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(p => p.Now).Returns(_now);
-        _resolver = new PollIntentionResolver(_dateTimeProvider.Object);
+        _dateTimeProvider = Substitute.For<IDateTimeProvider>();
+        _dateTimeProvider.Now.Returns(_now);
+        _resolver = new PollIntentionResolver(_dateTimeProvider);
     }
 
     [Theory]

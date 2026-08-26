@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

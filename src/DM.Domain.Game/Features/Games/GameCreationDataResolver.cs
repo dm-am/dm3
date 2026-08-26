@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Authorization;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.AttributeSchemas;
 

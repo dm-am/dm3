@@ -1,11 +1,12 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.UnreadCounters;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using FluentAssertions;
+using DM.Infrastructure.Persistence;
+using AwesomeAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using MongoDB.Driver;
 using Xunit;
 using DbUnreadCounter = DM.Infrastructure.Persistence.Entities.Shared.UnreadCounter;
 
@@ -13,11 +14,11 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
 /// One marker per (UserId, EntityId, EntryType) is the invariant every write
-/// assumes: they all upsert on that triple. The unique index is what makes it
-/// true, and the write paths are upserts so that the index refuses a duplicate
-/// instead of turning an ordinary request into an error. Neither fact exists
-/// anywhere but in a live store, hence the container Mongo — the application
-/// host asserts the index on startup, the same way it does in a deployment.
+/// assumes: they all upsert on that triple. The primary key is what makes it
+/// true, and the write paths are INSERT ... ON CONFLICT so that the server
+/// settles an encountering pair instead of turning an ordinary request into an
+/// error (INV-3). Neither fact exists anywhere but in a live store, hence the
+/// container Postgres.
 /// </summary>
 public class UnreadCountersRepositoryShould : IntegrationTestBase
 {
@@ -33,15 +34,18 @@ public class UnreadCountersRepositoryShould : IntegrationTestBase
         var userId = Guid.NewGuid();
         var entityId = Guid.NewGuid();
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var collection = Collection(scope);
-        await collection.InsertOneAsync(Marker(userId, entityId));
+        var dbContext = Context(scope);
+        dbContext.UnreadCounters.Add(Marker(userId, entityId));
+        await dbContext.SaveChangesAsync();
 
-        var act = async () => await collection.InsertOneAsync(Marker(userId, entityId));
+        var act = async () =>
+        {
+            dbContext.UnreadCounters.Add(Marker(userId, entityId));
+            await dbContext.SaveChangesAsync();
+        };
 
-        await act.Should().ThrowAsync<MongoWriteException>()
-            .Where(e => e.WriteError.Category == ServerErrorCategory.DuplicateKey);
-        var stored = await collection.CountDocumentsAsync(Key(userId, entityId));
-        stored.Should().Be(1, "the store, not the caller, is what keeps the triple single");
+        await act.Should().ThrowAsync<InvalidOperationException>(
+            "the triple is the primary key, so a second row for it cannot even be tracked");
     }
 
     [Fact]
@@ -60,7 +64,7 @@ public class UnreadCountersRepositoryShould : IntegrationTestBase
         // create meets the marker the first one left.
         await repository.CreateMarkerAsync(entityId, UnreadEntryType.Message, new[] { userId });
 
-        var stored = await Collection(scope).CountDocumentsAsync(Key(userId, entityId));
+        var stored = await Count(scope, userId, entityId);
         stored.Should().Be(1);
         var unread = await repository.SelectByEntitiesAsync(userId, UnreadEntryType.Message, entityId);
         unread[entityId].Should().Be(0, "the count starts over for a user counted in again");
@@ -81,7 +85,7 @@ public class UnreadCountersRepositoryShould : IntegrationTestBase
         await repository.FlushAsync(userId, UnreadEntryType.Message, entityId);
         await repository.FlushAsync(userId, UnreadEntryType.Message, entityId);
 
-        var stored = await Collection(scope).CountDocumentsAsync(Key(userId, entityId));
+        var stored = await Count(scope, userId, entityId);
         stored.Should().Be(1);
         var unread = await repository.SelectByEntitiesAsync(userId, UnreadEntryType.Message, entityId);
         unread[entityId].Should().Be(0, "the entity was marked as read, twice");
@@ -115,9 +119,10 @@ public class UnreadCountersRepositoryShould : IntegrationTestBase
 
         await repository.FlushAsync(second, UnreadEntryType.Message, chatId);
 
-        var stored = await Collection(scope)
-            .Find(Key(second, chatId))
-            .FirstOrDefaultAsync();
+        var stored = await Context(scope).UnreadCounters
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.UserId == second && c.EntityId == chatId &&
+                                      c.EntryType == UnreadEntryType.Message);
         stored.Should().NotBeNull();
         stored!.ParentId.Should().Be(second,
             "the reader owns the parent of their own marker, and marking as read does not move it");
@@ -133,13 +138,38 @@ public class UnreadCountersRepositoryShould : IntegrationTestBase
         mine[second].Should().Be(1,
             "a conversation that lost its parent disappears from every total that asks by parent");
     }
-    private static IMongoCollection<DbUnreadCounter> Collection(IServiceScope scope) =>
-        scope.ServiceProvider.GetRequiredService<DmMongoClient>().GetCollection<DbUnreadCounter>();
 
-    private static FilterDefinition<DbUnreadCounter> Key(Guid userId, Guid entityId) =>
-        Builders<DbUnreadCounter>.Filter.Eq(c => c.UserId, userId) &
-        Builders<DbUnreadCounter>.Filter.Eq(c => c.EntityId, entityId) &
-        Builders<DbUnreadCounter>.Filter.Eq(c => c.EntryType, UnreadEntryType.Message);
+    /// <summary>
+    /// The retention sweep reads a moment, so removing a marker has to write
+    /// one. A flag alone leaves the sweep nothing to look at and the row
+    /// forever.
+    /// </summary>
+    [Fact]
+    public async Task StampTheMomentAMarkerIsRemoved()
+    {
+        var entityId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IUnreadCountersRepository>();
+        await repository.CreateMarkerAsync(entityId, UnreadEntryType.Message, new[] { userId });
+
+        await repository.DeleteAsync(entityId, UnreadEntryType.Message);
+
+        var stored = await Context(scope).UnreadCounters
+            .AsNoTracking()
+            .FirstAsync(c => c.EntityId == entityId);
+        stored.IsRemoved.Should().BeTrue();
+        stored.RemovedUtc.Should().NotBeNull("a tombstone with no moment never expires");
+    }
+
+    private static DmDbContext Context(IServiceScope scope) =>
+        scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+    private static Task<int> Count(IServiceScope scope, Guid userId, Guid entityId) =>
+        Context(scope).UnreadCounters
+            .AsNoTracking()
+            .CountAsync(c => c.UserId == userId && c.EntityId == entityId &&
+                             c.EntryType == UnreadEntryType.Message);
 
     private static DbUnreadCounter Marker(Guid userId, Guid entityId) => new()
     {

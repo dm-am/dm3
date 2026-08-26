@@ -11,7 +11,7 @@ using DM.Web.API.Notifications;
 using DM.Web.API.Realtime;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
@@ -35,10 +35,10 @@ public class RealtimeNotificationProcessorShould : UnitTestBase
 {
     private static readonly Guid Recipient = Guid.NewGuid();
 
-    private readonly Mock<IUserConnectionService> _connections;
-    private readonly Mock<IHubClients<INotificationHub>> _clients;
-    private readonly Mock<INotificationHub> _broadcast;
-    private readonly Mock<INotificationHub> _targeted;
+    private readonly IUserConnectionService _connections;
+    private readonly IHubClients<INotificationHub> _clients;
+    private readonly INotificationHub _broadcast;
+    private readonly INotificationHub _targeted;
     private readonly RealtimeNotificationProcessor _processor;
 
     public RealtimeNotificationProcessorShould()
@@ -48,18 +48,17 @@ public class RealtimeNotificationProcessorShould : UnitTestBase
         _broadcast = Mock<INotificationHub>();
         _targeted = Mock<INotificationHub>();
 
-        _clients.SetupGet(clients => clients.All).Returns(_broadcast.Object);
+        _clients.All.Returns(_broadcast);
         _clients
-            .Setup(clients => clients.Clients(It.IsAny<IReadOnlyList<string>>()))
-            .Returns(_targeted.Object);
+            .Clients(Arg.Any<IReadOnlyList<string>>()).Returns(_targeted);
 
         var hubContext = Mock<IHubContext<NotificationHub, INotificationHub>>();
-        hubContext.SetupGet(context => context.Clients).Returns(_clients.Object);
+        hubContext.Clients.Returns(_clients);
 
         _processor = new RealtimeNotificationProcessor(
             NullLogger<RealtimeNotificationProcessor>.Instance,
-            _connections.Object,
-            hubContext.Object);
+            _connections,
+            hubContext);
     }
 
     [Fact]
@@ -67,8 +66,8 @@ public class RealtimeNotificationProcessorShould : UnitTestBase
     {
         await Process(EventType.NewGlobalChatMessage);
 
-        _broadcast.Verify(hub => hub.Send(It.IsAny<Notification>()), Times.Once);
-        _connections.Verify(connections => connections.GetConnectedUsers(), Times.Never);
+        await _broadcast.Received(1).Send(Arg.Any<Notification>());
+        _connections.DidNotReceive().GetConnectedUsers();
     }
 
     /// <summary>
@@ -84,16 +83,15 @@ public class RealtimeNotificationProcessorShould : UnitTestBase
     {
         await Process(eventType);
 
-        _broadcast.Verify(hub => hub.Send(It.IsAny<Notification>()), Times.Once);
-        _connections.Verify(connections => connections.GetConnectedUsers(), Times.Never);
+        await _broadcast.Received(1).Send(Arg.Any<Notification>());
+        _connections.DidNotReceive().GetConnectedUsers();
     }
 
     [Fact]
     public async Task SendAPersonalEventOnlyToTheConnectionsOfItsRecipients()
     {
         _connections
-            .Setup(connections => connections.GetConnectedUsers())
-            .Returns(new Dictionary<Guid, IEnumerable<string>>
+            .GetConnectedUsers().Returns(new Dictionary<Guid, IEnumerable<string>>
             {
                 [Recipient] = new[] { "recipient-1", "recipient-2" },
                 [Guid.NewGuid()] = new[] { "stranger-1" },
@@ -101,13 +99,11 @@ public class RealtimeNotificationProcessorShould : UnitTestBase
 
         await Process(EventType.NewMessage);
 
-        _broadcast.Verify(hub => hub.Send(It.IsAny<Notification>()), Times.Never);
-        _clients.Verify(
-            clients => clients.Clients(It.Is<IReadOnlyList<string>>(ids =>
+        await _broadcast.DidNotReceive().Send(Arg.Any<Notification>());
+        _clients.Received(1).Clients(Arg.Is<IReadOnlyList<string>>(ids =>
                 ids.Count == 2 &&
                 ids.Contains("recipient-1") &&
-                ids.Contains("recipient-2"))),
-            Times.Once);
+                ids.Contains("recipient-2")));
     }
 
     /// <summary>
@@ -117,15 +113,12 @@ public class RealtimeNotificationProcessorShould : UnitTestBase
     public async Task SendAPersonalEventNowhereWhenNoRecipientIsConnected()
     {
         _connections
-            .Setup(connections => connections.GetConnectedUsers())
-            .Returns(new Dictionary<Guid, IEnumerable<string>>());
+            .GetConnectedUsers().Returns(new Dictionary<Guid, IEnumerable<string>>());
 
         await Process(EventType.NewMessage);
 
-        _broadcast.Verify(hub => hub.Send(It.IsAny<Notification>()), Times.Never);
-        _clients.Verify(
-            clients => clients.Clients(It.Is<IReadOnlyList<string>>(ids => ids.Count == 0)),
-            Times.Once);
+        await _broadcast.DidNotReceive().Send(Arg.Any<Notification>());
+        _clients.Received(1).Clients(Arg.Is<IReadOnlyList<string>>(ids => ids.Count == 0));
     }
 
     private async Task Process(EventType eventType) =>

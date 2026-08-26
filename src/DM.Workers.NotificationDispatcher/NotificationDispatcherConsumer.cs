@@ -9,14 +9,11 @@ using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Workers.NotificationDispatcher.Dispatching;
 using DM.Workers.NotificationDispatcher.Notifiers;
-using Jamq.Client.Abstractions.Consuming;
-using Jamq.Client.Rabbit.Consuming;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
-using RabbitMQ.Client;
 
 namespace DM.Workers.NotificationDispatcher;
 
@@ -28,21 +25,21 @@ internal class NotificationDispatcherConsumer : BackgroundService
     private const string DeadLetterExchangeName = "dm.notifications.undelivered";
 
     private readonly ILogger<NotificationDispatcherConsumer> _logger;
-    private readonly IConsumerBuilder _consumerBuilder;
+    private readonly IDmConsumerBuilder _consumerBuilder;
     private readonly IServiceProvider _serviceProvider;
-    private readonly IAsyncConnectionFactory _rabbitConnectionFactory;
+    private readonly DmBrokerConnection _brokerConnection;
     private readonly AsyncRetryPolicy _consumeRetryPolicy;
 
     public NotificationDispatcherConsumer(
         ILogger<NotificationDispatcherConsumer> logger,
-        IConsumerBuilder consumerBuilder,
+        IDmConsumerBuilder consumerBuilder,
         IServiceProvider serviceProvider,
-        IAsyncConnectionFactory rabbitConnectionFactory)
+        DmBrokerConnection brokerConnection)
     {
         _logger = logger;
         _consumerBuilder = consumerBuilder;
         _serviceProvider = serviceProvider;
-        _rabbitConnectionFactory = rabbitConnectionFactory;
+        _brokerConnection = brokerConnection;
         _consumeRetryPolicy = Policy.Handle<Exception>().WaitAndRetryAsync(5,
             attempt => TimeSpan.FromSeconds(1 << attempt),
             (exception, _) => _logger.LogWarning(exception, "Could not subscribe to the queue"));
@@ -59,19 +56,14 @@ internal class NotificationDispatcherConsumer : BackgroundService
         // this way all along.
         await Task.Yield();
 
-        // Sequential rather than unmanaged. Unmanaged is the one order the client
-        // implements by skipping the prefetch call altogether, so the broker hands
-        // over the whole queue at once and the worker holds every message of it in
-        // memory, unacknowledged, until it has worked through them. It buys no
-        // parallelism to pay for that: the handler runs on the client's async
-        // consumer, which delivers one message at a time on the channel either
-        // way. What it does buy is a backlog that no rule can see - depth is read
-        // off messages_ready, and a message already handed to a consumer is not
-        // ready any more.
-        var parameters = new RabbitConsumerParameters("dm.notifications", QueueName, ProcessingOrder.Sequential)
+        // The prefetch of one is not declared here because it is not a choice a
+        // consumer gets to make: DmConsumer sets it for every subscription, and
+        // that file says why a worker allowed to take the whole queue builds a
+        // backlog no rule can see.
+        var parameters = new DmConsumerParameters("dm.notifications", QueueName)
         {
             ExchangeName = InvokedEventsTransport.ExchangeName,
-            RoutingKeys = ResolveHandledEventTypes().ToRoutingKeys(),
+            RoutingKeys = ResolveHandledEventTypes().ToRoutingKeys().ToArray(),
 
             // Without this the queue has no dead-letter exchange, so an event a
             // generator keeps throwing on is rejected into nothing: the retries run
@@ -80,16 +72,15 @@ internal class NotificationDispatcherConsumer : BackgroundService
             // event is five warnings in the log.
             DeadLetterExchange = DeadLetterExchangeName,
         };
-        var consumer = _consumerBuilder.BuildRabbit<InvokedEvent, NotificationProcessor>(parameters);
+        var consumer = _consumerBuilder.Build<InvokedEvent, NotificationProcessor>(parameters);
 
-        // The dead-letter declaration is inside the policy with the subscription: it
-        // opens its own connection to the same broker, and it used to be the one call
-        // nothing retried, so an unreachable broker threw past Polly entirely.
-        await _consumeRetryPolicy.ExecuteAsync(_ =>
+        // The dead-letter declaration is inside the policy with the subscription:
+        // both talk to the same broker, and one call left outside the policy is
+        // the one an unreachable broker throws past entirely.
+        await _consumeRetryPolicy.ExecuteAsync(async token =>
         {
-            DeadLetterQueue.DeclareTerminal(_rabbitConnectionFactory, DeadLetterExchangeName);
-            consumer.Subscribe();
-            return Task.CompletedTask;
+            await DeadLetterQueue.DeclareTerminal(_brokerConnection, DeadLetterExchangeName, token);
+            await consumer.Subscribe(token);
         }, stoppingToken);
 
         _logger.LogDebug("[👂] Notifications consumer is listening to {QueueName} queue", parameters.QueueName);

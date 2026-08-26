@@ -14,7 +14,7 @@ internal class CreateRoomValidator : AbstractValidator<CreateRoom>
 
         RuleFor(c => c.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(100).WithMessage(ValidationError.Long);
+            .MaximumLength(RoomFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(c => c.Type)
             .IsInEnum().WithMessage(ValidationError.Invalid);

@@ -156,9 +156,9 @@ function handleKeydown(e: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/ZIndex"
-@import "@/assets/styles/Animations"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/ZIndex" as *
+@use "@/assets/styles/Animations" as *
 
 .dialog-backdrop
   position: fixed

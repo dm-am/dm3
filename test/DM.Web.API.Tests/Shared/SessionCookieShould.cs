@@ -5,10 +5,11 @@ using DM.Domain.Core.Identity;
 using DM.Testing;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Configuration;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
@@ -106,9 +107,9 @@ public class SessionCookieShould : UnitTestBase
     private IIdentity AuthenticatedIdentity()
     {
         var identity = Mock<IIdentity>();
-        identity.SetupGet(i => i.Session).Returns(new Session { Id = Guid.NewGuid() });
-        identity.SetupGet(i => i.AuthenticationToken).Returns("token");
-        return identity.Object;
+        identity.Session.Returns(new Session { Id = Guid.NewGuid() });
+        identity.AuthenticationToken.Returns("token");
+        return identity;
     }
 
     private static DefaultHttpContext CreateContext(string host, bool isHttps)

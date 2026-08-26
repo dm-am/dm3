@@ -154,12 +154,21 @@ const violationsIn = (file: string): string[] => {
 };
 
 describe("comments are written in English", () => {
-  it("holds across src and test, the copy they cite excepted", () => {
-    const files = ["src", "test"].flatMap((tree) =>
-      collect(join(REPO_ROOT, tree)),
-    );
-    // A walk that finds nothing passes.
-    expect(files.length).toBeGreaterThan(1000);
-    expect(files.flatMap(violationsIn)).toEqual([]);
-  });
+  // Its own budget, and a generous one. The default 15s is meant for a
+  // behavioural test; this walks more than a thousand files and runs regexes
+  // over every line of them, while two hundred other spec files share the
+  // machine. Measured alone it takes under three seconds - the timeout is not
+  // covering slowness here, it is refusing to call a busy machine a defect.
+  it(
+    "holds across src and test, the copy they cite excepted",
+    { timeout: 120_000 },
+    () => {
+      const files = ["src", "test"].flatMap((tree) =>
+        collect(join(REPO_ROOT, tree)),
+      );
+      // A walk that finds nothing passes.
+      expect(files.length).toBeGreaterThan(1000);
+      expect(files.flatMap(violationsIn)).toEqual([]);
+    },
+  );
 });

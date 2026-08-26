@@ -5,9 +5,9 @@ using DM.Domain.Core.Abstractions;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Repositories.General;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using Moq;
+using NSubstitute;
 using Xunit;
 using IObjectStorage = DM.Domain.Core.Uploads.IObjectStorage;
 
@@ -37,17 +37,16 @@ public class UploadOrphanCollectorShould : UnitTestBase
     private static readonly DateTimeOffset Now = new(2020, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     private readonly string _databaseName = Guid.NewGuid().ToString();
-    private readonly Mock<IObjectStorage> _objectStorage;
-    private readonly Mock<IDateTimeProvider> _clock;
+    private readonly IObjectStorage _objectStorage;
+    private readonly IDateTimeProvider _clock;
 
     public UploadOrphanCollectorShould()
     {
         _objectStorage = Mock<IObjectStorage>();
-        _objectStorage.Setup(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+        _objectStorage.DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
 
         _clock = Mock<IDateTimeProvider>();
-        _clock.SetupGet(c => c.Now).Returns(Now);
+        _clock.Now.Returns(Now);
     }
 
     private DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()
@@ -77,7 +76,7 @@ public class UploadOrphanCollectorShould : UnitTestBase
     private async Task Sweep()
     {
         await using var dbContext = Context();
-        await new UploadOrphanCollector(dbContext, _objectStorage.Object, _clock.Object)
+        await new UploadOrphanCollector(dbContext, _objectStorage, _clock)
             .SweepAsync(CancellationToken.None);
     }
 
@@ -94,8 +93,7 @@ public class UploadOrphanCollectorShould : UnitTestBase
 
         await Sweep();
 
-        _objectStorage.Verify(s => s.DeleteAsync("uploads/expired.png", It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _objectStorage.Received(1).DeleteAsync("uploads/expired.png", Arg.Any<CancellationToken>());
         (await RemainingUploads()).Should().Be(0);
     }
 
@@ -106,8 +104,7 @@ public class UploadOrphanCollectorShould : UnitTestBase
 
         await Sweep();
 
-        _objectStorage.Verify(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _objectStorage.DidNotReceive().DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         (await RemainingUploads()).Should().Be(1);
     }
 
@@ -118,8 +115,7 @@ public class UploadOrphanCollectorShould : UnitTestBase
 
         await Sweep();
 
-        _objectStorage.Verify(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _objectStorage.DidNotReceive().DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         (await RemainingUploads()).Should().Be(1);
     }
 
@@ -136,11 +132,10 @@ public class UploadOrphanCollectorShould : UnitTestBase
         await Sweep();
         (await RemainingUploads()).Should().Be(1);
 
-        _clock.SetupGet(c => c.Now).Returns(Now.AddHours(25));
+        _clock.Now.Returns(Now.AddHours(25));
         await Sweep();
 
-        _objectStorage.Verify(s => s.DeleteAsync("uploads/aging.png", It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _objectStorage.Received(1).DeleteAsync("uploads/aging.png", Arg.Any<CancellationToken>());
         (await RemainingUploads()).Should().Be(0);
     }
 }

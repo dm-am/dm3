@@ -3,12 +3,12 @@ using DM.Domain.Core.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Forum.Features.Boards;
 using DM.Infrastructure.Persistence.Entities.Forum;
 using Microsoft.EntityFrameworkCore;
+
+using DM.Infrastructure.Persistence.Shared.Users;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
 
@@ -16,17 +16,14 @@ namespace DM.Infrastructure.Persistence.Repositories.Forum;
 internal class BoardModeratorRepository : IBoardModeratorRepository
 {
     private readonly DmDbContext _dmDbContext;
-    private readonly IMapper _mapper;
     private readonly IGuidFactory _guidFactory;
 
     /// <inheritdoc />
     public BoardModeratorRepository(
         DmDbContext dmDbContext,
-        IMapper mapper,
         IGuidFactory guidFactory)
     {
         _dmDbContext = dmDbContext;
-        _mapper = mapper;
         _guidFactory = guidFactory;
     }
 
@@ -37,7 +34,7 @@ internal class BoardModeratorRepository : IBoardModeratorRepository
             .TagWith("DM.Forum.ModeratorsList")
             .Where(m => m.BoardId == boardId)
             .Select(m => m.User)
-            .ProjectTo<GeneralUser>(_mapper.ConfigurationProvider)
+            .ProjectToGeneralUser()
             .ToArrayAsync();
     }
 

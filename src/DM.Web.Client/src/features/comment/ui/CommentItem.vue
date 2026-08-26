@@ -7,13 +7,14 @@ import type {
   ApiResult,
   Envelope,
   GeneralError,
+  QuoteSource,
 } from "@/shared/api/models/common";
 import type { Comment } from "@/shared/api/models/common/comment";
 import { unwrapResource } from "@/shared/api";
 import { useAuthStore, userIsModerator } from "@/entities/user";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { getRoleBadge } from "@/shared/config/roles";
-import { permalinkOrigin } from "@/shared/config/site";
+import { commentPermalink } from "../model/permalink";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import dayjs from "dayjs";
@@ -27,6 +28,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { useQuoteAction } from "@/shared/lib/composables/useQuoteComposer";
 import { notifyFailure } from "@/shared/lib/errors";
 import { getLikesTooltip } from "@/shared/lib/utils/chat";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
@@ -49,6 +51,15 @@ const props = withDefaults(
      * way to edit.
      */
     fetchEditSource: (id: string) => Promise<ApiResult<Envelope<Comment>>>;
+    /**
+     * Fetches the markup of a quotation of this comment. Domain-specific for
+     * the same reason the source fetch is — four surfaces, four endpoints —
+     * and optional, because a discussion whose page has no composer to answer
+     * in shows no Quote button either.
+     */
+    fetchQuoteSource?: (
+      id: string,
+    ) => Promise<ApiResult<Envelope<QuoteSource>>>;
     /**
      * Saves the edited BBCode and answers whether the server took it. A
      * function rather than an event, because only the answer may close the
@@ -122,6 +133,20 @@ const canDelete = computed(() => canEdit.value);
 
 const canWarn = computed(() => isModerator.value);
 
+// Quoting. Two conditions, and both have to hold: the page has to have handed
+// down a composer to answer in, and it has to have handed down the fetch for
+// this surface's endpoint.
+const { canQuote: composerAcceptsQuotes, quote } = useQuoteAction();
+const canQuote = computed(
+  () => composerAcceptsQuotes.value && !!props.fetchQuoteSource,
+);
+
+function quoteComment() {
+  const fetchQuoteSource = props.fetchQuoteSource;
+  if (!fetchQuoteSource) return;
+  return quote(() => fetchQuoteSource(props.comment.id));
+}
+
 const isLikedByMe = computed(() => {
   if (!currentUser.value) return false;
   return props.comment.likes?.some(
@@ -154,8 +179,6 @@ const hasFooterContent = computed(
     canDelete.value ||
     canWarn.value,
 );
-
-const commentAnchor = computed(() => `#comment-${props.comment.id}`);
 
 const isAuthorOnline = computed(() => {
   const lastActivityUtc = props.comment.author?.lastActivityUtc;
@@ -253,13 +276,7 @@ function handleWarn() {
 }
 
 async function copyAnchorLink() {
-  // Canonical link: keep only the page number (default sort, no active
-  // search/author/date filters) so the copied permalink always resolves for
-  // the recipient instead of silently carrying the sharer's active filters.
-  const numberParam = route.query.number;
-  const search = numberParam ? `?number=${String(numberParam)}` : "";
-  const url =
-    permalinkOrigin() + window.location.pathname + search + commentAnchor.value;
+  const url = commentPermalink(props.comment.id, route.query.number);
   try {
     await navigator.clipboard.writeText(url);
     toastSuccess("Ссылка скопирована");
@@ -475,6 +492,9 @@ watch(
                 <span class="likes-count">{{ likesCount }}</span>
               </Tooltip>
             </span>
+            <button v-if="canQuote" class="action-btn" @click="quoteComment">
+              Цитировать
+            </button>
             <button v-if="canEdit" class="action-btn" @click="startEdit">
               Редактировать
             </button>
@@ -528,7 +548,7 @@ watch(
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/BbcodeContent"
+@use "@/assets/styles/BbcodeContent" as *
 
 .comment
   display: flex

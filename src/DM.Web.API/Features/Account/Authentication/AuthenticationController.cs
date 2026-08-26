@@ -80,6 +80,38 @@ public class AuthenticationController : ControllerBase
     }
 
     /// <summary>
+    /// Finish signing in with the second factor
+    /// </summary>
+    /// <remarks>
+    /// Called when the first step answered `twoFactorRequired`. The challenge
+    /// travels in the short-lived `dm_2fa` cookie the first step issued; this
+    /// request carries only the code, which may be a code from the authenticator
+    /// app or one of the recovery codes.
+    ///
+    /// Every way of failing answers the same 400 with the same sentence: a wrong
+    /// code, an expired challenge, one nobody issued, a recovery code already
+    /// spent and a challenge out of attempts are one refusal. How many attempts
+    /// are left is not disclosed, for the reason the password step does not
+    /// disclose it either.
+    /// </remarks>
+    /// <param name="request">Code from the device or a recovery code</param>
+    /// <response code="200">Second factor accepted, session created</response>
+    /// <response code="400">The second factor was not passed</response>
+    /// <response code="403">Account is banned or removed</response>
+    /// <response code="429">Too many attempts, try again later</response>
+    [HttpPost("login/two-factor", Name = nameof(CompleteTwoFactorLogin))]
+    [ProducesResponseType(typeof(Envelope<LoginResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> CompleteTwoFactorLogin([FromBody] TwoFactorLoginRequest request) =>
+        // Enveloped, although the first step of the same flow answers with a bare
+        // body. The bare one is inherited and counted as debt; a new operation
+        // does not add to it.
+        Ok(new Envelope<LoginResponse>(
+            await _authenticationApiService.CompleteTwoFactor(request, HttpContext)));
+
+    /// <summary>
     /// Sign out
     /// </summary>
     /// <remarks>

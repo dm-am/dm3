@@ -18,6 +18,7 @@ import {
   enableAutoUnmount,
 } from "@vue/test-utils";
 import { nextTick } from "vue";
+import type { Editor } from "@tiptap/vue-3";
 import BBCodeEditor from "./BBCodeEditor.vue";
 
 // Unmount every wrapper after each test so the component destroys its
@@ -122,6 +123,49 @@ describe("BBCodeEditor", () => {
       // is the default preview surface. Tab order: BBCode[0], WYSIWYG[1].
       const wysiwygBtn = wrapper.findAll(".mode-tab")[1];
       expect(wysiwygBtn.classes()).toContain("active");
+    });
+  });
+
+  // ============================================================================
+  // EXTENSION REGISTRY
+  // ============================================================================
+
+  describe("Extension registry", () => {
+    it("registers each extension once and leaves anchors to BbLink", async () => {
+      const warnings: string[] = [];
+      const warn = vi
+        .spyOn(console, "warn")
+        .mockImplementation((...args: unknown[]) => {
+          warnings.push(args.map(String).join(" "));
+        });
+
+      const wrapper = mount(BBCodeEditor, { props: { modelValue: "" } });
+      await nextTick();
+
+      const editor = (wrapper.vm as unknown as { editor: Editor }).editor;
+      const names = editor.extensionManager.extensions.map((e) => e.name);
+
+      // StarterKit brings an `underline` and a `link` of its own, and this
+      // editor registers a replacement for each. The underline collides by
+      // name and tiptap says so out loud; the link does not collide by name,
+      // so nothing warns — its parse rule is a bare `a[href]` and it outranks
+      // BbLink's, which is how `data-bb-text` and `data-bb-selfref` came to be
+      // dropped on the way into the document, autolink included. Both are off
+      // in the kit's options, and this is the gate that keeps them off.
+      expect(
+        names.filter((name, index) => names.indexOf(name) !== index),
+        "the kit registers an extension this editor also registers: turn the kit's copy off in StarterKit.configure",
+      ).toEqual([]);
+      expect(
+        warnings.filter((line) => line.includes("Duplicate extension names")),
+      ).toEqual([]);
+      expect(Object.keys(editor.schema.marks)).toContain("bbLink");
+      expect(
+        Object.keys(editor.schema.marks),
+        "the stock link mark parses every anchor and discards the BBCode attributes BbLink carries",
+      ).not.toContain("link");
+
+      warn.mockRestore();
     });
   });
 
@@ -243,6 +287,103 @@ describe("BBCodeEditor", () => {
 
       const textarea = wrapper.find(".bbcode-textarea");
       expect((textarea.element as HTMLTextAreaElement).value).toContain("[b]");
+    });
+  });
+
+  // ============================================================================
+  // INSERTING A READY-MADE BLOCK (the Quote action)
+  // ============================================================================
+
+  describe("insertBlock", () => {
+    const QUOTE = '[quote="Вася"]\nчужая реплика\n[/quote]';
+
+    it("appends the block after a blank line and leaves the caret after it", async () => {
+      const wrapper = mount(BBCodeEditor, {
+        props: { modelValue: "начало" },
+      });
+      await flushPromises();
+      await wrapper.findAll(".mode-tab")[0].trigger("click");
+      await flushPromises();
+      await nextTick();
+
+      (
+        wrapper.vm as unknown as { insertBlock: (b: string) => void }
+      ).insertBlock(QUOTE);
+      await flushPromises();
+      await nextTick();
+
+      const expected = `начало\n\n${QUOTE}\n\n`;
+      const textarea = wrapper.find(".bbcode-textarea")
+        .element as HTMLTextAreaElement;
+      expect(textarea.value).toBe(expected);
+
+      // The caret stands on the line after the quotation, not inside it: the
+      // reader pressed the button in order to answer.
+      expect(textarea.selectionStart).toBe(expected.length);
+      expect(textarea.selectionEnd).toBe(expected.length);
+    });
+
+    it("appends a second quotation instead of replacing the first", async () => {
+      const wrapper = mount(BBCodeEditor, {
+        props: { modelValue: "" },
+      });
+      await flushPromises();
+      await wrapper.findAll(".mode-tab")[0].trigger("click");
+      await flushPromises();
+      await nextTick();
+
+      const editor = wrapper.vm as unknown as {
+        insertBlock: (b: string) => void;
+      };
+      editor.insertBlock(QUOTE);
+      await flushPromises();
+      editor.insertBlock(QUOTE);
+      await flushPromises();
+      await nextTick();
+
+      const textarea = wrapper.find(".bbcode-textarea")
+        .element as HTMLTextAreaElement;
+      expect(textarea.value.split("[/quote]").length - 1).toBe(2);
+    });
+
+    it("hands the new text to the parent", async () => {
+      const wrapper = mount(BBCodeEditor, {
+        props: { modelValue: "" },
+      });
+      await flushPromises();
+      await wrapper.findAll(".mode-tab")[0].trigger("click");
+      await flushPromises();
+      await nextTick();
+
+      (
+        wrapper.vm as unknown as { insertBlock: (b: string) => void }
+      ).insertBlock(QUOTE);
+      await flushPromises();
+      await nextTick();
+
+      const emitted = wrapper.emitted("update:modelValue");
+      expect(emitted).toBeTruthy();
+      expect(String(emitted!.at(-1)![0])).toContain('[quote="Вася"]');
+    });
+
+    it("inserts into the visual mode as well", async () => {
+      const wrapper = mount(BBCodeEditor, {
+        props: { modelValue: "" },
+      });
+      await flushPromises();
+      await nextTick();
+
+      (
+        wrapper.vm as unknown as { insertBlock: (b: string) => void }
+      ).insertBlock(QUOTE);
+      await flushPromises();
+      await nextTick();
+
+      // The quotation is a blockquote in the document, and the paragraph the
+      // caret was left in stands after it.
+      const content = wrapper.find(".ProseMirror");
+      expect(content.html()).toContain("blockquote");
+      expect(content.html()).toContain("чужая реплика");
     });
   });
 

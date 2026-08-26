@@ -211,7 +211,6 @@ function clearSearch() {
 
     <EmptyState
       v-else
-      icon="envelope"
       title="Нет переписок"
       hint="Найдите собеседника через поиск выше"
     />
@@ -219,8 +218,8 @@ function clearSearch() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Filters"
-@import "@/assets/styles/ZIndex"
+@use "@/assets/styles/Filters" as *
+@use "@/assets/styles/ZIndex" as *
 
 .messenger-list
   display: flex

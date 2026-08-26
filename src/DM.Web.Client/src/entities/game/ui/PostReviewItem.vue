@@ -368,7 +368,7 @@ async function confirmDelete() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 // Review item - bullet list style like old DM site
 .review-item
@@ -406,11 +406,13 @@ async function confirmDelete() {
   font-style: italic
 
 // No margin: the space before the number is the ", " text node above.
+// Same rule as .post-number in GamePost: a "go to the post" affordance is a
+// link and looks like one everywhere, home page included (UI_STANDARDS).
 .review-anchor
   font-size: $tertiary-font-size
-  color: $text-muted
+  color: $link
   &:hover
-    color: $link
+    color: $link-hover
 
 .review-sign
   &.positive

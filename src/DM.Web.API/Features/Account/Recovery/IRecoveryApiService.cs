@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using DM.Web.API.Features.Community.Users;
-using DM.Web.API.Features.Account.Availability;
 
 namespace DM.Web.API.Features.Account.Recovery;
 
@@ -16,13 +15,6 @@ public interface IRecoveryApiService
     /// <param name="request">Recovery request with email</param>
     /// <returns>Recovery result</returns>
     Task<RecoveryResponse> Recover(RecoveryRequest request);
-
-    /// <summary>
-    /// Check if email is available for registration
-    /// </summary>
-    /// <param name="email">Email to check</param>
-    /// <returns>Availability status</returns>
-    Task<EmailAvailabilityResponse> CheckEmailAvailability(string email);
 
     /// <summary>
     /// Get password reset token info

@@ -62,7 +62,7 @@ public class EmailConfiguration
     /// Refuse to send at all unless the session is encrypted
     /// </summary>
     /// <remarks>
-    /// Off by default because the local and preview stacks send through MailHog,
+    /// Off by default because the local and preview stacks send through Mailpit,
     /// which offers no TLS and would refuse every letter under a stricter
     /// setting. Opportunistic upgrade is also a downgrade anyone on the path can
     /// force by stripping STARTTLS out of the greeting, and what travels in these

@@ -13,6 +13,14 @@
  * and in thirty local rules that each re-invented it, so the rule cannot
  * be kept by one component and has to be checked over the tree.
  *
+ * The shared empty state has a second half to it, decided with the first
+ * and checked at the bottom of this file: it draws no icon. It used to
+ * take one and hang it at 64px above the sentence, which spent the height
+ * of three lines reporting what "Нет активных сессий" already says. An
+ * icon is not an alignment, so the walk above cannot see it, and an `icon`
+ * left at a call site is not an error either — an undeclared prop lands on
+ * the root element as a stray attribute and nothing complains.
+ *
  * What counts as an empty state is decided by the class name: the words
  * below are the vocabulary the client already uses for "there is nothing
  * here" and "you are not signed in". A rule outside that vocabulary is
@@ -236,5 +244,43 @@ describe("empty states and login prompts", () => {
     for (const [key, reason] of Object.entries(CENTERED_ON_PURPOSE)) {
       expect(stillCentered.has(key), `${key}: ${reason}`).toBe(true);
     }
+  });
+});
+
+/**
+ * Every `<EmptyState …>` opening tag of a file, attributes included. A fresh
+ * regex per call: a `/g` one carries `lastIndex` between calls and would skip
+ * the second file it is asked about.
+ */
+const emptyStateTags = (source: string): string[] =>
+  source.match(/<EmptyState\b[^>]*>/g) ?? [];
+
+describe("the shared empty state", () => {
+  it("draws no icon", () => {
+    const source = readFileSync(
+      join(CLIENT_SRC, "shared/ui/EmptyState/EmptyState.vue"),
+      "utf8",
+    );
+    expect(source).not.toContain("SvgIcon");
+    expect(source).not.toContain("empty-icon");
+    expect(source).not.toMatch(/^\s*icon\??:/m);
+  });
+
+  it("is handed no icon by any caller", () => {
+    const offenders: string[] = [];
+    for (const file of collect(CLIENT_SRC).filter((f) => f.endsWith(".vue"))) {
+      for (const tag of emptyStateTags(readFileSync(file, "utf8"))) {
+        if (/\bicon\b/.test(tag)) offenders.push(`${asPath(file)}: ${tag}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("really reaches the call sites, so the check above can go red", () => {
+    // Without this the walk could pass by finding no EmptyState at all.
+    const callers = collect(CLIENT_SRC)
+      .filter((f) => f.endsWith(".vue"))
+      .filter((f) => emptyStateTags(readFileSync(f, "utf8")).length > 0);
+    expect(callers.length).toBeGreaterThan(3);
   });
 });

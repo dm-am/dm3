@@ -1,6 +1,5 @@
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Web.API.Shared.Dto;
 using ApiBan = DM.Web.API.Features.Moderation.Bans.Ban;
@@ -12,10 +11,10 @@ namespace DM.Web.API.Features.Moderation.Warnings;
 internal class ViolatorApiService : IViolatorApiService
 {
     private readonly IWarningService _warningService;
-    private readonly IMapper _mapper;
+    private readonly WarningMapper _mapper;
 
     /// <inheritdoc />
-    public ViolatorApiService(IWarningService warningService, IMapper mapper)
+    public ViolatorApiService(IWarningService warningService, WarningMapper mapper)
     {
         _warningService = warningService;
         _mapper = mapper;
@@ -30,10 +29,10 @@ internal class ViolatorApiService : IViolatorApiService
 
     private Violator Map(DomainViolator violator) => new()
     {
-        User = _mapper.Map<UserRef>(violator.User),
+        User = UserRefMappers.ToUserRef(violator.User),
         Points = violator.Points,
         LastWarningUtc = violator.LastWarningUtc,
-        ActiveBan = violator.ActiveBan != null ? _mapper.Map<ApiBan>(violator.ActiveBan) : null
+        ActiveBan = violator.ActiveBan != null ? _mapper.ToBan(violator.ActiveBan) : null
     };
 
     private static ViolatorsFilter ParseFilter(string filter) => filter switch

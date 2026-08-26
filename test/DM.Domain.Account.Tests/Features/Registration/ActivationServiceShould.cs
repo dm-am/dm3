@@ -12,23 +12,24 @@ using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Registration;
 
 public class ActivationServiceShould : UnitTestBase
 {
-    private readonly Mock<IValidator<ActivationRequest>> _validator;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IActivationRepository> _repository;
-    private readonly Mock<IUserFactory> _userFactory;
-    private readonly Mock<IEventProducer> _producer;
-    private readonly Mock<IRecoveryService> _recoveryService;
+    private readonly IValidator<ActivationRequest> _validator;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IActivationRepository _repository;
+    private readonly IUserFactory _userFactory;
+    private readonly IEventProducer _producer;
+    private readonly IRecoveryService _recoveryService;
     private readonly ActivationService _service;
 
     public ActivationServiceShould()
@@ -44,20 +45,19 @@ public class ActivationServiceShould : UnitTestBase
             ActivationTokenLifetimeHours = 48
         });
 
-        _validator.Setup(v => v.ValidateAsync(
-                It.IsAny<ValidationContext<ActivationRequest>>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _validator.ValidateAsync(
+                Arg.Any<ValidationContext<ActivationRequest>>(),
+                Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _service = new ActivationService(
-            _validator.Object,
-            _dateTimeProvider.Object,
-            _repository.Object,
-            _userFactory.Object,
-            _producer.Object,
-            _recoveryService.Object,
+            _validator,
+            _dateTimeProvider,
+            _repository,
+            _userFactory,
+            _producer,
+            _recoveryService,
             config);
     }
 
@@ -70,8 +70,8 @@ public class ActivationServiceShould : UnitTestBase
             Username = "newuser"
         };
 
-        _repository.Setup(r => r.FindPendingByToken(request.Token, It.IsAny<CancellationToken>())).ReturnsAsync((PendingRegistration?)null);
-        _repository.Setup(r => r.FindUserByEmail(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync((AuthenticatedUser?)null);
+        _repository.FindPendingByToken(request.Token, Arg.Any<CancellationToken>()).Returns((PendingRegistration?)null);
+        _repository.FindUserByEmail(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((AuthenticatedUser?)null);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.Activate(request));
@@ -94,8 +94,8 @@ public class ActivationServiceShould : UnitTestBase
             TokenCreatedUtc = now.AddDays(-3)
         };
 
-        _repository.Setup(r => r.FindPendingByToken(request.Token, It.IsAny<CancellationToken>())).ReturnsAsync(pending);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _repository.FindPendingByToken(request.Token, Arg.Any<CancellationToken>()).Returns(pending);
+        _dateTimeProvider.Now.Returns(now);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.Activate(request));
@@ -128,15 +128,15 @@ public class ActivationServiceShould : UnitTestBase
             Email = pending.Email
         };
 
-        _repository.Setup(r => r.FindPendingByToken(tokenId, It.IsAny<CancellationToken>())).ReturnsAsync(pending);
-        _userFactory.Setup(f => f.CreateFromPending(pending, request.Username)).Returns(user);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _repository.FindPendingByToken(tokenId, Arg.Any<CancellationToken>()).Returns(pending);
+        _userFactory.CreateFromPending(pending, request.Username).Returns(user);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = await _service.Activate(request);
 
         result.Should().Be(userId);
-        _repository.Verify(r => r.CompleteActivation(user, pending.PendingRegistrationId), Times.Once);
-        _producer.Verify(p => p.SendAsync(EventType.ActivatedUser, userId), Times.Once);
+        await _repository.Received(1).CompleteActivation(user, pending.PendingRegistrationId);
+        await _producer.Received(1).SendAsync(EventType.ActivatedUser, userId);
     }
 
     [Fact]
@@ -157,13 +157,13 @@ public class ActivationServiceShould : UnitTestBase
             Email = "test@example.com"
         };
 
-        _repository.Setup(r => r.FindPendingByToken(tokenId, It.IsAny<CancellationToken>())).ReturnsAsync((PendingRegistration?)null);
-        _repository.Setup(r => r.FindUserByEmail(request.RetryEmail, It.IsAny<CancellationToken>())).ReturnsAsync(existingUser);
+        _repository.FindPendingByToken(tokenId, Arg.Any<CancellationToken>()).Returns((PendingRegistration?)null);
+        _repository.FindUserByEmail(request.RetryEmail, Arg.Any<CancellationToken>()).Returns(existingUser);
 
         var result = await _service.Activate(request);
 
         result.Should().Be(userId);
-        _repository.Verify(r => r.CompleteActivation(It.IsAny<CreateUser>(), It.IsAny<Guid>()), Times.Never);
+        await _repository.DidNotReceive().CompleteActivation(Arg.Any<CreateUser>(), Arg.Any<Guid>());
     }
 
     [Fact]
@@ -178,8 +178,8 @@ public class ActivationServiceShould : UnitTestBase
             TokenCreatedUtc = now.AddHours(-1)
         };
 
-        _repository.Setup(r => r.FindPendingByToken(tokenId, It.IsAny<CancellationToken>())).ReturnsAsync(pending);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _repository.FindPendingByToken(tokenId, Arg.Any<CancellationToken>()).Returns(pending);
+        _dateTimeProvider.Now.Returns(now);
 
         var result = await _service.GetPendingInfo(tokenId);
 
@@ -192,11 +192,11 @@ public class ActivationServiceShould : UnitTestBase
     public async Task DelegateToRecoveryServiceForActivationResend()
     {
         var email = "test@example.com";
-        _recoveryService.Setup(r => r.Recover(email)).ReturnsAsync(RecoveryResult.ActivationResent);
+        _recoveryService.Recover(email).Returns(RecoveryResult.ActivationResent);
 
         var result = await _service.ResendActivation(email);
 
         result.Should().BeTrue();
-        _recoveryService.Verify(r => r.Recover(email), Times.Once);
+        await _recoveryService.Received(1).Recover(email);
     }
 }

@@ -4,6 +4,7 @@ import type { ListEnvelope, CursorPaging } from "@/shared/api/models/common";
 import type { Chat, ChatId, Message, MessageId } from "./types";
 import type { Username } from "@/shared/api/models/common";
 import messagingApi from "../api/messagingApi";
+import { unwrapResource } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
@@ -317,18 +318,23 @@ export const useMessagingStore = defineStore("messaging", () => {
     try {
       const { data, error } = await messagingApi.sendMessage(chatId, text);
       if (error) return { error };
-      if (data) {
-        messagesList.value.push(data as Message);
+      // Out of the envelope. Taken as it came, the sent message went into the
+      // correspondence and into the chat list preview as an object with no
+      // text, no author and no date: the reply a person had just written
+      // showed as an empty line in both places until the page was reloaded.
+      const sent = unwrapResource<Message>(data);
+      if (sent) {
+        messagesList.value.push(sent);
         // Update last message in chat list
         if (chats.value) {
           const chat = chats.value.resources.find((c) => c.id === chatId);
           if (chat) {
-            (chat as Chat).lastMessage = data as typeof chat.lastMessage;
+            (chat as Chat).lastMessage = sent as typeof chat.lastMessage;
           }
         }
         if (selectedChat.value?.id === chatId) {
           (selectedChat.value as Chat).lastMessage =
-            data as Chat["lastMessage"];
+            sent as Chat["lastMessage"];
         }
       }
     } finally {
@@ -342,13 +348,16 @@ export const useMessagingStore = defineStore("messaging", () => {
     const { data, error } = await messagingApi.updateMessage(id as MessageId, {
       text,
     });
-    if (!error && data) {
+    // Out of the envelope: the edited message was replaced by the wrapper,
+    // so saving an edit blanked the very line that was edited.
+    const updated = unwrapResource<Message>(data);
+    if (!error && updated) {
       const idx = messagesList.value.findIndex((m) => m.id === id);
       if (idx !== -1) {
-        messagesList.value[idx] = data;
+        messagesList.value[idx] = updated;
       }
     }
-    return { data, error };
+    return { data: updated, error };
   }
 
   // Delete message - mark as removed instead of filtering
@@ -369,13 +378,16 @@ export const useMessagingStore = defineStore("messaging", () => {
   // Like/unlike message
   async function likeMessage(id: string) {
     const { data, error } = await messagingApi.likeMessage(id as MessageId);
-    if (!error && data) {
+    // Out of the envelope: liking a message replaced it with the wrapper, so
+    // the like erased the text of the message it was given to.
+    const liked = unwrapResource<Message>(data);
+    if (!error && liked) {
       const idx = messagesList.value.findIndex((m) => m.id === id);
       if (idx !== -1) {
-        messagesList.value[idx] = data;
+        messagesList.value[idx] = liked;
       }
     }
-    return { data, error };
+    return { data: liked, error };
   }
 
   async function unlikeMessage(id: string) {

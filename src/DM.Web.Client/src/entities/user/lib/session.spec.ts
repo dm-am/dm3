@@ -24,12 +24,14 @@ import type {
 const {
   mockRegister,
   mockSignIn,
+  mockCompleteTwoFactorLogin,
   mockSignOut,
   mockLogoutAll,
   mockGetMyProfile,
 } = vi.hoisted(() => ({
   mockRegister: vi.fn(),
   mockSignIn: vi.fn(),
+  mockCompleteTwoFactorLogin: vi.fn(),
   mockSignOut: vi.fn(),
   mockLogoutAll: vi.fn(),
   mockGetMyProfile: vi.fn(),
@@ -39,6 +41,7 @@ vi.mock("../api/accountApi", () => ({
   default: {
     register: mockRegister,
     signIn: mockSignIn,
+    completeTwoFactorLogin: mockCompleteTwoFactorLogin,
     signOut: mockSignOut,
     logoutAll: mockLogoutAll,
   },
@@ -51,7 +54,14 @@ vi.mock("../api/personalApi", () => ({
 import { Theme } from "@/shared/api/models/personal";
 import { useAuthStore } from "@/shared/stores";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { register, signIn, signOut, signOutAll, fetchUser } from "./session";
+import {
+  register,
+  signIn,
+  completeSecondFactor,
+  signOut,
+  signOutAll,
+  fetchUser,
+} from "./session";
 
 const viewer = { id: "user-1", username: "SolohinLex" };
 
@@ -152,9 +162,12 @@ describe("signIn", () => {
   it("hands back a refusal that names no field instead of a session", async () => {
     mockSignIn.mockResolvedValue(refused(403, "Аккаунт заблокирован"));
 
-    const failure = await signIn(credentials);
+    const outcome = await signIn(credentials);
 
-    expect(failure?.status).toBe(403);
+    expect(outcome).toEqual({
+      stage: "refused",
+      failure: expect.objectContaining({ status: 403 }),
+    });
     expect(useAuthStore().isAuthenticated).toBe(false);
   });
 
@@ -167,9 +180,9 @@ describe("signIn", () => {
       error: null,
     });
 
-    const failure = await signIn(credentials);
+    const outcome = await signIn(credentials);
 
-    expect(failure).toBeNull();
+    expect(outcome).toEqual({ stage: "signedIn" });
     expect(useAuthStore().user?.username).toBe("SolohinLex");
   });
 
@@ -182,6 +195,52 @@ describe("signIn", () => {
     await signIn(credentials);
 
     expect(useAuthStore().user).not.toHaveProperty("preferences");
+  });
+
+  // A success with no viewer in it. Read as "no error, therefore a session",
+  // this closed the dialog, left the store empty and lost the half-finished
+  // login: the account with a factor on it could not sign in at all.
+  it("reports the second factor instead of an empty session", async () => {
+    mockSignIn.mockResolvedValue({
+      data: { twoFactorRequired: true },
+      error: null,
+    });
+
+    const outcome = await signIn(credentials);
+
+    expect(outcome).toEqual({ stage: "secondFactor" });
+    expect(useAuthStore().isAuthenticated).toBe(false);
+  });
+});
+
+describe("completeSecondFactor", () => {
+  it("hands back the refusal instead of dropping the viewer", async () => {
+    mockCompleteTwoFactorLogin.mockResolvedValue(
+      refused(400, "Код не подошел"),
+    );
+
+    const failure = await completeSecondFactor("123456");
+
+    expect(failure?.title).toBe("Код не подошел");
+    expect(useAuthStore().isAuthenticated).toBe(false);
+  });
+
+  // The second step answers enveloped where the first answers bare. Read the
+  // way the first step is read, the envelope stands in the store as the viewer.
+  it("takes the viewer out of the envelope", async () => {
+    mockCompleteTwoFactorLogin.mockResolvedValue({
+      data: {
+        resource: {
+          user: viewer,
+          preferences: { theme: Theme.Light, paging: {} },
+        },
+      },
+      error: null,
+    });
+
+    expect(await completeSecondFactor("123456")).toBeNull();
+    expect(useAuthStore().user?.username).toBe("SolohinLex");
+    expect(useAuthStore().user).not.toHaveProperty("resource");
   });
 });
 

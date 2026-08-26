@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Security;
+using DM.Domain.Account.Features.TwoFactor;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
@@ -27,8 +28,12 @@ internal class AuthenticationService : IAuthenticationService
     private readonly ILoginAttemptTracker _loginAttemptTracker;
     private readonly ISecurityAuditRepository _auditService;
     private readonly IEventProducer _eventProducer;
+    private readonly ITwoFactorRepository _twoFactorRepository;
+    private readonly ITwoFactorVerifier _twoFactorVerifier;
+    private readonly IGuidFactory _guidFactory;
     private readonly ILogger<AuthenticationService> _logger;
     private readonly AuthenticationConfiguration _config;
+    private readonly TwoFactorConfiguration _twoFactorConfig;
 
     /// <summary>
     /// Credentials of nobody, hashed so that a login for an account that does not
@@ -59,8 +64,12 @@ internal class AuthenticationService : IAuthenticationService
         ILoginAttemptTracker loginAttemptTracker,
         ISecurityAuditRepository auditService,
         IEventProducer eventProducer,
+        ITwoFactorRepository twoFactorRepository,
+        ITwoFactorVerifier twoFactorVerifier,
+        IGuidFactory guidFactory,
         ILogger<AuthenticationService> logger,
-        IOptions<AuthenticationConfiguration> authConfig)
+        IOptions<AuthenticationConfiguration> authConfig,
+        IOptions<TwoFactorConfiguration> twoFactorConfig)
     {
         _securityManager = securityManager;
         _cryptoService = cryptoService;
@@ -71,8 +80,12 @@ internal class AuthenticationService : IAuthenticationService
         _loginAttemptTracker = loginAttemptTracker;
         _auditService = auditService;
         _eventProducer = eventProducer;
+        _twoFactorRepository = twoFactorRepository;
+        _twoFactorVerifier = twoFactorVerifier;
+        _guidFactory = guidFactory;
         _logger = logger;
         _config = authConfig.Value;
+        _twoFactorConfig = twoFactorConfig.Value;
     }
 
     /// <inheritdoc />
@@ -192,11 +205,44 @@ internal class AuthenticationService : IAuthenticationService
                 return Identity.Fail(AuthenticationError.Banned);
 
             default:
+                // The password is proven. Whether that is enough is the next
+                // question, and while it is unanswered nothing about this login
+                // is recorded: no attempt counter reset, no activity stamp, no
+                // entry in the journal and no session. A login that got halfway
+                // is not a login.
+                if (await _twoFactorRepository.IsConfirmed(user.UserId, cancellationToken))
+                {
+                    var challenge = new TwoFactorChallengeState
+                    {
+                        ChallengeId = _guidFactory.Create(),
+                        UserId = user.UserId,
+                        // The identifier the password step counted under, so a
+                        // wrong code lands in the same counter as a wrong
+                        // password instead of one of its own.
+                        Account = email,
+                        CreatedUtc = _dateTimeProvider.Now,
+                        ExpiresUtc = _dateTimeProvider.Now +
+                                     TimeSpan.FromMinutes(_twoFactorConfig.ChallengeLifetimeMinutes),
+                        Persistent = rememberMe,
+                        IpAddress = context?.IpAddress,
+                        UserAgent = context?.UserAgent
+                    };
+                    await _twoFactorRepository.AddChallenge(challenge, cancellationToken);
+
+                    _logger.LogInformation(
+                        "Password accepted, second factor owed. UserId={UserId}", user.UserId);
+                    return Identity.SecondFactorRequired(challenge.ChallengeId);
+                }
+
                 // Successful login - reset attempt counter
                 await _loginAttemptTracker.ResetAttempts(email);
 
                 // Update activity on login
                 await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
+
+                // The account has no factor, so the fold below can only withhold
+                // a rank - which is exactly what it is for.
+                user.ApplySecondFactorRequirement(secondFactorConfirmed: false);
 
                 // Session persistence based on "remember me" checkbox
                 var session = _sessionFactory.Create(persistent: rememberMe, context: context);
@@ -209,14 +255,121 @@ internal class AuthenticationService : IAuthenticationService
                 // without its own entry or throws away a genuine earlier login
                 // instead. Waiting buys away no availability either - the journal,
                 // the session written below and the attempt counter read at the
-                // top of this method share one Mongo, so a login that got this far
-                // never had Mongo down.
+                // top of this method share one database, so a login that got this
+                // far never had it down.
                 await _auditService.LogAsync(user.UserId, SecurityEventType.LoginSuccess,
                     context?.IpAddress, context?.UserAgent);
 
                 _logger.LogInformation("User authenticated successfully. UserId={UserId}", user.UserId);
                 return await CreateAuthenticationResult(user, session, settings);
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<IIdentity> CompleteSecondFactor(
+        Guid challengeId, string code, SessionContext? context = null,
+        CancellationToken cancellationToken = default)
+    {
+        var challenge = await _twoFactorRepository.FindChallenge(challengeId, cancellationToken);
+        if (challenge == null)
+        {
+            _logger.LogWarning("Second factor failed: unknown challenge");
+            return Identity.Fail(AuthenticationError.TwoFactorRejected);
+        }
+
+        // The counter of the password step, keyed on the same pair. The account
+        // identifier travels on the challenge for exactly this: two counters
+        // over one login would mean the lower threshold is the only real one.
+        var origin = new LoginAttemptOrigin(challenge.Account, context?.IpAddress);
+
+        if (challenge.ExpiresUtc <= _dateTimeProvider.Now)
+        {
+            await _twoFactorRepository.RemoveChallenge(challengeId, cancellationToken);
+            _logger.LogWarning("Second factor failed: challenge expired. UserId={UserId}", challenge.UserId);
+            return Identity.Fail(AuthenticationError.TwoFactorRejected);
+        }
+
+        if (await _loginAttemptTracker.IsAccountLocked(origin))
+        {
+            _logger.LogWarning("Second factor refused: account locked. UserId={UserId}", challenge.UserId);
+            return Identity.Fail(AuthenticationError.TwoFactorRejected);
+        }
+
+        var state = await _twoFactorRepository.Find(challenge.UserId, cancellationToken);
+        if (state is not { ConfirmedUtc: not null })
+        {
+            // The factor went away between the two steps. Nothing to prove, and
+            // nothing to hand out either: the login starts again.
+            await _twoFactorRepository.RemoveChallenge(challengeId, cancellationToken);
+            return Identity.Fail(AuthenticationError.TwoFactorRejected);
+        }
+
+        if (!await _twoFactorVerifier.Accept(state, code, context?.IpAddress, cancellationToken))
+        {
+            await _loginAttemptTracker.RecordFailedAttempt(origin);
+            var attempts = await _twoFactorRepository.CountChallengeAttempt(challengeId, cancellationToken);
+            if (attempts >= _twoFactorConfig.ChallengeAttemptLimit)
+            {
+                // The challenge is destroyed rather than left counting: carrying
+                // on costs the password again, which is the price of guessing.
+                await _twoFactorRepository.RemoveChallenge(challengeId, cancellationToken);
+            }
+
+            await _auditService.LogAsync(challenge.UserId, SecurityEventType.LoginFailure,
+                context?.IpAddress, context?.UserAgent, "Второй фактор");
+            _logger.LogWarning("Second factor failed: wrong code. UserId={UserId}", challenge.UserId);
+            return Identity.Fail(AuthenticationError.TwoFactorRejected);
+        }
+
+        // Spent whichever way it ends, and spent before anything is handed out.
+        await _twoFactorRepository.RemoveChallenge(challengeId, cancellationToken);
+
+        // The state of the account is asked again rather than carried over from
+        // the password step: a ban issued in the five minutes somebody spent
+        // finding their phone has to take effect.
+        var user = await _repository.FindUser(challenge.UserId);
+        ApplyActiveBans(user);
+
+        if (user == null)
+        {
+            return Identity.Fail(AuthenticationError.SessionExpired);
+        }
+
+        if (user.IsRemoved)
+        {
+            _logger.LogWarning("Second factor refused: account removed. UserId={UserId}", user.UserId);
+            return Identity.Fail(AuthenticationError.Removed);
+        }
+
+        if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
+        {
+            _logger.LogWarning("Second factor refused: account banned. UserId={UserId}", user.UserId);
+            return Identity.Fail(AuthenticationError.Banned);
+        }
+
+        // A sign-in that passed the factor is the owner saying "the device is
+        // still mine", which is the whole reason a scheduled removal can be
+        // called off without touching a mailbox.
+        if (await _twoFactorRepository.CancelScheduledRemoval(user.UserId, cancellationToken))
+        {
+            await _auditService.LogAsync(user.UserId, SecurityEventType.TwoFactorRemovalCancelled,
+                context?.IpAddress, context?.UserAgent);
+        }
+
+        await _loginAttemptTracker.ResetAttempts(challenge.Account);
+        await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
+        user.ApplySecondFactorRequirement(secondFactorConfirmed: true);
+
+        // "Remember me" as it was ticked on the first step: the second step has
+        // no checkbox and must not quietly answer for the person.
+        var session = _sessionFactory.Create(persistent: challenge.Persistent, context: context);
+        var settings = await _repository.FindUserSettings(user.UserId);
+
+        await _auditService.LogAsync(user.UserId, SecurityEventType.LoginSuccess,
+            context?.IpAddress, context?.UserAgent);
+
+        _logger.LogInformation("Second factor accepted. UserId={UserId}", user.UserId);
+        return await CreateAuthenticationResult(user, session, settings);
     }
 
     /// <inheritdoc />
@@ -231,15 +384,15 @@ internal class AuthenticationService : IAuthenticationService
 
         var (userId, sessionId) = token;
 
-        var fetchUser = _repository.FindUser(userId);
-        var fetchSession = _repository.FindUserSession(userId, sessionId);
-        var fetchSettings = _repository.FindUserSettings(userId);
-
-        await Task.WhenAll(fetchUser, fetchSession, fetchSettings);
-
-        var user = await fetchUser;
-        var session = await fetchSession;
-        var settings = await fetchSettings;
+        // Sequential on purpose: all three reads go to one DmDbContext now, and
+        // a context refuses parallel queries inside one scope (INV-7). Each is a
+        // primary-key lookup on the local database — units of milliseconds —
+        // and the price bought the disappearance of a class of cross-store
+        // inconsistencies. A single joined round trip stays a cheap local
+        // option if a profile ever shows the need.
+        var user = await _repository.FindUser(userId);
+        var session = await _repository.FindUserSession(userId, sessionId);
+        var settings = await _repository.FindUserSettings(userId);
         ApplyActiveBans(user);
 
         // Validate user state (could have changed since token was issued)
@@ -307,6 +460,13 @@ internal class AuthenticationService : IAuthenticationService
             await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
         }
 
+        // Folded on every request the way active bans are, and for the same
+        // reason: the role is what every resolver and every rank comparison in
+        // the moderation services reads. Folding it once here is what makes a
+        // factor switched on a minute ago give the rank back without a new
+        // sign-in, and a factor removed take it away just as fast.
+        await ApplySecondFactorRequirement(user);
+
         return Identity.Success(user, session, settings, authToken);
     }
 
@@ -337,6 +497,20 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.Banned);
         }
 
+        // A session minted without a password is exactly what a second factor
+        // exists to prevent, so this path refuses an account that has one. Today
+        // the only caller is the auto-login that follows activation, and a
+        // freshly created account cannot have a factor - which makes this rule
+        // safe by circumstance rather than by construction. The next caller will
+        // arrive without a word, and the rule has to be in the path rather than
+        // in the habits of its callers.
+        if (await _twoFactorRepository.IsConfirmed(userId))
+        {
+            _logger.LogWarning(
+                "Direct authentication refused: account has a second factor. UserId={UserId}", userId);
+            return Identity.Fail(AuthenticationError.Forbidden);
+        }
+
         // An ordinary session, with the address and agent it was opened from.
         // Minted invisible and contextless, it was a login the account owner had
         // no way to see: no entry in the security journal, a device list row with
@@ -344,6 +518,7 @@ internal class AuthenticationService : IAuthenticationService
         // no successful login on record, so the first real login from anywhere
         // had nothing to be compared against.
         await _repository.UpdateActivity(userId, _dateTimeProvider.Now);
+        user.ApplySecondFactorRequirement(secondFactorConfirmed: false);
         var session = _sessionFactory.Create(persistent: false, context: context);
         var settings = await _repository.FindUserSettings(userId);
 
@@ -456,5 +631,25 @@ internal class AuthenticationService : IAuthenticationService
         }
 
         user.AccessPolicy = user.EffectiveAccessPolicyAt(_dateTimeProvider.Now);
+    }
+
+    /// <summary>
+    /// Withhold the rank of an account that owes a second factor and has none.
+    /// </summary>
+    /// <remarks>
+    /// Beside the ban fold, and by the same argument: computed once, at the one
+    /// point an identity is built, so that no surface is obliged to remember it.
+    /// The day one surface forgets is the day a password alone is enough for a
+    /// privileged account again.
+    ///
+    /// The storage is asked only for the ranks the requirement covers, which is
+    /// a small handful of accounts: for everybody else the predicate is decided
+    /// without leaving the process, and the ordinary request pays nothing.
+    /// </remarks>
+    private async Task ApplySecondFactorRequirement(AuthenticatedUser user)
+    {
+        var confirmed = TwoFactorRequirement.AppliesTo(user.Role) &&
+                        await _twoFactorRepository.IsConfirmed(user.UserId);
+        user.ApplySecondFactorRequirement(confirmed);
     }
 }

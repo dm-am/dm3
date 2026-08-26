@@ -220,6 +220,39 @@ describe("BBCode Lists", () => {
       expectRoundTrip(bbcode);
     });
   });
+
+  // Text written inside a list but outside its items.
+  //
+  // The display path used to drop it and this converter never did, so a
+  // paragraph between two items sat in the editor, in the stored source and in
+  // search, and reached no reader. The server prints it now, lifting it out of
+  // the list markup because a ul may hold nothing but li (TagNode.EmitList).
+  //
+  // This converter keeps the shape it had, and the difference is deliberate:
+  // it builds the HTML the editor edits, not the HTML a reader gets, and its
+  // contract is that the source survives a round trip untouched. Lifting the
+  // text here would move it out of the list in the author's own source the
+  // first time they opened the post in visual mode. What the two sides owe is
+  // the same thing, and it is what these pin: the text is never lost.
+  describe("text between items", () => {
+    it("keeps text written between two items", () => {
+      const bbcode = "[ul][li]item 1[/li]a word between[li]item 2[/li][/ul]";
+      expect(bbcodeToHtml(bbcode)).toContain("a word between");
+      expectRoundTrip(bbcode);
+    });
+
+    it("keeps text written before the first item", () => {
+      const bbcode = "[ul]a word before[li]item 1[/li][li]item 2[/li][/ul]";
+      expect(bbcodeToHtml(bbcode)).toContain("a word before");
+      expectRoundTrip(bbcode);
+    });
+
+    it("keeps text written after the last item", () => {
+      const bbcode = "[ul][li]item 1[/li][li]item 2[/li]a word after[/ul]";
+      expect(bbcodeToHtml(bbcode)).toContain("a word after");
+      expectRoundTrip(bbcode);
+    });
+  });
 });
 
 // ============================================================================
@@ -280,12 +313,39 @@ describe("BBCode Special Blocks", () => {
       expectRoundTrip("[quote]quoted text[/quote]");
     });
 
-    it("[quote=X] author is stripped (not supported)", () => {
-      // Author parameter is intentionally NOT supported
+    // The server has always rendered [quote=Author] with an attribution line.
+    // The converter used to drop the author in both directions, so an author
+    // who opened their own post in the editor and saved it without changing
+    // anything lost the attribution — silently, with no way to notice before
+    // the post was already stored that way.
+    //
+    // It comes back quoted whichever way it went in. That is the form the
+    // server composes a quotation in and the only one that carries a name
+    // whole: unquoted stops at a double quote, so a nickname written the
+    // ordinary way stopped being a tag at all. Both spellings render the same
+    // page, because the server normalises the value before the parser sees it.
+    it("[quote=X] keeps the author through a round-trip", () => {
+      expect(
+        htmlToBbcode(bbcodeToHtml("[quote=Username]quoted text[/quote]")),
+      ).toBe('[quote="Username"]quoted text[/quote]');
+    });
+
+    it('[quote="X"] survives a round-trip as written', () => {
+      expectRoundTrip('[quote="Username"]quoted text[/quote]');
+    });
+
+    it("a name carrying a double quote survives the round-trip", () => {
+      expectRoundTrip('[quote="Джон "Быстрый" Смит"]quoted text[/quote]');
+    });
+
+    it("[quote=X] carries the author into the markup", () => {
       const html = bbcodeToHtml("[quote=Username]quoted text[/quote]");
-      const bbcode = htmlToBbcode(html);
-      expect(bbcode).toBe("[quote]quoted text[/quote]");
-      expect(bbcode).not.toContain("Username");
+      expect(html).toContain('data-bb-author="Username"');
+    });
+
+    it('[quote="X"] carries the author into the markup', () => {
+      const html = bbcodeToHtml('[quote="Username"]quoted text[/quote]');
+      expect(html).toContain('data-bb-author="Username"');
     });
 
     it("converts to HTML with proper structure", () => {

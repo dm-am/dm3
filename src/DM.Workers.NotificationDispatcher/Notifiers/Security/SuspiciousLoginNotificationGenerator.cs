@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using DM.Domain.Personal.Features.Notifications;
-using Microsoft.EntityFrameworkCore;
 
 namespace DM.Workers.NotificationDispatcher.Notifiers.Security;
 
@@ -25,16 +23,12 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Security;
 /// carries an identifier and nothing else, the journal entry that holds them lives
 /// in the document store, and the letter that does name them has already gone.
 /// </remarks>
-internal class SuspiciousLoginNotificationGenerator : BaseNotificationGenerator
+internal class SuspiciousLoginNotificationGenerator : SecurityNotificationGenerator
 {
-    private readonly DmDbContext _dbContext;
-    private readonly IDateTimeProvider _dateTimeProvider;
-
     /// <inheritdoc />
     public SuspiciousLoginNotificationGenerator(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
+        : base(dbContext, dateTimeProvider)
     {
-        _dbContext = dbContext;
-        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -43,33 +37,21 @@ internal class SuspiciousLoginNotificationGenerator : BaseNotificationGenerator
     /// <inheritdoc />
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var userData = await _dbContext.Users
-            .Where(u => u.UserId == entityId)
-            .Select(u => new
-            {
-                u.UserId,
-                u.Username
-            })
-            .FirstOrDefaultAsync();
-
-        if (userData == null)
+        var subject = await Subject(entityId);
+        if (subject == null)
         {
             yield break;
         }
 
-        // As a DateTime rather than the offset the clock answers with: the letter
-        // prints this field the way the serializer writes it down.
-        var eventTime = _dateTimeProvider.Now.UtcDateTime;
-
         yield return new CreateNotification
         {
-            UsersInterested = new[] { userData.UserId },
+            UsersInterested = new[] { subject.UserId },
             // No ActorId: whoever logged in is either the owner or somebody the
             // account cannot name, and neither is an actor to link to.
             Metadata = new
             {
-                Username = userData.Username,
-                EventTime = eventTime
+                Username = subject.Username,
+                EventTime = subject.EventTime
             }
         };
     }

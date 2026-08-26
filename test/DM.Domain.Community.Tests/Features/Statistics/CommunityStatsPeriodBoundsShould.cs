@@ -1,6 +1,6 @@
 using System;
 using DM.Domain.Community.Features.Statistics;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Statistics;

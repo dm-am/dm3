@@ -3,7 +3,7 @@ using System.Linq;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;

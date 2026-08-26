@@ -178,6 +178,7 @@ const allCategories: { value: NotificationCategory; label: string }[] = [
   { value: "Subscriptions", label: "Подписки" },
   { value: "Security", label: "Безопасность" },
   { value: "Moderation", label: "Модерация" },
+  { value: "Blog", label: "Блоги" },
 ];
 
 // Local state for toggles
@@ -320,8 +321,8 @@ defineExpose({ loadPreferences });
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "../AccountPage.styles"
+@use "@/assets/styles/Inputs" as *
+@use "../AccountPage.styles" as *
 
 .notifications-content
   padding: $medium

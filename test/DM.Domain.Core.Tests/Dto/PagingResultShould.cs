@@ -1,5 +1,5 @@
 using DM.Domain.Core.Dto;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Core.Tests.Dto;
@@ -38,6 +38,6 @@ public class PagingResultShould
     public void GuaranteeCurrentPageIsAtLeastFirst(int entityNumber)
     {
         var actual = PagingResult.Create(100, entityNumber, 10);
-        actual.CurrentPage.Should().BeGreaterOrEqualTo(1);
+        actual.CurrentPage.Should().BeGreaterThanOrEqualTo(1);
     }
 }

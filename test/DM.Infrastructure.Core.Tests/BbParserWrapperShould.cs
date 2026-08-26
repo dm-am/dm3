@@ -1,5 +1,5 @@
 using DM.Infrastructure.Core.Parsing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
@@ -12,7 +12,7 @@ public class BbParserWrapperShould
     public void PreserveImgAndLinkTags_ToBb()
     {
         var input = "[img]https://example.com/image.png[/img]\n\n[link]https://example.com[/link]";
-        var parser = _parserProvider.CurrentCommon;
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
         var tree = parser.Parse(input);
 
         var wrapped = tree as BbParserWrapper.WrappedNodeTree;
@@ -39,7 +39,7 @@ public class BbParserWrapperShould
     [InlineData("referrerpolicy=\"no-referrer\"")]
     public void EmitEveryAgreedImageAttribute(string attribute)
     {
-        var tree = _parserProvider.CurrentCommon
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment)
             .Parse("[img]https://example.com/image.png[/img]");
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
@@ -51,7 +51,7 @@ public class BbParserWrapperShould
     public void PreserveImgAndLinkTags_ToHtml()
     {
         var input = "[img]https://example.com/image.png[/img]\n\n[link]https://example.com[/link]";
-        var parser = _parserProvider.CurrentCommon;
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
         var tree = parser.Parse(input);
 
         var wrapped = tree as BbParserWrapper.WrappedNodeTree;
@@ -66,7 +66,7 @@ public class BbParserWrapperShould
     public void PreserveLinkWithText_ToBb()
     {
         var input = "[link=Click here]https://example.com[/link]";
-        var parser = _parserProvider.CurrentCommon;
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
         var tree = parser.Parse(input);
 
         var wrapped = tree as BbParserWrapper.WrappedNodeTree;
@@ -78,7 +78,7 @@ public class BbParserWrapperShould
     public void PreserveLinkWithText_ToHtml()
     {
         var input = "[link=Click here]https://example.com[/link]";
-        var parser = _parserProvider.CurrentCommon;
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
         var tree = parser.Parse(input);
 
         var wrapped = tree as BbParserWrapper.WrappedNodeTree;
@@ -91,7 +91,7 @@ public class BbParserWrapperShould
     public void PreserveMixedContent()
     {
         var input = "[b]Bold text[/b] with [img]https://img.com/a.png[/img] and [link]https://link.com[/link]";
-        var parser = _parserProvider.CurrentCommon;
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
         var tree = parser.Parse(input);
 
         var wrapped = tree as BbParserWrapper.WrappedNodeTree;
@@ -106,7 +106,7 @@ public class BbParserWrapperShould
     public void HandleMultipleImagesAndLinks()
     {
         var input = "[img]https://img1.com[/img][img]https://img2.com[/img][link]https://link1.com[/link][link=text]https://link2.com[/link]";
-        var parser = _parserProvider.CurrentCommon;
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
         var tree = parser.Parse(input);
 
         var wrapped = tree as BbParserWrapper.WrappedNodeTree;
@@ -124,7 +124,7 @@ public class BbParserWrapperShould
     public void ConvertSimpleSpoiler_ToHtml_UsesDefaultText()
     {
         var input = "[spoiler]hidden content[/spoiler]";
-        var parser = _parserProvider.CurrentCommon;
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
         var tree = parser.Parse(input);
 
         var wrapped = tree as BbParserWrapper.WrappedNodeTree;
@@ -148,7 +148,7 @@ public class BbParserWrapperShould
     public void EncodeLinkText_WhenUrlIsRejected(string dangerousUrl)
     {
         var input = $"[link=<img src=x onerror=alert(1)>]{dangerousUrl}[/link]";
-        var parser = _parserProvider.CurrentCommon;
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
         var tree = parser.Parse(input);
 
         var result = ((BbParserWrapper.WrappedNodeTree)tree!).ToHtml();
@@ -165,7 +165,7 @@ public class BbParserWrapperShould
     public void EncodeLinkText_WhenUrlIsAccepted()
     {
         var input = "[link=<b>bold</b>]https://example.com[/link]";
-        var parser = _parserProvider.CurrentCommon;
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
         var tree = parser.Parse(input);
 
         var result = ((BbParserWrapper.WrappedNodeTree)tree!).ToHtml();
@@ -204,7 +204,7 @@ public class BbParserWrapperShould
     [InlineData("http://api.localhost/x.png")]
     public void DropImage_WhenUrlPointsIntoReaderNetwork(string url)
     {
-        var tree = _parserProvider.CurrentCommon.Parse($"[img]{url}[/img]");
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment).Parse($"[img]{url}[/img]");
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
 
@@ -231,9 +231,9 @@ public class BbParserWrapperShould
     [InlineData("ftp://evil.example/x.png")]
     public void DropImage_WhenTheAttributeFormPointsIntoReaderNetwork(string url)
     {
-        var quoted = ((BbParserWrapper.WrappedNodeTree)_parserProvider.CurrentCommon
+        var quoted = ((BbParserWrapper.WrappedNodeTree)_parserProvider.GetForSurface(BbSurface.Comment)
             .Parse($"[img=\"{url}\"]")).ToHtml();
-        var bare = ((BbParserWrapper.WrappedNodeTree)_parserProvider.CurrentCommon
+        var bare = ((BbParserWrapper.WrappedNodeTree)_parserProvider.GetForSurface(BbSurface.Comment)
             .Parse($"[img={url}]")).ToHtml();
 
         quoted.Should().NotContain("<img");
@@ -249,9 +249,9 @@ public class BbParserWrapperShould
     {
         const string url = "https://example.org/picture.png";
 
-        var attribute = ((BbParserWrapper.WrappedNodeTree)_parserProvider.CurrentCommon
+        var attribute = ((BbParserWrapper.WrappedNodeTree)_parserProvider.GetForSurface(BbSurface.Comment)
             .Parse($"[img=\"{url}\"]")).ToHtml();
-        var content = ((BbParserWrapper.WrappedNodeTree)_parserProvider.CurrentCommon
+        var content = ((BbParserWrapper.WrappedNodeTree)_parserProvider.GetForSurface(BbSurface.Comment)
             .Parse($"[img]{url}[/img]")).ToHtml();
 
         attribute.Should().Be(content);
@@ -265,7 +265,8 @@ public class BbParserWrapperShould
     [InlineData("[img=200x100]https://example.org/p.png[/img]")]
     public void KeepTheSizeFormsWorkingBesideTheAttributeForm(string bbCode)
     {
-        var html = ((BbParserWrapper.WrappedNodeTree)_parserProvider.CurrentCommon.Parse(bbCode)).ToHtml();
+        var html = ((BbParserWrapper.WrappedNodeTree)_parserProvider
+            .GetForSurface(BbSurface.Comment).Parse(bbCode)).ToHtml();
 
         html.Should().Contain("<img");
         html.Should().Contain("example.org/p.png");
@@ -280,7 +281,7 @@ public class BbParserWrapperShould
     [InlineData("http://169.254.169.254/latest/meta-data")]
     public void DropAnchor_WhenLinkPointsIntoReaderNetwork(string url)
     {
-        var tree = _parserProvider.CurrentCommon.Parse($"[link=tap]{url}[/link]");
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment).Parse($"[link=tap]{url}[/link]");
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
 
@@ -302,7 +303,7 @@ public class BbParserWrapperShould
     [InlineData("http://10.example.com/x.png")]
     public void KeepImage_WhenUrlIsPublic(string url)
     {
-        var tree = _parserProvider.CurrentCommon.Parse($"[img]{url}[/img]");
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment).Parse($"[img]{url}[/img]");
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
 
@@ -322,7 +323,7 @@ public class BbParserWrapperShould
     [InlineData("I0")]
     public void RestoreImage_OnlyWhereItsTagStood(string typedByAuthor)
     {
-        var tree = _parserProvider.CurrentCommon
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment)
             .Parse($"{typedByAuthor} [img]https://example.com/a.png[/img]");
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
@@ -338,7 +339,7 @@ public class BbParserWrapperShould
     [Fact]
     public void KeepPlaceholder_WhenAuthorTypedItInsideTagAttribute()
     {
-        var tree = _parserProvider.CurrentCommon
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment)
             .Parse("[quote=\"__IMG_0__\"]text[/quote][img]https://example.com/a.png[/img]");
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
@@ -429,7 +430,7 @@ public class BbParserWrapperShould
     [Fact]
     public void KeepQuoteAuthor_WhenItIsAnOrdinaryName()
     {
-        var tree = _parserProvider.CurrentCommon.Parse("[quote=\"Вася & Петя\"]t[/quote]");
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment).Parse("[quote=\"Вася & Петя\"]t[/quote]");
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
 
@@ -448,7 +449,7 @@ public class BbParserWrapperShould
     [InlineData("https://example.com/a\nb.png")]
     public void DropImage_WhenUrlCarriesWhitespace(string url)
     {
-        var tree = _parserProvider.CurrentCommon.Parse($"[img]{url}[/img]");
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment).Parse($"[img]{url}[/img]");
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
 
@@ -462,7 +463,7 @@ public class BbParserWrapperShould
     [Fact]
     public void KeepImage_WhenUrlIsPaddedWithNewlines()
     {
-        var tree = _parserProvider.CurrentCommon.Parse("[img]\n  https://example.com/a.png\n[/img]");
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment).Parse("[img]\n  https://example.com/a.png\n[/img]");
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
 
@@ -532,7 +533,7 @@ public class BbParserWrapperShould
     [InlineData("[noparse][mention=\"Вася\"][/noparse]")]
     public void ShowMarkupInsideVerbatimBlocks_RatherThanRenderIt(string input)
     {
-        var tree = _parserProvider.CurrentCommon.Parse(input);
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment).Parse(input);
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
 
@@ -545,13 +546,59 @@ public class BbParserWrapperShould
     [Fact]
     public void KeepRenderingTheSameTagsOutsideAVerbatimBlock()
     {
-        var tree = _parserProvider.CurrentCommon
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment)
             .Parse("[code][img]https://example.com/a.png[/img][/code][img]https://example.com/b.png[/img]");
 
         var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
 
         html.Should().Contain("<img src=\"https://example.com/b.png\"");
         html.Should().NotContain("<img src=\"https://example.com/a.png\"");
+    }
+
+    /// <summary>
+    /// An image tag the author never closed costs them the tag, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// It used to cost them the rest of the paragraph. The content pattern ran to
+    /// the next [/img] anywhere in the post, so the unclosed tag joined up with
+    /// the closing tag of the following image and everything between the two
+    /// became one URL — which then failed the whitespace check and was dropped
+    /// whole. The author saw their own text disappear from the page with no
+    /// refusal and no message anywhere.
+    /// </remarks>
+    [Fact]
+    public void EatNothingBetweenAnUnclosedImageAndTheNextClosedOne()
+    {
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment).Parse(
+            "начало [img]https://example.com/a.png\nсередина\n[img]https://example.com/b.png[/img] конец");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain("начало").And.Contain("середина").And.Contain("конец");
+        // The tag that was never closed stays where it stands, as the text it is,
+        // and the one that was closed still renders.
+        html.Should().Contain("https://example.com/a.png");
+        html.Should().Contain("<img src=\"https://example.com/b.png\"");
+    }
+
+    /// <summary>
+    /// A bracket that opens no tag is an ordinary URL character.
+    /// </summary>
+    /// <remarks>
+    /// The counterweight to the rule above: narrowed to "up to the next bracket"
+    /// it would have cost a literal IPv6 host and an ordinary bracketed query
+    /// parameter, both of which are addresses people really write.
+    /// </remarks>
+    [Theory]
+    [InlineData("http://[2001:db8::1]/x.png")]
+    [InlineData("https://example.com/x.png?filter[name]=a")]
+    public void KeepImage_WhenTheUrlItselfCarriesBrackets(string url)
+    {
+        var tree = _parserProvider.GetForSurface(BbSurface.Comment).Parse($"[img]{url}[/img]");
+
+        var html = ((BbParserWrapper.WrappedNodeTree)tree).ToHtml();
+
+        html.Should().Contain("<img src=");
     }
 
     /// <summary>
@@ -572,7 +619,7 @@ public class BbParserWrapperShould
         var chat = ((BbParserWrapper.WrappedNodeTree)_parserProvider
             .GetForSurface(BbSurface.GlobalChatMessage).Parse(input)).ToHtml();
         var common = ((BbParserWrapper.WrappedNodeTree)_parserProvider
-            .CurrentCommon.Parse(input)).ToHtml();
+            .GetForSurface(BbSurface.Comment).Parse(input)).ToHtml();
 
         chat.Should().NotContain("javascript:");
         common.Should().NotContain("javascript:");

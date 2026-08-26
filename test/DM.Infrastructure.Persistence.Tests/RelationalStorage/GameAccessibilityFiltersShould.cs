@@ -5,7 +5,7 @@ using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.RelationalStorage;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;

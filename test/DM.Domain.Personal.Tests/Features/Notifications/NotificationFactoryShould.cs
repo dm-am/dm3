@@ -3,8 +3,8 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Personal.Tests.Features.Notifications;
@@ -12,13 +12,13 @@ namespace DM.Domain.Personal.Tests.Features.Notifications;
 public class NotificationFactoryShould : UnitTestBase
 {
     private readonly NotificationFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
+    private readonly IGuidFactory _guidFactory;
 
     public NotificationFactoryShould()
     {
         _guidFactory = Mock<IGuidFactory>();
 
-        _factory = new NotificationFactory(_guidFactory.Object);
+        _factory = new NotificationFactory(_guidFactory);
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public class NotificationFactoryShould : UnitTestBase
             Metadata = metadata
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(notificationId);
+        _guidFactory.Create().Returns(notificationId);
 
         var result = _factory.Create(createNotification, createDate);
 
@@ -58,7 +58,7 @@ public class NotificationFactoryShould : UnitTestBase
             Metadata = "{}"
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var result = _factory.Create(createNotification, DateTimeOffset.UtcNow);
 
@@ -76,11 +76,35 @@ public class NotificationFactoryShould : UnitTestBase
             Metadata = "{}"
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var result = _factory.Create(createNotification, DateTimeOffset.UtcNow);
 
         result.UsersInterested.Should().BeEquivalentTo(usersInterested);
+    }
+
+    /// <summary>
+    /// The entity is what the repository stores, and the stored EventId is what
+    /// a replayed event finds: a factory that dropped it would silently disarm
+    /// the deduplication for every notification it builds.
+    /// </summary>
+    [Fact]
+    public void PreserveEventId()
+    {
+        var eventId = Guid.NewGuid();
+        var createNotification = new CreateNotification
+        {
+            EventType = EventType.NewTopic,
+            EventId = eventId,
+            UsersInterested = new[] { Guid.NewGuid() },
+            Metadata = "{}"
+        };
+
+        _guidFactory.Create().Returns(Guid.NewGuid());
+
+        var result = _factory.Create(createNotification, DateTimeOffset.UtcNow);
+
+        result.EventId.Should().Be(eventId);
     }
 
     [Fact]
@@ -94,7 +118,7 @@ public class NotificationFactoryShould : UnitTestBase
             Metadata = metadata
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var result = _factory.Create(createNotification, DateTimeOffset.UtcNow);
 

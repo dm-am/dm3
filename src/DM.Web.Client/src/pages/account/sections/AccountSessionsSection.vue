@@ -130,7 +130,7 @@ const logoutFromAll = () => {
 </script>
 
 <style scoped lang="sass">
-@import "../AccountPage.styles"
+@use "../AccountPage.styles" as *
 
 .sessions-content
   padding: $medium

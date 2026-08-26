@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Messaging.Features.Search;
 
@@ -30,5 +31,5 @@ public class MessageSearchRequest
     public string? Cursor { get; set; }
 
     /// <summary>Requested page size.</summary>
-    public int Limit { get; set; } = MessageSearchQuery.DefaultLimit;
+    public int Limit { get; set; } = CursorQuery.DefaultLimit;
 }

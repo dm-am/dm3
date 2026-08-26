@@ -4,8 +4,8 @@ set -euo pipefail
 # The one place that creates docker/.env.
 #
 # Copying the template is half the job. It ships the encryption key empty on
-# purpose, and the compose files declare that key - along with both Mongo
-# passwords and both MinIO accounts - through ${...:?}, which stops
+# purpose, and the compose files declare that key - along with both MinIO
+# accounts - through ${...:?}, which stops
 # interpolation before a single container starts. The server installer created
 # no .env at all and died on exactly that, with the systemd unit and four
 # nightly backup jobs already enabled.
@@ -140,9 +140,8 @@ set_if_empty IMGPROXY_KEY "$(openssl rand -hex 32)"
 set_if_empty IMGPROXY_SALT "$(openssl rand -hex 32)"
 
 if [ "$MODE" = "server" ] && [ "$EXISTING" = 0 ]; then
-    # The only moment these can be chosen: the Mongo application user is created
-    # by the initdb hook and the MinIO accounts by minio-init, and both run once
-    # per empty volume. Keeping the template values would put every password of
+    # The only moment these can be chosen: the MinIO accounts are created by
+    # minio-init, which runs once per empty volume. Keeping the template values would put every password of
     # a public stand in a public repository.
     #
     # Only on a file this run created. Rotating the passwords of a stand that is
@@ -150,7 +149,7 @@ if [ "$MODE" = "server" ] && [ "$EXISTING" = 0 ]; then
     # old ones, so an existing file keeps whatever it holds and says so below.
     for secret in POSTGRES_PASSWORD DM_APP_PASSWORD DM_EXPORTER_PASSWORD \
                   RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
-                  GF_SECURITY_ADMIN_PASSWORD MONGO_ROOT_PASSWORD MONGO_PASSWORD \
+                  GF_SECURITY_ADMIN_PASSWORD \
                   MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD; do
         set_value "$secret" "$(openssl rand -hex 24)"
     done
@@ -172,7 +171,7 @@ fi
 # Everything the site says out loud goes through it: activation, the password
 # reset, the warning sent to the old address when somebody changes the new one,
 # and every rule of alerts.yml by way of alertmanager. The compose default is
-# MailHog, which listens on loopback of the stand and is declared restart: "no",
+# Mailpit, which listens on loopback of the stand and is declared restart: "no",
 # so a server installed by the documented command delivered all of that into a
 # dead end - while the alerting contour looked complete. Refused rather than
 # warned about: a contour that delivers nowhere is worse than no contour, because
@@ -219,7 +218,7 @@ if [ "$MODE" = "server" ]; then
     SHARED=""
     for secret in POSTGRES_PASSWORD DM_APP_PASSWORD DM_EXPORTER_PASSWORD \
                   RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
-                  GF_SECURITY_ADMIN_PASSWORD MONGO_ROOT_PASSWORD MONGO_PASSWORD \
+                  GF_SECURITY_ADMIN_PASSWORD \
                   MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD; do
         example_value="$(sed -n "s|^${secret}=||p" "$EXAMPLE_FILE" | head -1)"
         actual_value="$(sed -n "s|^${secret}=||p" "$ENV_FILE" | head -1)"

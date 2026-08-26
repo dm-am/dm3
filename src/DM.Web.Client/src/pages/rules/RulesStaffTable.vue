@@ -111,9 +111,9 @@ onMounted(loadRoleGroups);
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Tables"
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Tables" as *
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Skeleton" as *
 
 .admin-section
   margin: $big 0

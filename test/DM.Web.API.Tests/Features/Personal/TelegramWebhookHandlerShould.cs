@@ -4,28 +4,28 @@ using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Testing;
 using DM.Web.API.Features.Personal.Webhooks;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Web.API.Tests.Features.Personal;
 
 public class TelegramWebhookHandlerShould : UnitTestBase
 {
-    private readonly Mock<IBotLinkService> _botLinkService;
+    private readonly IBotLinkService _botLinkService;
     private readonly TelegramWebhookHandler _handler;
 
     public TelegramWebhookHandlerShould()
     {
         _botLinkService = Mock<IBotLinkService>();
         _botLinkService
-            .Setup(s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BotLinkResult { Success = true, Username = "CurrentUser" });
+            .VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new BotLinkResult { Success = true, Username = "CurrentUser" });
 
         _handler = new TelegramWebhookHandler(
-            _botLinkService.Object,
-            Mock<ILogger<TelegramWebhookHandler>>().Object);
+            _botLinkService,
+            Mock<ILogger<TelegramWebhookHandler>>());
     }
 
     private static JsonElement Payload(string json)
@@ -47,7 +47,7 @@ public class TelegramWebhookHandlerShould : UnitTestBase
 
         await _handler.HandleAsync(payload);
 
-        _botLinkService.Verify(s => s.VerifyAndLink("ABC123", "telegram", "12345", It.IsAny<CancellationToken>()), Times.Once);
+        await _botLinkService.Received(1).VerifyAndLink("ABC123", "telegram", "12345", Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public class TelegramWebhookHandlerShould : UnitTestBase
 
         await _handler.HandleAsync(payload);
 
-        _botLinkService.Verify(s => s.VerifyAndLink("abc123", "telegram", "12345", It.IsAny<CancellationToken>()), Times.Once);
+        await _botLinkService.Received(1).VerifyAndLink("abc123", "telegram", "12345", Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -67,9 +67,7 @@ public class TelegramWebhookHandlerShould : UnitTestBase
 
         await _handler.HandleAsync(payload);
 
-        _botLinkService.Verify(
-            s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -79,9 +77,7 @@ public class TelegramWebhookHandlerShould : UnitTestBase
 
         await _handler.HandleAsync(payload);
 
-        _botLinkService.Verify(
-            s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -91,9 +87,7 @@ public class TelegramWebhookHandlerShould : UnitTestBase
 
         await _handler.HandleAsync(payload);
 
-        _botLinkService.Verify(
-            s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -103,9 +97,7 @@ public class TelegramWebhookHandlerShould : UnitTestBase
 
         await _handler.HandleAsync(payload);
 
-        _botLinkService.Verify(
-            s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -115,8 +107,6 @@ public class TelegramWebhookHandlerShould : UnitTestBase
 
         await _handler.HandleAsync(payload);
 
-        _botLinkService.Verify(
-            s => s.VerifyAndLink(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 }

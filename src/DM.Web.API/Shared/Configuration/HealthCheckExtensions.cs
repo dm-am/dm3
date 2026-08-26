@@ -25,10 +25,6 @@ internal static class HealthCheckExtensions
             .AddNpgSql(
                 connectionString: connectionStrings.Rdb,
                 name: "postgresql",
-                tags: new[] { "db", "ready" })
-            .AddMongoDb(
-                mongodbConnectionString: connectionStrings.Mongo,
-                name: "mongodb",
                 tags: new[] { "db", "ready" });
 
         // Not "ready" here, unlike in the consumer workers: readiness answers

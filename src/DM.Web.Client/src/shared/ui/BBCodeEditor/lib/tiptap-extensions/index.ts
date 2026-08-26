@@ -8,7 +8,6 @@
 export { Spoiler } from "./Spoiler";
 export { Nsfw } from "./Nsfw";
 export { ModBlock } from "./ModBlock";
-export { WarningBlock } from "./WarningBlock";
 export { BbTab } from "./BbTab";
 export { BbQuote } from "./BbQuote";
 export { Private } from "./Private";

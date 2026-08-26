@@ -59,6 +59,12 @@ public class CreateNotificationEntity
     /// Event type
     /// </summary>
     public EventType EventType { get; set; }
+
+    /// <summary>
+    /// Identity of the bus publication the notification was created for, carried
+    /// to the stored row so a redelivery of the same publication finds it there
+    /// </summary>
+    public Guid? EventId { get; set; }
 }
 
 /// <summary>

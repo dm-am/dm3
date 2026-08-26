@@ -297,13 +297,13 @@ function goHome() {
   font-size: $secondary-font-size
   color: $accent-red
 
+// Info section — same notice as .registration-info: square frame, ordinary ink.
 .warning
   padding: $small $medium
   border: 1px solid $border
-  border-radius: $border-radius
   font-size: $secondary-font-size
   line-height: 1.5
-  color: $text-muted
+  color: $text
 
 .submit-button
   margin-top: $tiny
@@ -313,7 +313,6 @@ function goHome() {
   margin: $medium 0
   padding: $small $medium
   border: 1px solid $border-accent-red
-  border-radius: $border-radius
   font-size: $secondary-font-size
   line-height: 1.5
   text-align: left

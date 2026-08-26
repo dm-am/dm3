@@ -18,19 +18,16 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 /// way to change the schema — drops it silently. Asserting it here instead keeps the
 /// migration entirely generated, which is what makes regenerating it safe.
 ///
-/// Like <see cref="MongoIntegration.MongoIndexInitializer" />, this class is the authority
-/// for the index set it declares, re-asserts on every start and therefore heals databases
-/// that already exist, and never drops anything — dropping is destructive and belongs to an
-/// explicit operation, not to a startup hook.
+/// This class is the authority for the index set it declares, re-asserts on every start and
+/// therefore heals databases that already exist, and never drops anything — dropping is
+/// destructive and belongs to an explicit operation, not to a startup hook.
 ///
-/// Where the two differ, and it matters here. Mongo compares the whole specification and
-/// answers IndexOptionsConflict when an index of that name was built differently. Postgres
-/// compares the name and nothing else, so CREATE INDEX IF NOT EXISTS succeeds against an
-/// index that is not unique, or not over lower(), or over another column entirely, and
-/// reports success either way. So the definition is read back and compared rather than
-/// inferred from the statement having run: healing reaches existence, and a disagreement is
-/// reported instead — recreating an index under load is not a thing a startup hook does
-/// behind anybody's back.
+/// Postgres compares the name and nothing else, so CREATE INDEX IF NOT EXISTS succeeds
+/// against an index that is not unique, or not over lower(), or over another column
+/// entirely, and reports success either way. So the definition is read back and compared
+/// rather than inferred from the statement having run: healing reaches existence, and a
+/// disagreement is reported instead — recreating an index under load is not a thing a
+/// startup hook does behind anybody's back.
 ///
 /// CREATE INDEX IF NOT EXISTS is idempotent, so a restart with everything in place costs one
 /// catalogue lookup per index, plus one read of pg_indexes.
@@ -114,8 +111,12 @@ public class ExpressionIndexInitializer : IHostedService
         {
             await dbContext.Database.ExecuteSqlRawAsync(index.Statement, ct);
 
+            // AS "Value": SingleOrDefault composes over the raw SQL, and a
+            // composed scalar SqlQuery selects the column by exactly that name —
+            // without the alias every assertion of this pass fell into the catch
+            // below on every start, and nobody read what it logged.
             var actual = await dbContext.Database
-                .SqlQuery<string>($"SELECT indexdef FROM pg_indexes WHERE indexname = {index.Name}")
+                .SqlQuery<string>($"""SELECT indexdef AS "Value" FROM pg_indexes WHERE indexname = {index.Name}""")
                 .SingleOrDefaultAsync(ct);
 
             if (actual == index.Definition)

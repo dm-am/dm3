@@ -5,7 +5,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Mail;
 using DM.Infrastructure.Mail.Configuration;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Options;
 using Xunit;
 using DM.Workers.Mail.Sending;

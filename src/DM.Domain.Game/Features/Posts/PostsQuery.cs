@@ -37,6 +37,10 @@ public class PostsQuery : PagingQuery
     /// <summary>
     /// Search by post text (case-insensitive contains)
     /// </summary>
+    /// <remarks>
+    /// The text a reader sees, not the body as written: the markup is not part of
+    /// what is matched, and neither is anything the reader is not shown.
+    /// </remarks>
     public string? Search { get; set; }
 
     /// <summary>

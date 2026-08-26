@@ -10,18 +10,18 @@ using DM.Domain.Core.Tokens;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Personal.Tests.Features.Notifications;
 
 public class BotLinkServiceShould : UnitTestBase
 {
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IBotLinkRepository> _repository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IBotLinkRepository _repository;
     private readonly BotLinkService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly Guid _tokenId = Guid.NewGuid();
@@ -35,15 +35,15 @@ public class BotLinkServiceShould : UnitTestBase
         _repository = Mock<IBotLinkRepository>();
 
         var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
-        _identityProvider.Setup(p => p.Current).Returns(identity);
-        _dateTimeProvider.Setup(d => d.Now).Returns(_now);
-        _guidFactory.Setup(g => g.Create()).Returns(_tokenId);
+        _identityProvider.Current.Returns(identity);
+        _dateTimeProvider.Now.Returns(_now);
+        _guidFactory.Create().Returns(_tokenId);
 
         _service = new BotLinkService(
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
-            _repository.Object);
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider,
+            _repository);
     }
 
     [Fact]
@@ -59,23 +59,25 @@ public class BotLinkServiceShould : UnitTestBase
     [Fact]
     public async Task RemoveExistingTokensWhenGeneratingNewCode()
     {
-        _repository.Setup(r => r.RemoveExistingTokens(_currentUserId, It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-        _repository.Setup(r => r.CreateLinkToken(It.IsAny<CreateToken>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+        _repository.RemoveExistingTokens(_currentUserId, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        _repository.CreateLinkToken(Arg.Any<CreateToken>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
         await _service.GenerateLinkCode("telegram");
 
-        _repository.Verify(r => r.RemoveExistingTokens(_currentUserId, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).RemoveExistingTokens(_currentUserId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task CreateTokenWithCorrectData()
     {
         CreateToken? capturedToken = null;
-        _repository.Setup(r => r.CreateLinkToken(It.IsAny<CreateToken>(), It.IsAny<CancellationToken>()))
-            .Callback<CreateToken, CancellationToken>((t, _) => capturedToken = t)
-            .Returns(Task.CompletedTask);
+        _repository.CreateLinkToken(Arg.Any<CreateToken>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask)
+            .AndDoes(ci =>
+            {
+                var t = ci.ArgAt<CreateToken>(0);
+                capturedToken = t;
+            });
 
         await _service.GenerateLinkCode("discord");
 
@@ -89,8 +91,7 @@ public class BotLinkServiceShould : UnitTestBase
     [Fact]
     public async Task GenerateCodeFromFirst6CharsOfGuid()
     {
-        _repository.Setup(r => r.CreateLinkToken(It.IsAny<CreateToken>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+        _repository.CreateLinkToken(Arg.Any<CreateToken>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
         var result = await _service.GenerateLinkCode("telegram");
 
@@ -111,8 +112,7 @@ public class BotLinkServiceShould : UnitTestBase
     [Fact]
     public async Task ReturnErrorWhenVerifyingExpiredCode()
     {
-        _repository.Setup(r => r.FindValidToken("ABCDEF", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Token?)null);
+        _repository.FindValidToken("ABCDEF", Arg.Any<CancellationToken>()).Returns((Token?)null);
 
         var result = await _service.VerifyAndLink("ABCDEF", "telegram", "12345");
 
@@ -129,24 +129,21 @@ public class BotLinkServiceShould : UnitTestBase
             UserId = _currentUserId,
             Type = TokenType.NotificationBotLink
         };
-        _repository.Setup(r => r.FindValidToken("ABCDEF", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(token);
-        _repository.Setup(r => r.MarkTokenUsed(_tokenId, It.IsAny<CancellationToken>()))
+        _repository.FindValidToken("ABCDEF", Arg.Any<CancellationToken>()).Returns(token);
+        _repository.MarkTokenUsed(_tokenId, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        _repository.SetChannelId(_currentUserId, "telegram", "12345", Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
-        _repository.Setup(r => r.SetChannelId(_currentUserId, "telegram", "12345", It.IsAny<CancellationToken>()))
+        _repository.InitializeChannelPreferences(_currentUserId, "telegram", Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
-        _repository.Setup(r => r.InitializeChannelPreferences(_currentUserId, "telegram", It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-        _repository.Setup(r => r.GetUsername(_currentUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync("CurrentUser");
+        _repository.GetUsername(_currentUserId, Arg.Any<CancellationToken>()).Returns("CurrentUser");
 
         var result = await _service.VerifyAndLink("ABCDEF", "telegram", "12345");
 
         result.Success.Should().BeTrue();
         result.Username.Should().Be("CurrentUser");
-        _repository.Verify(r => r.MarkTokenUsed(_tokenId, It.IsAny<CancellationToken>()), Times.Once);
-        _repository.Verify(r => r.SetChannelId(_currentUserId, "telegram", "12345", It.IsAny<CancellationToken>()), Times.Once);
-        _repository.Verify(r => r.InitializeChannelPreferences(_currentUserId, "telegram", It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).MarkTokenUsed(_tokenId, Arg.Any<CancellationToken>());
+        await _repository.Received(1).SetChannelId(_currentUserId, "telegram", "12345", Arg.Any<CancellationToken>());
+        await _repository.Received(1).InitializeChannelPreferences(_currentUserId, "telegram", Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -162,15 +159,15 @@ public class BotLinkServiceShould : UnitTestBase
     [Fact]
     public async Task DisconnectChannelSuccessfully()
     {
-        _repository.Setup(r => r.SetChannelId(_currentUserId, "discord", null, It.IsAny<CancellationToken>()))
+        _repository.SetChannelId(_currentUserId, "discord", null, Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
-        _repository.Setup(r => r.ClearChannelPreferences(_currentUserId, "discord", It.IsAny<CancellationToken>()))
+        _repository.ClearChannelPreferences(_currentUserId, "discord", Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         await _service.Disconnect("discord");
 
-        _repository.Verify(r => r.SetChannelId(_currentUserId, "discord", null, It.IsAny<CancellationToken>()), Times.Once);
-        _repository.Verify(r => r.ClearChannelPreferences(_currentUserId, "discord", It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).SetChannelId(_currentUserId, "discord", null, Arg.Any<CancellationToken>());
+        await _repository.Received(1).ClearChannelPreferences(_currentUserId, "discord", Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -1,20 +1,15 @@
-using Autofac;
-using Autofac.Extensions.DependencyInjection;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.MongoIntegration;
 using DM.Web.API.HostedServices;
 using DM.Web.API.Realtime;
-using MongoDB.Driver;
-using MongoDB.Driver.Core.Extensions.DiagnosticSources;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 // ReSharper disable once RedundantUsingDirective - used by TestAuthenticationStartupFilter
 using IStartupFilter = Microsoft.AspNetCore.Hosting.IStartupFilter;
@@ -57,8 +52,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["RabbitMqConfiguration:Endpoint"] = _databaseFixture.RabbitMqConnectionString,
                 // Disable rate limiting in tests
                 ["RateLimiting:Enabled"] = "false",
-                // Point MongoDB to the test container
-                ["ConnectionStrings:Mongo"] = _databaseFixture.MongoConnectionString,
                 // The encryption key has no default in the repository, so the host
                 // refuses to start without one. A fixed throwaway key keeps the
                 // tests deterministic and is never a deployment's key.
@@ -84,9 +77,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             var backgroundServicesToRemove = new[]
             {
                 typeof(RealtimeNotificationConsumer), // RabbitMQ connection attempts
-                typeof(WarmupService), // MongoDB warmup connection
+                typeof(WarmupService), // background warmup competes with tests for the pool
                 typeof(TokenCleanupService), // Token cleanup uses DB — avoid race conditions
-                typeof(SessionCleanupService), // Session cleanup uses MongoDB
+                typeof(SessionCleanupService), // periodic session purge — avoid race conditions
+                typeof(RetentionSweepService), // periodic retention sweep — tests call the processor directly
+                typeof(OutboxRelayService), // outbox relay — tests drive the processor directly, a live loop would claim their rows
                 typeof(PendingRegistrationCleanupService), // DB cleanup — avoid race conditions
                 typeof(UsernameChangeCleanupService) // DB cleanup — avoid race conditions
             };
@@ -100,11 +95,14 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 }
             }
 
-            // Remove all DbContext-related registrations from the real app
+            // Remove all DbContext-related registrations from the real app. The
+            // lease is part of the pool's plumbing: left behind, it asks for the
+            // removed pool, which the validating build refuses at startup.
             var dbContextDescriptors = services
                 .Where(d => d.ServiceType == typeof(DbContextOptions<DmDbContext>) ||
                             d.ServiceType == typeof(DmDbContext) ||
                             d.ServiceType.FullName?.Contains("DbContextPool") == true ||
+                            d.ServiceType.FullName?.Contains("DbContextLease") == true ||
                             d.ServiceType.FullName?.Contains("DbContextOptions") == true)
                 .ToList();
 
@@ -137,45 +135,16 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                     .EnableSensitiveDataLogging()
                     .EnableDetailedErrors();
             }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);
+
+            // The bucket, as a dictionary. WebApplicationFactory runs this
+            // callback after Startup.ConfigureServices, so the registration here
+            // is the last descriptor and the one the host resolves — see
+            // InMemoryObjectStorage for why S3 is the one dependency not
+            // containerised. RemoveAll on top, so the scanned pairs cannot even
+            // sit on the enumerable.
+            services.RemoveAll<DM.Domain.Core.Uploads.IObjectStorage>();
+            services.AddSingleton<DM.Domain.Core.Uploads.IObjectStorage, InMemoryObjectStorage>();
         });
-    }
-
-    /// <inheritdoc />
-    protected override IHost CreateHost(IHostBuilder builder)
-    {
-        // Wrap with Autofac and configure our test overrides
-        // This must be called first to ensure the app uses Autofac
-        builder.UseServiceProviderFactory(new AutofacServiceProviderFactory(containerBuilder =>
-        {
-            // This runs AFTER all ConfigureContainer callbacks, as the final step before building
-            ConfigureTestContainer(containerBuilder);
-        }));
-
-        return base.CreateHost(builder);
-    }
-
-    private void ConfigureTestContainer(ContainerBuilder containerBuilder)
-    {
-        // Override DmMongoClient to use the test container connection string
-        var mongoConnectionString = _databaseFixture.MongoConnectionString;
-        var mongoUrl = MongoUrl.Create(mongoConnectionString);
-        var mongoSettings = MongoClientSettings.FromUrl(mongoUrl);
-        mongoSettings.ServerSelectionTimeout = TimeSpan.FromSeconds(5);
-        mongoSettings.ConnectTimeout = TimeSpan.FromSeconds(10);
-        mongoSettings.RetryWrites = true;
-        mongoSettings.RetryReads = true;
-        mongoSettings.ClusterConfigurator = cb => cb.Subscribe(
-            new DiagnosticsActivityEventSubscriber(new InstrumentationOptions { CaptureCommandText = true }));
-        containerBuilder.RegisterInstance(new DmMongoClient(mongoSettings, mongoUrl))
-            .AsSelf()
-            .AsImplementedInterfaces();
-
-        // The bucket, as a dictionary. This callback runs after every module, so
-        // the registration here is the default the host resolves — see
-        // InMemoryObjectStorage for why S3 is the one dependency not containerised.
-        containerBuilder.RegisterType<InMemoryObjectStorage>()
-            .As<DM.Domain.Core.Uploads.IObjectStorage>()
-            .SingleInstance();
     }
 
     /// <summary>

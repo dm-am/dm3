@@ -4,7 +4,8 @@
  *
  * The profile owner's uploaded files (avatars, post images), newest first,
  * paged, with a ConfirmDialog-gated delete. Mirrors the profile subpage
- * pattern (useProfileSubpage + ProfileSubpageHeader).
+ * pattern (useProfileSubpage + ProfileSubpageHeader); the table itself is the
+ * shared UploadsTable, the same one the moderation-wide list draws.
  *
  * Access: the page is for the file owner (doc), and admins can view any
  * user's uploads (GET /v1/uploads?username= is Admin-gated server-side).
@@ -19,17 +20,12 @@ import type { Upload } from "@/shared/api/models/common/upload";
 import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
 import { UserRole } from "@/shared/api/models/common";
 import { useAuthStore } from "@/shared/stores/auth";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { formatDate } from "@/shared/lib/utils/datetime";
-import { formatFileSize } from "@/shared/lib/utils/fileSize";
 import {
-  isImage,
-  fileExt,
-  uploadHref,
   uploadPreviewColumn,
   uploadFileColumn,
 } from "@/shared/lib/utils/upload";
-import { DataTable, type Column } from "@/shared/ui/DataTable";
+import { type Column } from "@/shared/ui/DataTable";
+import { UploadsTable } from "@/shared/ui/UploadsTable";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
@@ -37,12 +33,12 @@ import { SecondaryText } from "@/shared/ui/Layout";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
 import { useProfileSubpage } from "./useProfileSubpage";
-import { notifyFailure } from "@/shared/lib/errors";
+import { useUploadDelete } from "@/shared/lib/composables/useUploadDelete";
+import { parsePageNumber } from "@/shared/lib/filters";
 
 const PAGE_SIZE = 20;
 
 const route = useRoute();
-const toast = useToast();
 const authStore = useAuthStore();
 
 const { username, canonicalUsername, notFound, profileLink } =
@@ -63,10 +59,7 @@ const paging = ref<PagingModel | null>(null);
 const loading = ref(false);
 const loadError = ref<string | null>(null);
 
-const pageNumber = computed(() => {
-  const n = parseInt(String(route.query.number ?? "1"), 10);
-  return Number.isFinite(n) && n > 0 ? n : 1;
-});
+const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
 async function fetch() {
   if (!canView.value) return;
@@ -99,22 +92,7 @@ const columns: Column[] = [
 ];
 
 // --- Delete upload (ConfirmDialog-gated) ---
-const deleteTarget = ref<Upload | null>(null);
-const deleting = ref(false);
-
-async function confirmDelete() {
-  if (!deleteTarget.value || deleting.value) return;
-  deleting.value = true;
-  const { error } = await uploadApi.deleteUpload(deleteTarget.value.id);
-  deleting.value = false;
-  if (error) {
-    notifyFailure(error, "Не удалось удалить файл");
-    return;
-  }
-  toast.success("Файл удален");
-  deleteTarget.value = null;
-  await fetch();
-}
+const { deleteTarget, deleting, confirmDelete } = useUploadDelete(fetch);
 </script>
 
 <template>
@@ -141,49 +119,12 @@ async function confirmDelete() {
         :retry="fetch"
       />
 
-      <DataTable
+      <UploadsTable
         :columns="columns"
-        :data="uploads"
+        :uploads="uploads"
         :loading="loading"
-        empty-text="Загруженных файлов пока нет"
-        aria-label="Загруженные файлы"
-      >
-        <template #cell-preview="{ row }">
-          <img
-            v-if="isImage(row)"
-            :src="uploadHref(row)"
-            :alt="row.originalFileName"
-            class="upload-thumb"
-            loading="lazy"
-          />
-          <span v-else class="upload-ext">{{ fileExt(row) }}</span>
-        </template>
-        <template #cell-file="{ row }">
-          <a
-            :href="uploadHref(row)"
-            target="_blank"
-            rel="noopener"
-            class="upload-name"
-          >
-            {{ row.originalFileName }}
-          </a>
-        </template>
-        <template #cell-date="{ row }">
-          {{ formatDate(row.createdUtc) }}
-        </template>
-        <template #cell-size="{ row }">
-          {{ formatFileSize(row.sizeBytes) }}
-        </template>
-        <template #cell-actions="{ row }">
-          <button
-            type="button"
-            class="delete-button"
-            @click="deleteTarget = row"
-          >
-            Удалить
-          </button>
-        </template>
-      </DataTable>
+        @remove="(row) => (deleteTarget = row)"
+      />
 
       <Paging
         v-if="paging"
@@ -208,37 +149,11 @@ async function confirmDelete() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-
 .profile-uploads-page
   width: 100%
 
 .error-banner
   margin-bottom: $medium
-
-.upload-thumb
-  display: block
-  width: 48px
-  height: 48px
-  object-fit: cover
-  border-radius: $border-radius
-  margin: 0 auto
-
-.upload-ext
-  color: $text-muted
-  font-size: $tertiary-font-size
-  font-weight: bold
-
-.upload-name
-  overflow-wrap: anywhere
-
-.delete-button
-  +inline-link-button
-
-  // Destructive action stays red at rest and on hover
-  &,
-  &:hover:not(:disabled)
-    color: $accent-red
 
 .pager
   margin-top: $medium

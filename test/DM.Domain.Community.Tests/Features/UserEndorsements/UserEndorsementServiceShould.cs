@@ -13,35 +13,35 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.UserEndorsements;
 
 public class UserEndorsementServiceShould : UnitTestBase
 {
-    private readonly Mock<IValidator<CreateUserEndorsement>> _createValidator;
-    private readonly Mock<IValidator<UpdateUserEndorsement>> _updateValidator;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IUserEndorsementRepository> _repository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IValidator<CreateUserEndorsement> _createValidator;
+    private readonly IValidator<UpdateUserEndorsement> _updateValidator;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IUserEndorsementRepository _repository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly UserEndorsementService _service;
     private readonly Guid _currentUserId;
 
     public UserEndorsementServiceShould()
     {
         _createValidator = Mock<IValidator<CreateUserEndorsement>>();
-        _createValidator.Setup(v => v.ValidateAsync(It.IsAny<CreateUserEndorsement>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _createValidator.ValidateAsync(Arg.Any<CreateUserEndorsement>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _updateValidator = Mock<IValidator<UpdateUserEndorsement>>();
-        _updateValidator.Setup(v => v.ValidateAsync(It.IsAny<UpdateUserEndorsement>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _updateValidator.ValidateAsync(Arg.Any<UpdateUserEndorsement>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _intentionManager = Mock<IIntentionManager>();
 
@@ -49,22 +49,22 @@ public class UserEndorsementServiceShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _guidFactory = Mock<IGuidFactory>();
-        _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _service = new UserEndorsementService(
-            _createValidator.Object,
-            _updateValidator.Object,
-            _intentionManager.Object,
-            _repository.Object,
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object);
+            _createValidator,
+            _updateValidator,
+            _intentionManager,
+            _repository,
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider);
     }
 
     #region Create Tests
@@ -77,14 +77,14 @@ public class UserEndorsementServiceShould : UnitTestBase
 
         await _service.CreateAsync(new CreateUserEndorsement { TargetUserId = targetUserId, Text = "Great player!" });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(UserEndorsementIntention.Create), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(UserEndorsementIntention.Create);
     }
 
     [Fact]
     public async Task ThrowForbiddenWhenNewbieTryingToCreateEndorsement()
     {
         var targetUserId = Guid.NewGuid();
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(50); // Newbie
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(50); // Newbie
 
         var act = async () => await _service.CreateAsync(new CreateUserEndorsement { TargetUserId = targetUserId, Text = "Great player!" });
 
@@ -95,7 +95,7 @@ public class UserEndorsementServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowForbiddenWhenEndorsingYourself()
     {
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
 
         var act = async () => await _service.CreateAsync(new CreateUserEndorsement { TargetUserId = _currentUserId, Text = "I'm great!" });
 
@@ -107,8 +107,8 @@ public class UserEndorsementServiceShould : UnitTestBase
     public async Task ThrowForbiddenWhenUsersHaveNotPlayedTogether()
     {
         var targetUserId = Guid.NewGuid();
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId)).ReturnsAsync(false);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.HavePlayedTogetherAsync(_currentUserId, targetUserId).Returns(false);
 
         var act = async () => await _service.CreateAsync(new CreateUserEndorsement { TargetUserId = targetUserId, Text = "Great player!" });
 
@@ -120,9 +120,9 @@ public class UserEndorsementServiceShould : UnitTestBase
     public async Task ThrowConflictWhenEndorsementAlreadyExists()
     {
         var targetUserId = Guid.NewGuid();
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId)).ReturnsAsync(true);
-        _repository.Setup(r => r.ExistsAsync(_currentUserId, targetUserId)).ReturnsAsync(true);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.HavePlayedTogetherAsync(_currentUserId, targetUserId).Returns(true);
+        _repository.ExistsAsync(_currentUserId, targetUserId).Returns(true);
 
         var act = async () => await _service.CreateAsync(new CreateUserEndorsement { TargetUserId = targetUserId, Text = "Great player!" });
 
@@ -145,7 +145,7 @@ public class UserEndorsementServiceShould : UnitTestBase
         var result = await _service.CreateAsync(new CreateUserEndorsement { TargetUserId = targetUserId, Text = "Great player!" });
 
         result.Should().Be(expectedEndorsement);
-        _repository.Verify(r => r.CreateAsync(It.IsAny<CreateUserEndorsementEntity>()), Times.Once);
+        await _repository.Received(1).CreateAsync(Arg.Any<CreateUserEndorsementEntity>());
     }
 
     #endregion
@@ -191,7 +191,7 @@ public class UserEndorsementServiceShould : UnitTestBase
         eligibility.Reason.Should().Be("Нельзя рекомендовать самого себя");
         eligibility.Status.Should().Be(HttpStatusCode.Forbidden);
         // The refusal is free: a self-recommendation is not worth a query.
-        _repository.Verify(r => r.GetUserPostCountAsync(It.IsAny<Guid>()), Times.Never);
+        await _repository.DidNotReceive().GetUserPostCountAsync(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -199,8 +199,7 @@ public class UserEndorsementServiceShould : UnitTestBase
     {
         var targetUserId = Guid.NewGuid();
         AllowCreateIntention();
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId))
-            .ReturnsAsync(ProbationPolicy.NewbiePostThreshold - 1);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(ProbationPolicy.NewbiePostThreshold - 1);
 
         var eligibility = await _service.GetEligibilityAsync(targetUserId);
 
@@ -213,8 +212,8 @@ public class UserEndorsementServiceShould : UnitTestBase
     {
         var targetUserId = Guid.NewGuid();
         AllowCreateIntention();
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId)).ReturnsAsync(false);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.HavePlayedTogetherAsync(_currentUserId, targetUserId).Returns(false);
 
         var eligibility = await _service.GetEligibilityAsync(targetUserId);
 
@@ -227,9 +226,9 @@ public class UserEndorsementServiceShould : UnitTestBase
     {
         var targetUserId = Guid.NewGuid();
         AllowCreateIntention();
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId)).ReturnsAsync(true);
-        _repository.Setup(r => r.ExistsAsync(_currentUserId, targetUserId)).ReturnsAsync(true);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.HavePlayedTogetherAsync(_currentUserId, targetUserId).Returns(true);
+        _repository.ExistsAsync(_currentUserId, targetUserId).Returns(true);
 
         var eligibility = await _service.GetEligibilityAsync(targetUserId);
 
@@ -253,11 +252,10 @@ public class UserEndorsementServiceShould : UnitTestBase
     {
         var targetUserId = Guid.NewGuid();
         AllowCreateIntention();
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId))
-            .ReturnsAsync(isNewbie ? ProbationPolicy.NewbiePostThreshold - 1 : 200);
-        _repository.Setup(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId))
-            .ReturnsAsync(havePlayedTogether);
-        _repository.Setup(r => r.ExistsAsync(_currentUserId, targetUserId)).ReturnsAsync(alreadyExists);
+        _repository.GetUserPostCountAsync(_currentUserId)
+            .Returns(isNewbie ? ProbationPolicy.NewbiePostThreshold - 1 : 200);
+        _repository.HavePlayedTogetherAsync(_currentUserId, targetUserId).Returns(havePlayedTogether);
+        _repository.ExistsAsync(_currentUserId, targetUserId).Returns(alreadyExists);
 
         var eligibility = await _service.GetEligibilityAsync(targetUserId);
         var act = async () => await _service.CreateAsync(
@@ -266,7 +264,7 @@ public class UserEndorsementServiceShould : UnitTestBase
         eligibility.CanCreate.Should().BeFalse();
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message == eligibility.Reason && e.StatusCode == eligibility.Status);
-        _repository.Verify(r => r.CreateAsync(It.IsAny<CreateUserEndorsementEntity>()), Times.Never);
+        await _repository.DidNotReceive().CreateAsync(Arg.Any<CreateUserEndorsementEntity>());
     }
 
     /// <summary>
@@ -274,7 +272,7 @@ public class UserEndorsementServiceShould : UnitTestBase
     /// stands in for that and the eligibility rules are what is under test.
     /// </summary>
     private void AllowCreateIntention() =>
-        _intentionManager.Setup(m => m.IsAllowed(UserEndorsementIntention.Create)).Returns(true);
+        _intentionManager.IsAllowed(UserEndorsementIntention.Create).Returns(true);
 
     #endregion
 
@@ -284,7 +282,7 @@ public class UserEndorsementServiceShould : UnitTestBase
     public async Task ThrowNotFoundWhenEndorsementDoesNotExist()
     {
         var endorsementId = Guid.NewGuid();
-        _repository.Setup(r => r.GetAsync(endorsementId)).ReturnsAsync((UserEndorsement?)null);
+        _repository.GetAsync(endorsementId).Returns((UserEndorsement?)null);
 
         var act = async () => await _service.GetAsync(endorsementId);
 
@@ -297,7 +295,7 @@ public class UserEndorsementServiceShould : UnitTestBase
     {
         var endorsementId = Guid.NewGuid();
         var endorsement = new UserEndorsement { Id = endorsementId, Text = "Great player!" };
-        _repository.Setup(r => r.GetAsync(endorsementId)).ReturnsAsync(endorsement);
+        _repository.GetAsync(endorsementId).Returns(endorsement);
 
         var result = await _service.GetAsync(endorsementId);
 
@@ -320,12 +318,12 @@ public class UserEndorsementServiceShould : UnitTestBase
             Text = "Original text",
             CreatedUtc = DateTimeOffset.UtcNow
         };
-        _repository.Setup(r => r.GetAsync(endorsementId)).ReturnsAsync(endorsement);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdateUserEndorsementEntity>())).ReturnsAsync(endorsement);
+        _repository.GetAsync(endorsementId).Returns(endorsement);
+        _repository.UpdateAsync(Arg.Any<UpdateUserEndorsementEntity>()).Returns(endorsement);
 
         await _service.UpdateAsync(new UpdateUserEndorsement { EndorsementId = endorsementId, Text = "Updated text" });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(UserEndorsementIntention.Edit, endorsement), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(UserEndorsementIntention.Edit, endorsement);
     }
 
     [Fact]
@@ -340,7 +338,7 @@ public class UserEndorsementServiceShould : UnitTestBase
             Text = "Original text",
             CreatedUtc = DateTimeOffset.UtcNow.AddDays(-2) // Past edit window
         };
-        _repository.Setup(r => r.GetAsync(endorsementId)).ReturnsAsync(endorsement);
+        _repository.GetAsync(endorsementId).Returns(endorsement);
 
         var act = async () => await _service.UpdateAsync(new UpdateUserEndorsement { EndorsementId = endorsementId, Text = "Updated text" });
 
@@ -360,12 +358,12 @@ public class UserEndorsementServiceShould : UnitTestBase
             Text = "Original text",
             CreatedUtc = DateTimeOffset.UtcNow
         };
-        _repository.Setup(r => r.GetAsync(endorsementId)).ReturnsAsync(endorsement);
+        _repository.GetAsync(endorsementId).Returns(endorsement);
 
         var result = await _service.UpdateAsync(new UpdateUserEndorsement { EndorsementId = endorsementId, Text = "" });
 
         result.Should().Be(endorsement);
-        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdateUserEndorsementEntity>()), Times.Never);
+        await _repository.DidNotReceive().UpdateAsync(Arg.Any<UpdateUserEndorsementEntity>());
     }
 
     #endregion
@@ -383,12 +381,12 @@ public class UserEndorsementServiceShould : UnitTestBase
             TargetUser = new GeneralUser { UserId = Guid.NewGuid() },
             Text = "Some text"
         };
-        _repository.Setup(r => r.GetAsync(endorsementId)).ReturnsAsync(endorsement);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdateUserEndorsementEntity>())).ReturnsAsync(endorsement);
+        _repository.GetAsync(endorsementId).Returns(endorsement);
+        _repository.UpdateAsync(Arg.Any<UpdateUserEndorsementEntity>()).Returns(endorsement);
 
         await _service.DeleteAsync(endorsementId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(UserEndorsementIntention.Delete, endorsement), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(UserEndorsementIntention.Delete, endorsement);
     }
 
     [Fact]
@@ -402,12 +400,12 @@ public class UserEndorsementServiceShould : UnitTestBase
             TargetUser = new GeneralUser { UserId = Guid.NewGuid() },
             Text = "Some text"
         };
-        _repository.Setup(r => r.GetAsync(endorsementId)).ReturnsAsync(endorsement);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdateUserEndorsementEntity>())).ReturnsAsync(endorsement);
+        _repository.GetAsync(endorsementId).Returns(endorsement);
+        _repository.UpdateAsync(Arg.Any<UpdateUserEndorsementEntity>()).Returns(endorsement);
 
         await _service.DeleteAsync(endorsementId);
 
-        _repository.Verify(r => r.UpdateAsync(It.Is<UpdateUserEndorsementEntity>(e => e.IsRemoved == true)), Times.Once);
+        await _repository.Received(1).UpdateAsync(Arg.Is<UpdateUserEndorsementEntity>(e => e.IsRemoved == true));
     }
 
     #endregion
@@ -442,12 +440,12 @@ public class UserEndorsementServiceShould : UnitTestBase
     public async Task DelegateHavePlayedTogetherToRepository()
     {
         var targetUserId = Guid.NewGuid();
-        _repository.Setup(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId)).ReturnsAsync(true);
+        _repository.HavePlayedTogetherAsync(_currentUserId, targetUserId).Returns(true);
 
         var result = await _service.HavePlayedTogetherAsync(_currentUserId, targetUserId);
 
         result.Should().BeTrue();
-        _repository.Verify(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId), Times.Once);
+        await _repository.Received(1).HavePlayedTogetherAsync(_currentUserId, targetUserId);
     }
 
     #endregion
@@ -461,9 +459,9 @@ public class UserEndorsementServiceShould : UnitTestBase
             Text = "Great player!"
         };
 
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.HavePlayedTogetherAsync(_currentUserId, targetUserId)).ReturnsAsync(true);
-        _repository.Setup(r => r.ExistsAsync(_currentUserId, targetUserId)).ReturnsAsync(false);
-        _repository.Setup(r => r.CreateAsync(It.IsAny<CreateUserEndorsementEntity>())).ReturnsAsync(expectedEndorsement);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.HavePlayedTogetherAsync(_currentUserId, targetUserId).Returns(true);
+        _repository.ExistsAsync(_currentUserId, targetUserId).Returns(false);
+        _repository.CreateAsync(Arg.Any<CreateUserEndorsementEntity>()).Returns(expectedEndorsement);
     }
 }

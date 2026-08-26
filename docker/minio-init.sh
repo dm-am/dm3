@@ -5,7 +5,7 @@ set -eu
 # accounts here and is then out of the picture: the application and imgproxy
 # hold keys that can only touch objects of one bucket, so a leaked workload
 # configuration cannot drop the bucket, rewrite its policy or mint further
-# accounts. This is the split mongo-init.js already makes for Mongo.
+# accounts.
 
 BUCKET="${BUCKET_NAME:-dm-uploads}"
 ENDPOINT="${MINIO_ENDPOINT:-http://dm-minio:9000}"

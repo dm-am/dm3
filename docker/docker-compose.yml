@@ -13,7 +13,6 @@ name: dm
 
 volumes:
   pgdata:
-  mongodata:
   lokidata:
   miniodata:
   rmqdata:
@@ -46,14 +45,6 @@ x-workload-env: &workload-env
   # создает postgres-init.sh при первой инициализации тома, ей же принадлежит
   # база — с Postgres 15 право CREATE в схеме public есть только у владельца.
   DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=${DB_USER:-dm_app};Password=${DM_APP_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
-  # maxPoolSize repeats the MaxPoolSize of the line above on purpose: both cap the
-  # connections one process holds at once, and this driver returns a connection
-  # after each operation where Npgsql holds one for a whole unit of work, so the
-  # document pool covers the same concurrency with no more connections than the
-  # relational one already gets. Spelled out rather than left to the driver so it
-  # moves when that line moves; ConnectionPoolCeilingShould keeps the two equal in
-  # all four files that carry the pair.
-  DM_ConnectionStrings__Mongo: mongodb://${MONGO_USER:-dm}:${MONGO_PASSWORD}@${MONGO_HOST:-dm-mongo}:27017/dm3?authSource=dm3&maxPoolSize=100${MONGO_TLS:-}
   DM_ConnectionStrings__Logs: http://${LOGS_HOST:-dm-loki}:3100
   DM_ConnectionStrings__TracingEndpoint: http://${TRACING_HOST:-dm-jaeger}:4317
 
@@ -80,7 +71,7 @@ x-workload-env: &workload-env
   # only data nothing else can rebuild, and any leak of a workload's
   # configuration used to hand over administration of the store: dropping the
   # bucket, rewriting its policy, minting further accounts. Created by
-  # minio-init, the way mongo-init.js creates the Mongo application user.
+  # minio-init creates it at stack start.
   DM_CdnConfiguration__AccessKey: ${MINIO_APP_USER:-dm-app}
   DM_CdnConfiguration__SecretKey: ${MINIO_APP_PASSWORD:?MINIO_APP_PASSWORD is required}
   DM_CdnConfiguration__Folder:
@@ -99,17 +90,18 @@ x-workload-env: &workload-env
   DM_ImageProxyConfiguration__SourceUrlPrefix: s3://dm-uploads/
 
   # === Email ===
-  DM_EmailConfiguration__ServerHost: ${MAIL_HOST:-dm-mailhog}
+  DM_EmailConfiguration__ServerHost: ${MAIL_HOST:-dm-mailpit}
   DM_EmailConfiguration__ServerPort: ${MAIL_PORT:-1025}
   DM_EmailConfiguration__Username:
   DM_EmailConfiguration__Password:
   DM_EmailConfiguration__FromAddress: info@dm.am
   DM_EmailConfiguration__FromDisplayName: DM.am
   DM_EmailConfiguration__ReplyToAddress: test@dm.am
-  # Оппортунистический STARTTLS по умолчанию: relay на стенде — это MailHog, и
-  # шифрования он не предлагает вовсе. Развертывание с настоящим relay ставит
-  # true, и тогда сессия падает вместо тихой отправки открытым текстом: в
-  # письмах ездят ссылки активации и сброса пароля.
+  # Оппортунистический STARTTLS по умолчанию: relay на стенде — это Mailpit, и
+  # шифрование он предлагает только с выданной ему парой сертификат/ключ,
+  # которой у стенда нет. Развертывание с настоящим relay ставит true, и тогда
+  # сессия падает вместо тихой отправки открытым текстом: в письмах ездят
+  # ссылки активации и сброса пароля.
   DM_EmailConfiguration__RequireTls: ${MAIL_REQUIRE_TLS:-false}
 
   # Область сессионной куки. Пусто — кука принадлежит хосту, который ее выдал,
@@ -181,42 +173,16 @@ services:
         reservations:
           memory: 512M
 
-  mongo:
-    container_name: 'dm-mongo'
-    image: 'mongo:7'
-    ports:
-      - '127.0.0.1:27017:27017'
-    environment:
-      # Authentication is on. The store holds sessions, the security audit log
-      # and login attempts: without it everything on the compose network reads
-      # and writes all of that with no credential at all.
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
-      MONGO_INITDB_DATABASE: dm3
-      # Consumed by mongo-init.js to create the least-privilege application user
-      DM_MONGO_USER: ${MONGO_USER:-dm}
-      DM_MONGO_PASSWORD: ${MONGO_PASSWORD:?MONGO_PASSWORD is required}
-    volumes:
-      - mongodata:/data/db
-      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "-u", "${MONGO_ROOT_USER:-root}", "-p", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-
+  # 3.5 - последняя ветка, чей образ несет что-либо кроме самого loki. Начиная
+  # с 3.6.0 он собран distroless: внутри только /usr/bin/loki, ни оболочки, ни
+  # wget, а значит и никакой пробы, которую можно запустить внутри контейнера.
+  # Healthcheck на каждый сервис - правило этого стека, и проба, отвечающая
+  # "здоров" по факту запуска процесса, хуже отсутствующей: она покупает
+  # уверенность. Отсюда пин на конец 3.5 вместо гонки за 3.7 - до тех пор, пока
+  # готовность loki не станет проверяться чем-то извне контейнера.
   loki:
     container_name: 'dm-loki'
-    image: 'grafana/loki:3.1.1'
+    image: 'grafana/loki:3.5.12'
     command: '-config.file=/etc/loki/loki.yaml'
     ports:
       - '127.0.0.1:3100:3100'
@@ -240,7 +206,10 @@ services:
 
   rabbitmq:
     container_name: 'dm-rmq'
-    image: 'rabbitmq:3-management'
+    # 4.3: the 3.x series left community support 2024-09-30. The in-place
+    # upgrade path 3.13 -> 4.x does not exist; a reset (down -v) starts the
+    # node clean, which is the project's normal way anyway.
+    image: 'rabbitmq:4.3-management'
     hostname: 'dm-rmq'
     ports:
       - '127.0.0.1:15672:15672'
@@ -284,14 +253,29 @@ services:
 
   # --- Infrastructure: Dev Tools ---
 
-  mailhog:
-    container_name: 'dm-mailhog'
-    image: 'mailhog/mailhog:v1.0.1'
+  # Ловушка для писем стенда: SMTP на 1025, веб и HTTP API на 8025 - те же
+  # порты, что были у MailHog, которого этот сервис заменил. MailHog не
+  # выпускался с 2020 года и архивирован автором; Mailpit - его прямая замена,
+  # с тем же поведением "принять и никуда не отправить" и с STARTTLS, если
+  # выдать ему сертификат.
+  mailpit:
+    container_name: 'dm-mailpit'
+    image: 'axllent/mailpit:v1.31.0'
     ports:
       - '127.0.0.1:1025:1025'
       - '127.0.0.1:8025:8025'
+    environment:
+      # Без -d база уезжает во временный файл, который исчезает вместе с
+      # контейнером: письма стенда живут до перезапуска, тома под них нет и не
+      # нужно. Число - потолок, после которого вытесняются самые старые.
+      MP_MAX_MESSAGES: '500'
+      # Проверка обновлений на старте ходит наружу, а стенд поднимается и в
+      # окружении без интернета.
+      MP_DISABLE_VERSION_CHECK: 'true'
+    # Собственная проба образа: HTTP-запрос к /readyz тем же бинарем, без
+    # curl и wget внутри контейнера.
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:8025/ || exit 1"]
+      test: ["CMD", "/mailpit", "readyz"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -306,7 +290,12 @@ services:
 
   minio:
     container_name: 'dm-minio'
-    image: 'quay.io/minio/minio:RELEASE.2024-06-13T22-53-53Z'
+    # Deliberate ceiling, not a lag: the next release (RELEASE.2025-05-24)
+    # strips the admin features from the community console, and later community
+    # builds only cut deeper. This is the last full-featured image; it moves
+    # only together with a decision to leave MinIO (AWSSDK.S3 keeps the store
+    # swappable), and the mc line below moves in the same commit.
+    image: 'quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z'
     command: server --console-address ':9001' /data/
     ports:
       - '127.0.0.1:9000:9000'
@@ -342,7 +331,7 @@ services:
     # у клиента отдельный цикл выпусков, поэтому взят ближайший выпуск после
     # серверного, а не та же строка. Неприпшпиленный клиент уезжает от сервера сам
     # по себе, и первым признаком будет команда, которой сервер не знает.
-    image: 'minio/mc:RELEASE.2024-06-20T14-50-54Z'
+    image: 'minio/mc:RELEASE.2025-05-21T01-59-54Z'
     entrypoint: ["/bin/sh", "/minio-init.sh"]
     environment:
       MINIO_ENDPOINT: http://${MINIO_HOST:-dm-minio}:9000
@@ -371,7 +360,7 @@ services:
   # один source-file на upload — все thumbs генерируются по требованию.
   imgproxy:
     container_name: 'dm-imgproxy'
-    image: 'darthsim/imgproxy:v3.27'
+    image: 'darthsim/imgproxy:v4.0.14'
     ports:
       - '127.0.0.1:8080:8080'
     environment:
@@ -412,21 +401,34 @@ services:
 
   # --- Infrastructure: Tracing ---
 
+  # Jaeger v2. Ветка v1 (all-in-one) закончила поддержку 31.12.2025 и последний
+  # ее выпуск - 1.x 2024 года; v2 переехала на сборку OpenTelemetry Collector и
+  # называется другим образом - jaegertracing/jaeger вместо all-in-one.
+  # Приложение этого не замечает: OTLP слушается на тех же 4317/4318, UI на
+  # 16686. Что изменилось - настройка. Флагов v1 (COLLECTOR_OTLP_ENABLED,
+  # MEMORY_MAX_TRACES) больше нет, вместо них конфиг коллектора; порт
+  # administrative-проб уехал с 14269 на 13133.
   jaeger:
     container_name: 'dm-jaeger'
-    image: jaegertracing/all-in-one:1.56
+    image: jaegertracing/jaeger:2.20.0
     ports:
       - '127.0.0.1:16686:16686'
       - '127.0.0.1:4317:4317'
       - '127.0.0.1:4318:4318'
-    environment:
-      COLLECTOR_OTLP_ENABLED: 'true'
+    # Точечные правки встроенного конфига, а не свой файл целиком: собственная
+    # копия конфига all-in-one устаревала бы на каждом обновлении образа молча.
+    # Ключ, которого в конфиге нет, роняет старт - имя опечатки не переживет.
+    command:
       # Memory storage is unbounded by default and this service runs under a
       # 256M limit, so the ceiling is what keeps the collector alive instead of
       # being OOM-killed - which loses every trace it was holding, silently.
-      MEMORY_MAX_TRACES: '10000'
+      - '--set=extensions.jaeger_storage.backends.some_storage.memory.max_traces=10000'
+      # Встроенный конфиг v2 включает MCP-эндпоинт на порту UI и фоновую
+      # проверку связи с агентом, которого в этом развертывании нет: ни того,
+      # ни другого мы не используем, а эндпоинт открыт без аутентификации.
+      - '--set=extensions.jaeger_query.ai.enable_mcp=false'
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:14269/ || exit 1"]
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:13133/status || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -441,7 +443,7 @@ services:
 
   prometheus:
     container_name: 'dm-prometheus'
-    image: 'prom/prometheus:v2.51.0'
+    image: 'prom/prometheus:v3.14.0'
     ports:
       - '127.0.0.1:9090:9090'
     volumes:
@@ -477,12 +479,12 @@ services:
   # suspecting the site is down.
   #
   # No secret of its own. Alerts go out over the mail transport the deployment
-  # already has - MAIL_HOST is MailHog on a stand and the relay on a server - so
+  # already has - MAIL_HOST is Mailpit on a stand and the relay on a server - so
   # an alert arrives wherever registration mail arrives, and there is no token to
   # paste before delivery starts working.
   alertmanager:
     container_name: 'dm-alertmanager'
-    image: 'prom/alertmanager:v0.27.0'
+    image: 'prom/alertmanager:v0.34.0'
     # Alertmanager expands no environment variable in its configuration file, so
     # the entrypoint renders one from the environment first. Everything below
     # would otherwise have to be a literal in the repository.
@@ -492,11 +494,13 @@ services:
     environment:
       # The mail path of the application, not a second one: a relay reachable by
       # the API is a relay reachable by the alerts about the API.
-      ALERT_SMTP_SMARTHOST: ${MAIL_HOST:-dm-mailhog}:${MAIL_PORT:-1025}
+      ALERT_SMTP_SMARTHOST: ${MAIL_HOST:-dm-mailpit}:${MAIL_PORT:-1025}
       ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-}
       ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
-      # MailHog offers no STARTTLS and alertmanager insists on it by default, so
-      # the stand default is off and a relay that wants TLS turns it on.
+      # Mailpit offers STARTTLS only when it is given a certificate and a key,
+      # which the stand does not have, and alertmanager insists on it by
+      # default, so the stand default is off and a relay that wants TLS turns
+      # it on.
       ALERT_SMTP_REQUIRE_TLS: ${ALERT_SMTP_REQUIRE_TLS:-false}
       ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-alertmanager@dm.am}
       ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-alerts@dm.am}
@@ -521,7 +525,7 @@ services:
 
   grafana:
     container_name: 'dm-grafana'
-    image: 'grafana/grafana:10.4.0'
+    image: 'grafana/grafana:13.2.0'
     ports:
       - '127.0.0.1:3000:3000'
     environment:
@@ -544,7 +548,7 @@ services:
   # --- Infrastructure: Exporters ---
 
   postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.15.0
+    image: prometheuscommunity/postgres-exporter:v0.20.1
     container_name: 'dm-pg-exporter'
     environment:
       # pg_monitor и ничего больше: экспортеру нужны представления статистики, а
@@ -560,33 +564,8 @@ services:
           memory: 64M
           cpus: '0.1'
 
-  # Второе хранилище наблюдается наравне с первым. Без экспортера единственным
-  # сигналом о нем была проба в /_ready, которую никто не опрашивает: остановка
-  # Mongo не давала ни одного алерта, а счетчики непрочитанного и журнал
-  # безопасности живут именно там.
-  mongodb-exporter:
-    image: percona/mongodb_exporter:0.40.0
-    container_name: 'dm-mongo-exporter'
-    command:
-      - "--collect-all"
-      - "--compatible-mode"
-    environment:
-      # maxPoolSize повторяет число приложения, а не выбирает свое: в файле оно
-      # одно, и правило о согласии потолков держит его одним. Экспортеру этот
-      # потолок все равно недостижим — он опрашивает сервер раз в интервал сбора.
-      MONGODB_URI: "mongodb://${MONGO_ROOT_USER:-root}:${MONGO_ROOT_PASSWORD}@dm-mongo:27017/?authSource=admin&maxPoolSize=100"
-    depends_on:
-      mongo:
-        condition: service_healthy
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 64M
-          cpus: '0.1'
-
   node-exporter:
-    image: prom/node-exporter:v1.7.0
+    image: prom/node-exporter:v1.12.1
     container_name: 'dm-node-exporter'
     volumes:
       - /proc:/host/proc:ro
@@ -624,8 +603,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      mongo:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     restart: "no"
@@ -647,7 +624,7 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-      mailhog:
+      mailpit:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
@@ -676,8 +653,6 @@ services:
     environment: *workload-env
     depends_on:
       rabbitmq:
-        condition: service_healthy
-      mongo:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
@@ -753,8 +728,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      mongo:
-        condition: service_healthy
       minio-init:
         condition: service_completed_successfully
     restart: "no"
@@ -771,7 +744,7 @@ services:
   # unit, not a container swap.
   watchtower:
     container_name: 'dm-watchtower'
-    image: containrrr/watchtower:1.7.1
+    image: nickfedor/watchtower:1.21.0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:

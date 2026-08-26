@@ -12,33 +12,30 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Profiles;
 
 public class CommunityProfileServiceShould : UnitTestBase
 {
-    private readonly Mock<IUserReadRepository> _userRepository;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<ICache> _cache;
+    private readonly IUserReadRepository _userRepository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly ICache _cache;
     private readonly CommunityProfileService _service;
 
     public CommunityProfileServiceShould()
     {
         _userRepository = Mock<IUserReadRepository>();
-        _userRepository.Setup(r => r.GetUserDetailsAsync(It.IsAny<string>()))
-            .ReturnsAsync(new UserDetails());
-        _userRepository.Setup(r => r.GetUserDetailsAsync(It.IsAny<Guid>()))
-            .ReturnsAsync(new UserDetails());
+        _userRepository.GetUserDetailsAsync(Arg.Any<string>()).Returns(new UserDetails());
+        _userRepository.GetUserDetailsAsync(Arg.Any<Guid>()).Returns(new UserDetails());
 
         var usernameHistoryReader = Mock<IUsernameHistoryReader>();
-        usernameHistoryReader.Setup(r => r.GetByUserIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<UsernameHistoryEntry>());
+        usernameHistoryReader.GetByUserIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<UsernameHistoryEntry>());
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<CommunityIntention>()));
 
         var identityProvider = Mock<IIdentityProvider>();
         var identity = Identity.Success(
@@ -47,27 +44,25 @@ public class CommunityProfileServiceShould : UnitTestBase
             new UserSettings { Paging = new PagingSettings { EntitiesPerPage = 20 } },
             "token"
         );
-        identityProvider.Setup(p => p.Current).Returns(identity);
+        identityProvider.Current.Returns(identity);
 
         _cache = Mock<ICache>();
-        _cache.Setup(c => c.GetOrCreateAsync(
-                It.IsAny<object>(),
-                It.IsAny<Func<Task<UserDetails>>>(),
-                It.IsAny<TimeSpan>()))
-            .Returns((object key, Func<Task<UserDetails>> factory, TimeSpan ttl) => factory());
+        _cache.GetOrCreateAsync(
+                Arg.Any<object>(),
+                Arg.Any<Func<Task<UserDetails>>>(),
+                Arg.Any<TimeSpan>()).Returns(ci => { var key = ci.ArgAt<object>(0); var factory = ci.ArgAt<Func<Task<UserDetails>>>(1); var ttl = ci.ArgAt<TimeSpan>(2); return factory(); });
 
-        _cache.Setup(c => c.GetOrCreateAsync(
-                It.IsAny<object>(),
-                It.IsAny<Func<Task<IEnumerable<GeneralUser>>>>(),
-                It.IsAny<TimeSpan>()))
-            .Returns((object key, Func<Task<IEnumerable<GeneralUser>>> factory, TimeSpan ttl) => factory());
+        _cache.GetOrCreateAsync(
+                Arg.Any<object>(),
+                Arg.Any<Func<Task<IEnumerable<GeneralUser>>>>(),
+                Arg.Any<TimeSpan>()).Returns(ci => { var key = ci.ArgAt<object>(0); var factory = ci.ArgAt<Func<Task<IEnumerable<GeneralUser>>>>(1); var ttl = ci.ArgAt<TimeSpan>(2); return factory(); });
 
         _service = new CommunityProfileService(
-            _userRepository.Object,
-            usernameHistoryReader.Object,
-            _intentionManager.Object,
-            identityProvider.Object,
-            _cache.Object);
+            _userRepository,
+            usernameHistoryReader,
+            _intentionManager,
+            identityProvider,
+            _cache);
     }
 
     [Fact]
@@ -77,7 +72,7 @@ public class CommunityProfileServiceShould : UnitTestBase
 
         var result = await _service.GetProfile(username);
 
-        _userRepository.Verify(r => r.GetUserDetailsAsync(username), Times.Once);
+        await _userRepository.Received(1).GetUserDetailsAsync(username);
     }
 
     [Fact]
@@ -87,10 +82,10 @@ public class CommunityProfileServiceShould : UnitTestBase
 
         await _service.GetProfile(username);
 
-        _cache.Verify(c => c.GetOrCreateAsync(
+        await _cache.Received(1).GetOrCreateAsync(
             $"user_details_{username.ToLowerInvariant()}",
-            It.IsAny<Func<Task<UserDetails>>>(),
-            CachePolicy.Medium), Times.Once);
+            Arg.Any<Func<Task<UserDetails>>>(),
+            CachePolicy.Medium);
     }
 
     [Fact]
@@ -100,7 +95,7 @@ public class CommunityProfileServiceShould : UnitTestBase
 
         var result = await _service.GetProfile(userId);
 
-        _userRepository.Verify(r => r.GetUserDetailsAsync(userId), Times.Once);
+        await _userRepository.Received(1).GetUserDetailsAsync(userId);
     }
 
     [Fact]
@@ -110,23 +105,22 @@ public class CommunityProfileServiceShould : UnitTestBase
 
         await _service.GetProfile(userId);
 
-        _cache.Verify(c => c.GetOrCreateAsync(
+        await _cache.Received(1).GetOrCreateAsync(
             $"user_details_{userId}",
-            It.IsAny<Func<Task<UserDetails>>>(),
-            CachePolicy.Medium), Times.Once);
+            Arg.Any<Func<Task<UserDetails>>>(),
+            CachePolicy.Medium);
     }
 
     [Fact]
     public async Task AuthorizeViewPendingUsersAction()
     {
         var query = new PagingQuery();
-        _userRepository.Setup(r => r.CountUsersAsync(It.IsAny<UserFilter>())).ReturnsAsync(0);
-        _userRepository.Setup(r => r.GetUsersAsync(It.IsAny<PagingData>(), It.IsAny<UserFilter>()))
-            .ReturnsAsync(Array.Empty<GeneralUser>());
+        _userRepository.CountUsersAsync(Arg.Any<UserFilter>()).Returns(0);
+        _userRepository.GetUsersAsync(Arg.Any<PagingData>(), Arg.Any<UserFilter>()).Returns(Array.Empty<GeneralUser>());
 
         await _service.GetUsers(query, new UserFilter { Activity = UserActivityFilter.Pending });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(CommunityIntention.ViewPendingUsers), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(CommunityIntention.ViewPendingUsers);
     }
 
     /// <summary>
@@ -139,12 +133,20 @@ public class CommunityProfileServiceShould : UnitTestBase
     {
         UserFilter? countedWith = null;
         UserFilter? pagedWith = null;
-        _userRepository.Setup(r => r.CountUsersAsync(It.IsAny<UserFilter>()))
-            .Callback<UserFilter>(f => countedWith = f)
-            .ReturnsAsync(0);
-        _userRepository.Setup(r => r.GetUsersAsync(It.IsAny<PagingData>(), It.IsAny<UserFilter>()))
-            .Callback<PagingData, UserFilter>((_, f) => pagedWith = f)
-            .ReturnsAsync(Array.Empty<GeneralUser>());
+        _userRepository.CountUsersAsync(Arg.Any<UserFilter>())
+            .Returns(0)
+            .AndDoes(ci =>
+            {
+                var f = ci.ArgAt<UserFilter>(0);
+                countedWith = f;
+            });
+        _userRepository.GetUsersAsync(Arg.Any<PagingData>(), Arg.Any<UserFilter>())
+            .Returns(Array.Empty<GeneralUser>())
+            .AndDoes(ci =>
+            {
+                var f = ci.ArgAt<UserFilter>(1);
+                pagedWith = f;
+            });
 
         var filter = new UserFilter
         {
@@ -169,26 +171,24 @@ public class CommunityProfileServiceShould : UnitTestBase
     public async Task RetrieveUsersByRole()
     {
         var role = UserRole.Admin;
-        _userRepository.Setup(r => r.GetUsersByRoleAsync(role))
-            .ReturnsAsync(Array.Empty<GeneralUser>());
+        _userRepository.GetUsersByRoleAsync(role).Returns(Array.Empty<GeneralUser>());
 
         await _service.GetUsersByRole(role);
 
-        _userRepository.Verify(r => r.GetUsersByRoleAsync(role), Times.Once);
+        await _userRepository.Received(1).GetUsersByRoleAsync(role);
     }
 
     [Fact]
     public async Task CacheUsersByRole()
     {
         var role = UserRole.Admin;
-        _userRepository.Setup(r => r.GetUsersByRoleAsync(role))
-            .ReturnsAsync(Array.Empty<GeneralUser>());
+        _userRepository.GetUsersByRoleAsync(role).Returns(Array.Empty<GeneralUser>());
 
         await _service.GetUsersByRole(role);
 
-        _cache.Verify(c => c.GetOrCreateAsync(
+        await _cache.Received(1).GetOrCreateAsync(
             $"users_by_role_{role}",
-            It.IsAny<Func<Task<IEnumerable<GeneralUser>>>>(),
-            CachePolicy.LongLived), Times.Once);
+            Arg.Any<Func<Task<IEnumerable<GeneralUser>>>>(),
+            CachePolicy.LongLived);
     }
 }

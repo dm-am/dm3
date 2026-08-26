@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Account.Features.Security;
+using DM.Domain.Account.Features.TwoFactor;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
@@ -12,25 +13,29 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Authentication;
 
 public class AuthenticationServiceShould : UnitTestBase
 {
-    private readonly Mock<ISecurityManager> _securityManager;
-    private readonly Mock<ISymmetricCryptoService> _cryptoService;
-    private readonly Mock<IAuthenticationRepository> _repository;
-    private readonly Mock<ISessionFactory> _sessionFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<ILoginAttemptTracker> _loginAttemptTracker;
-    private readonly Mock<ISecurityAuditRepository> _auditService;
-    private readonly Mock<IEventProducer> _eventProducer;
+    private readonly ISecurityManager _securityManager;
+    private readonly ISymmetricCryptoService _cryptoService;
+    private readonly IAuthenticationRepository _repository;
+    private readonly ISessionFactory _sessionFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly ILoginAttemptTracker _loginAttemptTracker;
+    private readonly ISecurityAuditRepository _auditService;
+    private readonly IEventProducer _eventProducer;
+    private readonly ITwoFactorRepository _twoFactorRepository;
+    private readonly ITwoFactorVerifier _twoFactorVerifier;
+    private readonly IGuidFactory _guidFactory;
     private readonly AuthenticationService _service;
 
     private static readonly Guid _userId = Guid.Parse("7b1c2d3e-4f50-4a61-8b72-9c83d4e5f607");
@@ -47,6 +52,9 @@ public class AuthenticationServiceShould : UnitTestBase
         _loginAttemptTracker = Mock<ILoginAttemptTracker>();
         _auditService = Mock<ISecurityAuditRepository>();
         _eventProducer = Mock<IEventProducer>();
+        _twoFactorRepository = Mock<ITwoFactorRepository>();
+        _twoFactorVerifier = Mock<ITwoFactorVerifier>();
+        _guidFactory = Mock<IGuidFactory>();
         var logger = Mock<ILogger<AuthenticationService>>();
         var config = Options.Create(new AuthenticationConfiguration
         {
@@ -56,27 +64,31 @@ public class AuthenticationServiceShould : UnitTestBase
             PersistentSessionExpirationDays = 365
         });
 
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _service = new AuthenticationService(
-            _securityManager.Object,
-            _cryptoService.Object,
-            _repository.Object,
-            _sessionFactory.Object,
-            _dateTimeProvider.Object,
-            _identityProvider.Object,
-            _loginAttemptTracker.Object,
-            _auditService.Object,
-            _eventProducer.Object,
-            logger.Object,
-            config);
+            _securityManager,
+            _cryptoService,
+            _repository,
+            _sessionFactory,
+            _dateTimeProvider,
+            _identityProvider,
+            _loginAttemptTracker,
+            _auditService,
+            _eventProducer,
+            _twoFactorRepository,
+            _twoFactorVerifier,
+            _guidFactory,
+            logger,
+            config,
+            Options.Create(new TwoFactorConfiguration()));
     }
 
     [Fact]
     public async Task ReturnFailureWhenEmailIsPendingRegistration()
     {
         var email = "test@example.com";
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(true);
+        _repository.IsPendingRegistration(email).Returns(true);
 
         var result = await _service.Authenticate(email, "password");
 
@@ -88,9 +100,9 @@ public class AuthenticationServiceShould : UnitTestBase
     public async Task ReturnFailureWhenAccountIsLocked()
     {
         var email = "test@example.com";
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(true);
-        _loginAttemptTracker.Setup(t => t.GetRemainingLockoutSeconds(new LoginAttemptOrigin(email, null))).ReturnsAsync(300);
+        _repository.IsPendingRegistration(email).Returns(false);
+        _loginAttemptTracker.IsAccountLocked(new LoginAttemptOrigin(email, null)).Returns(true);
+        _loginAttemptTracker.GetRemainingLockoutSeconds(new LoginAttemptOrigin(email, null)).Returns(300);
 
         var result = await _service.Authenticate(email, "password");
 
@@ -102,21 +114,21 @@ public class AuthenticationServiceShould : UnitTestBase
     public async Task ReturnFailureWhenUserNotFound()
     {
         var email = "test@example.com";
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
-        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync(((bool, AuthenticatedUser?))(false, null));
+        _repository.IsPendingRegistration(email).Returns(false);
+        _loginAttemptTracker.IsAccountLocked(new LoginAttemptOrigin(email, null)).Returns(false);
+        _loginAttemptTracker.GetDelayForUser(new LoginAttemptOrigin(email, null)).Returns(0);
+        _repository.TryFindUserByEmail(email).Returns(((bool, AuthenticatedUser?))(false, null));
 
         var result = await _service.Authenticate(email, "password");
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.WrongLogin);
-        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(new LoginAttemptOrigin(email, null)), Times.Once);
+        await _loginAttemptTracker.Received(1).RecordFailedAttempt(new LoginAttemptOrigin(email, null));
         // Answered in the same time as a wrong password, not only in the same
         // words: with no hash of anything, a missing account comes back before
         // Argon2id would have finished, and that difference is the answer
-        _securityManager.Verify(s => s.ComparePasswords(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        _securityManager.Received(1).ComparePasswords(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
     }
 
     [Fact]
@@ -133,20 +145,19 @@ public class AuthenticationServiceShould : UnitTestBase
             AccessPolicy = AccessPolicy.NotSpecified
         };
 
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
-        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
-        _securityManager.Setup(s => s.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash))
-            .Returns(false);
+        _repository.IsPendingRegistration(email).Returns(false);
+        _loginAttemptTracker.IsAccountLocked(new LoginAttemptOrigin(email, null)).Returns(false);
+        _loginAttemptTracker.GetDelayForUser(new LoginAttemptOrigin(email, null)).Returns(0);
+        _repository.TryFindUserByEmail(email).Returns((true, user));
+        _securityManager.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash).Returns(false);
 
         var result = await _service.Authenticate(email, "wrongpassword");
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.WrongPassword);
-        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(new LoginAttemptOrigin(email, null)), Times.Once);
-        _auditService.Verify(a => a.LogAsync(user.UserId, SecurityEventType.LoginFailure,
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
+        await _loginAttemptTracker.Received(1).RecordFailedAttempt(new LoginAttemptOrigin(email, null));
+        await _auditService.Received(1).LogAsync(user.UserId, SecurityEventType.LoginFailure,
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
     [Fact]
@@ -164,21 +175,18 @@ public class AuthenticationServiceShould : UnitTestBase
         };
         var origin = new LoginAttemptOrigin(email, null);
 
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(origin)).ReturnsAsync(0);
-        _securityManager.Setup(s => s.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash))
-            .Returns(false);
+        _repository.IsPendingRegistration(email).Returns(false);
+        _repository.TryFindUserByEmail(email).Returns((true, user));
+        _loginAttemptTracker.GetDelayForUser(origin).Returns(0);
+        _securityManager.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash).Returns(false);
 
         // Unlocked when the attempt starts, locked once it has been counted:
         // that is the one attempt the notification belongs to.
-        _loginAttemptTracker.SetupSequence(t => t.IsAccountLocked(origin))
-            .ReturnsAsync(false)
-            .ReturnsAsync(true);
+        _loginAttemptTracker.IsAccountLocked(origin).Returns(false, true);
 
         await _service.Authenticate(email, "wrongpassword");
 
-        _eventProducer.Verify(p => p.SendAsync(EventType.AccountLocked, user.UserId), Times.Once);
+        await _eventProducer.Received(1).SendAsync(EventType.AccountLocked, user.UserId);
     }
 
     [Fact]
@@ -202,25 +210,24 @@ public class AuthenticationServiceShould : UnitTestBase
         var session = new Session { Id = sessionId };
         var settings = UserSettings.Default;
 
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
-        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
-        _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
-            .Returns(true);
-        _sessionFactory.Setup(f => f.Create(true, null)).Returns(createSession);
-        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(settings);
-        _repository.Setup(r => r.AddSession(userId, createSession)).ReturnsAsync(session);
-        _cryptoService.Setup(c => c.Encrypt(It.IsAny<string>())).ReturnsAsync("encrypted-token");
+        _repository.IsPendingRegistration(email).Returns(false);
+        _loginAttemptTracker.IsAccountLocked(new LoginAttemptOrigin(email, null)).Returns(false);
+        _loginAttemptTracker.GetDelayForUser(new LoginAttemptOrigin(email, null)).Returns(0);
+        _repository.TryFindUserByEmail(email).Returns((true, user));
+        _securityManager.ComparePasswords("password", user.Salt, user.PasswordHash).Returns(true);
+        _sessionFactory.Create(true, null).Returns(createSession);
+        _repository.FindUserSettings(userId).Returns(settings);
+        _repository.AddSession(userId, createSession).Returns(session);
+        _cryptoService.Encrypt(Arg.Any<string>()).Returns("encrypted-token");
 
         var result = await _service.Authenticate(email, "password");
 
         result.User.IsAuthenticated.Should().BeTrue();
         result.User.UserId.Should().Be(userId);
-        _loginAttemptTracker.Verify(t => t.ResetAttempts(email), Times.Once);
-        _repository.Verify(r => r.UpdateActivity(userId, It.IsAny<DateTimeOffset>()), Times.Once);
-        _auditService.Verify(a => a.LogAsync(userId, SecurityEventType.LoginSuccess,
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
+        await _loginAttemptTracker.Received(1).ResetAttempts(email);
+        await _repository.Received(1).UpdateActivity(userId, Arg.Any<DateTimeOffset>());
+        await _auditService.Received(1).LogAsync(userId, SecurityEventType.LoginSuccess,
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
     [Fact]
@@ -233,22 +240,21 @@ public class AuthenticationServiceShould : UnitTestBase
             .WithCredentials("salt", "hash")
             .Please();
 
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
-        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        _repository.IsPendingRegistration(email).Returns(false);
+        _loginAttemptTracker.IsAccountLocked(new LoginAttemptOrigin(email, null)).Returns(false);
+        _loginAttemptTracker.GetDelayForUser(new LoginAttemptOrigin(email, null)).Returns(0);
+        _repository.TryFindUserByEmail(email).Returns((true, user));
         // The password is right, and that is what earns the real reason: to
         // everyone else a banned account answers like a wrong password, see
         // HideTheStateOfTheAccountUntilThePasswordIsProven
-        _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
-            .Returns(true);
+        _securityManager.ComparePasswords("password", user.Salt, user.PasswordHash).Returns(true);
 
         var result = await _service.Authenticate(email, "password");
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.Banned);
         // No session is minted for a banned account
-        _repository.Verify(r => r.AddSession(It.IsAny<Guid>(), It.IsAny<CreateSession>()), Times.Never);
+        await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
     }
 
     /// <summary>
@@ -277,18 +283,17 @@ public class AuthenticationServiceShould : UnitTestBase
         user.IsRemoved = isRemoved;
         var origin = new LoginAttemptOrigin(email, null);
 
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(origin)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(origin)).ReturnsAsync(0);
-        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
-        _securityManager.Setup(s => s.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash))
-            .Returns(false);
+        _repository.IsPendingRegistration(email).Returns(false);
+        _loginAttemptTracker.IsAccountLocked(origin).Returns(false);
+        _loginAttemptTracker.GetDelayForUser(origin).Returns(0);
+        _repository.TryFindUserByEmail(email).Returns((true, user));
+        _securityManager.ComparePasswords("wrongpassword", user.Salt, user.PasswordHash).Returns(false);
 
         var result = await _service.Authenticate(email, "wrongpassword");
 
         result.Error.Should().Be(AuthenticationError.WrongPassword);
         // And it costs the guess an attempt, like any other wrong password does
-        _loginAttemptTracker.Verify(t => t.RecordFailedAttempt(origin), Times.Once);
+        await _loginAttemptTracker.Received(1).RecordFailedAttempt(origin);
     }
 
     [Fact]
@@ -301,18 +306,17 @@ public class AuthenticationServiceShould : UnitTestBase
             .Please();
         user.IsRemoved = true;
 
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
-        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
-        _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
-            .Returns(true);
+        _repository.IsPendingRegistration(email).Returns(false);
+        _loginAttemptTracker.IsAccountLocked(new LoginAttemptOrigin(email, null)).Returns(false);
+        _loginAttemptTracker.GetDelayForUser(new LoginAttemptOrigin(email, null)).Returns(0);
+        _repository.TryFindUserByEmail(email).Returns((true, user));
+        _securityManager.ComparePasswords("password", user.Salt, user.PasswordHash).Returns(true);
 
         var result = await _service.Authenticate(email, "password");
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.Removed);
-        _repository.Verify(r => r.AddSession(It.IsAny<Guid>(), It.IsAny<CreateSession>()), Times.Never);
+        await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
     }
 
     [Fact]
@@ -324,10 +328,10 @@ public class AuthenticationServiceShould : UnitTestBase
             .WithCredentials("salt", "hash")
             .Please();
 
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
-        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
+        _repository.IsPendingRegistration(email).Returns(false);
+        _loginAttemptTracker.IsAccountLocked(new LoginAttemptOrigin(email, null)).Returns(false);
+        _loginAttemptTracker.GetDelayForUser(new LoginAttemptOrigin(email, null)).Returns(0);
+        _repository.TryFindUserByEmail(email).Returns((true, user));
         // Everything a successful login needs is stubbed, a matching password
         // included: what stops the robot is the check on its role, and the refusal
         // has to hold with the credentials of a real account behind it.
@@ -336,14 +340,11 @@ public class AuthenticationServiceShould : UnitTestBase
         // decoy rather than against its own columns - the seed leaves those empty,
         // and the hash exists to spend the time, not to ask a question.
         _securityManager
-            .Setup(s => s.ComparePasswords(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Returns(true);
-        _sessionFactory.Setup(f => f.Create(true, null))
-            .Returns(new CreateSession { Id = Guid.NewGuid() });
-        _repository.Setup(r => r.FindUserSettings(user.UserId)).ReturnsAsync(UserSettings.Default);
-        _repository.Setup(r => r.AddSession(user.UserId, It.IsAny<CreateSession>()))
-            .ReturnsAsync(new Session { Id = Guid.NewGuid() });
-        _cryptoService.Setup(c => c.Encrypt(It.IsAny<string>())).ReturnsAsync("encrypted-token");
+            .ComparePasswords(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        _sessionFactory.Create(true, null).Returns(new CreateSession { Id = Guid.NewGuid() });
+        _repository.FindUserSettings(user.UserId).Returns(UserSettings.Default);
+        _repository.AddSession(user.UserId, Arg.Any<CreateSession>()).Returns(new Session { Id = Guid.NewGuid() });
+        _cryptoService.Encrypt(Arg.Any<string>()).Returns("encrypted-token");
 
         var result = await _service.Authenticate(email, "password");
 
@@ -351,14 +352,12 @@ public class AuthenticationServiceShould : UnitTestBase
         // Answered as a wrong password on purpose: a distinct error would point at
         // the one account that exists but can never be logged into
         result.Error.Should().Be(AuthenticationError.WrongPassword);
-        _repository.Verify(r => r.AddSession(It.IsAny<Guid>(), It.IsAny<CreateSession>()), Times.Never);
+        await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
 
         // And it pays for the refusal like every other refusal does. Short-circuited
         // on the role, this answer came back some hundred and fifty milliseconds
         // before any other and named the robot's address by that alone.
-        _securityManager.Verify(
-            s => s.ComparePasswords(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
-            Times.Once);
+        _securityManager.Received(1).ComparePasswords(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
     }
 
     [Fact]
@@ -371,12 +370,11 @@ public class AuthenticationServiceShould : UnitTestBase
             .WithAccessPolicy(AccessPolicy.FullBan)
             .Please();
 
-        _cryptoService.Setup(c => c.Decrypt("token"))
-            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
-        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
-        _repository.Setup(r => r.FindUserSession(userId, sessionId))
-            .ReturnsAsync(new Session { Id = sessionId, ExpirationUtc = DateTime.UtcNow.AddDays(1) });
-        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
+        _cryptoService.Decrypt("token").Returns($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.FindUser(userId).Returns(user);
+        _repository.FindUserSession(userId, sessionId)
+            .Returns(new Session { Id = sessionId, ExpirationUtc = DateTime.UtcNow.AddDays(1) });
+        _repository.FindUserSettings(userId).Returns(UserSettings.Default);
 
         var result = await _service.Authenticate("token");
 
@@ -393,12 +391,11 @@ public class AuthenticationServiceShould : UnitTestBase
         var sessionId = Guid.NewGuid();
         var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
 
-        _cryptoService.Setup(c => c.Decrypt("token"))
-            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
-        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
-        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
-        _repository.Setup(r => r.FindUserSession(userId, sessionId))
-            .ReturnsAsync(new Session { Id = sessionId, ExpirationUtc = DateTime.UtcNow.AddDays(1) });
+        _cryptoService.Decrypt("token").Returns($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.FindUser(userId).Returns(user);
+        _repository.FindUserSettings(userId).Returns(UserSettings.Default);
+        _repository.FindUserSession(userId, sessionId)
+            .Returns(new Session { Id = sessionId, ExpirationUtc = DateTime.UtcNow.AddDays(1) });
 
         var result = await _service.Authenticate("token");
 
@@ -406,7 +403,7 @@ public class AuthenticationServiceShould : UnitTestBase
         // Both halves of the token are used together. Looking the session up by
         // its id alone would authenticate a token whose userId and sessionId
         // belong to different people.
-        _repository.Verify(r => r.FindUserSession(userId, sessionId), Times.Once);
+        await _repository.Received(1).FindUserSession(userId, sessionId);
     }
 
     [Fact]
@@ -416,13 +413,11 @@ public class AuthenticationServiceShould : UnitTestBase
         var foreignSessionId = Guid.NewGuid();
         var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
 
-        _cryptoService.Setup(c => c.Decrypt("token"))
-            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{foreignSessionId}\"}}");
-        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
-        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
+        _cryptoService.Decrypt("token").Returns($"{{\"userId\":\"{userId}\",\"sessionId\":\"{foreignSessionId}\"}}");
+        _repository.FindUser(userId).Returns(user);
+        _repository.FindUserSettings(userId).Returns(UserSettings.Default);
         // The session exists in the store, but not under this user
-        _repository.Setup(r => r.FindUserSession(userId, foreignSessionId))
-            .ReturnsAsync((Session?)null);
+        _repository.FindUserSession(userId, foreignSessionId).Returns((Session?)null);
 
         var result = await _service.Authenticate("token");
 
@@ -436,7 +431,7 @@ public class AuthenticationServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
 
         var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
         // The ban lives in its own table and reaches the identity as a restriction
@@ -445,12 +440,11 @@ public class AuthenticationServiceShould : UnitTestBase
             new AccessRestriction(AccessPolicy.DemocraticBan, now.AddDays(-1), now.AddDays(1))
         ];
 
-        _cryptoService.Setup(c => c.Decrypt("token"))
-            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
-        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
-        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
-        _repository.Setup(r => r.FindUserSession(userId, sessionId))
-            .ReturnsAsync(new Session { Id = sessionId, ExpirationUtc = now.AddDays(1).UtcDateTime });
+        _cryptoService.Decrypt("token").Returns($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.FindUser(userId).Returns(user);
+        _repository.FindUserSettings(userId).Returns(UserSettings.Default);
+        _repository.FindUserSession(userId, sessionId)
+            .Returns(new Session { Id = sessionId, ExpirationUtc = now.AddDays(1).UtcDateTime });
 
         var result = await _service.Authenticate("token");
 
@@ -468,19 +462,18 @@ public class AuthenticationServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
 
         var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
         user.AccessRestrictions = [
             new AccessRestriction(AccessPolicy.DemocraticBan, now.AddDays(startsInDays), now.AddDays(endsInDays))
         ];
 
-        _cryptoService.Setup(c => c.Decrypt("token"))
-            .ReturnsAsync($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
-        _repository.Setup(r => r.FindUser(userId)).ReturnsAsync(user);
-        _repository.Setup(r => r.FindUserSettings(userId)).ReturnsAsync(UserSettings.Default);
-        _repository.Setup(r => r.FindUserSession(userId, sessionId))
-            .ReturnsAsync(new Session { Id = sessionId, ExpirationUtc = now.AddDays(1).UtcDateTime });
+        _cryptoService.Decrypt("token").Returns($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.FindUser(userId).Returns(user);
+        _repository.FindUserSettings(userId).Returns(UserSettings.Default);
+        _repository.FindUserSession(userId, sessionId)
+            .Returns(new Session { Id = sessionId, ExpirationUtc = now.AddDays(1).UtcDateTime });
 
         var result = await _service.Authenticate("token");
 
@@ -494,7 +487,7 @@ public class AuthenticationServiceShould : UnitTestBase
     {
         var email = "banned@example.com";
         var now = DateTimeOffset.UtcNow;
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
 
         var user = Create.User()
             .WithRole(UserRole.RegularUser)
@@ -504,12 +497,11 @@ public class AuthenticationServiceShould : UnitTestBase
             new AccessRestriction(AccessPolicy.FullBan, now.AddHours(-1), now.AddHours(1))
         ];
 
-        _repository.Setup(r => r.IsPendingRegistration(email)).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.IsAccountLocked(new LoginAttemptOrigin(email, null))).ReturnsAsync(false);
-        _loginAttemptTracker.Setup(t => t.GetDelayForUser(new LoginAttemptOrigin(email, null))).ReturnsAsync(0);
-        _repository.Setup(r => r.TryFindUserByEmail(email)).ReturnsAsync((true, user));
-        _securityManager.Setup(s => s.ComparePasswords("password", user.Salt, user.PasswordHash))
-            .Returns(true);
+        _repository.IsPendingRegistration(email).Returns(false);
+        _loginAttemptTracker.IsAccountLocked(new LoginAttemptOrigin(email, null)).Returns(false);
+        _loginAttemptTracker.GetDelayForUser(new LoginAttemptOrigin(email, null)).Returns(0);
+        _repository.TryFindUserByEmail(email).Returns((true, user));
+        _securityManager.ComparePasswords("password", user.Salt, user.PasswordHash).Returns(true);
 
         var result = await _service.Authenticate(email, "password");
 
@@ -529,14 +521,14 @@ public class AuthenticationServiceShould : UnitTestBase
             UserSettings.Default,
             "token");
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
+        _identityProvider.Current.Returns(identity);
 
         var result = await _service.Logout();
 
         result.User.IsAuthenticated.Should().BeFalse();
-        _repository.Verify(r => r.RemoveSession(userId, sessionId), Times.Once);
-        _repository.Verify(r => r.UpdateActivity(userId, It.IsAny<DateTimeOffset>()), Times.Once);
-        _auditService.Verify(a => a.LogAsync(userId, SecurityEventType.Logout, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
+        await _repository.Received(1).RemoveSession(userId, sessionId);
+        await _repository.Received(1).UpdateActivity(userId, Arg.Any<DateTimeOffset>());
+        await _auditService.Received(1).LogAsync(userId, SecurityEventType.Logout, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
     [Fact]
@@ -550,13 +542,13 @@ public class AuthenticationServiceShould : UnitTestBase
             UserSettings.Default,
             "token");
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
+        _identityProvider.Current.Returns(identity);
 
         var result = await _service.LogoutElsewhere();
 
         result.Should().Be(identity);
-        _repository.Verify(r => r.RemoveSessionsExcept(userId, sessionId), Times.Once);
-        _auditService.Verify(a => a.LogAsync(userId, SecurityEventType.LogoutElsewhere, It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
+        await _repository.Received(1).RemoveSessionsExcept(userId, sessionId);
+        await _auditService.Received(1).LogAsync(userId, SecurityEventType.LogoutElsewhere, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
     [Fact]
@@ -571,13 +563,13 @@ public class AuthenticationServiceShould : UnitTestBase
             UserSettings.Default,
             "token");
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
+        _identityProvider.Current.Returns(identity);
 
         await _service.TerminateSession(userId, targetSessionId);
 
-        _repository.Verify(r => r.RemoveSession(userId, targetSessionId), Times.Once);
-        _auditService.Verify(a => a.LogAsync(userId, SecurityEventType.SessionTerminated,
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Once);
+        await _repository.Received(1).RemoveSession(userId, targetSessionId);
+        await _auditService.Received(1).LogAsync(userId, SecurityEventType.SessionTerminated,
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
     [Fact]
@@ -592,7 +584,7 @@ public class AuthenticationServiceShould : UnitTestBase
             UserSettings.Default,
             "token");
 
-        _identityProvider.Setup(p => p.Current).Returns(identity);
+        _identityProvider.Current.Returns(identity);
 
         // Not the caller's session to end, and a refusal is a refusal: the error
         // middleware maps HttpException and its kin and nothing else, so anything
@@ -616,7 +608,7 @@ public class AuthenticationServiceShould : UnitTestBase
     public async Task RefreshASessionNoFurtherThanTheDayItWasIssuedFor()
     {
         var now = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
 
         // Issued 23 hours ago against a 24 hour lifetime and inside the refresh
         // window: an unbounded slide would push it half an hour past the ceiling.
@@ -630,17 +622,16 @@ public class AuthenticationServiceShould : UnitTestBase
 
         await AuthenticateWith(session);
 
-        _repository.Verify(
-            r => r.RefreshSession(_userId, _sessionId, session.CreatedUtc.AddHours(24)),
-            Times.Once,
-            "the ceiling is the lifetime it was issued with, counted from issue");
+        // The ceiling is the lifetime the session was issued with, counted from issue.
+        await _repository.Received(1).RefreshSession(
+            _userId, _sessionId, session.CreatedUtc.AddHours(24));
     }
 
     [Fact]
     public async Task StopRefreshingASessionThatHasReachedItsCeiling()
     {
         var now = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
-        _dateTimeProvider.Setup(d => d.Now).Returns(now);
+        _dateTimeProvider.Now.Returns(now);
 
         // Already at the ceiling: every request of the last window would otherwise
         // write the same value again.
@@ -654,9 +645,7 @@ public class AuthenticationServiceShould : UnitTestBase
 
         await AuthenticateWith(session);
 
-        _repository.Verify(
-            r => r.RefreshSession(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<DateTimeOffset>()),
-            Times.Never);
+        await _repository.DidNotReceive().RefreshSession(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
     }
 
     /// <summary>Runs token authentication against a session and nothing else.</summary>
@@ -670,12 +659,11 @@ public class AuthenticationServiceShould : UnitTestBase
             LastActivityUtc = session.CreatedUtc,
         };
 
-        _repository.Setup(r => r.FindUser(_userId)).ReturnsAsync(user);
-        _repository.Setup(r => r.FindUserSession(_userId, _sessionId)).ReturnsAsync(session);
-        _repository.Setup(r => r.FindUserSettings(_userId)).ReturnsAsync(UserSettings.Default);
+        _repository.FindUser(_userId).Returns(user);
+        _repository.FindUserSession(_userId, _sessionId).Returns(session);
+        _repository.FindUserSettings(_userId).Returns(UserSettings.Default);
         _cryptoService
-            .Setup(c => c.Decrypt(It.IsAny<string>()))
-            .ReturnsAsync(
+            .Decrypt(Arg.Any<string>()).Returns(
                 "{\"userId\":\"" + _userId + "\",\"sessionId\":\"" + _sessionId + "\"}");
 
         await _service.Authenticate("token");

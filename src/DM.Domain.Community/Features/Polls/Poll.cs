@@ -57,8 +57,8 @@ public class Poll
     /// them would have offered a vote the authorization then refused.
     ///
     /// The listing in the storage still restates the same window twice - once as
-    /// a Mongo filter, once as a BSON ladder for the status sort - because those
-    /// are built and sent to the server rather than called.
+    /// a filter, once as a CASE ladder for the status sort - because those are
+    /// translated into SQL rather than called.
     /// </remarks>
     /// <param name="now">Moment to judge the poll at</param>
     public PollStatus StatusAt(DateTimeOffset now)

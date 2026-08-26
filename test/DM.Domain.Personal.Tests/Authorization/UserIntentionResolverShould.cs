@@ -4,7 +4,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Authorization;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Personal.Tests.Authorization;

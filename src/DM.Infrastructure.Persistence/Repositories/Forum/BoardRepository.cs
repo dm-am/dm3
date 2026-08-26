@@ -1,19 +1,17 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Features.Boards;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
 
 /// <inheritdoc />
 internal class BoardRepository(
-    DmDbContext dmDbContext,
-    IConfigurationProvider mapperConfig)
+    DmDbContext dmDbContext)
     : IBoardRepository
 {
     /// <inheritdoc />
@@ -31,7 +29,7 @@ internal class BoardRepository(
         var boards = await dmDbContext.Boards
             .TagWith("DM.Forum.BoardsList")
             .OrderBy(b => b.Order)
-            .ProjectTo<Board>(mapperConfig)
+            .ProjectToBoard()
             .ToArrayAsync();
 
         await FillCommentSummary(boards);
@@ -80,7 +78,7 @@ internal class BoardRepository(
                 .TagWith("DM.Forum.BoardLastComment")
                 .Join(dmDbContext.Topics, c => c.EntityId, t => t.TopicId, (c, t) => new { Comment = c, Topic = t })
                 .Where(x => boardIds.Contains(x.Topic.BoardId) && lastUtcs.Contains(x.Comment.CreatedUtc))
-                .Select(x => new
+                .SelectSpliced(x => new
                 {
                     x.Topic.BoardId,
                     Last = new BoardLastComment
@@ -90,14 +88,8 @@ internal class BoardRepository(
                         TopicTitle = x.Topic.Title,
                         TopicNumber = x.Topic.TopicNumber,
                         CreatedUtc = x.Comment.CreatedUtc,
-                        Author = new GeneralUser
-                        {
-                            UserId = x.Comment.Author.UserId,
-                            Username = x.Comment.Author.Username,
-                            Role = x.Comment.Author.Role,
-                            Status = x.Comment.Author.Status,
-                            QuantityRating = x.Comment.Author.QuantityRating,
-                        },
+                        // The same narrow stub the board list itself renders.
+                        Author = ForumMappers.BoardUserStub.Splice(x.Comment.Author),
                     },
                 })
                 .ToArrayAsync();

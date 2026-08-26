@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Subscriptions;
 using Microsoft.EntityFrameworkCore;
@@ -17,12 +15,10 @@ namespace DM.Infrastructure.Persistence.Shared.Subscriptions;
 internal class SubscriptionRepository : ISubscriptionRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
-    public SubscriptionRepository(DmDbContext dbContext, IMapper mapper)
+    public SubscriptionRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     /// <summary>
@@ -81,7 +77,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     {
         return await _dbContext.Subscriptions
             .Where(s => s.SubscriptionId == subscriptionId)
-            .ProjectTo<Subscription>(_mapper.ConfigurationProvider)
+            .ProjectToSubscription()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -91,7 +87,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
         return await _dbContext.Subscriptions
             .Where(s => s.TargetType == targetType && s.TargetId == targetId)
             .Where(s => (s.Settings & requiredSettings) != 0)
-            .ProjectTo<Subscription>(_mapper.ConfigurationProvider)
+            .ProjectToSubscription()
             .ToListAsync(ct);
     }
 
@@ -100,7 +96,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     {
         return await _dbContext.Subscriptions
             .Where(s => s.SubscriberId == userId && s.TargetType == targetType && s.TargetId == targetId)
-            .ProjectTo<Subscription>(_mapper.ConfigurationProvider)
+            .ProjectToSubscription()
             .FirstOrDefaultAsync(ct);
     }
 

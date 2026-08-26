@@ -13,7 +13,7 @@ internal class UpdateRubricValidator : AbstractValidator<UpdateRubric>
             .NotEmpty().WithMessage(ValidationError.Empty);
 
         RuleFor(x => x.Title)
-            .MaximumLength(100).WithMessage(ValidationError.Long)
+            .MaximumLength(BlogFieldLimits.RubricTitleMaxLength).WithMessage(ValidationError.Long)
             .When(x => x.Title is not null);
     }
 }

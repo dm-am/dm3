@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Web.API.Features.Community.Awards;
 using DM.Web.API.Shared.Dto;
 using IAwardService = DM.Domain.Community.Features.Awards.IAwardService;
@@ -11,10 +10,10 @@ namespace DM.Web.API.Features.Moderation.Awards;
 internal class UserAwardApiService : IUserAwardApiService
 {
     private readonly IAwardService _awardService;
-    private readonly IMapper _mapper;
+    private readonly AwardMapper _mapper;
 
     /// <inheritdoc />
-    public UserAwardApiService(IAwardService awardService, IMapper mapper)
+    public UserAwardApiService(IAwardService awardService, AwardMapper mapper)
     {
         _awardService = awardService;
         _mapper = mapper;
@@ -25,7 +24,7 @@ internal class UserAwardApiService : IUserAwardApiService
     {
         var granted = await _awardService.GrantAsync(
             username, request.AwardTypeId, request.ContestSeriesId, request.WorkUrl);
-        return new Envelope<UserAward>(_mapper.Map<UserAward>(granted));
+        return new Envelope<UserAward>(_mapper.ToUserAward(granted));
     }
 
     /// <inheritdoc />

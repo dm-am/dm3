@@ -150,8 +150,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/Filters"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Filters" as *
 
 +sort-control
 

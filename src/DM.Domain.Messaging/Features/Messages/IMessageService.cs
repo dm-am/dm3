@@ -46,6 +46,22 @@ public interface IMessageService
     Task<Message> GetAsync(Guid messageId, CancellationToken ct = default);
 
     /// <summary>
+    /// Get single global chat message
+    /// </summary>
+    /// <remarks>
+    /// A line of the global chat is readable by whoever the global chat itself is
+    /// open to, which is everyone, signed in or not. Written down in those words
+    /// rather than derived from membership: the read above answers a different
+    /// question — whether the reader takes part in the conversation — and the
+    /// global chat has nobody taking part in it, so that question refuses
+    /// everybody.
+    /// </remarks>
+    /// <param name="messageId">Message identifier</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Message</returns>
+    Task<Message> GetGlobalChatMessageAsync(Guid messageId, CancellationToken ct = default);
+
+    /// <summary>
     /// Get list of chat messages with cursor-based pagination
     /// </summary>
     /// <param name="chatId">Chat identifier</param>
@@ -76,6 +92,20 @@ public interface IMessageService
     /// <returns>Updated message</returns>
     Task<Message> UpdateAsync(UpdateMessage updateMessage);
 
+    /// <summary>
+    /// Update existing global chat message
+    /// </summary>
+    /// <remarks>
+    /// Differs from the update above in the read it starts from, and in nothing
+    /// else: who may rewrite the line is <see cref="Authorization.MessageIntention.Edit"/>,
+    /// the same rule the private-message route has always applied — its author
+    /// within the editing window, moderation at any time, and a ban on public
+    /// speech closes the author's half of it.
+    /// </remarks>
+    /// <param name="updateMessage">Update message model</param>
+    /// <returns>Updated message</returns>
+    Task<Message> UpdateGlobalChatMessageAsync(UpdateMessage updateMessage);
+
     // ═══ DELETE ═══
 
     /// <summary>
@@ -83,4 +113,17 @@ public interface IMessageService
     /// </summary>
     /// <param name="messageId">Message identifier</param>
     Task DeleteAsync(Guid messageId);
+
+    /// <summary>
+    /// Delete global chat message
+    /// </summary>
+    /// <remarks>
+    /// Again the same rule, <see cref="Authorization.MessageIntention.Delete"/>:
+    /// the author takes their own line down within the editing window, and
+    /// somebody else's comes down by moderation — Moderator and above, which is
+    /// what <c>MessageIntentionResolver.CanEditOrDelete</c> already says for
+    /// every other kind of message.
+    /// </remarks>
+    /// <param name="messageId">Message identifier</param>
+    Task DeleteGlobalChatMessageAsync(Guid messageId);
 }

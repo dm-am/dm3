@@ -52,7 +52,7 @@ npm run type-check   # TypeScript check
 npm run test:unit    # Vitest
 npm run lint         # ESLint — note it is configured with --fix, it mutates
 
-# Your preview server on 5174, with the /v1 and /whatsup proxies.
+# Your preview server on 5174, with the /v1 and /hubs proxies.
 # The same line .claude/launch.json runs.
 npx vite --config vite.preview.config.ts --mode preview --port 5174
 ```

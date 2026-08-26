@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -25,7 +25,7 @@ namespace DM.Architecture.Tests;
 public class DeadLetterRoutingShould
 {
     /// <summary>How every Rabbit consumer in the solution declares its topology.</summary>
-    private const string ConsumerParameters = "new RabbitConsumerParameters(";
+    private const string ConsumerParameters = "new DmConsumerParameters(";
 
     /// <summary>Assignment of the dead-letter exchange inside those parameters.</summary>
     private const string RoutesPoisonMessages = "DeadLetterExchange =";
@@ -56,7 +56,7 @@ public class DeadLetterRoutingShould
     /// </summary>
     [Fact]
     public void FindEveryConsumer() =>
-        Consumers.Should().HaveCountGreaterOrEqualTo(3);
+        Consumers.Should().HaveCountGreaterThanOrEqualTo(3);
 
     [Fact]
     public void DeadLetterEveryQueueThatCarriesWork() =>
@@ -81,19 +81,17 @@ public class DeadLetterRoutingShould
                 "an internal of a pinned version, and one that drifts is answered with 406 " +
                 "when the consumer subscribes");
 
-    /// <summary>The processing order the client implements by not limiting anything.</summary>
-    private const string NoPrefetchAtAll = "ProcessingOrder.Unmanaged";
+    /// <summary>The one file every subscription of this system goes through.</summary>
+    private const string SharedConsumer = "src/DM.Infrastructure.Messaging/DmConsumer.cs";
 
     /// <summary>
     /// A consumer takes what it can finish, not what the queue holds.
     /// </summary>
     /// <remarks>
-    /// The client implements this one order by skipping the prefetch call
-    /// altogether, so the broker hands over the entire queue and the worker holds
-    /// every message of it in memory, unacknowledged, until it works through them.
-    /// Nothing is gained for that: the handler runs on the client's async
-    /// consumer, which delivers one message at a time on the channel whatever the
-    /// order says.
+    /// Without a prefetch limit the broker hands over the entire queue and the
+    /// worker holds every message of it in memory, unacknowledged, until it
+    /// works through them. Nothing is gained for that: the handler runs on the
+    /// client's dispatcher, one message at a time on the channel either way.
     ///
     /// And the backlog it builds is the invisible kind. A message delivered to a
     /// consumer is no longer ready, so depth read off the ready series shows an
@@ -101,19 +99,19 @@ public class DeadLetterRoutingShould
     /// green, the panel stays flat, and the first symptom is a reader asking why
     /// a notification took an hour.
     ///
-    /// Asserted on the sources for the same reason as everything else here: the
-    /// parameters are built inside a background service that needs a live broker
-    /// to reach that line.
+    /// The limit lives in the one shared subscription rather than in each
+    /// consumer's parameters, so this asserts the line itself: prefetch of one,
+    /// and global=false spelled out, because global=true is the call RabbitMQ
+    /// 4.x refuses.
     /// </remarks>
     [Fact]
     public void BoundWhatEachConsumerTakesAtOnce() =>
-        Consumers
-            .Where(path => File.ReadAllText(path).Contains(NoPrefetchAtAll, StringComparison.Ordinal))
-            .Select(Path.GetFileName)
-            .Should().BeEmpty(
-                "this order is the one the client implements by never limiting the prefetch, " +
-                "so the worker holds the whole queue in memory and the backlog it builds is " +
-                "invisible to a depth read off the ready series");
+        File.ReadAllText(Path.Combine(RepositoryRoot,
+                SharedConsumer.Replace('/', Path.DirectorySeparatorChar)))
+            .Should().Contain("BasicQosAsync(0, 1, global: false",
+                "every subscription goes through this file, and without the prefetch " +
+                "of one the worker holds the whole queue in memory as a backlog no " +
+                "depth series can see");
 
     /// <summary>
     /// The exemption has to keep naming a consumer that exists, or a rename turns

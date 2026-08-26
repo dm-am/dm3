@@ -1,7 +1,7 @@
 using System.Linq;
+using System.Text.Json.Nodes;
 using DM.Web.API.Shared.Sorting;
-using Microsoft.OpenApi.Any;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace DM.Web.API.Swagger;
@@ -23,12 +23,13 @@ namespace DM.Web.API.Swagger;
 internal class SortVocabularySwaggerFilter : IParameterFilter
 {
     /// <inheritdoc />
-    public void Apply(OpenApiParameter parameter, ParameterFilterContext context)
+    public void Apply(IOpenApiParameter parameter, ParameterFilterContext context)
     {
         // Only query members of a bound query object carry a vocabulary; a
         // route or header parameter of the same name would not.
         var declaringType = context.PropertyInfo?.DeclaringType;
-        if (declaringType == null || parameter.Schema?.Type != "string")
+        if (declaringType == null || parameter.Schema is not OpenApiSchema schema ||
+            schema.Type != JsonSchemaType.String)
         {
             return;
         }
@@ -49,6 +50,6 @@ internal class SortVocabularySwaggerFilter : IParameterFilter
             return;
         }
 
-        parameter.Schema.Enum = values.Select(v => (IOpenApiAny)new OpenApiString(v)).ToList();
+        schema.Enum = values.Select(v => (JsonNode)v!).ToList();
     }
 }

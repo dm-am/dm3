@@ -12,12 +12,12 @@ namespace DM.Web.API.Middleware;
 /// </summary>
 public class AuthenticationMiddleware
 {
-    private readonly RequestDelegate next;
+    private readonly RequestDelegate _next;
 
     /// <inheritdoc />
     public AuthenticationMiddleware(RequestDelegate next)
     {
-        this.next = next;
+        _next = next;
     }
 
     /// <summary>
@@ -51,13 +51,13 @@ public class AuthenticationMiddleware
         var username = identityProvider.Current?.User?.Username;
         if (string.IsNullOrEmpty(username))
         {
-            await next(httpContext);
+            await _next(httpContext);
             return;
         }
 
         using (LogContext.PushProperty("User", username))
         {
-            await next(httpContext);
+            await _next(httpContext);
         }
     }
 }

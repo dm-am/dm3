@@ -419,6 +419,14 @@ public class CreatePostEntity
     /// Creation timestamp
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
+
+    /// <summary>
+    /// Dice rolls made for the post, rolled server-side before the write.
+    /// The repository persists them in the same transaction as the post
+    /// (INV-6): a roll cannot be produced a second time, so it must never
+    /// outlive or predate the post it belongs to.
+    /// </summary>
+    public IReadOnlyList<Posts.DiceRoll> DiceRolls { get; set; } = [];
 }
 
 /// <summary>
@@ -1038,6 +1046,11 @@ public interface IAttributeSpecificationInput
     /// Is descriptor attribute
     /// </summary>
     bool IsDescriptor { get; }
+
+    /// <summary>
+    /// Position of the specification in the schema
+    /// </summary>
+    int Order { get; }
 }
 
 /// <summary>

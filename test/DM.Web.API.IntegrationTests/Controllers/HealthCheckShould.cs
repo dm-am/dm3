@@ -1,5 +1,5 @@
 using System.Net;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers;
@@ -34,7 +34,6 @@ public class HealthCheckShould : IntegrationTestBase
 
         var body = await response.Content.ReadAsStringAsync();
         body.Should().NotContain("postgresql");
-        body.Should().NotContain("mongodb");
         body.Should().NotContain("rabbitmq");
     }
 
@@ -60,7 +59,6 @@ public class HealthCheckShould : IntegrationTestBase
 
         var body = await response.Content.ReadAsStringAsync();
         body.Should().Contain("postgresql");
-        body.Should().Contain("mongodb");
         body.Should().NotContain("rabbitmq");
     }
 
@@ -74,7 +72,6 @@ public class HealthCheckShould : IntegrationTestBase
 
         var body = await response.Content.ReadAsStringAsync();
         body.Should().Contain("postgresql");
-        body.Should().Contain("mongodb");
         body.Should().Contain("rabbitmq");
     }
 

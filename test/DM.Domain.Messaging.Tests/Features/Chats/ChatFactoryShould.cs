@@ -6,8 +6,8 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.Chats;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Features.Chats;
@@ -15,13 +15,13 @@ namespace DM.Domain.Messaging.Tests.Features.Chats;
 public class ChatFactoryShould : UnitTestBase
 {
     private readonly ChatFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
+    private readonly IGuidFactory _guidFactory;
 
     public ChatFactoryShould()
     {
         _guidFactory = Mock<IGuidFactory>();
 
-        _factory = new ChatFactory(_guidFactory.Object);
+        _factory = new ChatFactory(_guidFactory);
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class ChatFactoryShould : UnitTestBase
         var userId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
 
-        _guidFactory.Setup(f => f.Create()).Returns(chatId);
+        _guidFactory.Create().Returns(chatId);
 
         var (chat, links) = _factory.CreateDirect(userId, otherUserId);
 
@@ -46,7 +46,7 @@ public class ChatFactoryShould : UnitTestBase
     public void ThrowWhenCreatingDirectChatWithSameUser()
     {
         var userId = Guid.NewGuid();
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var act = () => _factory.CreateDirect(userId, userId);
 
@@ -62,7 +62,7 @@ public class ChatFactoryShould : UnitTestBase
         var title = "Test Group";
         var participantIds = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
 
-        _guidFactory.Setup(f => f.Create()).Returns(chatId);
+        _guidFactory.Create().Returns(chatId);
 
         var (chat, links) = _factory.CreateGroup(title, participantIds);
 
@@ -80,7 +80,7 @@ public class ChatFactoryShould : UnitTestBase
         var userId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var (_, links) = _factory.CreateDirect(userId, otherUserId);
 
@@ -93,7 +93,7 @@ public class ChatFactoryShould : UnitTestBase
         var chatId = Guid.NewGuid();
         var participantIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
 
-        _guidFactory.Setup(f => f.Create()).Returns(chatId);
+        _guidFactory.Create().Returns(chatId);
 
         var (_, links) = _factory.CreateGroup("Group", participantIds);
 
@@ -106,7 +106,7 @@ public class ChatFactoryShould : UnitTestBase
         var duplicateId = Guid.NewGuid();
         var participantIds = new[] { duplicateId, Guid.NewGuid(), duplicateId };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var (_, links) = _factory.CreateGroup("Group", participantIds);
 

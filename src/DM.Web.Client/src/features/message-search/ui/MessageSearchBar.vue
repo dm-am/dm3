@@ -197,9 +197,9 @@ defineExpose({ focus });
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Filters"
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/Animations"
+@use "@/assets/styles/Filters" as *
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Animations" as *
 
 // The row IS the site's filter bar, and it is also what the results hang off:
 // the chat frame below clips its own overflow, so the layer has to belong to
@@ -214,7 +214,7 @@ defineExpose({ focus });
 // row, so it reads as a section over the feed rather than as a menu. Settles in
 // on the site's one reveal idiom.
 .search-dropdown
-  +_dropdown-panel
+  +dropdown-panel
   left: 0
   right: 0
   animation: search-drop $expand-duration $expand-easing

@@ -14,8 +14,8 @@ import {
   type Blog,
 } from "@/entities/blog";
 import { BlogsFilter, useBlogsFilter } from "@/features/blog-filter";
-import type { BlogsSearchParams } from "@/features/blog-filter";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
+import { stableCacheKey } from "@/shared/lib/utils/keyedCache";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 
 const blogsStore = useBlogsStore();
@@ -80,26 +80,9 @@ const currentSort = computed<SortState | undefined>(() => {
 // Computed blogs array
 const blogs = computed(() => searchResult.value?.resources ?? []);
 
-// Create stable key for search params (must include ALL filter params)
-function createParamsKey(params: BlogsSearchParams): string {
-  return JSON.stringify({
-    search: params.search || "",
-    status: params.status || "",
-    hostUsernames: params.hostUsernames?.slice().sort() || [],
-    createdFromUtc: params.createdFromUtc || "",
-    createdToUtc: params.createdToUtc || "",
-    activatedFromUtc: params.activatedFromUtc || "",
-    activatedToUtc: params.activatedToUtc || "",
-    closedFromUtc: params.closedFromUtc || "",
-    closedToUtc: params.closedToUtc || "",
-    sortBy: params.sortBy || "created",
-    sortOrder: params.sortOrder || "desc",
-    number: params.number || 1,
-    size: params.size || 20,
-  });
-}
-
-const paramsKey = computed(() => createParamsKey(searchParams.value));
+// Refetch whenever the cache key (covering every filter param) changes.
+// Shares the store's key builder so the widget and store never diverge.
+const paramsKey = computed(() => stableCacheKey(searchParams.value));
 
 // Closed blogs never get the green "new" highlight (matches BlogLink)
 function isNewHighlight(blog: Blog): boolean {

@@ -9,8 +9,8 @@
 // being replaced, so the compiled output is byte-identical and no cascade tie
 // resolves differently.
 
-@import "Themes"
-@import "Variables"
+@use "Themes" as *
+@use "Variables" as *
 
 /// A framed surface with padding: list rows, cards, answer blocks.
 =card($padding: $medium)

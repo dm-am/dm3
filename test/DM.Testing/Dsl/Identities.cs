@@ -35,5 +35,6 @@ public static class Identities
         public UserSettings Settings { get; set; } = null!;
         public AuthenticationError Error { get; set; }
         public string? AuthenticationToken { get; set; }
+        public Guid? TwoFactorChallengeId { get; set; }
     }
 }

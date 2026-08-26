@@ -1,6 +1,6 @@
 ---
 name: debugger
-description: Debugs DM3 issues - EF Core, MongoDB, RabbitMQ, SignalR, Vue 3. Use for errors, test failures, and performance issues.
+description: Debugs DM3 issues - EF Core, RabbitMQ, SignalR, Vue 3. Use for errors, test failures, and performance issues.
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -8,7 +8,7 @@ You are a debugging specialist for DM3 — a text-based RPG platform.
 
 ## Stack
 
-- **Backend:** .NET 8, EF Core (PostgreSQL), MongoDB, RabbitMQ, SignalR
+- **Backend:** .NET 10, EF Core (PostgreSQL), RabbitMQ, SignalR
 - **Frontend:** Vue 3, TypeScript, Pinia, Vite
 - **Infrastructure:** Docker, Nginx
 
@@ -29,7 +29,6 @@ Reference: [SYSTEM.md](../../docs/architecture/SYSTEM.md)
 # Docker logs
 docker logs dm-api --tail 100
 docker logs dm-pg --tail 50
-docker logs dm-mongo --tail 50
 docker logs dm-rmq --tail 50
 
 # Service status
@@ -45,7 +44,7 @@ passes it through as a literal path that does not exist, and a shell that does
 expand it hands `dotnet test` ten arguments where it takes one.
 
 `.\scripts\dm.ps1 reset` is absent from that list on purpose. It is
-`compose down -v`: it deletes the volumes, so Postgres and Mongo come back
+`compose down -v`: it deletes the volumes, so Postgres comes back
 empty and every account, game and post on the owner's stand is gone. Read from
 the stand, restart, reset and reseed nothing — the same rule the frontend brief
 states for the dev server and the API. If a diagnosis genuinely needs a clean
@@ -58,7 +57,6 @@ database, say so and let the owner run it.
 | API config | `src/DM.Web.API/appsettings.json` |
 | Migrations | `src/DM.Infrastructure.Persistence/Migrations/` |
 | DbContext | `src/DM.Infrastructure.Persistence/DmDbContext.cs` |
-| MongoDB | `src/DM.Infrastructure.Persistence/Repositories/` |
 | Frontend | `src/DM.Web.Client/src/` |
 
 ## Common Issues
@@ -69,11 +67,6 @@ database, say so and let the owner run it.
   project has exactly one migration, schema changes go into it (see CLAUDE.md)
 - N+1 queries: Check `.Include()` usage
 - Nullable reference warnings
-
-### MongoDB
-- Collection naming (camelCase vs PascalCase)
-- Index missing for queries
-- Connection pool exhaustion
 
 ### RabbitMQ
 - Queue not bound to exchange

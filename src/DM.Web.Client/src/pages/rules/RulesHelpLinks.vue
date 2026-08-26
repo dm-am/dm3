@@ -96,7 +96,7 @@ const linksWithSplit = computed(() =>
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Tables"
+@use "@/assets/styles/Tables" as *
 
 .help-section
   margin: $big 0

@@ -36,10 +36,13 @@ import { UserLink, userIsModerator } from "@/entities/user";
 import {
   MAX_POST_ATTACHMENTS,
   POST_ATTACHMENT_ACCEPT,
+  attachmentImageBox,
   describeAttachmentProblem,
+  isImageAttachment,
+  reserveAttachmentImageBoxes,
   uploadPostAttachments,
 } from "@/features/upload";
-import { uploadApi } from "@/shared/api";
+import { unwrapResource, uploadApi } from "@/shared/api";
 import { apiUrl } from "@/shared/api/client";
 import { formatFileSize } from "@/shared/lib/utils/fileSize";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
@@ -53,6 +56,7 @@ import { symbols } from "@/shared/lib/utils/icons";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { scrollBlockIntoView } from "@/shared/lib/scroll";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { useQuoteAction } from "@/shared/lib/composables/useQuoteComposer";
 import { notifyFailure } from "@/shared/lib/errors";
 
 const props = withDefaults(
@@ -107,6 +111,17 @@ const toast = useToast();
 // Comment block; moderators+ may edit/delete regardless (PostIntention).
 const EDIT_TIME_LIMIT_MINUTES = 15;
 
+// Quoting. The action exists only where there is a composer to answer in, and
+// the room's composer is what provides it — a post shown on a rating listing,
+// where there is nothing to write into, has no button.
+const { canQuote, quote } = useQuoteAction();
+
+function quotePost() {
+  const postId = props.post?.id;
+  if (!postId) return;
+  return quote(() => gameApi.getPostQuote(postId));
+}
+
 // Reviews state
 const showReviews = ref(false);
 const reviews = ref<PostReview[]>([]);
@@ -150,12 +165,22 @@ const effectiveMetaText = computed(() =>
 
 const hasMetagameText = computed(() => !!effectiveMetaText.value);
 // Pre-trim leading/trailing empty lines so they never inflate scrollHeight
-// or eat the collapsed budget. Pure transforms, no DOM mutation.
+// or eat the collapsed budget, then declare the box of every picture that is
+// one of this post's own attachments, so its decode does not push the text
+// below it down. Pure transforms, no DOM mutation. `attachments` is read
+// lazily, inside the computed, and is declared with the rest of the attachment
+// state further down.
 const postTextHtml = computed(() =>
-  trimHtmlWhitespace(effectiveGameText.value),
+  reserveAttachmentImageBoxes(
+    trimHtmlWhitespace(effectiveGameText.value),
+    attachments.value,
+  ),
 );
 const postMetagameHtml = computed(() =>
-  trimHtmlWhitespace(effectiveMetaText.value),
+  reserveAttachmentImageBoxes(
+    trimHtmlWhitespace(effectiveMetaText.value),
+    attachments.value,
+  ),
 );
 
 const formattedDate = computed(() => formatDateFull(props.post?.createdUtc));
@@ -460,7 +485,14 @@ async function startEditPost() {
 
   try {
     const { data } = await gameApi.getPostForEdit(props.post.id);
-    if (data && isEditingPost.value) {
+    // The answer is an envelope: the field sits under `resource`, and reading
+    // it off the top level gave undefined every time. The editor then kept the
+    // value seeded two lines above - the Display rendering - and handed
+    // server-built HTML to an editor that takes BBCode. Saving that published
+    // the [private] block as ordinary text to the whole room, which is the one
+    // thing this fetch exists to prevent.
+    const source = unwrapResource<Post>(data);
+    if (source && isEditingPost.value) {
       // htmlToBbcode rather than a plain assignment: the AuthorEdit audience
       // returns HTML carrying data-bb-* attributes (BbConverter calls RenderHtml
       // for every audience except plain text), while the editor takes and returns
@@ -468,11 +500,11 @@ async function startEditPost() {
       // markup, the server escapes it on the way out, and the private line is
       // published to the whole room — the very harm this method asks for the
       // author's audience to avoid.
-      editGameText.value = data.gameText
-        ? htmlToBbcode(data.gameText)
+      editGameText.value = source.gameText
+        ? htmlToBbcode(source.gameText)
         : editGameText.value;
-      editMetaText.value = data.metagameText
-        ? htmlToBbcode(data.metagameText)
+      editMetaText.value = source.metagameText
+        ? htmlToBbcode(source.metagameText)
         : editMetaText.value;
     }
   } catch {
@@ -679,8 +711,12 @@ async function submitReview() {
       sign,
       text: newReviewText.value.trim(),
     });
-    if (data) {
-      reviews.value.push(data);
+    // Out of the envelope: the review a person had just written appeared in
+    // the list as an empty row while the counter beside it moved, so the two
+    // disagreed on the same screen.
+    const created = unwrapResource<PostReview>(data);
+    if (created) {
+      reviews.value.push(created);
       newReviewText.value = "";
       newReviewSign.value = canPickSignedReview.value ? 1 : 0;
       // Keep the visible rating/reviewCount consistent with the new review
@@ -949,25 +985,47 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
                 </div>
               </div>
 
-              <!-- Files, as names and sizes. No previews: a thumbnail would
-                   have to come from a service reading the bucket with its own
-                   credentials, and the link it hands out works for whoever
-                   holds it — which is the one thing an attachment in a closed
-                   room must not have. -->
+              <!-- A picture is shown as one, and everything else stays a name
+                   and a size. The address is the content endpoint, which decides
+                   who may have the bytes on every request — so drawing it here
+                   hands out no access the reader did not already have, and a
+                   file in a closed room stays in it. What the file is comes from
+                   the server's own reading of it, not from its name.
+
+                   Name and size stay under the picture: they are what the link
+                   to the file is, and the map an author attaches is rarely named
+                   by what it shows. -->
               <div v-if="attachments.length" class="attachments">
-                <a
+                <div
                   v-for="file in attachments"
                   :key="file.id"
-                  class="attachment"
-                  :href="attachmentHref(file)"
-                  target="_blank"
-                  rel="noopener"
+                  class="attachment-entry"
                 >
-                  <span class="attachment-name">{{ file.fileName }}</span>
-                  <span class="attachment-size">{{
-                    formatFileSize(file.sizeBytes)
-                  }}</span>
-                </a>
+                  <!-- The declared pair reserves the box before the bytes
+                       arrive, the same pair a picture of this post in the text
+                       gets; an attachment with no measured size simply goes
+                       without, which is the browser's own behaviour. -->
+                  <img
+                    v-if="isImageAttachment(file)"
+                    class="attachment-image"
+                    :src="attachmentHref(file)"
+                    :alt="file.fileName"
+                    :width="attachmentImageBox(file)?.width"
+                    :height="attachmentImageBox(file)?.height"
+                    loading="lazy"
+                  />
+                  <a
+                    class="attachment"
+                    :href="attachmentHref(file)"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    <span class="attachment-name">{{ file.fileName }}</span>
+                    <span class="attachment-size">{{
+                      formatFileSize(file.sizeBytes)
+                    }}</span>
+                  </a>
+                </div>
               </div>
 
               <div v-if="hasMetagameText" class="metagame-text">
@@ -983,9 +1041,20 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
         <!-- Post footer: number or anchor icon (inside card, like DM2 td[colspan=3]) -->
         <div class="post-footer">
           <span
-            v-if="!isEditingPost && (canEditPost || canDeletePost || isEdited)"
+            v-if="
+              !isEditingPost &&
+              (canQuote || canEditPost || canDeletePost || isEdited)
+            "
             class="post-controls"
           >
+            <button
+              v-if="canQuote"
+              type="button"
+              class="post-action-btn"
+              @click="quotePost"
+            >
+              Цитировать
+            </button>
             <button
               v-if="canEditPost"
               type="button"
@@ -1144,8 +1213,8 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/Animations"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Animations" as *
 
 // ============================================================================
 // Game Post — layout dimensions matching DM2
@@ -1337,12 +1406,15 @@ button.rating-value
 .post-number-tip
   font-size: $tertiary-font-size
 
+// Link colour, not muted: every "go to the post" affordance looks like a link
+// (UI_STANDARDS, owner decision 2026-08-25) - the same element renders on pages
+// where it is pure navigation, and one glyph must not wear two coats.
 .post-number
-  color: $text-muted
+  color: $link
   font-size: $tertiary-font-size
   text-decoration: none
   &:hover
-    color: $link
+    color: $link-hover
 
 .post-link
   color: $link
@@ -1512,6 +1584,30 @@ button.rating-value
   gap: $small
   padding: 0 2px
   margin-top: $small
+
+// One attachment: its picture, when it is one, over the link that names it.
+// max-width and min-width are what keep a wide file inside the column instead
+// of stretching the row it wraps in.
+.attachment-entry
+  display: flex
+  flex-direction: column
+  align-items: flex-start
+  gap: $tiny
+  max-width: 100%
+  min-width: 0
+
+// Drawn to the same contract as a picture in the post's text, declared once in
+// _BbcodeContent.sass: the width/height pair the template puts on reserves the
+// box, max-width shrinks the whole box with the column, and the height follows
+// the ratio rather than being clamped on its own — with both sides declared the
+// two caps would cut each side separately and squash the picture. The cap reads
+// the same custom property the text images do, so the collapsed state of
+// TruncatedContent shrinks this picture along with them.
+.attachment-image
+  display: block
+  max-width: 100%
+  max-height: var(--bb-image-max-height, 500px)
+  height: auto
 
 .attachment
   display: inline-flex

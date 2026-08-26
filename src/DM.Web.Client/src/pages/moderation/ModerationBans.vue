@@ -15,6 +15,7 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { parsePageNumber } from "@/shared/lib/filters";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useRoleGate } from "./lib/useRoleGate";
 import { BAN_TYPE_LABELS, banTermLabel } from "./lib/labels";
@@ -31,10 +32,7 @@ const paging = ref<PagingModel | null>(null);
 const loading = ref(false);
 const loadError = ref<string | null>(null);
 
-const pageNumber = computed(() => {
-  const n = parseInt(String(route.query.number ?? "1"), 10);
-  return Number.isFinite(n) && n > 0 ? n : 1;
-});
+const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
 async function fetch() {
   loading.value = true;
@@ -174,8 +172,8 @@ const isEmpty = computed(() => !loading.value && bans.value.length === 0);
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Skeleton" as *
 
 .ban-list
   display: flex

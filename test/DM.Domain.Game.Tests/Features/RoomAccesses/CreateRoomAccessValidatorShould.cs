@@ -7,7 +7,7 @@ using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.RoomAccesses;
 using DM.Testing;
 using FluentValidation.TestHelper;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.RoomAccesses;
@@ -15,12 +15,12 @@ namespace DM.Domain.Game.Tests.Features.RoomAccesses;
 public class CreateRoomAccessValidatorShould : UnitTestBase
 {
     private readonly CreateRoomAccessValidator validator;
-    private readonly Mock<IUserLookupService> userLookupServiceMock;
+    private readonly IUserLookupService userLookupServiceMock;
 
     public CreateRoomAccessValidatorShould()
     {
         userLookupServiceMock = Mock<IUserLookupService>();
-        validator = new CreateRoomAccessValidator(userLookupServiceMock.Object);
+        validator = new CreateRoomAccessValidator(userLookupServiceMock);
     }
 
     [Fact]
@@ -41,8 +41,7 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
     public async Task PassForValidReaderAccess()
     {
         userLookupServiceMock
-            .Setup(s => s.UsernameExistsAsync("reader", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .UsernameExistsAsync("reader", Arg.Any<CancellationToken>()).Returns(true);
 
         var input = new CreateRoomAccess
         {
@@ -104,8 +103,7 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
     public async Task FailWhenReaderUsernameDoesNotExist()
     {
         userLookupServiceMock
-            .Setup(s => s.UsernameExistsAsync("nonexistent", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .UsernameExistsAsync("nonexistent", Arg.Any<CancellationToken>()).Returns(false);
 
         var input = new CreateRoomAccess
         {
@@ -129,8 +127,7 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
     public async Task PassForAReaderGrantedWriting()
     {
         userLookupServiceMock
-            .Setup(s => s.UsernameExistsAsync("reader", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .UsernameExistsAsync("reader", Arg.Any<CancellationToken>()).Returns(true);
 
         var input = new CreateRoomAccess
         {

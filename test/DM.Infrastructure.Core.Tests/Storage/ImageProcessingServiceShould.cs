@@ -6,7 +6,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Storage;
-using FluentAssertions;
+using AwesomeAssertions;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
@@ -94,7 +94,7 @@ public class ImageProcessingServiceShould
 
         using var image = Image.Load(result.Bytes);
         Math.Max(image.Width, image.Height)
-            .Should().BeLessOrEqualTo(ImageProcessingService.OriginalMaxDimension);
+            .Should().BeLessThanOrEqualTo(ImageProcessingService.OriginalMaxDimension);
     }
 
     [Fact]

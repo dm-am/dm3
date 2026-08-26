@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -44,7 +44,7 @@ public class ModuleCompositionShould
         .OrderBy(name => name, StringComparer.Ordinal)
         .ToArray();
 
-    private static string CompositionBody(string root) => Between(
+    private static string CompositionBody(string root) => SourceText.Between(
         File.ReadAllText(Path.Combine(root, "src", "DM.Web.API", "Startup.cs")),
         "private static void RegisterDomainServices",
         "\n    }");
@@ -56,7 +56,7 @@ public class ModuleCompositionShould
         var body = CompositionBody(root);
         var modules = DomainModules(root);
 
-        modules.Should().HaveCountGreaterOrEqualTo(8,
+        modules.Should().HaveCountGreaterThanOrEqualTo(8,
             "the modules are discovered from the tree, and a filter that stops matching " +
             "would leave this rule with nothing to check");
 
@@ -78,7 +78,7 @@ public class ModuleCompositionShould
     {
         var root = RepositoryRoot;
         var body = CompositionBody(root);
-        var scanned = Between(body, "var domainAssemblies = new[]", "};");
+        var scanned = SourceText.Between(body, "var domainAssemblies = new[]", "};");
 
         scanned.Should().NotBeNullOrWhiteSpace("the array of scanned assemblies must still be declared");
 
@@ -109,12 +109,4 @@ public class ModuleCompositionShould
     /// Text between an opening marker and the first terminator after it: enough to
     /// read one method, and loud when the method is gone or renamed.
     /// </summary>
-    private static string Between(string source, string start, string end)
-    {
-        var from = source.IndexOf(start, StringComparison.Ordinal);
-        from.Should().BeGreaterThan(-1, $"the source must still declare {start}");
-        var to = source.IndexOf(end, from + start.Length, StringComparison.Ordinal);
-        to.Should().BeGreaterThan(-1, $"the declaration of {start} must be terminated");
-        return source[from..to];
-    }
 }

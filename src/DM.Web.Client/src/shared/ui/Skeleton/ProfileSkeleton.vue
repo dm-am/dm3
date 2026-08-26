@@ -44,7 +44,7 @@
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Skeleton" as *
 
 .profile-skeleton
   display: flex

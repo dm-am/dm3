@@ -6,6 +6,9 @@ import { useEditor, EditorContent } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Placeholder from "@tiptap/extension-placeholder";
+// The insertion of a ready-made block is one undo step, and this is what keeps
+// it from merging with the typing that came before it. See insertBlock.
+import { closeHistory } from "@tiptap/pm/history";
 import {
   bbcodeToHtml,
   htmlToBbcode,
@@ -28,7 +31,6 @@ import {
   BbLink,
   BbImage,
   ModBlock,
-  WarningBlock,
 } from "./lib/tiptap-extensions";
 
 const props = withDefaults(
@@ -301,6 +303,22 @@ const editor = useEditor({
       horizontalRule: false, // [cut] marker was removed — truncation is now height-based
       blockquote: false, // We use custom BbQuote instead
       codeBlock: false, // We use inline code only, no code blocks
+      // The kit ships `underline` and `link` of its own, and both collide with
+      // what this editor registers below.
+      //
+      // `underline` is the same extension twice under one name: tiptap answers
+      // with "Duplicate extension names found: ['underline']" and keeps the
+      // later registration. Turning the kit's copy off leaves exactly one.
+      //
+      // `link` is worse because the names differ, so nothing warns. Its parse
+      // rule is a bare `a[href]` and it is registered ahead of BbLink, so every
+      // anchor — including the `a[data-bb-tag="link"]` our own converter emits —
+      // was claimed by it, and `data-bb-text` / `data-bb-selfref` were dropped
+      // on the way in. That is the loss BbLink was written to prevent. Its
+      // autolink and paste handlers were live too, quietly turning a typed URL
+      // into a link the author never asked for.
+      underline: false,
+      link: false,
     }),
     Underline,
     Placeholder.configure({
@@ -316,7 +334,6 @@ const editor = useEditor({
     BbLink,
     BbImage,
     ModBlock,
-    WarningBlock,
   ],
   content: "",
   editable: !props.disabled,
@@ -676,14 +693,6 @@ function insertMod() {
   }
 }
 
-function insertWarning() {
-  if (mode.value === "bbcode") {
-    wrapSelection("[warning]", "[/warning]");
-  } else {
-    editor.value?.chain().focus().toggleWarningBlock().run();
-  }
-}
-
 function loadDraftManual() {
   const draft = loadDraft();
   if (draft) {
@@ -908,6 +917,105 @@ function wrapSelection(before: string, after: string) {
   });
 }
 
+/**
+ * Append a ready-made block of BBCode and leave the caret on the line after it.
+ *
+ * Written for the Quote action, and shaped by what that action needs: the block
+ * arrives whole from the server, it goes to the end rather than to the caret,
+ * and pressing the button twice appends a second one instead of replacing the
+ * first. The caret does not stay inside the quoted text — the reader pressed
+ * the button in order to answer, so they start typing their answer and not
+ * inside somebody else's line.
+ *
+ * One undo step in both modes, which is the whole of the action's undo: there
+ * is no separate control for taking the insertion back, the editor's own undo
+ * is it. In the source mode that means going through execCommand, which keeps
+ * the textarea's native undo stack; assigning to the value would empty it and
+ * the reader's own typing before the insertion would stop being undoable too.
+ * In the visual mode one chain is one transaction, and the history group is
+ * closed first so the step does not merge with whatever was typed a moment ago.
+ */
+function insertBlock(block: string) {
+  if (!block) return;
+  if (mode.value === "bbcode") {
+    insertBlockIntoSource(block);
+  } else {
+    insertBlockIntoVisual(block);
+  }
+  nextTick(() => {
+    // "nearest" and not "start": a composer already on screen must not move,
+    // which is what the chats need — their feed manages its own scrolling and
+    // the box is under it either way. The guard is for the environments that
+    // have no layout at all (tests), where the method is simply absent.
+    const container = editorContainer.value;
+    if (typeof container?.scrollIntoView === "function") {
+      container.scrollIntoView({ block: "nearest" });
+    }
+  });
+}
+
+/** Blank line between what is already written and what is appended. */
+function separatorBefore(existing: string): string {
+  if (existing.length === 0) return "";
+  if (existing.endsWith("\n\n")) return "";
+  return existing.endsWith("\n") ? "\n" : "\n\n";
+}
+
+function insertBlockIntoSource(block: string) {
+  const textarea = bbcodeTextarea.value;
+  if (!textarea) return;
+
+  const existing = bbcodeText.value;
+  const payload = `${separatorBefore(existing)}${block}\n\n`;
+
+  textarea.focus();
+  textarea.setSelectionRange(existing.length, existing.length);
+
+  let insertedNatively: boolean;
+  try {
+    insertedNatively = document.execCommand("insertText", false, payload);
+  } catch {
+    // No execCommand here (an older embedding, a test environment): fall
+    // through to writing the value, which costs the native undo stack and is
+    // still better than a button that does nothing.
+    insertedNatively = false;
+  }
+
+  if (insertedNatively) {
+    nextTick(() => autoResizeTextarea());
+    return;
+  }
+
+  const next = existing + payload;
+  bbcodeText.value = next;
+  emit("update:modelValue", next);
+  saveDraft(next);
+  nextTick(() => {
+    autoResizeTextarea();
+    textarea.setSelectionRange(next.length, next.length);
+  });
+}
+
+function insertBlockIntoVisual(block: string) {
+  const instance = editor.value;
+  if (!instance) return;
+
+  // The empty paragraph after the block is where the caret ends up, and it has
+  // to be inserted with the block: appended afterwards it would be a second
+  // transaction and a second undo step.
+  const html = `${bbcodeToHtml(block)}<p></p>`;
+
+  instance
+    .chain()
+    .command(({ tr }) => {
+      closeHistory(tr);
+      return true;
+    })
+    .insertContentAt(instance.state.doc.content.size, html)
+    .focus("end")
+    .run();
+}
+
 // Reset editor height to default
 function resetEditorHeight() {
   if (editorContainer.value) {
@@ -938,6 +1046,7 @@ defineExpose({
     resetEditorHeight();
   },
   clearDraft,
+  insertBlock,
 });
 </script>
 
@@ -1137,24 +1246,6 @@ defineExpose({
           aria-label="Цитата"
         >
           quote
-        </button>
-      </Tooltip>
-      <Tooltip
-        v-if="availableTags.includes('warning') && isModerator"
-        text="Предупреждение"
-      >
-        <button
-          type="button"
-          class="tag-btn tag-btn-warning"
-          :class="{
-            active: mode === 'wysiwyg' && editor?.isActive('warningBlock'),
-          }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('warningBlock')"
-          :disabled="disabled"
-          @click="insertWarning"
-          aria-label="Предупреждение"
-        >
-          warning
         </button>
       </Tooltip>
       <Tooltip
@@ -1387,10 +1478,6 @@ defineExpose({
                   <code>[code]</code>текст<code>[/code]</code> — моноширинный
                   код
                 </div>
-                <div v-if="isModerator" class="help-item help-item-warning">
-                  <code>[warning]</code>текст<code>[/warning]</code> —
-                  предупреждение
-                </div>
                 <div v-if="isModerator" class="help-item help-item-mod">
                   <code>[mod]</code>текст<code>[/mod]</code> — модераторский
                   блок
@@ -1533,8 +1620,8 @@ defineExpose({
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/BbcodeContent"
-@import "@/assets/styles/ZIndex"
+@use "@/assets/styles/BbcodeContent" as *
+@use "@/assets/styles/ZIndex" as *
 
 .bbcode-editor-wrapper
   position: relative
@@ -1661,9 +1748,6 @@ defineExpose({
 .tag-btn-mod
   color: $accent-green
 
-.tag-btn-warning
-  color: $accent-red
-
 .editor-content
   display: flex
   flex-direction: column
@@ -1693,8 +1777,14 @@ defineExpose({
       border-color: $border
       margin: $medium 0
 
-    // Tiptap placeholder
-    .ProseMirror-placeholder
+    // Tiptap placeholder. The extension only marks the empty node and hands the
+    // text over in data-placeholder — drawing it is on us, so the hint the
+    // BBCode textarea gets for free has to be written out here.
+    p.is-editor-empty:first-child::before
+      content: attr(data-placeholder)
+      float: left
+      height: 0
+      pointer-events: none
       color: $text-muted
       opacity: 0.6
 
@@ -1888,10 +1978,6 @@ defineExpose({
 :global(.help-item-private)
   code
     color: $accent-green
-
-:global(.help-item-warning)
-  code
-    color: $accent-red
 
 :global(.help-item-mod)
   code

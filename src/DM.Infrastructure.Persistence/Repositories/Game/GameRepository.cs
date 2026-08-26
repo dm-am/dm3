@@ -4,8 +4,6 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
@@ -17,6 +15,7 @@ using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
+using DM.Infrastructure.Persistence.Shared.Subscriptions;
 using DM.Infrastructure.Persistence.Shared.Users;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using Microsoft.EntityFrameworkCore;
@@ -32,20 +31,17 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 internal class GameRepository : IGameRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IPublicIdService _publicIdService;
 
     public GameRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
         IPublicIdService publicIdService)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _publicIdService = publicIdService;
@@ -88,7 +84,7 @@ internal class GameRepository : IGameRepository
             // Assistants, BlackList); a single query LEFT-JOINs them into a
             // cartesian product that can exhaust memory (BufferedDataReader
             // OOM). AsSplitQuery loads each collection with its own query.
-            .ProjectTo<GameDto>(_mapper.ConfigurationProvider)
+            .ProjectToGame()
             .AsSplitQuery()
             .ToArrayAsync(ct);
 
@@ -236,41 +232,9 @@ internal class GameRepository : IGameRepository
                 g => g.Select(c => c.Author).DistinctBy(u => u.UserId).ToList());
 
         // Subscriber summary — the total, whether this viewer is one of them, and
-        // the capped preview of names, all from one statement. The three fields
-        // are everything the consumers ever asked the subscriber list for: two
-        // counts and a Contains(viewerId). Loading the ids to answer them read
-        // every subscription row of every game on the page.
-        //
-        // EF 8 / Npgsql 8 translate this to a single SELECT: a GROUP BY for the
-        // aggregates, LEFT JOIN'ed to a ROW_NUMBER() OVER (PARTITION BY TargetId)
-        // subquery for the preview (the window form rather than LATERAL because
-        // the inner order is by a column of the joined Users row). The viewer
-        // flag becomes an EXISTS over the same (TargetType, TargetId) index with
-        // an equality on SubscriberId — no join, so unlike a conditional count
-        // over the navigation it does not re-scan Users per group.
-        var subscriberSummaries = await _dbContext.Subscriptions
-            .Where(s => s.TargetType == SubscriptionTargetType.Game && gameIds.Contains(s.TargetId))
-            .GroupBy(s => s.TargetId)
-            .Select(g => new
-            {
-                GameId = g.Key,
-                // Distinct subscribers, not subscription rows. The pair is unique in
-                // the schema now, so the two forms agree; the distinct one stays
-                // because it is what the column means, and because the count has to
-                // keep meaning that if the rows ever arrive from an import rather
-                // than from the subscribe path.
-                Count = g.Select(s => s.SubscriberId).Distinct().Count(),
-                ViewerSubscribed = g.Any(s => s.SubscriberId == userId),
-                // Subscribers who have never been active must sort last, and a
-                // plain DESC in Postgres puts nulls first.
-                Preview = g.OrderByDescending(s => s.Subscriber.LastActivityUtc != null)
-                    .ThenByDescending(s => s.Subscriber.LastActivityUtc)
-                    .ThenBy(s => s.SubscriptionId)
-                    .Take(SubscriptionPolicy.PreviewCap)
-                    .Select(s => s.Subscriber.Username)
-                    .ToList(),
-            })
-            .ToDictionaryAsync(x => x.GameId, ct);
+        // the capped preview of names, all from one statement.
+        var subscriberSummaries = await SubscriberSummaries.ByTarget(
+            _dbContext.Subscriptions, SubscriptionTargetType.Game, gameIds, userId, ct);
 
         foreach (var game in games)
         {
@@ -876,7 +840,7 @@ internal class GameRepository : IGameRepository
 
         var game = await games
             .Where(addressing)
-            .ProjectTo<GameDetails>(_mapper.ConfigurationProvider)
+            .ProjectToGameDetails()
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
 
@@ -902,7 +866,7 @@ internal class GameRepository : IGameRepository
             .Where(g => g.GameId == gameId)
             // GameDto's three collections (GameTags/Assistants/BlackList) would
             // otherwise multiply into a cartesian product on a single query.
-            .ProjectTo<GameDto>(_mapper.ConfigurationProvider)
+            .ProjectToGame()
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
 
@@ -944,7 +908,7 @@ internal class GameRepository : IGameRepository
             .Where(GameAccessibilityFilters.GameAvailable(userId, mayJudgePremoderation))
             .Where(g => g.PublicId == publicId)
             // See GetGame: AsSplitQuery avoids the multi-collection cartesian.
-            .ProjectTo<GameDto>(_mapper.ConfigurationProvider)
+            .ProjectToGame()
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
 
@@ -1002,7 +966,7 @@ internal class GameRepository : IGameRepository
             // GameDto's GameTags/Assistants/BlackList collections cartesian-
             // explode on a single query; split them (EF orders each split by
             // the parent key automatically when there is no row limiting).
-            .ProjectTo<GameDto>(_mapper.ConfigurationProvider)
+            .ProjectToGame()
             .AsSplitQuery()
             .ToArrayAsync(ct);
 
@@ -1080,7 +1044,7 @@ internal class GameRepository : IGameRepository
 
         return await _dbContext.Games
             .Where(g => g.GameId == game.GameId)
-            .ProjectTo<GameDetails>(_mapper.ConfigurationProvider)
+            .ProjectToGameDetails()
             .AsSplitQuery()
             .FirstAsync(ct);
     }
@@ -1196,7 +1160,7 @@ internal class GameRepository : IGameRepository
 
         return await _dbContext.Games
             .Where(g => g.GameId == updateGame.GameId)
-            .ProjectTo<GameDetails>(_mapper.ConfigurationProvider)
+            .ProjectToGameDetails()
             .AsSplitQuery()
             .FirstAsync(ct);
     }
@@ -1225,24 +1189,19 @@ internal class GameRepository : IGameRepository
 
         // The strategy wrapper is required because the API host configures
         // EnableRetryOnFailure.
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        var attempted = false;
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async isRetry =>
         {
-            if (attempted)
+            if (isRetry)
             {
-                // A retry replays this block; SaveChanges leaves the game
-                // Unchanged even when the transaction around it rolls back, so
-                // without the clear the second attempt writes no soft-delete.
-                _dbContext.ChangeTracker.Clear();
+                // The clear the helper just did detached the game this block is
+                // about to soft-delete, so it has to be read again - and it may be
+                // gone by now.
                 game = await _dbContext.Games.FindAsync([gameId], ct);
                 if (game == null)
                 {
                     return;
                 }
             }
-
-            attempted = true;
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
 
             SoftDelete.Mark(game, deletedByUserId, now);

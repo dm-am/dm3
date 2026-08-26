@@ -7,7 +7,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "solution-items", "solution-
 		Directory.Build.props = Directory.Build.props
 		.gitignore = .gitignore
 		Directory.Packages.props = Directory.Packages.props
-		test\Directory.Packages.props = test\Directory.Packages.props
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docker", "docker", "{AB8A13B8-6C50-4765-983A-63F1D78A777E}"
@@ -97,6 +96,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DM.Domain.Core.Tests", "test\DM.Domain.Core.Tests\DM.Domain.Core.Tests.csproj", "{E41731EC-2054-4EF0-99D6-CB1492ACFF57}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DM.Workers.Mail.Tests", "test\DM.Workers.Mail.Tests\DM.Workers.Mail.Tests.csproj", "{3F5A6D02-9C41-4B87-8E5D-71C0A2B4E619}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BBCodeParser", "src\BBCodeParser\BBCodeParser.csproj", "{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -540,6 +541,18 @@ Global
 		{3F5A6D02-9C41-4B87-8E5D-71C0A2B4E619}.Release|x64.Build.0 = Release|Any CPU
 		{3F5A6D02-9C41-4B87-8E5D-71C0A2B4E619}.Release|x86.ActiveCfg = Release|Any CPU
 		{3F5A6D02-9C41-4B87-8E5D-71C0A2B4E619}.Release|x86.Build.0 = Release|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Debug|x64.Build.0 = Debug|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Debug|x86.Build.0 = Debug|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Release|x64.ActiveCfg = Release|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Release|x64.Build.0 = Release|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Release|x86.ActiveCfg = Release|Any CPU
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -583,5 +596,6 @@ Global
 		{D9D98A64-1460-4157-BF66-28B93C0D3E1D} = {0C88DD14-F956-CE84-757C-A364CCF449FC}
 		{E41731EC-2054-4EF0-99D6-CB1492ACFF57} = {0C88DD14-F956-CE84-757C-A364CCF449FC}
 		{3F5A6D02-9C41-4B87-8E5D-71C0A2B4E619} = {0C88DD14-F956-CE84-757C-A364CCF449FC}
+		{4E2468D9-BEF4-4E34-B9A1-9CFB95B65CAE} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

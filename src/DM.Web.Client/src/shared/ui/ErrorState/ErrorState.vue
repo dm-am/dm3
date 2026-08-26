@@ -44,7 +44,7 @@ async function handleRetry() {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .error-state
   display: flex

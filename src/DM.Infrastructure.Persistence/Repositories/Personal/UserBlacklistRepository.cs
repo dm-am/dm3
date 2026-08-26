@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Blacklists;
 using DM.Infrastructure.Persistence.Entities.Account;
@@ -16,13 +14,11 @@ namespace DM.Infrastructure.Persistence.Repositories.Personal;
 internal class UserBlacklistRepository : IUserBlacklistRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
 
     /// <inheritdoc />
-    public UserBlacklistRepository(DmDbContext dbContext, IMapper mapper)
+    public UserBlacklistRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
     }
 
     /// <inheritdoc />
@@ -31,7 +27,7 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
         return await _dbContext.UserBlacklists
             .Where(b => b.OwnerId == ownerId)
             .OrderByDescending(b => b.CreatedUtc)
-            .ProjectTo<BlacklistEntry>(_mapper.ConfigurationProvider)
+            .ProjectToBlacklistEntry()
             .ToListAsync(ct);
     }
 
@@ -40,7 +36,7 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
     {
         return await _dbContext.UserBlacklists
             .Where(b => b.EntryId == entryId)
-            .ProjectTo<BlacklistEntry>(_mapper.ConfigurationProvider)
+            .ProjectToBlacklistEntry()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -49,7 +45,7 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
     {
         return await _dbContext.UserBlacklists
             .Where(b => b.OwnerId == ownerId && b.BlockedUserId == blockedUserId)
-            .ProjectTo<BlacklistEntry>(_mapper.ConfigurationProvider)
+            .ProjectToBlacklistEntry()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -89,18 +85,9 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Guid>> GetBlockedUserIdsAsync(Guid ownerId, CancellationToken ct = default)
-    {
-        return await _dbContext.UserBlacklists
-            .Where(b => b.OwnerId == ownerId)
-            .Select(b => b.BlockedUserId)
-            .ToListAsync(ct);
-    }
-
-    /// <inheritdoc />
     /// <remarks>
     /// One statement, because the switch and the entries it governs now live in
-    /// the same store. This used to be a Mongo read followed by a Postgres read,
+    /// the same store. This used to be a document read followed by a relational read,
     /// with nothing keeping the two consistent.
     /// </remarks>
     public async Task<IReadOnlySet<Guid>> GetBlockedUserIdsIfFlagEnabledAsync(Guid ownerId, UserBlacklistSettings flag, CancellationToken ct = default)

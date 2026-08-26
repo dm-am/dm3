@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -21,7 +21,7 @@ namespace DM.Architecture.Tests;
 /// exactly as long as nothing in the seed wore it.
 ///
 /// The rule reads the seeder sources rather than a seeded database: seeding needs
-/// PostgreSQL, MongoDB and object storage, and a fixture whose whole purpose is
+/// PostgreSQL and object storage, and a fixture whose whole purpose is
 /// to be looked at is defended by asserting that it is still written. The room
 /// and post initialisers hold no nested braces, which is what makes reading them
 /// out of the text sound rather than clever, and the reader is held to that by
@@ -135,7 +135,7 @@ public class SeededRoomExamplesShould
         var parsed = SeededRooms().Count;
 
         parsed.Should().Be(written, "every room the seeder builds has to be readable by this rule");
-        parsed.Should().BeGreaterOrEqualTo(Required.Length, "the four rooms the menu is read against are seeded");
+        parsed.Should().BeGreaterThanOrEqualTo(Required.Length, "the four rooms the menu is read against are seeded");
     }
 
     /// <summary>
@@ -209,28 +209,7 @@ public class SeededRoomExamplesShould
     {
         var seeder = Path.Combine(RepositoryRoot.FullName, "src", "DM.Tools.Seeder");
         Directory.Exists(seeder).Should().BeTrue("the seeder is the tool that builds the fixture");
-        return SourceFiles(seeder).ToList();
-    }
-
-    private static IEnumerable<string> SourceFiles(string directory)
-    {
-        foreach (var file in Directory.EnumerateFiles(directory, "*.cs"))
-        {
-            yield return file;
-        }
-
-        foreach (var nested in Directory.EnumerateDirectories(directory))
-        {
-            if (BuildOutput.Contains(Path.GetFileName(nested)))
-            {
-                continue;
-            }
-
-            foreach (var file in SourceFiles(nested))
-            {
-                yield return file;
-            }
-        }
+        return RepositoryFiles.CsharpFiles(seeder, BuildOutput).ToList();
     }
 
     private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;

@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Infrastructure.Core.Tracing;
-using Jamq.Client.Abstractions.Consuming;
 using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
@@ -30,10 +29,10 @@ namespace DM.Infrastructure.Messaging;
 /// it is given and by nothing else. The API keeps a middleware of its own because it
 /// measures without retrying, which is another pipeline rather than another copy.
 ///
-/// A helper the middleware calls rather than a base class it derives from. The
-/// client picks the InvokeAsync of a middleware out by reflection, so leaving that
-/// method declared on the middleware itself keeps this refactoring clear of a
-/// resolution rule nothing in the solution states.
+/// A helper the middleware calls rather than a base class it derives from: what
+/// the two pipelines share is the policy and the instruments, not an identity,
+/// and a base class would invite the next middleware to inherit behaviour it
+/// only meant to reuse.
 /// </remarks>
 public sealed class MeasuredConsumerPipeline
 {
@@ -58,7 +57,9 @@ public sealed class MeasuredConsumerPipeline
     /// <param name="queue">Queue name, as the metrics label it.</param>
     /// <param name="logger">Logger of the middleware this sits behind.</param>
     public static MeasuredConsumerPipeline Retrying(string queue, ILogger logger) =>
-        new(queue, Policy.Handle<Exception>().WaitAndRetryAsync(Attempts,
+        new(queue, Policy.Handle<Exception>(exception =>
+                exception is not OperationCanceledException)
+            .WaitAndRetryAsync(Attempts,
             attempt => TimeSpan.FromSeconds(1 << attempt),
             (exception, _) =>
             {
@@ -86,13 +87,17 @@ public sealed class MeasuredConsumerPipeline
         var started = Stopwatch.GetTimestamp();
         try
         {
-            // The token goes to the attempt and not to the policy. The policy
-            // handles every exception, cancellation among them, so an attempt that
-            // observes the token is retried like any other failure; handing it to
-            // ExecuteAsync instead would throw straight out of the middleware, and
-            // an exception that escapes here is what dead-letters the message.
-            // Where a message interrupted by a stop belongs is part of deciding
-            // how a consumer drains, and that is not decided in this file.
+            // The token goes to the attempt and not to the policy. Cancellation
+            // is the one exception the policy does not retry (review of W1.2): a
+            // stopping host used to sit through the whole 2+4+8+16+32s ladder
+            // re-asking a caller that had already left, with five false
+            // dm_messaging_retried increments per message in flight. An
+            // OperationCanceledException escapes on the first attempt instead,
+            // and the consumer hands the message back by NOT acknowledging it -
+            // the closing connection requeues it. Every other exception keeps
+            // the ladder. Where a message interrupted by a stop belongs beyond
+            // that is part of deciding how a consumer drains, and a full drain
+            // is still not decided in this file.
             var result = _retryPolicy is null
                 ? await next.Invoke(context, cancellationToken)
                 : await _retryPolicy.ExecuteAsync(() => next.Invoke(context, cancellationToken));

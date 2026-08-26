@@ -3,15 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Tracing;
+using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Messaging.GeneralBus;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Workers.NotificationDispatcher.Notifiers;
 using DM.Workers.NotificationDispatcher.Email;
 using DM.Workers.NotificationDispatcher.Bot;
-using Jamq.Client.Abstractions.Consuming;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Workers.NotificationDispatcher.Dispatching;
@@ -23,7 +22,6 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
     private readonly INotificationService _notificationService;
     private readonly INotificationEmailSender _emailSender;
     private readonly INotificationBotSender _botSender;
-    private readonly IMapper _mapper;
     private readonly IRealtimeNotificationProducer _producer;
     private readonly ILogger<NotificationProcessor> _logger;
 
@@ -33,7 +31,6 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
         INotificationService notificationService,
         INotificationEmailSender emailSender,
         INotificationBotSender botSender,
-        IMapper mapper,
         IRealtimeNotificationProducer producer,
         ILogger<NotificationProcessor> logger)
     {
@@ -41,7 +38,6 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
         _notificationService = notificationService;
         _emailSender = emailSender;
         _botSender = botSender;
-        _mapper = mapper;
         _producer = producer;
         _logger = logger;
     }
@@ -49,6 +45,12 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
     /// <inheritdoc />
     public async Task<ProcessResult> Process(string key, InvokedEvent message, CancellationToken cancellationToken)
     {
+        // Empty is a message queued before the bus carried an idempotency key:
+        // stamping it through would make every legacy message a replay of one
+        // and the same event, so such a message is processed the way it always
+        // had been - written and delivered without deduplication.
+        var eventId = message.EventId == Guid.Empty ? (Guid?)null : message.EventId;
+
         var notificationsToCreate = new List<CreateNotification>();
         foreach (var generator in _generators.Where(g => g.CanResolve(message.Type)))
         {
@@ -60,7 +62,7 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
                 var eventType = createNotification.EventType != default
                     ? createNotification.EventType
                     : message.Type;
-                notificationsToCreate.Add(createNotification with { EventType = eventType });
+                notificationsToCreate.Add(createNotification with { EventType = eventType, EventId = eventId });
             }
         }
 
@@ -69,34 +71,43 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
             return ProcessResult.Success;
         }
 
+        // Counted before the creation call: past it the requested list may not be
+        // read at all - NotificationRecipientsShould holds every channel to the
+        // filtered answer - and the count is the one thing the replay log needs.
+        var requestedCount = notificationsToCreate.Count;
+
         var notifications = await _notificationService.CreateAsync(notificationsToCreate, cancellationToken);
 
-        // Past this call the notifications are durable, and the event carries no
-        // idempotency key — nothing downstream can tell a replay from a first
-        // delivery. An exception escaping from here hands the whole method back to
-        // the retry middleware, which repeats the write as well: the recipient ends
-        // up with the same entry twice in the list, two letters and two bot
-        // messages. So delivery is best effort, logged and dropped on failure. The
-        // cost is bounded — the stored notification is what the list is built from,
-        // so a lost push only delays it until the next page load. Everything above
-        // this line has no side effects and still throws, which is what lets a
-        // message that produced nothing yet be replayed safely.
+        // Past this call the notifications are durable. Delivery below is best
+        // effort, logged and dropped on failure: an exception escaping from here
+        // would hand the whole method back to the retry middleware, and the cost
+        // of a lost push is bounded — the stored notification is what the list is
+        // built from, so it only delays until the next page load.
         //
-        // What that leaves open is redelivery from the broker — a worker killed
-        // between the write and the acknowledgement, a nack, a restart — which
-        // hands the same message back and produces a second set of notifications.
-        // Weighed and accepted 2026-08-12 rather than overlooked. Closing it needs
-        // an idempotency key on InvokedEvent, filled by the single publishing point
-        // and honoured by an idempotent write here; that is a change to the bus
-        // contract every producer of events shares, on the path where a mistake
-        // means notifications stop arriving at all. It earns its own pass, not a
-        // rider on somebody else's.
+        // A broker redelivery — a worker killed between the write and the
+        // acknowledgement, a nack, a restart — hands the same message in again,
+        // and since W1.4 that is safe end to end: the event carries an EventId
+        // from the single publishing point, CreateAsync writes idempotently by
+        // (EventId, EventType) under a unique index, and a replay gets an answer
+        // with the already-stored notifications removed. The channels below all
+        // iterate that answer, so what was written once is also mailed, botted
+        // and pushed at most once. The exceptions are deliberate: a message with
+        // no EventId predates the key and flows through undeduplicated, and a
+        // realtime-only notification has no row to find, so a replay repeats a
+        // push whose whole effect is an open tab re-reading a counter.
+        if (notifications.Count < requestedCount)
+        {
+            _logger.LogInformation(
+                "Skipped {SkippedCount} of {TotalCount} notifications already stored for replayed event {EventId} of {EventType}",
+                requestedCount - notifications.Count, requestedCount,
+                message.EventId, message.Type);
+        }
 
         // In-app notifications, pushed over SignalR by the API
         foreach (var notification in notifications)
         {
             await Deliver("realtime", notification.Entity.EventType, () =>
-                _producer.SendAsync(_mapper.Map<RealtimeNotification>(notification.Entity), cancellationToken));
+                _producer.SendAsync(notification.Entity.ToRealtimeNotification(), cancellationToken));
         }
 
         // A realtime-only notification ends at the hub. It carries no words of

@@ -7,7 +7,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Uploads;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -140,6 +140,160 @@ public class PostRepositoryShould : IntegrationTestBase
         ordered.Should().ContainSingle()
             .Which.Id.Should().Be(thisWeek, "the week's best is the best OF THE WEEK");
         ordered.Should().NotContain(p => p.Id == lastWeek);
+    }
+
+    /// <summary>
+    /// Which posts come back says nothing about which of them hides something.
+    /// </summary>
+    /// <remarks>
+    /// The filter used to run over the body as written with the private block cut
+    /// out by a regexp inside the query, and a cut leaves a trace: the block became
+    /// a space and the whitespace around it stayed, so a phrase reaching across the
+    /// place where the block stood matched the post without it and missed the post
+    /// with it. Nobody saw a word of the hidden text and everybody could tell it was
+    /// there — a search for the phrase either returned the post or did not.
+    ///
+    /// The two bodies here differ by the block alone and project to the same visible
+    /// text, so the filter has nothing left to tell them apart by.
+    /// </remarks>
+    [Fact]
+    public async Task TellNothingAboutAHiddenBlockFromWhichPostsComeBack()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        var withBlock = await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
+            gameText: "Отряд идет дальше [private=\"Гончая\"]в третьей комнате ловушка[/private] к реке");
+        var withoutBlock = await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
+            gameText: "Отряд идет дальше к реке");
+
+        // The phrase spans exactly the place where the block stands in one of them.
+        var (posts, total) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+            Search = "дальше к реке",
+        }, Guid.Empty);
+
+        total.Should().Be(2);
+        posts.Select(p => p.Id).Should().BeEquivalentTo(new[] { withBlock, withoutBlock },
+            "a post with a hidden block and the same post without one answer a search alike");
+    }
+
+    /// <summary>
+    /// And the hidden words are not what is matched either.
+    /// </summary>
+    [Fact]
+    public async Task KeepThePrivateTextOutOfWhatTheFilterMatches()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
+            gameText: "Отряд идет дальше [private=\"Гончая\"]в третьей комнате ловушка[/private] к реке");
+
+        var (posts, total) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+            Search = "ловушка",
+        }, Guid.Empty);
+
+        total.Should().Be(0);
+        posts.Should().BeEmpty("the block is not on the page, so it is not in the search either");
+    }
+
+    /// <summary>
+    /// The ordinary case: a post is found by the words of its text.
+    /// </summary>
+    [Fact]
+    public async Task FindAPostByTheWordsItsReaderSees()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        var postId = await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
+            gameText: "Гонец принес письмо из столицы");
+        await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
+            gameText: "Караван ушел на восход");
+
+        var (found, foundTotal) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+            Search = "принес письмо",
+        }, Guid.Empty);
+
+        foundTotal.Should().Be(1);
+        found.Should().ContainSingle().Which.Id.Should().Be(postId);
+
+        // The filter is case-insensitive, as the parameter says it is.
+        var (upperCase, _) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+            Search = "ПРИНЕС ПИСЬМО",
+        }, Guid.Empty);
+
+        upperCase.Should().ContainSingle().Which.Id.Should().Be(postId);
+
+        var (missing, missingTotal) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+            Search = "дракон",
+        }, Guid.Empty);
+
+        missingTotal.Should().Be(0);
+        missing.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// The named, visible price of the move: the markup is no longer searchable and
+    /// the words it splits are.
+    /// </summary>
+    /// <remarks>
+    /// Both directions are the same fact — what is matched is the text the reader is
+    /// shown rather than the body as written. A query that used to hit a tag name
+    /// returned posts with nothing in them to show for it; a word an author put a tag
+    /// inside of was unfindable by the word.
+    /// </remarks>
+    [Fact]
+    public async Task StopMatchingTheMarkupAndStartMatchingTheWordItSplits()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        var postId = await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
+            gameText: "[b]Стран[/b]ники вышли к реке");
+
+        var (byWord, _) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+            Search = "Странники",
+        }, Guid.Empty);
+
+        byWord.Should().ContainSingle("the reader sees one word, and one word is what he searches for")
+            .Which.Id.Should().Be(postId);
+
+        var (byMarkup, byMarkupTotal) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+            Search = "[b]Стран",
+        }, Guid.Empty);
+
+        byMarkupTotal.Should().Be(0);
+        byMarkup.Should().BeEmpty("the markup is not part of what anybody reads");
     }
 
     [Fact]
@@ -424,7 +578,7 @@ public class PostRepositoryShould : IntegrationTestBase
             GameText = "[private=Анна]секрет[/private]",
             PrivateAddresseeSnapshotJson = PrivateAddresseeSnapshot.Build(
                 "[private=Анна]секрет[/private]",
-                new[] { new PrivateAddressee("Анна", annaOwner) }),
+                new[] { new PrivateAddressee(Guid.NewGuid(), "Анна", annaOwner) }),
             CreatedUtc = DateTimeOffset.UtcNow,
         });
 
@@ -438,7 +592,7 @@ public class PostRepositoryShould : IntegrationTestBase
             GameText = "[private=Борис]секрет[/private]",
             PrivateAddresseeSnapshotJson = PrivateAddresseeSnapshot.Build(
                 "[private=Борис]секрет[/private]",
-                new[] { new PrivateAddressee("Борис", borisOwner) }),
+                new[] { new PrivateAddressee(Guid.NewGuid(), "Борис", borisOwner) }),
         });
 
         var afterEdit = PrivateAddresseeSnapshot.Parse(await ReadSnapshotAsync(dbContext, created.Id));
@@ -638,7 +792,7 @@ public class PostRepositoryShould : IntegrationTestBase
     private static async Task<Guid> AddRatedPostAsync(
         DmDbContext dbContext, GameContext context, int positiveReviews,
         DateTimeOffset? reviewTime = null, DateTimeOffset? postCreatedUtc = null,
-        int negativeReviews = 0, int removedReviews = 0)
+        int negativeReviews = 0, int removedReviews = 0, string gameText = "text")
     {
         var characterId = Guid.NewGuid();
         var postId = Guid.NewGuid();
@@ -659,7 +813,7 @@ public class PostRepositoryShould : IntegrationTestBase
             RoomId = context.RoomId,
             CharacterId = characterId,
             AuthorId = context.UserId,
-            GameText = "text",
+            GameText = gameText,
             CreatedUtc = postCreatedUtc ?? DateTimeOffset.UtcNow,
         });
 

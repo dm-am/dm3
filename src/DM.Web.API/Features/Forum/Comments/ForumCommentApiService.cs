@@ -1,7 +1,6 @@
 using System;
 using DM.Domain.Core.Comments;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
@@ -17,19 +16,22 @@ internal class ForumCommentApiService : IForumCommentApiService
     private readonly ITopicCommentService _commentService;
     private readonly IIdentityProvider _identityProvider;
     private readonly IUserBlacklistChecker _blacklistChecker;
-    private readonly IMapper _mapper;
+    private readonly DiscussionMapper _mapper;
+    private readonly ForumCommentMapper _forumCommentMapper;
 
     /// <inheritdoc />
     public ForumCommentApiService(
         ITopicCommentService commentService,
         IIdentityProvider identityProvider,
         IUserBlacklistChecker blacklistChecker,
-        IMapper mapper)
+        DiscussionMapper mapper,
+        ForumCommentMapper forumCommentMapper)
     {
         _commentService = commentService;
         _identityProvider = identityProvider;
         _blacklistChecker = blacklistChecker;
         _mapper = mapper;
+        _forumCommentMapper = forumCommentMapper;
     }
 
     /// <inheritdoc />
@@ -53,7 +55,7 @@ internal class ForumCommentApiService : IForumCommentApiService
         var hiddenAuthors = await CommentReading.HiddenAuthorsAsync(_blacklistChecker, _identityProvider.Current);
         var position = await _commentService.GetFirstUnreadAsync(boardAlias, topicNumber, hiddenAuthors);
 
-        return new Envelope<FirstUnreadComment>(_mapper.Map<FirstUnreadComment>(position));
+        return new Envelope<FirstUnreadComment>(_forumCommentMapper.ToFirstUnreadComment(position));
     }
 
     /// <inheritdoc />

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -28,7 +28,7 @@ public class PublishedExchangeShould
 {
     /// <summary>How every Rabbit producer in the solution names its exchange.</summary>
     private static readonly Regex Publishes = new(
-        @"new RabbitProducerParameters\(\s*([\w.]+)", RegexOptions.Compiled);
+        @"new DmProducerParameters\(\s*([\w.]+)", RegexOptions.Compiled);
 
     /// <summary>
     /// How a host declares what it publishes to. The leading dot is what tells a
@@ -40,7 +40,7 @@ public class PublishedExchangeShould
     [Fact]
     public void DeclareEveryExchangeSomethingPublishesTo()
     {
-        var published = Sources()
+        var published = RepositoryFiles.ProductionSources()
             .SelectMany(path => Publishes.Matches(File.ReadAllText(path)))
             .Select(match => match.Groups[1].Value)
             .ToHashSet(StringComparer.Ordinal);
@@ -64,56 +64,52 @@ public class PublishedExchangeShould
     }
 
     /// <summary>
-    /// Waiting for the broker to take the message is asked for where the message
-    /// is the whole obligation, and nowhere else.
+    /// Waiting for the broker to take the message is asked for in exactly two
+    /// places, each for its own reason, and nowhere else.
     /// </summary>
     /// <remarks>
     /// The letter is what a registration or a password reset owes the reader, and
     /// nothing left behind can reconstruct it, so a refusal there has to reach the
-    /// caller. An event is the opposite case by the rule this system is built on:
-    /// it is not the carrier of the fact, the write it reports is committed before
-    /// it is sent, and turning a refusal into a 500 would fail requests whose work
-    /// is done — and cost the caller a retry that writes everything twice.
+    /// caller. The outbox relay waits for the opposite reason: the row it is about
+    /// to mark published is the durable record of the event, and a mark without
+    /// the broker's confirm would record "delivered" about a message the broker
+    /// may not have taken — the silent loss coming back through another door. The
+    /// wait is affordable there because the relay is background work: the rule
+    /// "nobody waits on the bus" protected an HTTP caller the relay does not have.
     ///
-    /// Both directions, because the interesting failure is the second: the wait is
-    /// one property on a parameters object, and adding it to the bus reads like
-    /// making things safer while quietly moving every write in the site behind the
-    /// availability of the broker.
+    /// Both directions, because the interesting failure is a third producer
+    /// acquiring the wait: it is one property on a parameters object, and adding
+    /// it to a producer inside a request reads like making things safer while
+    /// quietly moving every write in the site behind the availability of the
+    /// broker.
     /// </remarks>
     [Fact]
     public void WaitForTheBrokerOnlyWhereTheMessageIsTheWholeObligation()
     {
-        var producers = Sources()
+        var producers = RepositoryFiles.ProductionSources()
             .Where(path => Publishes.IsMatch(File.ReadAllText(path)))
             .ToList();
 
-        producers.Should().HaveCountGreaterOrEqualTo(3,
-            "three producers exist - the bus, the mail queue and the realtime push - so " +
-            "finding fewer means the search went stale");
+        producers.Should().HaveCountGreaterThanOrEqualTo(3,
+            "three producers exist - the outbox relay, the mail queue and the realtime " +
+            "push - so finding fewer means the search went stale");
 
         var waiting = producers
-            .Where(path => File.ReadAllText(path).Contains("PublishingTimeout", StringComparison.Ordinal))
+            .Where(path => File.ReadAllText(path).Contains("PublishConfirmTimeout", StringComparison.Ordinal))
             .Select(Path.GetFileName)
             .ToList();
 
-        waiting.Should().Equal(["MailSender.cs"],
+        waiting.Should().Equal(["MailSender.cs", "OutboxRelayService.cs"],
             "the letter is the whole of what the request owes and is recoverable from " +
-            "nothing, while an event reports a write that is already committed - so waiting " +
-            "on the bus fails requests whose work is done and buys a duplicate on the retry");
+            "nothing, and the relay must not mark a row published on a publish the broker " +
+            "never confirmed - while a producer inside a request waiting on the broker " +
+            "fails requests whose work is done and buys a duplicate on the retry");
     }
 
-    private static HashSet<string> DeclaredExchanges() => Sources()
+    private static HashSet<string> DeclaredExchanges() => RepositoryFiles.ProductionSources()
         .SelectMany(path => Declares.Matches(File.ReadAllText(path)))
         .SelectMany(match => match.Groups[1].Value.Split(','))
         .Select(name => name.Trim())
         .Where(name => name.Length > 0)
         .ToHashSet(StringComparer.Ordinal);
-
-    private static IEnumerable<string> Sources() => Directory
-        .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
-        .Where(path => !path
-            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Any(segment => segment is "obj" or "bin"));
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

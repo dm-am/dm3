@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AutoMapper;
-using AutoMapper.QueryableExtensions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -18,17 +16,14 @@ namespace DM.Infrastructure.Persistence.Repositories.Moderation;
 internal class TicketRepository : ITicketRepository
 {
     private readonly DmDbContext _dbContext;
-    private readonly IMapper _mapper;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public TicketRepository(
         DmDbContext dbContext,
-        IMapper mapper,
         IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
-        _mapper = mapper;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -58,7 +53,7 @@ internal class TicketRepository : ITicketRepository
             .OrderByDescending(t => t.CreatedUtc)
             .Skip(query.Skip)
             .Take(query.Take)
-            .ProjectTo<Ticket>(_mapper.ConfigurationProvider)
+            .ProjectToTicket()
             .ToListAsync(ct);
 
         return (page, PagingResult.Create(total, query.Skip + 1, query.Take));
@@ -78,7 +73,7 @@ internal class TicketRepository : ITicketRepository
             .OrderByDescending(t => t.CreatedUtc)
             .Skip(query.Skip)
             .Take(query.Take)
-            .ProjectTo<Ticket>(_mapper.ConfigurationProvider)
+            .ProjectToTicket()
             .ToListAsync(ct);
 
         return (page, PagingResult.Create(total, query.Skip + 1, query.Take));
@@ -108,7 +103,7 @@ internal class TicketRepository : ITicketRepository
             .OrderByDescending(t => t.CreatedUtc)
             .Skip(query.Skip)
             .Take(query.Take)
-            .ProjectTo<Ticket>(_mapper.ConfigurationProvider)
+            .ProjectToTicket()
             .ToListAsync(ct);
 
         return (page, PagingResult.Create(total, query.Skip + 1, query.Take));
@@ -119,7 +114,7 @@ internal class TicketRepository : ITicketRepository
     {
         return await _dbContext.Tickets
             .Where(t => t.TicketId == ticketId)
-            .ProjectTo<Ticket>(_mapper.ConfigurationProvider)
+            .ProjectToTicket()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -128,7 +123,7 @@ internal class TicketRepository : ITicketRepository
     {
         return await _dbContext.Tickets
             .Where(t => t.TicketId == ticketId)
-            .ProjectTo<TicketDetails>(_mapper.ConfigurationProvider)
+            .ProjectToTicketDetails()
             .FirstOrDefaultAsync(ct);
     }
 
@@ -144,7 +139,7 @@ internal class TicketRepository : ITicketRepository
 
         return await _dbContext.Tickets
             .Where(t => t.TrackingToken == token)
-            .ProjectTo<TicketDetails>(_mapper.ConfigurationProvider)
+            .ProjectToTicketDetails()
             .FirstOrDefaultAsync(ct);
     }
 

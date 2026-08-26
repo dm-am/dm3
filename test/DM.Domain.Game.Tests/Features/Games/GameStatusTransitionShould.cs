@@ -19,25 +19,24 @@ using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Invitations;
-using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
 
 public class GameStatusTransitionShould : UnitTestBase
 {
-    private readonly Mock<IGameRepository> _repository;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IEventProducer> _producer;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
+    private readonly IGameRepository _repository;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IEventProducer _producer;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly GameService _service;
     private readonly Guid _currentUserId;
     private readonly DateTimeOffset _now = new(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
@@ -46,25 +45,20 @@ public class GameStatusTransitionShould : UnitTestBase
     public GameStatusTransitionShould()
     {
         var gamesQueryValidator = Mock<IValidator<GamesQuery>>();
-        gamesQueryValidator.Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<GamesQuery>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        gamesQueryValidator.ValidateAsync(Arg.Any<ValidationContext<GamesQuery>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         var updateGameValidator = Mock<IValidator<UpdateGame>>();
-        updateGameValidator.Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateGame>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        updateGameValidator.ValidateAsync(Arg.Any<ValidationContext<UpdateGame>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         var creationValidator = Mock<IGameCreationValidator>();
-        creationValidator.Setup(v => v.ValidateAndAuthorize(It.IsAny<CreateGame>()))
-            .Returns(Task.CompletedTask);
+        creationValidator.ValidateAndAuthorize(Arg.Any<CreateGame>()).Returns(Task.CompletedTask);
 
         var dataResolver = Mock<IGameCreationDataResolver>();
-        dataResolver.Setup(r => r.ResolveTagIds(It.IsAny<IEnumerable<int>?>()))
-            .ReturnsAsync(Array.Empty<Guid>());
+        dataResolver.ResolveTagIds(Arg.Any<IEnumerable<int>?>()).Returns(Array.Empty<Guid>());
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDto>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<GameIntention>(), It.IsAny<GameDetails>()));
 
         var schemaService = Mock<IAttributeSchemaService>();
 
@@ -76,67 +70,59 @@ public class GameStatusTransitionShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
-
-        var userBlacklistChecker = Mock<DM.Domain.Core.Blacklists.IUserBlacklistChecker>();
-        userBlacklistChecker.Setup(c => c.GetBlockedUserIdsAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<Guid>());
+        identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         var gameBlacklistRepository = Mock<IGameBlacklistRepository>();
 
         var unreadCountersRepository = Mock<IUnreadCountersRepository>();
-        unreadCountersRepository.Setup(r => r.CreateMarkerAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>()))
+        unreadCountersRepository.CreateMarkerAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>())
             .Returns(Task.CompletedTask);
-        unreadCountersRepository.Setup(r => r.SelectByEntitiesAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
-            .ReturnsAsync((Guid userId, UnreadEntryType type, Guid[] ids) =>
-                ids.ToDictionary(id => id, _ => 0) as IDictionary<Guid, int>);
+        unreadCountersRepository.SelectByEntitiesAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<Guid[]>())
+            .Returns(ci =>
+            {
+                var userId = ci.ArgAt<Guid>(0);
+                var type = ci.ArgAt<UnreadEntryType>(1);
+                var ids = ci.ArgAt<Guid[]>(2);
+                return ids.ToDictionary(id => id, _ => 0) as IDictionary<Guid, int>;
+            });
 
         var subscriptionService = Mock<IGameSubscriptionService>();
-        subscriptionService.Setup(s => s.GetSubscribersAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<DM.Domain.Core.Dto.UserReference>());
-
-        var roomRepository = Mock<IRoomRepository>();
+        subscriptionService.GetSubscribersAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<DM.Domain.Core.Dto.UserReference>());
 
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(d => d.Now).Returns(_now);
+        _dateTimeProvider.Now.Returns(_now);
 
         var guidFactory = Mock<IGuidFactory>();
-        guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
-
-        var intentionConverter = Mock<IGameIntentionConverter>();
-        intentionConverter.Setup(c => c.Convert(It.IsAny<ModuleStatus>()))
-            .Returns((GameIntention.Edit, EventType.ChangedGame));
+        guidFactory.Create().Returns(Guid.NewGuid());
 
         _producer = Mock<IEventProducer>();
-        _producer.Setup(p => p.SendAsync(It.IsAny<EventType>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
-        _producer.Setup(p => p.SendAsync(It.IsAny<IEnumerable<EventType>>(), It.IsAny<Guid>())).Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
+        _producer.SendAsync(Arg.Any<IEnumerable<EventType>>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         var cache = Mock<ICache>();
 
         var logger = Mock<ILogger<GameService>>();
 
         _service = new GameService(
-            gamesQueryValidator.Object,
-            updateGameValidator.Object,
-            creationValidator.Object,
-            dataResolver.Object,
-            _intentionManager.Object,
-            schemaService.Object,
-            _repository.Object,
-            userRepository.Object,
-            invitationService.Object,
-            identityProvider.Object,
-            userBlacklistChecker.Object,
-            gameBlacklistRepository.Object,
-            unreadCountersRepository.Object,
-            subscriptionService.Object,
-            roomRepository.Object,
-            _dateTimeProvider.Object,
-            guidFactory.Object,
-            intentionConverter.Object,
-            _producer.Object,
-            cache.Object,
-            logger.Object);
+            gamesQueryValidator,
+            updateGameValidator,
+            creationValidator,
+            dataResolver,
+            _intentionManager,
+            schemaService,
+            _repository,
+            userRepository,
+            invitationService,
+            identityProvider,
+            gameBlacklistRepository,
+            unreadCountersRepository,
+            subscriptionService,
+            _dateTimeProvider,
+            guidFactory,
+            _producer,
+            cache,
+            logger);
     }
 
     private Guid SetupGame(
@@ -159,16 +145,18 @@ public class GameStatusTransitionShould : UnitTestBase
             Master = new DM.Domain.Core.Dto.GeneralUser { UserId = masterId ?? _currentUserId },
             Recruitment = new GameRecruitment()
         };
-        _repository.Setup(r => r.GetGameDetails(gameId, _currentUserId, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(game);
+        _repository.GetGameDetails(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
         // The mentor's two moves read past the accessibility scope, because a game
         // awaiting edits has no curator and the scope would hide it from them.
-        _repository.Setup(r => r.GetGameDetailsForModeration(
-                gameId, _currentUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(game);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateGameEntity>(), It.IsAny<CancellationToken>()))
-            .Callback<UpdateGameEntity, CancellationToken>((update, _) => _capturedUpdate = update)
-            .ReturnsAsync(game);
+        _repository.GetGameDetailsForModeration(
+                gameId, _currentUserId, Arg.Any<CancellationToken>()).Returns(game);
+        _repository.Update(Arg.Any<UpdateGameEntity>(), Arg.Any<CancellationToken>())
+            .Returns(game)
+            .AndDoes(ci =>
+            {
+                var update = ci.ArgAt<UpdateGameEntity>(0);
+                _capturedUpdate = update;
+            });
         return gameId;
     }
 
@@ -184,8 +172,8 @@ public class GameStatusTransitionShould : UnitTestBase
         _capturedUpdate.Should().NotBeNull();
         _capturedUpdate!.Status.Should().Be(ModuleStatus.Active);
         _capturedUpdate.ActivatedUtc.Should().Be(_now);
-        _producer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameActive)), gameId), Times.Once);
+        await _producer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameActive)), gameId);
     }
 
     [Fact]
@@ -228,8 +216,8 @@ public class GameStatusTransitionShould : UnitTestBase
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.Frozen);
         _capturedUpdate.ClosedUtc.Should().Be(_now);
         _capturedUpdate.IsRecruitmentOpen.Should().BeFalse();
-        _producer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameFrozen)), gameId), Times.Once);
+        await _producer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameFrozen)), gameId);
     }
 
     [Theory]
@@ -260,8 +248,8 @@ public class GameStatusTransitionShould : UnitTestBase
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.Finished);
         _capturedUpdate.ClosedUtc.Should().Be(_now);
         _capturedUpdate.IsRecruitmentOpen.Should().BeFalse();
-        _producer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameFinished)), gameId), Times.Once);
+        await _producer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameFinished)), gameId);
     }
 
     [Theory]
@@ -292,8 +280,8 @@ public class GameStatusTransitionShould : UnitTestBase
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.None);
         _capturedUpdate.ClosedUtc.Should().Be(_now);
         _capturedUpdate.IsRecruitmentOpen.Should().BeFalse();
-        _producer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameClosed)), gameId), Times.Once);
+        await _producer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameClosed)), gameId);
     }
 
     [Fact]
@@ -350,8 +338,8 @@ public class GameStatusTransitionShould : UnitTestBase
         _capturedUpdate.ClosedReason.Should().Be(ClosedReason.None);
         _capturedUpdate.ClearClosedUtc.Should().BeTrue();
         _capturedUpdate.ActivatedUtc.Should().BeNull(); // Already activated before
-        _producer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameActive)), gameId), Times.Once);
+        await _producer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameActive)), gameId);
     }
 
     [Fact]
@@ -395,8 +383,8 @@ public class GameStatusTransitionShould : UnitTestBase
         _capturedUpdate!.PremoderationStatus.Should().Be(PremoderationStatus.Approved);
         _capturedUpdate.MentorId.Should().BeNull();
         _capturedUpdate.SetMentorId.Should().BeTrue();
-        _producer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameModeration)), gameId), Times.Once);
+        await _producer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameModeration)), gameId);
     }
 
     [Theory]
@@ -430,10 +418,8 @@ public class GameStatusTransitionShould : UnitTestBase
 
         await _service.ChangePremoderationAsync(gameId.ToString(), transition);
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(GameIntention.SetStatusModeration), Times.Once);
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(GameIntention.SubmitForApproval, It.IsAny<GameDetails>()), Times.Never);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.SetStatusModeration);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(GameIntention.SubmitForApproval, Arg.Any<GameDetails>());
     }
 
     [Fact]
@@ -446,8 +432,8 @@ public class GameStatusTransitionShould : UnitTestBase
 
         _capturedUpdate!.PremoderationStatus.Should().Be(PremoderationStatus.AwaitingApproval);
         _capturedUpdate.SetMentorId.Should().BeFalse();
-        _producer.Verify(p => p.SendAsync(
-            It.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameModeration)), gameId), Times.Once);
+        await _producer.Received(1).SendAsync(
+            Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameModeration)), gameId);
     }
 
     /// <summary>
@@ -463,10 +449,8 @@ public class GameStatusTransitionShould : UnitTestBase
         await _service.ChangePremoderationAsync(
             gameId.ToString(), ModulePremoderationTransition.SubmitForApproval);
 
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(GameIntention.SubmitForApproval, It.IsAny<GameDetails>()), Times.Once);
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(GameIntention.SetStatusModeration), Times.Never);
+        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.SubmitForApproval, Arg.Any<GameDetails>());
+        _intentionManager.DidNotReceive().ThrowIfForbidden(GameIntention.SetStatusModeration);
     }
 
     [Theory]
@@ -496,8 +480,7 @@ public class GameStatusTransitionShould : UnitTestBase
             gameId.ToString(), ModulePremoderationTransition.SubmitForApproval);
 
         await act.Should().ThrowAsync<HttpException>();
-        _intentionManager.Verify(
-            m => m.ThrowIfForbidden(GameIntention.SubmitForApproval, It.IsAny<GameDetails>()), Times.Never);
+        _intentionManager.DidNotReceive().ThrowIfForbidden(GameIntention.SubmitForApproval, Arg.Any<GameDetails>());
     }
 
     #endregion

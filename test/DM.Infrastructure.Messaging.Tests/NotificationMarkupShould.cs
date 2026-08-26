@@ -3,7 +3,7 @@ using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Workers.NotificationDispatcher.Bot;
 using DM.Workers.NotificationDispatcher.Email;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 using DM.Workers.NotificationDispatcher.Dispatching;
 

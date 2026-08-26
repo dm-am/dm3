@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -30,7 +30,7 @@ public class ConsumerMetricsShould
 {
     /// <summary>Instrument declaration, as every metrics class spells it.</summary>
     private static readonly Regex Instrument = new(
-        @"Create(?:Counter|Histogram|UpDownCounter|ObservableGauge|ObservableCounter)<[^>]+>\(\s*""(dm\.[a-z0-9._]+)""",
+        @"Create(?:Counter|Histogram|UpDownCounter|ObservableGauge|ObservableCounter|Gauge)<[^>]+>\(\s*""(dm\.[a-z0-9._]+)""",
         RegexOptions.Compiled);
 
     /// <summary>A series of this project, as an expression spells it.</summary>
@@ -62,7 +62,6 @@ public class ConsumerMetricsShould
         ("process_runtime_", "dm-api"),
         ("rabbitmq_", "rabbitmq"),
         ("pg_", "postgres"),
-        ("mongodb_", "mongo"),
         ("node_", "node"),
         // The contour instruments itself, and the two halves of it are targets like
         // any other: a rule about the receiver is as silent as any rule over a name
@@ -136,13 +135,10 @@ public class ConsumerMetricsShould
     private const string Composition = "Startup.cs";
 
     /// <summary>The interface a host takes its consumers from.</summary>
-    private const string ConsumerFactory = "IConsumerBuilder";
+    private const string ConsumerFactory = "IDmConsumerBuilder";
 
-    /// <summary>The argument a host declares its consumer pipeline in.</summary>
-    private const string ConsumerPipeline = "consumerBuilderDefaults:";
-
-    /// <summary>A middleware installed into a pipeline, as the builder spells it.</summary>
-    private static readonly Regex Installation = new(@"WithMiddleware<(\w+)>", RegexOptions.Compiled);
+    /// <summary>A middleware installed into a pipeline, as the declaration spells it.</summary>
+    private static readonly Regex Installation = new(@"AddDmConsumerMiddleware<(\w+)>", RegexOptions.Compiled);
 
     /// <summary>
     /// The hosts that consume, read off the tree rather than listed here.
@@ -170,29 +166,17 @@ public class ConsumerMetricsShould
         .Any(file => File.ReadAllText(file.FullName).Contains(ConsumerFactory, StringComparison.Ordinal));
 
     /// <summary>
-    /// The consumer middlewares a host installs, out of the argument that declares its
-    /// consumer pipeline.
+    /// The consumer middlewares a host installs, out of the declarations in its
+    /// composition.
     /// </summary>
     /// <remarks>
-    /// Not every middleware in a composition is a consumer's: the producer pipeline is
-    /// declared with the same call, and a host that added one of its own to it would
-    /// otherwise be asked here for counters a producer middleware has no consumed
-    /// message to write. So the reading starts at the named argument and stops at the
-    /// end of the statement it belongs to.
+    /// The declaring call is generic over the middleware type, so the name read
+    /// out of the angle brackets is the type the message scope will resolve -
+    /// there is no second pipeline sharing the call the way the producer
+    /// defaults of the previous client did.
     /// </remarks>
-    private static IReadOnlyCollection<string> InstalledConsumerMiddlewares(string composition)
-    {
-        var declaration = composition.IndexOf(ConsumerPipeline, StringComparison.Ordinal);
-        if (declaration < 0)
-        {
-            return Array.Empty<string>();
-        }
-
-        var end = composition.IndexOf(';', declaration);
-        var pipeline = composition[declaration..(end < 0 ? composition.Length : end)];
-
-        return Installation.Matches(pipeline).Select(match => match.Groups[1].Value).ToArray();
-    }
+    private static IReadOnlyCollection<string> InstalledConsumerMiddlewares(string composition) =>
+        Installation.Matches(composition).Select(match => match.Groups[1].Value).ToArray();
 
     /// <summary>The interface a consumer middleware implements, which is what selects one.</summary>
     /// <remarks>
@@ -313,6 +297,24 @@ public class ConsumerMetricsShould
     /// failures listed above answer nobody, so a rule about them is the only
     /// answer there is.
     /// </remarks>
+    /// <summary>
+    /// Failure counters whose alert deliberately reads a different series, and
+    /// the series it reads instead. Both halves are asserted, so an entry can
+    /// neither excuse a counter that is gone nor point at a rule that is.
+    /// </summary>
+    /// <remarks>
+    /// The outbox relay's publish refusal is a delay, not a loss: the row stays
+    /// and the next pass retries it, so the alertable fact is how long the
+    /// oldest row has been waiting - the lag gauge. A rule on the refusal count
+    /// itself would fire on every deploy's broker restart, which is exactly the
+    /// event the outbox exists to make routine.
+    /// </remarks>
+    private static readonly Dictionary<string, string> AlertedThroughAnotherSeries =
+        new(StringComparer.Ordinal)
+        {
+            ["dm_messaging_outbox_publish_failed"] = "dm_messaging_outbox_lag",
+        };
+
     [Fact]
     public void AlertOnEveryFailureNobodyIsWaitingOn()
     {
@@ -332,10 +334,17 @@ public class ConsumerMetricsShould
 
             foreach (var failure in failures)
             {
-                rules.Should().Contain(failure,
+                var alerted = AlertedThroughAnotherSeries.GetValueOrDefault(failure, failure);
+                rules.Should().Contain(alerted,
                     $"{failure} counts work that was lost while {why}, and a count no rule " +
                     "reads is the same silence as no count at all");
             }
+        }
+
+        foreach (var (excused, _) in AlertedThroughAnotherSeries)
+        {
+            Unattended.SelectMany(entry => InstrumentsOf(entry.Owner)).Should().Contain(excused,
+                $"the exemption for {excused} names an instrument that is gone");
         }
     }
 
@@ -496,7 +505,7 @@ public class ConsumerMetricsShould
 
     /// <summary>An instrument declaration with its unit argument.</summary>
     private static readonly Regex InstrumentWithUnit = new(
-        @"Create(?<kind>Counter|Histogram|UpDownCounter|ObservableGauge|ObservableCounter)<[^>]+>\(\s*""(?<name>dm\.[a-z0-9._]+)""\s*,\s*(?<unit>null|""[^""]*"")",
+        @"Create(?<kind>Counter|Histogram|UpDownCounter|ObservableGauge|ObservableCounter|Gauge)<[^>]+>\(\s*""(?<name>dm\.[a-z0-9._]+)""\s*,\s*(?<unit>null|""[^""]*"")",
         RegexOptions.Compiled);
 
     /// <summary>
@@ -544,6 +553,14 @@ public class ConsumerMetricsShould
                 unit.Should().Be("null",
                     $"{name} counts things, and a word the exporter does not know is appended " +
                     "verbatim in front of _total");
+                continue;
+            }
+
+            if (kind == "Gauge" && unit == "null")
+            {
+                // A level gauge over a count - rows waiting, connections open -
+                // is dimensionless: the UCUM table has nothing to map "rows"
+                // to, and anything unmapped is appended to the name verbatim.
                 continue;
             }
 

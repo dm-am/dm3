@@ -26,7 +26,7 @@ set -euo pipefail
 # Ratchet, not a floor to duck under - the same rule as the frontend thresholds
 # in src/DM.Web.Client/vite.config.ts: raise after a gain, never lower after a
 # miss. Measured on the merged report of a full run of the solution with every
-# test project green: 72.3% lines, 52.5% branches. Those are the two numbers this
+# test project green: 75.2% lines, 57.2% branches (2026-08-24, first xunit.v3 run; 18 assemblies, unchanged by the move). Those are the two numbers this
 # script prints, read off the line-rate and branch-rate attributes of the merged
 # Cobertura report, which are the values the comparison below is made against.
 # The TextSummary of that same run reads a tenth lower on both, 72.2% and 52.4%,
@@ -75,6 +75,19 @@ if [ -z "$(find "$RESULTS" -name coverage.cobertura.xml -print -quit 2>/dev/null
   echo "ERROR: no coverage report under $RESULTS." >&2
   echo 'Collect it first: dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults' >&2
   exit 1
+fi
+
+# Only the newest run. Every collection drops a fresh GUID directory here and
+# nothing removes the previous ones, so a developer machine accumulates them -
+# eighteen of them, from eighteen different states of the code, were found in
+# one checkout. Merging that pile answers with the coverage of no version in
+# particular: a file deleted last week still contributes its old lines, and a
+# line uncovered today is reported covered because some older run covered it.
+# CI never saw this because its checkout starts empty, which is exactly why the
+# gate could lie locally and stay green.
+NEWEST_RUN="$(find "$RESULTS" -mindepth 1 -maxdepth 1 -type d -exec ls -1dt {} + 2>/dev/null | head -1)"
+if [ -n "$NEWEST_RUN" ]; then
+  RESULTS="$NEWEST_RUN"
 fi
 
 # Cached by version: downloaded once per machine rather than once per run.

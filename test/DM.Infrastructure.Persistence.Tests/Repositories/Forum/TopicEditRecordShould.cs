@@ -1,16 +1,15 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Features.Topics;
 using DM.Infrastructure.Persistence.Repositories.Forum;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.InMemory.Internal;
-using Moq;
+using NSubstitute;
 using Xunit;
 using DbBoard = DM.Infrastructure.Persistence.Entities.Forum.Board;
 using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
@@ -49,9 +48,6 @@ public class TopicEditRecordShould
 
     private static readonly DateTimeOffset Created = new(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset EditedAt = new(2026, 5, 2, 9, 30, 0, TimeSpan.Zero);
-
-    private static readonly IMapper Mapper = new MapperConfiguration(cfg =>
-        cfg.AddMaps(typeof(TopicMappingProfile).Assembly)).CreateMapper();
 
     private static DmDbContext Seeded()
     {
@@ -93,12 +89,12 @@ public class TopicEditRecordShould
 
     private static TopicRepository RepositoryOver(DmDbContext context)
     {
-        var guids = new Mock<IGuidFactory>();
-        guids.Setup(f => f.Create()).Returns(EditRecordId);
-        var clock = new Mock<IDateTimeProvider>();
-        clock.SetupGet(c => c.Now).Returns(EditedAt);
+        var guids = Substitute.For<IGuidFactory>();
+        guids.Create().Returns(EditRecordId);
+        var clock = Substitute.For<IDateTimeProvider>();
+        clock.Now.Returns(EditedAt);
 
-        return new TopicRepository(context, Mapper, guids.Object, clock.Object);
+        return new TopicRepository(context, guids, clock);
     }
 
     /// <summary>

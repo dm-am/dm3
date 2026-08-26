@@ -50,7 +50,7 @@ export default { inheritAttrs: false };
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Skeleton"
+@use "@/assets/styles/Skeleton" as *
 
 .sidebar-skeleton
   display: block

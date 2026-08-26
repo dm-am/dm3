@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Blog.Features.Notepads;
 using DM.Domain.Core.Notepads;
 using DM.Web.API.Shared.Dto;
@@ -13,11 +12,11 @@ namespace DM.Web.API.Features.Blog.Notepads;
 internal class BlogNotepadApiService : IBlogNotepadApiService
 {
     private readonly IBlogNotepadService _notepadService;
-    private readonly IMapper _mapper;
+    private readonly NotepadMapper _mapper;
 
     public BlogNotepadApiService(
         IBlogNotepadService notepadService,
-        IMapper mapper)
+        NotepadMapper mapper)
     {
         _notepadService = notepadService;
         _mapper = mapper;
@@ -28,41 +27,32 @@ internal class BlogNotepadApiService : IBlogNotepadApiService
     {
         var entries = await _notepadService.GetEntries(blogId);
         return new ListEnvelope<NotepadEntryResponse>(
-            entries.Select(_mapper.Map<NotepadEntryResponse>).ToList());
+            entries.Select(_mapper.ToResponse).ToList());
     }
 
     /// <inheritdoc />
     public async Task<Envelope<NotepadEntryResponse>> GetEntry(Guid entryId)
     {
         var entry = await _notepadService.GetEntry(entryId);
-        return new Envelope<NotepadEntryResponse>(_mapper.Map<NotepadEntryResponse>(entry));
+        return new Envelope<NotepadEntryResponse>(_mapper.ToResponse(entry));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<NotepadEntryResponse>> CreateEntry(Guid blogId, CreateNotepadEntryRequest request)
     {
-        var createEntry = new CreateNotepadEntry
-        {
-            Title = request.Title,
-            Content = request.Content
-        };
+        var createEntry = _mapper.ToCreateEntry(request);
 
         var entry = await _notepadService.CreateEntry(blogId, createEntry);
-        return new Envelope<NotepadEntryResponse>(_mapper.Map<NotepadEntryResponse>(entry));
+        return new Envelope<NotepadEntryResponse>(_mapper.ToResponse(entry));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<NotepadEntryResponse>> UpdateEntry(Guid entryId, UpdateNotepadEntryRequest request)
     {
-        var updateEntry = new UpdateNotepadEntry
-        {
-            Title = request.Title,
-            Content = request.Content,
-            SortOrder = request.SortOrder
-        };
+        var updateEntry = _mapper.ToUpdateEntry(request);
 
         var entry = await _notepadService.UpdateEntry(entryId, updateEntry);
-        return new Envelope<NotepadEntryResponse>(_mapper.Map<NotepadEntryResponse>(entry));
+        return new Envelope<NotepadEntryResponse>(_mapper.ToResponse(entry));
     }
 
     /// <inheritdoc />

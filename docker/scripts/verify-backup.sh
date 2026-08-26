@@ -133,8 +133,6 @@ echo ""
 
 check_backup_dir "${PG_BACKUP_DIR:-/var/backups/postgresql}" "PostgreSQL" "*.sql.gz"
 echo ""
-check_backup_dir "${MONGO_BACKUP_DIR:-/var/backups/mongodb}" "MongoDB" "*.archive.gz"
-echo ""
 check_backup_tree "${MINIO_BACKUP_DIR:-/var/backups/minio}" "MinIO"
 echo ""
 

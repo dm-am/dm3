@@ -6,8 +6,8 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Testing;
 using DM.Web.API.Realtime;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
@@ -16,7 +16,7 @@ namespace DM.Web.API.Tests.Features.General;
 /// Guards the lifetime of the SignalR connection map.
 /// </summary>
 /// <remarks>
-/// The map is registered as a single instance, which Autofac activates in the
+/// The map is registered as a single instance, which the container activates in the
 /// root scope together with everything it asks for. It used to ask for the
 /// authentication service, and behind that sat a repository holding a pooled
 /// DbContext: one context leased for the life of the process and used by every
@@ -134,15 +134,15 @@ public class UserConnectionServiceShould : UnitTestBase
     private IIdentity AuthenticatedAs(Guid userId)
     {
         var identity = Mock<IIdentity>();
-        identity.SetupGet(i => i.User).Returns(
+        identity.User.Returns(
             new AuthenticatedUser { UserId = userId, Role = UserRole.RegularUser });
-        return identity.Object;
+        return identity;
     }
 
     private IIdentity GuestIdentity()
     {
         var identity = Mock<IIdentity>();
-        identity.SetupGet(i => i.User).Returns(AuthenticatedUser.Guest);
-        return identity.Object;
+        identity.User.Returns(AuthenticatedUser.Guest);
+        return identity;
     }
 }

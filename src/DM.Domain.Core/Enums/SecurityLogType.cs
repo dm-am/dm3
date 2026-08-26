@@ -19,5 +19,8 @@ public enum SecurityLogType
     Password = 1,
 
     /// <summary>Session creation and termination.</summary>
-    Session = 2
+    Session = 2,
+
+    /// <summary>Everything that happened to the second factor.</summary>
+    TwoFactor = 3
 }

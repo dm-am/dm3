@@ -11,8 +11,6 @@
 //   .nsfw-spoiler, .nsfw-head     - NSFW content
 //   .quote, .quote-author         - quotes (uses <div>)
 //   .code                         - code blocks (uses <pre>)
-//   .noparse                      - unparsed content
-//   .image                        - images
 //   .mod-block                    - moderator blocks
 //   .private-message, .private-message-header - private text
 //
@@ -24,19 +22,20 @@
 //   .bb-noparse                   - unparsed content
 //   .bb-image                     - images
 //   .bb-mod                       - moderator blocks
-//   .bb-warning                   - warning blocks (red)
 //   .bb-private                   - private text
 //   .bb-tab                       - tab/indent
 // ============================================================================
 
 // $expand-duration / $expand-easing for the spoiler/NSFW reveal animation
-@import "Animations"
+@use "Animations" as *
+@use "Variables" as *
+@use "Themes" as *
 
 // ──────────────────────────────────────────────────────────────────────────
 // Overlay Background Mixin
 // ──────────────────────────────────────────────────────────────────────────
 // Creates a colored overlay effect using ::before pseudo-element.
-// Used for quote, mod-block, warning-block, and private-message.
+// Used for quote, mod-block, and private-message.
 //
 // Parameters:
 //   $color - The overlay color (e.g., $highlight-overlay-blue)
@@ -125,10 +124,31 @@
   // The var() fallbacks below are the single declaration of the default image
   // size. Neither parser emits custom properties for an image without an
   // explicit size, so no C# or TS constant can change it — edit it here.
+  //
+  // `height: auto` and no `width: auto`, and the asymmetry is deliberate.
+  //
+  // Auto is the initial value of both, so declaring them changes nothing for an
+  // image that carries no size — but a class rule outranks the width/height
+  // attributes an element does carry, and that pair is the only thing that
+  // reserves room before a picture decodes. While `width: auto` stood here it
+  // computed to 0×0 and the reservation was silently nothing. Nothing either
+  // parser emits carries the attributes, so every image they render is sized
+  // exactly as before; the pair is put on by a reader that knows the size —
+  // today, a post declaring the box of its own attachment.
+  //
+  // `height: auto` has to stay. With both sides declared, max-width and
+  // max-height clamp each on its own and the picture comes out stretched; with
+  // the height auto the ratio governs and max-width shrinks the box whole.
+  // max-height is then the one cap that still clamps alone, which is why the
+  // reader shrinks the pair to fit under it first — see MAX_DRAWN_HEIGHT in
+  // features/upload/model/postAttachments.ts, mirroring the 500 below.
+  //
+  // The collapsed state in TruncatedContent still declares width auto, on
+  // purpose: there the media is clamped to a fixed budget and the file's own
+  // dimensions must not win.
   img, .bb-image
     max-width: var(--bb-image-max-width, 100%)
     max-height: var(--bb-image-max-height, 500px)
-    width: auto
     height: auto
     display: inline-block
     vertical-align: middle
@@ -347,20 +367,6 @@
     +overlay-bg($highlight-overlay-green)
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Warning Block
-  // Backend: div.warning-block | Frontend: div.bb-warning
-  // ──────────────────────────────────────────────────────────────────────────
-
-  // Warning block - uses overlay approach: bg-element + semi-transparent red tint
-  .warning-block, .bb-warning
-    margin: $tiny 0
-    padding: 2px 6px
-    border-left: 10px solid $border-accent-red
-    background-color: $bg-element
-    color: $text-on-red
-    +overlay-bg($highlight-overlay-red)
-
-  // ──────────────────────────────────────────────────────────────────────────
   // Tab
   // Backend: &nbsp; entities | Frontend: span.bb-tab
   // ──────────────────────────────────────────────────────────────────────────
@@ -371,7 +377,7 @@
 
   // ──────────────────────────────────────────────────────────────────────────
   // Noparse
-  // Backend: span.noparse | Frontend: span.bb-noparse
+  // Backend: no wrapper at all | Frontend: span.bb-noparse
   // No special styling - just displays raw BBCode as plain text
   // ──────────────────────────────────────────────────────────────────────────
 

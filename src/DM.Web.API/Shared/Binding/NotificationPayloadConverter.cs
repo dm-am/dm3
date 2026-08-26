@@ -11,11 +11,12 @@ namespace DM.Web.API.Shared.Binding;
 /// One notification reaches one open tab twice: pushed over the hub and read
 /// back from the list. The pushed copy is the JSON the dispatcher published,
 /// which System.Text.Json wrote in camelCase and which arrives here as a
-/// JsonElement. The stored copy comes out of Mongo as a dictionary whose keys
-/// are the CLR member names of the metadata object, and a dictionary key is not
-/// touched by PropertyNamingPolicy. So one field left as gameTitle over the
-/// socket and as GameTitle over REST, and the reader of the list found neither
-/// a title nor a link because it was written against the other spelling.
+/// JsonElement — and since W1.1 the stored copy is a JsonElement in the same
+/// spelling, parsed back from the jsonb column. The dictionary arm remains for
+/// any writer that hands the bag over under CLR member names: a dictionary key
+/// is not touched by PropertyNamingPolicy, and one field used to leave as
+/// gameTitle over the socket and as GameTitle over REST, so the reader of the
+/// list found neither a title nor a link.
 ///
 /// Scoped to this one property by attribute rather than fixed on the serializer
 /// with DictionaryKeyPolicy: that switch is global and would rename the keys of

@@ -3,7 +3,7 @@ import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
-import { isValidDate } from "@/shared/lib/filters/utils";
+import { isValidDate, parsePageNumber } from "@/shared/lib/filters/utils";
 import type { PulseSearchParams } from "@/entities/game";
 
 // =============================================================================
@@ -274,11 +274,8 @@ export function usePulseFilter(): PulseFilterComposable {
     if (state.createdTo) params.createdTo = state.createdTo;
     if (state.gameId) params.gameId = state.gameId;
 
-    const numberParam = route.query.number;
-    if (numberParam) {
-      const num = parseInt(String(numberParam), 10);
-      if (!isNaN(num) && num > 0) params.number = num;
-    }
+    const pageNumber = parsePageNumber(route.query.number);
+    if (pageNumber) params.number = pageNumber;
 
     params.size = entitiesPerPage.value;
     return params;

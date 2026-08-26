@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -30,18 +30,7 @@ namespace DM.Architecture.Tests;
 public class PagingContractShould
 {
     private static readonly string ClientRoot = Path.Combine(
-        SolutionRoot(), "src", "DM.Web.Client", "src");
-
-    private static string SolutionRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "DM.sln")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName ?? throw new InvalidOperationException("DM.sln not found above the test binaries");
-    }
+        DM.Testing.RepositoryLayout.Root, "src", "DM.Web.Client", "src");
 
     [Fact]
     public void OfferExactlyThePageSizesTheApiAccepts()

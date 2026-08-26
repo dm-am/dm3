@@ -4,8 +4,8 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.RoomAccesses;
 using DM.Testing;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.RoomAccesses;
@@ -13,13 +13,13 @@ namespace DM.Domain.Game.Tests.Features.RoomAccesses;
 public class RoomAccessFactoryShould : UnitTestBase
 {
     private readonly RoomAccessFactory _factory;
-    private readonly Mock<IGuidFactory> _guidFactory;
+    private readonly IGuidFactory _guidFactory;
 
     public RoomAccessFactoryShould()
     {
         _guidFactory = Mock<IGuidFactory>();
 
-        _factory = new RoomAccessFactory(_guidFactory.Object);
+        _factory = new RoomAccessFactory(_guidFactory);
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public class RoomAccessFactoryShould : UnitTestBase
             Policy = RoomAccessPolicy.Full
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(accessId);
+        _guidFactory.Create().Returns(accessId);
 
         var result = _factory.CreateForCharacter(createRoomAccess, characterId);
 
@@ -60,7 +60,7 @@ public class RoomAccessFactoryShould : UnitTestBase
             Policy = RoomAccessPolicy.ReadOnly
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(accessId);
+        _guidFactory.Create().Returns(accessId);
 
         var result = _factory.CreateForReader(createRoomAccess, readerUserId);
 
@@ -81,7 +81,7 @@ public class RoomAccessFactoryShould : UnitTestBase
             Policy = RoomAccessPolicy.Full
         };
 
-        _guidFactory.Setup(f => f.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         var result = _factory.CreateForCharacter(createRoomAccess, Guid.NewGuid());
 
@@ -96,8 +96,7 @@ public class RoomAccessFactoryShould : UnitTestBase
         var currentIndex = 0;
         var accessIds = new[] { accessId1, accessId2 };
 
-        _guidFactory.Setup(f => f.Create())
-            .Returns(() => accessIds[currentIndex++]);
+        _guidFactory.Create().Returns(_ => accessIds[currentIndex++]);
 
         var createRoomAccess = new CreateRoomAccess
         {

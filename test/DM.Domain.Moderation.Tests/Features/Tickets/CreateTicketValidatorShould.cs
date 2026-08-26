@@ -2,7 +2,7 @@ using System;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.Tickets;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 

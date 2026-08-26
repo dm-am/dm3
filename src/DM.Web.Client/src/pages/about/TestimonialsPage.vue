@@ -172,7 +172,7 @@ function pagingAnchor(): HTMLElement | null {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 // Paging blocks sit at the same tight $tiny rhythm the rows keep between
 // themselves and their dash separators (COMM-1: paging to rows equals the

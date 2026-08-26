@@ -3,7 +3,7 @@ using System.Linq;
 using System.Reflection;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -39,7 +39,7 @@ public class EventRoutingKeysShould
 
     private static FieldInfo[] Members => typeof(EventType)
         .GetFields(BindingFlags.Public | BindingFlags.Static)
-        .Where(field => field.Name != Unrouted)
+        .Where(member => member.Name != Unrouted)
         .ToArray();
 
     [Fact]
@@ -120,5 +120,5 @@ public class EventRoutingKeysShould
         field.GetCustomAttributes<EventRoutingKeyAttribute>(false).FirstOrDefault()?.RoutingKey
         ?? string.Empty;
 
-    private static FieldInfo[] Keyed => Members.Where(field => Key(field).Length > 0).ToArray();
+    private static FieldInfo[] Keyed => Members.Where(member => Key(member).Length > 0).ToArray();
 }

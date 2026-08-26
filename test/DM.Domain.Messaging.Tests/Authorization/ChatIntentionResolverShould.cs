@@ -5,7 +5,7 @@ using DM.Domain.Messaging.Features.Chats;
 using DM.Domain.Messaging.Authorization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Authorization;

@@ -8,8 +8,8 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Persistence;
 using DM.Workers.NotificationDispatcher.Notifiers;
-using FluentAssertions;
-using Moq;
+using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Workers.NotificationDispatcher.Tests;
@@ -55,25 +55,26 @@ public class EveryNotificationGeneratorShould
         var arguments = constructor.GetParameters()
             .Select(parameter => parameter.ParameterType == typeof(DmDbContext)
                 ? context
-                : Substitute(parameter.ParameterType))
+                : SubstituteFor(parameter.ParameterType))
             .ToArray();
 
         return (INotificationGenerator)constructor.Invoke(arguments);
     }
 
-    private static object Substitute(Type type)
-    {
-        var mock = (Mock)Activator.CreateInstance(typeof(Mock<>).MakeGenericType(type))!;
-        mock.DefaultValue = DefaultValue.Empty;
-        return mock.Object;
-    }
+    /// <summary>A substitute for a constructor parameter the test does not care about.</summary>
+    /// <remarks>
+    /// The type is only known at run time, so the non-generic overload is what this
+    /// can reach; NSubstitute answers unconfigured calls with empty values of its
+    /// own, so nothing else has to be said about the parameter.
+    /// </remarks>
+    private static object SubstituteFor(Type type) => Substitute.For(new[] { type }, null);
 
     /// <summary>A clock that answers with the moment it was given.</summary>
     internal static IDateTimeProvider ClockAt(DateTimeOffset moment)
     {
-        var clock = new Mock<IDateTimeProvider>();
-        clock.SetupGet(provider => provider.Now).Returns(moment);
-        return clock.Object;
+        var clock = Substitute.For<IDateTimeProvider>();
+        clock.Now.Returns(moment);
+        return clock;
     }
 
     internal static async Task<List<CreateNotification>> DrainAsync(

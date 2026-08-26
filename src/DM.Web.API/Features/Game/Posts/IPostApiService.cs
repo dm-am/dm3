@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Game.Features.Posts;
+using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Posts;
@@ -25,6 +26,13 @@ public interface IPostApiService
     /// <param name="postId">Post identifier</param>
     /// <returns>Envelope containing the post</returns>
     Task<Envelope<Post>> Get(Guid postId);
+
+    /// <summary>
+    /// Get the markup of a quotation of a post
+    /// </summary>
+    /// <param name="postId">Post identifier</param>
+    /// <returns>Envelope containing the quotation source</returns>
+    Task<Envelope<QuoteSource>> GetQuote(Guid postId);
 
     /// <summary>
     /// Create new post

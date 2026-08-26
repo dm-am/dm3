@@ -3,7 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Workers.NotificationDispatcher.Notifiers.Game;
-using FluentAssertions;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Workers.NotificationDispatcher.Tests;

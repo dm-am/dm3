@@ -132,16 +132,7 @@ internal class TopicService : ITopicService
                 "Топик не найден");
         }
 
-        if (identity.User.IsAuthenticated)
-        {
-            topic.UnreadCommentsCount = (await _unreadCountersRepository.SelectByEntitiesAsync(
-                identity.User.UserId, UnreadEntryType.Message, topicId))[topicId];
-        }
-        else
-        {
-            // Anonymous users: show total counts
-            topic.UnreadCommentsCount = topic.TotalCommentsCount;
-        }
+        await FillUnreadCounter(topic, identity);
 
         return topic;
     }
@@ -165,15 +156,7 @@ internal class TopicService : ITopicService
                 $"Топик #{topicNumber} не найден в разделе {boardAlias}");
         }
 
-        if (identity.User.IsAuthenticated)
-        {
-            topic.UnreadCommentsCount = (await _unreadCountersRepository.SelectByEntitiesAsync(
-                identity.User.UserId, UnreadEntryType.Message, topic.Id))[topic.Id];
-        }
-        else
-        {
-            topic.UnreadCommentsCount = topic.TotalCommentsCount;
-        }
+        await FillUnreadCounter(topic, identity);
 
         return topic;
     }
@@ -225,21 +208,7 @@ internal class TopicService : ITopicService
             topics = (await _repository.Get(board.Id, accessPolicy, pagingData, query, ct)).ToArray();
         }
 
-        if (identity.User.IsAuthenticated)
-        {
-            // Unread counts are always filled per-request, never cached:
-            // they depend on the specific viewer's read state.
-            await _unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
-                t => t.Id, t => t.UnreadCommentsCount);
-        }
-        else
-        {
-            // Anonymous users: show total counts
-            foreach (var topic in topics)
-            {
-                topic.UnreadCommentsCount = topic.TotalCommentsCount;
-            }
-        }
+        await FillUnreadCounters(topics, identity);
 
         return (topics, pagingData?.Result);
     }
@@ -268,6 +237,63 @@ internal class TopicService : ITopicService
 
         var topics = (await _repository.Get(boardId: null, accessPolicy, pagingData, query, ct)).ToArray();
 
+        await FillUnreadCounters(topics, identity);
+
+        return (topics, pagingData.Result);
+    }
+
+    /// <inheritdoc />
+    public async Task<Topic?> GetBestUserTopicAsync(string username, CancellationToken ct = default)
+    {
+        // Resolve username → UserId via the cross-module lookup so the
+        // repository stays typed on Guid. Throws HttpException(404) on an
+        // unknown user, which reaches the API caller unchanged.
+        var user = await _userLookupService.GetAsync(username);
+
+        // Scope to boards the current viewer can see — the same access-policy
+        // mask the cross-board listing uses, so the widget never surfaces a
+        // topic on a board the viewer lacks access to.
+        var identity = _identityProvider.Current;
+        var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
+        var topic = await _repository.GetBestUserTopic(user.UserId, accessPolicy, ct);
+
+        if (topic != null)
+        {
+            await FillUnreadCounter(topic, identity);
+        }
+
+        return topic;
+    }
+
+    /// <summary>
+    /// How many comments of a topic this viewer has not read.
+    /// </summary>
+    /// <remarks>
+    /// Unread counts are always filled per request and never cached: they depend
+    /// on the specific viewer's read state. An anonymous viewer has no read state
+    /// at all, so the total stands in for it - that is what an unread badge means
+    /// to somebody who has read nothing.
+    ///
+    /// Written once for a single topic and once for a page of them, because five
+    /// copies of one if/else is five chances to answer an anonymous reader with a
+    /// zero.
+    /// </remarks>
+    private async Task FillUnreadCounter(Topic topic, IIdentity identity)
+    {
+        if (identity.User.IsAuthenticated)
+        {
+            topic.UnreadCommentsCount = (await _unreadCountersRepository.SelectByEntitiesAsync(
+                identity.User.UserId, UnreadEntryType.Message, topic.Id))[topic.Id];
+        }
+        else
+        {
+            topic.UnreadCommentsCount = topic.TotalCommentsCount;
+        }
+    }
+
+    /// <inheritdoc cref="FillUnreadCounter" />
+    private async Task FillUnreadCounters(ICollection<Topic> topics, IIdentity identity)
+    {
         if (identity.User.IsAuthenticated)
         {
             await _unreadCountersRepository.FillEntityCounters(topics, identity.User.UserId,
@@ -280,40 +306,6 @@ internal class TopicService : ITopicService
                 topic.UnreadCommentsCount = topic.TotalCommentsCount;
             }
         }
-
-        return (topics, pagingData.Result);
-    }
-
-    /// <inheritdoc />
-    public async Task<Topic?> GetBestUserTopicAsync(string username, CancellationToken ct = default)
-    {
-        // Resolve username → UserId via the cross-module lookup so the
-        // repository stays typed on Guid. Throws HttpException(410) on an
-        // unknown user, which surfaces as a clean 404 to the API caller.
-        var user = await _userLookupService.GetAsync(username);
-
-        // Scope to boards the current viewer can see — the same access-policy
-        // mask the cross-board listing uses, so the widget never surfaces a
-        // topic on a board the viewer lacks access to.
-        var identity = _identityProvider.Current;
-        var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
-        var topic = await _repository.GetBestUserTopic(user.UserId, accessPolicy, ct);
-
-        if (topic != null)
-        {
-            if (identity.User.IsAuthenticated)
-            {
-                topic.UnreadCommentsCount = (await _unreadCountersRepository.SelectByEntitiesAsync(
-                    identity.User.UserId, UnreadEntryType.Message, topic.Id))[topic.Id];
-            }
-            else
-            {
-                // Anonymous users: show total counts
-                topic.UnreadCommentsCount = topic.TotalCommentsCount;
-            }
-        }
-
-        return topic;
     }
 
     /// <summary>

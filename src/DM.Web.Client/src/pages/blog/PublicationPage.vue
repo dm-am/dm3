@@ -134,6 +134,7 @@ const create = (text: string) =>
 
 const fetchEditSource = (id: string) =>
   blogApi.getPublicationCommentForEdit(id);
+const fetchQuoteSource = (id: string) => blogApi.getPublicationCommentQuote(id);
 </script>
 
 <template>
@@ -161,6 +162,7 @@ const fetchEditSource = (id: string) =>
         :like="likeComment"
         :unlike="unlikeComment"
         :fetch-edit-source="fetchEditSource"
+        :fetch-quote-source="fetchQuoteSource"
         :paging-to="{
           name: 'blog-publication',
           params: { id: blogId, pubId },

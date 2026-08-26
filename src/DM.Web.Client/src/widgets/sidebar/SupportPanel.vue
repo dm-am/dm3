@@ -73,7 +73,7 @@ void fetch();
 </script>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .goal-title
   font-weight: bold

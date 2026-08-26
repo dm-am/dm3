@@ -4,7 +4,8 @@ using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
 using DM.Infrastructure.Core.Parsing.Visitors;
-using FluentAssertions;
+using DM.Testing.Dsl;
+using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
@@ -296,6 +297,155 @@ public class PermissionFilteringVisitorShould
         html.Should().Contain("secret");
     }
 
+    /// <summary>
+    /// A tag the author forgot to close does not carry the block past the filter.
+    /// </summary>
+    /// <remarks>
+    /// The [img] content pattern used to run to the next [/img] anywhere in the
+    /// post, so an opening tag left unclosed swallowed everything down to the
+    /// closing tag of the NEXT image — the private block included. What is
+    /// swallowed is filed as the image's URL before the parse, which means it
+    /// never becomes a node and the filter here is never asked about it: there
+    /// was nothing to strip, and the block came back out of the tree walk
+    /// verbatim.
+    ///
+    /// Both audiences, because they leaked through different doors. The HTML one
+    /// dropped the image on the whitespace the swallowed text carried and took
+    /// the author's own paragraph down with it; the plain-text one is what the
+    /// stored search text is built from and what X-Dm-Audience: plain_text
+    /// returns to anyone who asks for it.
+    /// </remarks>
+    [Theory]
+    [InlineData("до [img]https://example.com/a.png\n[private=\"B\"]secret[/private]\n" +
+                "[img]https://example.com/b.png[/img] после")]
+    [InlineData("до [img]https://example.com/a.png[private=\"B\"]secret[/private]" +
+                "[img]https://example.com/b.png[/img] после")]
+    [InlineData("до [link]https://example.com/a\n[private=\"B\"]secret[/private]\n" +
+                "[link]https://example.com/b[/link] после")]
+    [InlineData("до [img=100 alt=\"x\"]https://example.com/a.png\n[private=\"B\"]secret[/private]\n" +
+                "[img=100 alt=\"y\"]https://example.com/b.png[/img] после")]
+    public void StripPrivate_WhenAnUnclosedTagAboveItReachesForTheNextClosingTag(string input)
+    {
+        var viewer = Viewer(UserRole.RegularUser, OtherUser);
+        var ctx = DisplayCtxForGamePost(viewer);
+
+        var html = RenderWithContext(input, BbSurface.GamePost, ctx);
+        var text = RenderText(input, BbSurface.GamePost, RenderAudience.PlainText);
+
+        html.Should().NotContain("secret");
+        text.Should().NotContain("secret");
+
+        // And the author keeps their post: the words on either side of the tag
+        // are still there, which is the half of this that failed silently.
+        html.Should().Contain("до").And.Contain("после");
+        text.Should().Contain("до").And.Contain("после");
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // The empty id is not an identity.
+    //
+    // Every rule below matches the reader against an id the content
+    // carries. An anonymous reader's id is Guid.Empty, and Guid.Empty is
+    // also what a context field nobody filled in holds — so a projection
+    // that produced the text of a post without the fields deciding who may
+    // read it handed each of these rules two empty ids and a match. The
+    // rated-posts feed did exactly that, and served the [private] blocks of
+    // every open game to readers who were not signed in.
+    // ════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void HidePrivate_FromAnAnonymousReader_WhenTheContextWasNeverFilled()
+    {
+        var ctx = new RenderContext
+        {
+            Audience = RenderAudience.Display,
+            Surface = BbSurface.GamePost,
+            Viewer = Viewer(UserRole.Guest, Guid.Empty),
+            // What an unfilled post projection produces: a post with no known
+            // author, in a game whose master id is the default Guid.
+            PostAuthorUserId = Guid.Empty,
+            GameLeadUserIds = [Guid.Empty]
+        };
+
+        var html = RenderWithContext("до [private=\"B\"]secret[/private] после",
+            BbSurface.GamePost, ctx);
+
+        html.Should().NotContain("secret");
+        html.Should().Contain("до").And.Contain("после");
+    }
+
+    [Fact]
+    public void HidePrivate_FromASignedInReader_CarryingTheEmptyId()
+    {
+        // The other half of the same coincidence: a subject that says it is
+        // authenticated but carries no id. Neither half may be the one thing
+        // keeping the block closed.
+        var ctx = new RenderContext
+        {
+            Audience = RenderAudience.Display,
+            Surface = BbSurface.GamePost,
+            Viewer = Viewer(UserRole.RegularUser, Guid.Empty),
+            PostAuthorUserId = Guid.Empty,
+            GameLeadUserIds = [Guid.Empty]
+        };
+
+        var html = RenderWithContext("[private=\"B\"]secret[/private]", BbSurface.GamePost, ctx);
+
+        html.Should().NotContain("secret");
+    }
+
+    [Fact]
+    public void HidePrivate_FromAnAnonymousReader_AddressedByAnEmptyIdInTheSnapshot()
+    {
+        var addressees = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal)
+        {
+            ["B"] = new HashSet<Guid> { Guid.Empty }
+        };
+        var ctx = new RenderContext
+        {
+            Audience = RenderAudience.Display,
+            Surface = BbSurface.GamePost,
+            Viewer = Viewer(UserRole.Guest, Guid.Empty),
+            PostAuthorUserId = AuthorId,
+            GameLeadUserIds = [MasterId],
+            PrivateAddresseeOwnerUserIdsByAttribute = addressees
+        };
+
+        var html = RenderWithContext("[private=\"B\"]secret[/private]", BbSurface.GamePost, ctx);
+
+        html.Should().NotContain("secret");
+    }
+
+    [Fact]
+    public void DropTheEmptyIdOnTheWayIntoTheContext()
+    {
+        // Not a rule of the filter but of the context that feeds it: the empty
+        // id cannot be in the lead list or stand as the author, whatever the
+        // caller passes.
+        var ctx = new RenderContext
+        {
+            Audience = RenderAudience.Display,
+            Surface = BbSurface.GamePost,
+            PostAuthorUserId = Guid.Empty,
+            GameLeadUserIds = [Guid.Empty, MasterId, MasterId]
+        };
+
+        ctx.PostAuthorUserId.Should().BeNull();
+        ctx.GameLeadUserIds.Should().Equal(MasterId);
+    }
+
+    [Fact]
+    public void ReadNoViewerId_ForAReaderWhoIsNobody()
+    {
+        new RenderContext { Viewer = null }.ViewerUserId.Should().BeNull();
+        new RenderContext { Viewer = Viewer(UserRole.Guest, Guid.Empty) }
+            .ViewerUserId.Should().BeNull();
+        new RenderContext { Viewer = Viewer(UserRole.RegularUser, Guid.Empty) }
+            .ViewerUserId.Should().BeNull();
+        new RenderContext { Viewer = Viewer(UserRole.RegularUser, OtherUser) }
+            .ViewerUserId.Should().Be(OtherUser);
+    }
+
     // ════════════════════════════════════════════════════════════════
     // Non-privacy content always passes through unchanged.
     // ════════════════════════════════════════════════════════════════
@@ -364,11 +514,4 @@ public class PermissionFilteringVisitorShould
             AccessPolicy = AccessPolicy.NotSpecified
         };
 
-    private sealed class TestSubject : IAuthorizationSubject
-    {
-        public Guid UserId { get; init; }
-        public UserRole Role { get; init; }
-        public bool IsAuthenticated { get; init; }
-        public AccessPolicy AccessPolicy { get; init; }
-    }
 }

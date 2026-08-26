@@ -10,13 +10,6 @@ import { pluralize } from "@/shared/lib/utils/pluralize";
 
 // ==================== Ticket status ====================
 
-export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
-  WaitingForModeration: "Ожидает ответа модерации",
-  WaitingForUser: "Ожидает ответа пользователя",
-  Closed: "Закрыто",
-  Spam: "Спам",
-};
-
 /** Color class for the status indicator (doc 4.2.2.23). */
 export const TICKET_STATUS_CLASSES: Record<TicketStatus, string> = {
   WaitingForModeration: "status-waiting-moderation",
@@ -34,16 +27,6 @@ export const TICKET_STATUS_ORDER: Record<TicketStatus, number> = {
 };
 
 // ==================== Ticket subtype ====================
-
-export const TICKET_SUBTYPE_LABELS: Record<TicketSubtype, string> = {
-  UserComplaint: "Жалоба на пользователя",
-  ModeratorDecisionComplaint: "Жалоба на решение младшего модератора",
-  SeniorModeratorDecisionComplaint: "Жалоба на решение старшего модератора",
-  SiteImprovementSuggestion: "Предложение по улучшению сайта",
-  Bug: "Ошибка",
-  AccessRecovery: "Восстановление доступа",
-  RegistrationIssue: "Проблемы с регистрацией",
-};
 
 /** Subtypes shown on the "Поддержка" page (doc 4.2.3.8.7, admin scope). */
 export const SUPPORT_SUBTYPES: TicketSubtype[] = [

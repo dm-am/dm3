@@ -15,36 +15,36 @@ using DM.Domain.Game.Features.GameReviews;
 using DM.Domain.Game.Features.Games;
 using DM.Testing.Dsl;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.GameReviews;
 
 public class GameReviewServiceShould : UnitTestBase
 {
-    private readonly Mock<IValidator<CreateGameReview>> _createValidator;
-    private readonly Mock<IValidator<UpdateGameReview>> _updateValidator;
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IGameReviewRepository> _repository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IGuidFactory> _guidFactory;
-    private readonly Mock<IDateTimeProvider> _dateTimeProvider;
-    private readonly Mock<IGameBlacklistRepository> _blacklistRepository;
+    private readonly IValidator<CreateGameReview> _createValidator;
+    private readonly IValidator<UpdateGameReview> _updateValidator;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IGameReviewRepository _repository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IGuidFactory _guidFactory;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IGameBlacklistRepository _blacklistRepository;
     private readonly GameReviewService _service;
     private readonly Guid _currentUserId;
 
     public GameReviewServiceShould()
     {
         _createValidator = Mock<IValidator<CreateGameReview>>();
-        _createValidator.Setup(v => v.ValidateAsync(It.IsAny<CreateGameReview>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _createValidator.ValidateAsync(Arg.Any<CreateGameReview>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _updateValidator = Mock<IValidator<UpdateGameReview>>();
-        _updateValidator.Setup(v => v.ValidateAsync(It.IsAny<UpdateGameReview>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+        _updateValidator.ValidateAsync(Arg.Any<UpdateGameReview>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _intentionManager = Mock<IIntentionManager>();
 
@@ -52,25 +52,25 @@ public class GameReviewServiceShould : UnitTestBase
 
         _currentUserId = Guid.NewGuid();
         _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Setup(p => p.Current).Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
         _guidFactory = Mock<IGuidFactory>();
-        _guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        _guidFactory.Create().Returns(Guid.NewGuid());
 
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Setup(d => d.Now).Returns(DateTimeOffset.UtcNow);
+        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _blacklistRepository = Mock<IGameBlacklistRepository>();
 
         _service = new GameReviewService(
-            _createValidator.Object,
-            _updateValidator.Object,
-            _intentionManager.Object,
-            _repository.Object,
-            _identityProvider.Object,
-            _guidFactory.Object,
-            _dateTimeProvider.Object,
-            _blacklistRepository.Object);
+            _createValidator,
+            _updateValidator,
+            _intentionManager,
+            _repository,
+            _identityProvider,
+            _guidFactory,
+            _dateTimeProvider,
+            _blacklistRepository);
     }
 
     [Fact]
@@ -79,8 +79,7 @@ public class GameReviewServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         SetupSuccessfulCreate(gameId);
         _blacklistRepository
-            .Setup(r => r.IsBlocked(gameId, _currentUserId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .IsBlocked(gameId, _currentUserId, Arg.Any<CancellationToken>()).Returns(true);
 
         var act = async () => await _service.CreateAsync(new CreateGameReview { GameId = gameId, Text = "Great game!" });
 
@@ -102,14 +101,14 @@ public class GameReviewServiceShould : UnitTestBase
 
         await _service.CreateAsync(new CreateGameReview { GameId = gameId, Text = "Great game!" });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameReviewIntention.Create), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameReviewIntention.Create);
     }
 
     [Fact]
     public async Task ThrowForbiddenWhenNewbieTryingToCreateReview()
     {
         var gameId = Guid.NewGuid();
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(50); // Newbie
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(50); // Newbie
 
         var act = async () => await _service.CreateAsync(new CreateGameReview { GameId = gameId, Text = "Great game!" });
 
@@ -121,8 +120,8 @@ public class GameReviewServiceShould : UnitTestBase
     public async Task ThrowForbiddenWhenUserHasNoPostsInGame()
     {
         var gameId = Guid.NewGuid();
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.CanReviewGameAsync(_currentUserId, gameId)).ReturnsAsync(false);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.CanReviewGameAsync(_currentUserId, gameId).Returns(false);
 
         var act = async () => await _service.CreateAsync(new CreateGameReview { GameId = gameId, Text = "Great game!" });
 
@@ -134,9 +133,9 @@ public class GameReviewServiceShould : UnitTestBase
     public async Task ThrowConflictWhenReviewAlreadyExists()
     {
         var gameId = Guid.NewGuid();
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.CanReviewGameAsync(_currentUserId, gameId)).ReturnsAsync(true);
-        _repository.Setup(r => r.ExistsAsync(_currentUserId, gameId)).ReturnsAsync(true);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.CanReviewGameAsync(_currentUserId, gameId).Returns(true);
+        _repository.ExistsAsync(_currentUserId, gameId).Returns(true);
 
         var act = async () => await _service.CreateAsync(new CreateGameReview { GameId = gameId, Text = "Great game!" });
 
@@ -154,7 +153,7 @@ public class GameReviewServiceShould : UnitTestBase
         var result = await _service.CreateAsync(new CreateGameReview { GameId = gameId, Text = "Great game!" });
 
         result.Should().Be(expectedReview);
-        _repository.Verify(r => r.CreateAsync(It.IsAny<CreateGameReviewEntity>()), Times.Once);
+        await _repository.Received(1).CreateAsync(Arg.Any<CreateGameReviewEntity>());
     }
 
     #endregion
@@ -165,7 +164,7 @@ public class GameReviewServiceShould : UnitTestBase
     public async Task ThrowNotFoundWhenReviewDoesNotExist()
     {
         var reviewId = Guid.NewGuid();
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync((GameReview?)null);
+        _repository.GetAsync(reviewId).Returns((GameReview?)null);
 
         var act = async () => await _service.GetAsync(reviewId);
 
@@ -178,7 +177,7 @@ public class GameReviewServiceShould : UnitTestBase
     {
         var reviewId = Guid.NewGuid();
         var review = new GameReview { Id = reviewId, Text = "Great game!" };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
 
         var result = await _service.GetAsync(reviewId);
 
@@ -200,12 +199,12 @@ public class GameReviewServiceShould : UnitTestBase
             Text = "Original text",
             CreatedUtc = DateTimeOffset.UtcNow
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdateGameReviewEntity>())).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdateGameReviewEntity>()).Returns(review);
 
         await _service.UpdateAsync(new UpdateGameReview { ReviewId = reviewId, Text = "Updated text" });
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameReviewIntention.Edit, review), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameReviewIntention.Edit, review);
     }
 
     [Fact]
@@ -219,7 +218,7 @@ public class GameReviewServiceShould : UnitTestBase
             Text = "Original text",
             CreatedUtc = DateTimeOffset.UtcNow.AddDays(-2) // Past edit window
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
 
         var act = async () => await _service.UpdateAsync(new UpdateGameReview { ReviewId = reviewId, Text = "Updated text" });
 
@@ -238,12 +237,12 @@ public class GameReviewServiceShould : UnitTestBase
             Text = "Original text",
             CreatedUtc = DateTimeOffset.UtcNow
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
 
         var result = await _service.UpdateAsync(new UpdateGameReview { ReviewId = reviewId, Text = "" });
 
         result.Should().Be(review);
-        _repository.Verify(r => r.UpdateAsync(It.IsAny<UpdateGameReviewEntity>()), Times.Never);
+        await _repository.DidNotReceive().UpdateAsync(Arg.Any<UpdateGameReviewEntity>());
     }
 
     #endregion
@@ -260,12 +259,12 @@ public class GameReviewServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = _currentUserId },
             Text = "Some text"
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdateGameReviewEntity>())).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdateGameReviewEntity>()).Returns(review);
 
         await _service.DeleteAsync(reviewId);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(GameReviewIntention.Delete, review), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(GameReviewIntention.Delete, review);
     }
 
     [Fact]
@@ -278,12 +277,12 @@ public class GameReviewServiceShould : UnitTestBase
             Author = new GeneralUser { UserId = _currentUserId },
             Text = "Some text"
         };
-        _repository.Setup(r => r.GetAsync(reviewId)).ReturnsAsync(review);
-        _repository.Setup(r => r.UpdateAsync(It.IsAny<UpdateGameReviewEntity>())).ReturnsAsync(review);
+        _repository.GetAsync(reviewId).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdateGameReviewEntity>()).Returns(review);
 
         await _service.DeleteAsync(reviewId);
 
-        _repository.Verify(r => r.UpdateAsync(It.Is<UpdateGameReviewEntity>(e => e.IsRemoved == true)), Times.Once);
+        await _repository.Received(1).UpdateAsync(Arg.Is<UpdateGameReviewEntity>(e => e.IsRemoved == true));
     }
 
     #endregion
@@ -318,12 +317,12 @@ public class GameReviewServiceShould : UnitTestBase
     public async Task DelegateCanReviewToRepository()
     {
         var gameId = Guid.NewGuid();
-        _repository.Setup(r => r.CanReviewGameAsync(_currentUserId, gameId)).ReturnsAsync(true);
+        _repository.CanReviewGameAsync(_currentUserId, gameId).Returns(true);
 
         var result = await _service.CanReviewAsync(_currentUserId, gameId);
 
         result.Should().BeTrue();
-        _repository.Verify(r => r.CanReviewGameAsync(_currentUserId, gameId), Times.Once);
+        await _repository.Received(1).CanReviewGameAsync(_currentUserId, gameId);
     }
 
     #endregion
@@ -332,9 +331,9 @@ public class GameReviewServiceShould : UnitTestBase
     {
         expectedReview ??= new GameReview { Id = Guid.NewGuid(), GameId = gameId, Text = "Great game!" };
 
-        _repository.Setup(r => r.GetUserPostCountAsync(_currentUserId)).ReturnsAsync(200);
-        _repository.Setup(r => r.CanReviewGameAsync(_currentUserId, gameId)).ReturnsAsync(true);
-        _repository.Setup(r => r.ExistsAsync(_currentUserId, gameId)).ReturnsAsync(false);
-        _repository.Setup(r => r.CreateAsync(It.IsAny<CreateGameReviewEntity>())).ReturnsAsync(expectedReview);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
+        _repository.CanReviewGameAsync(_currentUserId, gameId).Returns(true);
+        _repository.ExistsAsync(_currentUserId, gameId).Returns(false);
+        _repository.CreateAsync(Arg.Any<CreateGameReviewEntity>()).Returns(expectedReview);
     }
 }

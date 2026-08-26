@@ -2,9 +2,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
+using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Messaging.GeneralBus;
-using Jamq.Client.Abstractions.Consuming;
-using Jamq.Client.Rabbit.Consuming;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Polly;
@@ -18,12 +17,12 @@ internal class RealtimeNotificationConsumer : BackgroundService
     internal const string QueueName = "dm.notifications.api";
 
     private readonly ILogger<RealtimeNotificationConsumer> _logger;
-    private readonly IConsumerBuilder _consumerBuilder;
+    private readonly IDmConsumerBuilder _consumerBuilder;
     private readonly AsyncRetryPolicy _consumeRetryPolicy;
 
     public RealtimeNotificationConsumer(
         ILogger<RealtimeNotificationConsumer> logger,
-        IConsumerBuilder consumerBuilder)
+        IDmConsumerBuilder consumerBuilder)
     {
         _logger = logger;
         _consumerBuilder = consumerBuilder;
@@ -40,22 +39,26 @@ internal class RealtimeNotificationConsumer : BackgroundService
         // part of host startup, so a RabbitMQ outage would abort the whole host.
         await Task.Yield();
 
-        var parameters = new RabbitConsumerParameters("dm.api", QueueName, ProcessingOrder.Sequential)
+        var parameters = new DmConsumerParameters("dm.api", QueueName)
         {
             ExchangeName = RealtimeNotificationsTransport.ExchangeName,
-            RoutingKeys = new[] { "#" },
+            RoutingKeys = ["#"],
 
             // No dead-letter exchange here, unlike the queues the workers consume.
             // This message is a copy of a notification the dispatcher has already
             // stored, and the client reads that over REST — a push kept past its
             // moment gives nobody anything to act on. Dropping it is the decision,
             // not an omission.
+            //
+            // Exclusive also names the queue with a random suffix on every
+            // subscription, which is why the alert about this queue matches it
+            // by prefix.
             Exclusive = true
         };
 
         try
         {
-            var consumer = _consumerBuilder.BuildRabbit<RealtimeNotification, RealtimeNotificationProcessor>(parameters);
+            var consumer = _consumerBuilder.Build<RealtimeNotification, RealtimeNotificationProcessor>(parameters);
 
             // Retried under the token the host stops with, the way both workers do
             // it. The waits double from one second over five attempts, 62 seconds
@@ -63,10 +66,9 @@ internal class RealtimeNotificationConsumer : BackgroundService
             // pool thread and was handed no token at all, so a stop arriving inside
             // a broker outage waited every remaining attempt out with nothing able
             // to interrupt it.
-            await _consumeRetryPolicy.ExecuteAsync(_ =>
+            await _consumeRetryPolicy.ExecuteAsync(async token =>
             {
-                consumer.Subscribe();
-                return Task.CompletedTask;
+                await consumer.Subscribe(token);
             }, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

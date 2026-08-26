@@ -15,6 +15,21 @@ internal static class RateLimitPolicies
     /// <summary>Authentication endpoints: login, registration, password reset.</summary>
     public const string Auth = "auth";
 
+    /// <summary>
+    /// Settings of the second factor: switching it on, off, and reissuing the
+    /// recovery codes.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="Auth" />, although the surface looks like one. That budget
+    /// is five requests an address may spend in a minute, and switching the
+    /// factor on costs four of them in one sitting - after the sign-in that got
+    /// the person to the screen has already spent one. A single mistyped
+    /// confirmation code then answered 429 instead of "that code did not match",
+    /// and behind carrier-grade NAT, where the address is a neighbourhood, it did
+    /// so without anybody mistyping anything.
+    /// </remarks>
+    public const string TwoFactor = "two-factor";
+
     /// <summary>Username availability check on the registration form.</summary>
     public const string UsernameCheck = "username-check";
 

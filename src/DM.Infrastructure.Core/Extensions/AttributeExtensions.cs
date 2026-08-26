@@ -85,10 +85,4 @@ public class AttributeNotFoundException : Exception
         : base($"Attribute of type {attrType.FullName} not found at enum {enumType.FullName}.")
     {
     }
-
-    /// <inheritdoc />
-    public AttributeNotFoundException(Type attrType)
-        : base($"Attribute of type {attrType.FullName} not found")
-    {
-    }
 }

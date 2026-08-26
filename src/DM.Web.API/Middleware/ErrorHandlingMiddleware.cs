@@ -4,6 +4,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Abstractions;
+using DM.Web.API.Shared.Http;
 using FluentValidation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,8 +18,6 @@ namespace DM.Web.API.Middleware;
 /// </summary>
 internal class ErrorHandlingMiddleware
 {
-    private const string ProblemJsonContentType = "application/problem+json";
-
     private readonly RequestDelegate _next;
 
     /// <inheritdoc />
@@ -107,7 +106,7 @@ internal class ErrorHandlingMiddleware
             // Through the contentType overload: assigning ContentType before
             // WriteAsJsonAsync was overwritten by it with application/json, and the
             // client could not tell an error apart by content type.
-            await httpContext.Response.WriteAsJsonAsync(error, error.GetType(), options: null, ProblemJsonContentType);
+            await httpContext.Response.WriteAsJsonAsync(error, error.GetType(), options: null, ApiContentTypes.ProblemJson);
         }
     }
 }

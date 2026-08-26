@@ -13,7 +13,7 @@ internal class UpdateChatValidator : AbstractValidator<UpdateChat>
             .NotEmpty().WithMessage(ValidationError.Empty);
 
         RuleFor(c => c.Title)
-            .MaximumLength(200).WithMessage(ValidationError.Long)
+            .MaximumLength(ChatFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long)
             .When(c => c.Title != null);
     }
 }

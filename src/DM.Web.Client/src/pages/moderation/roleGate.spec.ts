@@ -42,6 +42,29 @@ const gatedPages = readdirSync(HERE).filter(
   (name) => name.endsWith(".vue") && !NOT_A_GATED_PAGE.has(name),
 );
 
+/**
+ * The file that answers for a page's gate.
+ *
+ * Usually the page itself. A page whose whole template is one component out of
+ * this same directory — the two premoderation queues are one shared table with
+ * different nouns — is gated by that component, and the checks below have to
+ * follow it there. Following is not the same as excusing: the delegate is read
+ * in the page's stead, so a queue that stopped opening on the refusal fails
+ * for every page that leans on it.
+ */
+function gateSource(name: string): string {
+  const source = readFileSync(join(HERE, name), "utf8");
+  const opens = source
+    .slice(source.indexOf("<template>"))
+    .match(/^<template>\s*<([A-Z]\w+)[\s>]/);
+  const delegate = opens?.[1];
+  const imported =
+    delegate && source.includes(`import ${delegate} from "./${delegate}.vue"`);
+  return imported
+    ? readFileSync(join(HERE, `${delegate}.vue`), "utf8")
+    : source;
+}
+
 describe("the moderation role gate", () => {
   it("spells the refusal in one place", () => {
     const offenders = collectFiles(HERE)
@@ -56,7 +79,7 @@ describe("the moderation role gate", () => {
     expect(gatedPages.length).toBeGreaterThan(0);
 
     const offenders = gatedPages.filter((name) => {
-      const source = readFileSync(join(HERE, name), "utf8");
+      const source = gateSource(name);
       return !source.includes("useRoleGate(") || !source.includes("deniedText");
     });
 
@@ -78,7 +101,7 @@ describe("the moderation role gate", () => {
     const ASKS_ABOUT_THE_LOAD = /\sv-(?:else-)?if="[^"]*\b(error|loading)\b/g;
 
     const offenders = gatedPages.flatMap((name) => {
-      const source = readFileSync(join(HERE, name), "utf8");
+      const source = gateSource(name);
       const template = source.slice(source.indexOf("<template>"));
 
       const refusal = template.search(OPENS_ON_REFUSAL);

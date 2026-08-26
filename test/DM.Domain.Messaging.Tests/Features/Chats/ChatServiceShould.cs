@@ -17,24 +17,22 @@ using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Messaging.Authorization;
 using DM.Domain.Messaging.Features.Chats;
 using DM.Testing;
-using FluentAssertions;
+using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
-using Moq;
-using Moq.Language.Flow;
+using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Features.Chats;
 
 public class ChatServiceShould : UnitTestBase
 {
-    private readonly Mock<IIntentionManager> _intentionManager;
-    private readonly Mock<IChatRepository> _repository;
-    private readonly Mock<IUnreadCountersRepository> _unreadCountersRepository;
-    private readonly Mock<IIdentityProvider> _identityProvider;
-    private readonly Mock<IUserBlacklistChecker> _userBlacklistChecker;
-    private readonly ISetup<IChatFactory, (CreateChatEntity, IEnumerable<CreateChatLinkEntity>)> _createGroupSetup;
-    private readonly ISetup<IChatFactory, (CreateChatEntity, IEnumerable<CreateChatLinkEntity>)> _createDirectSetup;
+    private readonly IIntentionManager _intentionManager;
+    private readonly IChatRepository _repository;
+    private readonly IUnreadCountersRepository _unreadCountersRepository;
+    private readonly IIdentityProvider _identityProvider;
+    private readonly IUserBlacklistChecker _userBlacklistChecker;
+    private readonly IChatFactory _factory;
     private readonly ChatService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
 
@@ -42,60 +40,60 @@ public class ChatServiceShould : UnitTestBase
     {
         var createValidator = Mock<IValidator<CreateChat>>();
         createValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateChat>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<CreateChat>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         var updateValidator = Mock<IValidator<UpdateChat>>();
         updateValidator
-            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateChat>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ValidationResult());
+            .ValidateAsync(Arg.Any<ValidationContext<UpdateChat>>(), Arg.Any<CancellationToken>())
+            .Returns(new ValidationResult());
 
         _intentionManager = Mock<IIntentionManager>();
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<ChatIntention>()));
-        _intentionManager.Setup(m => m.ThrowIfForbidden(It.IsAny<ChatIntention>(), It.IsAny<Chat>()));
 
-        var factory = Mock<IChatFactory>();
-        _createGroupSetup = factory.Setup(f => f.CreateGroup(It.IsAny<string>(), It.IsAny<Guid[]>()));
-        _createDirectSetup = factory.Setup(f => f.CreateDirect(It.IsAny<Guid>(), It.IsAny<Guid>()));
+        _factory = Mock<IChatFactory>();
 
         _repository = Mock<IChatRepository>();
-        _repository.Setup(r => r.Create(It.IsAny<CreateChatEntity>(), It.IsAny<IEnumerable<CreateChatLinkEntity>>()))
-            .ReturnsAsync(new Chat { Id = Guid.NewGuid() });
+        _repository.Create(Arg.Any<CreateChatEntity>(), Arg.Any<IEnumerable<CreateChatLinkEntity>>())
+            .Returns(new Chat { Id = Guid.NewGuid() });
 
         _unreadCountersRepository = Mock<IUnreadCountersRepository>();
-        _unreadCountersRepository.Setup(r => r.CreateMarkerAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<IEnumerable<Guid>>()))
+        _unreadCountersRepository.CreateMarkerAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<IEnumerable<Guid>>())
             .Returns(Task.CompletedTask);
-        _unreadCountersRepository.Setup(r => r.SelectByEntitiesAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid[]>()))
-            .ReturnsAsync((Guid userId, UnreadEntryType type, Guid[] ids) =>
-                ids.ToDictionary(id => id, _ => 0));
+        _unreadCountersRepository.SelectByEntitiesAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<Guid[]>())
+            .Returns(ci =>
+            {
+                var userId = ci.ArgAt<Guid>(0);
+                var type = ci.ArgAt<UnreadEntryType>(1);
+                var ids = ci.ArgAt<Guid[]>(2);
+                return ids.ToDictionary(id => id, _ => 0);
+            });
 
         var guidFactory = Mock<IGuidFactory>();
-        guidFactory.Setup(g => g.Create()).Returns(Guid.NewGuid());
+        guidFactory.Create().Returns(Guid.NewGuid());
 
         _identityProvider = Mock<IIdentityProvider>();
         var user = new AuthenticatedUser { UserId = _currentUserId };
         var settings = new UserSettings { Paging = new PagingSettings { MessagesPerPage = 20 } };
         var session = new Session();
         var identity = Identity.Success(user, session, settings, "token");
-        _identityProvider.Setup(p => p.Current).Returns(identity);
+        _identityProvider.Current.Returns(identity);
 
         _userBlacklistChecker = Mock<IUserBlacklistChecker>();
         _userBlacklistChecker
-            .Setup(c => c.GetOwnersBlockingIfFlagEnabledAsync(
-                It.IsAny<Guid>(), It.IsAny<IReadOnlyCollection<Guid>>(),
-                It.IsAny<UserBlacklistSettings>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<Guid>());
+            .GetOwnersBlockingIfFlagEnabledAsync(
+                Arg.Any<Guid>(), Arg.Any<IReadOnlyCollection<Guid>>(),
+                Arg.Any<UserBlacklistSettings>(), Arg.Any<CancellationToken>()).Returns(new HashSet<Guid>());
 
         _service = new ChatService(
-            createValidator.Object,
-            updateValidator.Object,
-            factory.Object,
-            _repository.Object,
-            _unreadCountersRepository.Object,
-            _intentionManager.Object,
-            guidFactory.Object,
-            _identityProvider.Object,
-            _userBlacklistChecker.Object);
+            createValidator,
+            updateValidator,
+            _factory,
+            _repository,
+            _unreadCountersRepository,
+            _intentionManager,
+            guidFactory,
+            _identityProvider,
+            _userBlacklistChecker);
     }
 
     [Fact]
@@ -108,11 +106,11 @@ public class ChatServiceShould : UnitTestBase
         };
         var chatEntity = new CreateChatEntity();
         var linkEntities = new List<CreateChatLinkEntity>();
-        _createGroupSetup.Returns((chatEntity, linkEntities));
+        _factory.CreateGroup(Arg.Any<string>(), Arg.Any<Guid[]>()).Returns((chatEntity, linkEntities));
 
         var result = await _service.CreateGroupAsync(createChat);
 
-        _repository.Verify(r => r.Create(chatEntity, linkEntities), Times.Once);
+        await _repository.Received(1).Create(chatEntity, linkEntities);
     }
 
     [Fact]
@@ -128,18 +126,16 @@ public class ChatServiceShould : UnitTestBase
         // the markers are written before the row exists to return one.
         var chatEntity = new CreateChatEntity { ChatId = chatId };
         var linkEntities = new List<CreateChatLinkEntity>();
-        _createGroupSetup.Returns((chatEntity, linkEntities));
-        _repository.Setup(r => r.Create(It.IsAny<CreateChatEntity>(), It.IsAny<IEnumerable<CreateChatLinkEntity>>()))
-            .ReturnsAsync(new Chat { Id = chatId });
+        _factory.CreateGroup(Arg.Any<string>(), Arg.Any<Guid[]>()).Returns((chatEntity, linkEntities));
+        _repository.Create(Arg.Any<CreateChatEntity>(), Arg.Any<IEnumerable<CreateChatLinkEntity>>())
+            .Returns(new Chat { Id = chatId });
 
         await _service.CreateGroupAsync(createChat);
 
-        _unreadCountersRepository.Verify(
-            r => r.CreateMarkerAsync(chatId, UnreadEntryType.Message, It.IsAny<IEnumerable<Guid>>()),
-            Times.Once);
-        _unreadCountersRepository.Verify(
-            r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<IEnumerable<Guid>>()),
-            Times.Never, "the row landed, so the reservation was committed");
+        await _unreadCountersRepository.Received(1).CreateMarkerAsync(chatId, UnreadEntryType.Message, Arg.Any<IEnumerable<Guid>>());
+        // The row landed, so the reservation was committed.
+        await _unreadCountersRepository.DidNotReceive().DeleteAsync(
+            Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<IEnumerable<Guid>>());
     }
 
     /// <summary>
@@ -148,7 +144,7 @@ public class ChatServiceShould : UnitTestBase
     /// <remarks>
     /// A person could be counted into a chat two ways and out of it none. The
     /// link in Postgres was flagged removed, so the conversation vanished from
-    /// every read of theirs, while the marker in Mongo went on being incremented
+    /// every read of theirs, while the unread marker went on being incremented
     /// by every later message — and nothing collected it, because the expiry
     /// index reads the removal stamp and an untouched marker carries none.
     /// </remarks>
@@ -159,15 +155,13 @@ public class ChatServiceShould : UnitTestBase
         var removed = Guid.NewGuid();
         var chat = new Chat { Id = chatId, Participants = Array.Empty<GeneralUser>() };
         var updateChat = new UpdateChat { ChatId = chatId, RemoveParticipants = new[] { removed } };
-        _repository.Setup(r => r.GetForUpdate(chatId)).ReturnsAsync(chat);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateChatEntity>())).ReturnsAsync(chat);
+        _repository.GetForUpdate(chatId).Returns(chat);
+        _repository.Update(Arg.Any<UpdateChatEntity>()).Returns(chat);
 
         await _service.UpdateAsync(updateChat);
 
-        _unreadCountersRepository.Verify(
-            r => r.DeleteAsync(chatId, UnreadEntryType.Message,
-                It.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { removed }))),
-            Times.Once);
+        await _unreadCountersRepository.Received(1).DeleteAsync(chatId, UnreadEntryType.Message,
+                Arg.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { removed })));
     }
 
     /// <summary>
@@ -187,7 +181,7 @@ public class ChatServiceShould : UnitTestBase
     public async Task RefuseToMarkAsReadAConversationTheCallerIsNotIn(ChatType type)
     {
         var chatId = Guid.NewGuid();
-        _repository.Setup(r => r.GetForUpdate(chatId)).ReturnsAsync(new Chat
+        _repository.GetForUpdate(chatId).Returns(new Chat
         {
             Id = chatId,
             Type = type,
@@ -198,9 +192,7 @@ public class ChatServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
-        _unreadCountersRepository.Verify(
-            r => r.FlushAsync(It.IsAny<Guid>(), It.IsAny<UnreadEntryType>(), It.IsAny<Guid>()),
-            Times.Never);
+        await _unreadCountersRepository.DidNotReceive().FlushAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<Guid>());
     }
 
     /// <summary>
@@ -212,7 +204,7 @@ public class ChatServiceShould : UnitTestBase
     {
         var chatId = Guid.NewGuid();
         var roomId = Guid.NewGuid();
-        _repository.Setup(r => r.GetForUpdate(chatId)).ReturnsAsync(new Chat
+        _repository.GetForUpdate(chatId).Returns(new Chat
         {
             Id = chatId,
             Type = ChatType.GameRoom,
@@ -222,8 +214,7 @@ public class ChatServiceShould : UnitTestBase
 
         await _service.MarkAsReadAsync(chatId);
 
-        _unreadCountersRepository.Verify(
-            r => r.FlushAsync(_currentUserId, UnreadEntryType.Message, roomId), Times.Once);
+        await _unreadCountersRepository.Received(1).FlushAsync(_currentUserId, UnreadEntryType.Message, roomId);
     }
 
     [Fact]
@@ -232,12 +223,12 @@ public class ChatServiceShould : UnitTestBase
         var chatId = Guid.NewGuid();
         var updateChat = new UpdateChat { ChatId = chatId, Title = "Updated Title" };
         var chat = new Chat { Id = chatId, Participants = Array.Empty<GeneralUser>() };
-        _repository.Setup(r => r.GetForUpdate(chatId)).ReturnsAsync(chat);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateChatEntity>())).ReturnsAsync(chat);
+        _repository.GetForUpdate(chatId).Returns(chat);
+        _repository.Update(Arg.Any<UpdateChatEntity>()).Returns(chat);
 
         await _service.UpdateAsync(updateChat);
 
-        _intentionManager.Verify(m => m.ThrowIfForbidden(ChatIntention.UpdateChat, chat), Times.Once);
+        _intentionManager.Received(1).ThrowIfForbidden(ChatIntention.UpdateChat, chat);
     }
 
     [Fact]
@@ -247,15 +238,15 @@ public class ChatServiceShould : UnitTestBase
         var username = "testuser";
         var chatEntity = new CreateChatEntity();
         var linkEntities = new List<CreateChatLinkEntity>();
-        _createDirectSetup.Returns((chatEntity, linkEntities));
-        _repository.Setup(r => r.FindUser(username)).ReturnsAsync(otherUserId);
-        _repository.Setup(r => r.FindDirectChat(_currentUserId, otherUserId)).ReturnsAsync((Chat?)null);
-        _repository.Setup(r => r.Create(It.IsAny<CreateChatEntity>(), It.IsAny<IEnumerable<CreateChatLinkEntity>>()))
-            .ReturnsAsync(new Chat { Id = Guid.NewGuid(), Type = ChatType.Direct });
+        _factory.CreateDirect(Arg.Any<Guid>(), Arg.Any<Guid>()).Returns((chatEntity, linkEntities));
+        _repository.FindUser(username).Returns(otherUserId);
+        _repository.FindDirectChat(_currentUserId, otherUserId).Returns((Chat?)null);
+        _repository.Create(Arg.Any<CreateChatEntity>(), Arg.Any<IEnumerable<CreateChatLinkEntity>>())
+            .Returns(new Chat { Id = Guid.NewGuid(), Type = ChatType.Direct });
 
         var result = await _service.GetOrCreateDirectAsync(username);
 
-        _repository.Verify(r => r.Create(chatEntity, linkEntities), Times.Once);
+        await _repository.Received(1).Create(chatEntity, linkEntities);
     }
 
     [Fact]
@@ -264,12 +255,12 @@ public class ChatServiceShould : UnitTestBase
         var otherUserId = Guid.NewGuid();
         var username = "testuser";
         var existingChat = new Chat { Id = Guid.NewGuid(), Type = ChatType.Direct };
-        _repository.Setup(r => r.FindUser(username)).ReturnsAsync(otherUserId);
-        _repository.Setup(r => r.FindDirectChat(_currentUserId, otherUserId)).ReturnsAsync(existingChat);
+        _repository.FindUser(username).Returns(otherUserId);
+        _repository.FindDirectChat(_currentUserId, otherUserId).Returns(existingChat);
 
         var result = await _service.GetOrCreateDirectAsync(username);
 
-        _repository.Verify(r => r.Create(It.IsAny<CreateChatEntity>(), It.IsAny<IEnumerable<CreateChatLinkEntity>>()), Times.Never);
+        await _repository.DidNotReceive().Create(Arg.Any<CreateChatEntity>(), Arg.Any<IEnumerable<CreateChatLinkEntity>>());
     }
 
     /// <summary>
@@ -287,19 +278,16 @@ public class ChatServiceShould : UnitTestBase
     {
         var blocker = Guid.NewGuid();
         _userBlacklistChecker
-            .Setup(c => c.GetOwnersBlockingIfFlagEnabledAsync(
-                _currentUserId, It.IsAny<IReadOnlyCollection<Guid>>(),
-                UserBlacklistSettings.BlockDirectMessages, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<Guid> { blocker });
+            .GetOwnersBlockingIfFlagEnabledAsync(
+                _currentUserId, Arg.Any<IReadOnlyCollection<Guid>>(),
+                UserBlacklistSettings.BlockDirectMessages, Arg.Any<CancellationToken>()).Returns(new HashSet<Guid> { blocker });
         var createChat = new CreateChat { Title = "Test Group", ParticipantIds = new[] { blocker } };
 
         var act = async () => await _service.CreateGroupAsync(createChat);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        _repository.Verify(
-            r => r.Create(It.IsAny<CreateChatEntity>(), It.IsAny<IEnumerable<CreateChatLinkEntity>>()),
-            Times.Never);
+        await _repository.DidNotReceive().Create(Arg.Any<CreateChatEntity>(), Arg.Any<IEnumerable<CreateChatLinkEntity>>());
     }
 
     /// <summary>
@@ -315,19 +303,18 @@ public class ChatServiceShould : UnitTestBase
         var chatId = Guid.NewGuid();
         var blocker = Guid.NewGuid();
         var chat = new Chat { Id = chatId, Type = ChatType.Group, Participants = Array.Empty<GeneralUser>() };
-        _repository.Setup(r => r.GetForUpdate(chatId)).ReturnsAsync(chat);
-        _repository.Setup(r => r.Update(It.IsAny<UpdateChatEntity>())).ReturnsAsync(chat);
+        _repository.GetForUpdate(chatId).Returns(chat);
+        _repository.Update(Arg.Any<UpdateChatEntity>()).Returns(chat);
         _userBlacklistChecker
-            .Setup(c => c.GetOwnersBlockingIfFlagEnabledAsync(
-                _currentUserId, It.IsAny<IReadOnlyCollection<Guid>>(),
-                UserBlacklistSettings.BlockDirectMessages, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new HashSet<Guid> { blocker });
+            .GetOwnersBlockingIfFlagEnabledAsync(
+                _currentUserId, Arg.Any<IReadOnlyCollection<Guid>>(),
+                UserBlacklistSettings.BlockDirectMessages, Arg.Any<CancellationToken>()).Returns(new HashSet<Guid> { blocker });
         var updateChat = new UpdateChat { ChatId = chatId, AddParticipants = new[] { blocker } };
 
         var act = async () => await _service.UpdateAsync(updateChat);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        _repository.Verify(r => r.Update(It.IsAny<UpdateChatEntity>()), Times.Never);
+        await _repository.DidNotReceive().Update(Arg.Any<UpdateChatEntity>());
     }
 }

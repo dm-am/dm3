@@ -1,90 +1,100 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Account.Features.Authentication;
 using DM.Infrastructure.Persistence.Entities.Account;
-using DM.Infrastructure.Persistence.MongoIntegration;
-using MongoDB.Driver;
+using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
 /// <inheritdoc cref="ILoginAttemptRepository"/>
-internal class LoginAttemptRepository : MongoCollectionRepository<LoginAttempt>, ILoginAttemptRepository
+internal class LoginAttemptRepository : ILoginAttemptRepository
 {
+    private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     /// <inheritdoc />
     public LoginAttemptRepository(
-        DmMongoClient client,
-        IDateTimeProvider dateTimeProvider) : base(client)
+        DmDbContext dbContext,
+        IDateTimeProvider dateTimeProvider)
     {
+        _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
     public async Task<int> GetFailedAttemptCount(LoginAttemptOrigin origin)
     {
-        var record = await Collection
-            .Find(Filter.Eq(x => x.Id, origin.Key))
-            .FirstOrDefaultAsync();
+        var record = await _dbContext.LoginAttempts
+            .TagWith("DM.Authentication.FailedAttemptCount")
+            .FirstOrDefaultAsync(x => x.Key == origin.Key);
         return record?.FailedAttempts ?? 0;
     }
 
     /// <inheritdoc />
     public async Task<DateTime?> GetLockoutStart(LoginAttemptOrigin origin)
     {
-        var record = await Collection
-            .Find(Filter.Eq(x => x.Id, origin.Key))
-            .FirstOrDefaultAsync();
+        var record = await _dbContext.LoginAttempts
+            .TagWith("DM.Authentication.LockoutStart")
+            .FirstOrDefaultAsync(x => x.Key == origin.Key);
         return record?.LockoutStartUtc;
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// One atomic statement, as FindOneAndUpdate was: two requests racing each
+    /// other both land, the server serializes the increments, and each caller
+    /// reads back the count its own attempt produced.
+    /// </remarks>
     public async Task<int> RecordFailedAttempt(LoginAttemptOrigin origin)
     {
         var now = _dateTimeProvider.Now.UtcDateTime;
 
-        var result = await Collection.FindOneAndUpdateAsync(
-            Filter.Eq(x => x.Id, origin.Key),
-            UpdateBuilder
-                .Inc(x => x.FailedAttempts, 1)
-                .Set(x => x.LastAttemptUtc, now)
-                // Denormalized out of the composite id so a successful login can
-                // clear every address at once, and so the record stays readable.
-                .SetOnInsert(x => x.Email, origin.NormalizedEmail)
-                .SetOnInsert(x => x.IpAddress, origin.IpAddress),
-            new FindOneAndUpdateOptions<LoginAttempt>
-            {
-                IsUpsert = true,
-                ReturnDocument = ReturnDocument.After
-            });
-
-        return result?.FailedAttempts ?? 1;
+        // Email and address are only written on the insert that creates the row,
+        // like SetOnInsert before: denormalized out of the composite key so a
+        // successful login can clear every address at once.
+        //
+        // ToListAsync, not SingleAsync: an operator composed over SqlQuery wraps
+        // the statement into a subquery, and INSERT ... RETURNING is not valid
+        // inside one. Uncomposed, the statement runs as written and RETURNING
+        // is the result set.
+        var counts = await _dbContext.Database.SqlQuery<int>($"""
+            INSERT INTO "LoginAttempts" ("Key", "Email", "IpAddress", "FailedAttempts", "LastAttemptUtc")
+            VALUES ({origin.Key}, {origin.NormalizedEmail}, {origin.IpAddress}, 1, {now})
+            ON CONFLICT ("Key") DO UPDATE SET
+                "FailedAttempts" = "LoginAttempts"."FailedAttempts" + 1,
+                "LastAttemptUtc" = {now}
+            RETURNING "FailedAttempts" AS "Value"
+            """).ToListAsync();
+        return counts.Single();
     }
 
     /// <inheritdoc />
     public Task SetLockout(LoginAttemptOrigin origin, DateTime lockoutStart)
     {
-        return Collection.UpdateOneAsync(
-            Filter.Eq(x => x.Id, origin.Key),
-            UpdateBuilder
-                .Set(x => x.LockoutStartUtc, lockoutStart)
-                .SetOnInsert(x => x.Email, origin.NormalizedEmail)
-                .SetOnInsert(x => x.IpAddress, origin.IpAddress),
-            new UpdateOptions { IsUpsert = true });
+        return _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "LoginAttempts" ("Key", "Email", "IpAddress", "FailedAttempts", "LastAttemptUtc", "LockoutStartUtc")
+            VALUES ({origin.Key}, {origin.NormalizedEmail}, {origin.IpAddress}, 0, {lockoutStart}, {lockoutStart})
+            ON CONFLICT ("Key") DO UPDATE SET
+                "LockoutStartUtc" = {lockoutStart}
+            """);
     }
 
     /// <inheritdoc />
     public Task ResetAttempts(LoginAttemptOrigin origin) =>
-        Collection.DeleteOneAsync(Filter.Eq(x => x.Id, origin.Key));
+        _dbContext.LoginAttempts
+            .Where(x => x.Key == origin.Key)
+            .ExecuteDeleteAsync();
 
     /// <inheritdoc />
     public Task ResetAttempts(string email)
     {
         // Every address, not only the one that succeeded: proving you know the
         // password clears the account's whole history of failed attempts.
-        return Collection.DeleteManyAsync(
-            Filter.Eq(x => x.Email, email.ToLowerInvariant()));
+        var normalized = email.ToLowerInvariant();
+        return _dbContext.LoginAttempts
+            .Where(x => x.Email == normalized)
+            .ExecuteDeleteAsync();
     }
-
 }

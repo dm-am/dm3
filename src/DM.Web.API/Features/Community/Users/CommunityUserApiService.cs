@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using AutoMapper;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Community.Features.Profiles;
 using DM.Domain.Core.Enums;
@@ -23,7 +22,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
     private readonly IUserLookupService _userLookupService;
     private readonly IUserProfileNoteService _profileNoteService;
     private readonly ILoginRecordService _loginRecordService;
-    private readonly IMapper _mapper;
+    private readonly UserMapper _mapper;
 
     /// <inheritdoc />
     public CommunityUserApiService(
@@ -31,7 +30,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
         IUserLookupService userLookupService,
         IUserProfileNoteService profileNoteService,
         ILoginRecordService loginRecordService,
-        IMapper mapper)
+        UserMapper mapper)
     {
         _profileService = profileService;
         _userLookupService = userLookupService;
@@ -56,21 +55,21 @@ internal class CommunityUserApiService : ICommunityUserApiService
         // Mapped by name, so a filter added to the query string and the domain
         // record needs no edit here. The direction is the one thing this layer
         // decides, above.
-        var filter = _mapper.Map<UserFilter>(query) with { SortAscending = sortAscending };
+        var filter = _mapper.ToUserFilter(query) with { SortAscending = sortAscending };
 
         var (users, paging) = await _profileService.GetUsers(query, filter);
-        return new ListEnvelope<User>(users.Select(_mapper.Map<User>), new PagingInfo(paging));
+        return new ListEnvelope<User>(users.Select(_mapper.ToUser), new PagingInfo(paging));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<User>> GetUser(string username)
     {
         var user = await _userLookupService.GetAsync(username);
-        var userDto = _mapper.Map<User>(user);
+        var userDto = _mapper.ToUser(user);
 
         // Populate username history
         var usernameHistory = await _profileService.GetUsernameHistory(user.UserId);
-        userDto.UsernameHistory = usernameHistory.Select(_mapper.Map<UsernameHistoryEntry>).ToList();
+        userDto.UsernameHistory = usernameHistory.Select(_mapper.ToUsernameHistoryEntry).ToList();
 
         return new Envelope<User>(userDto);
     }
@@ -90,14 +89,14 @@ internal class CommunityUserApiService : ICommunityUserApiService
         // mean exactly that.
         var personalNote = await _profileNoteService.GetNote(username);
 
-        var profile = _mapper.Map<UserProfile>(user);
-        profile.UsernameHistory = usernameHistory.Select(_mapper.Map<UsernameHistoryEntry>).ToList();
+        var profile = _mapper.ToUserProfile(user);
+        profile.UsernameHistory = usernameHistory.Select(_mapper.ToUsernameHistoryEntry).ToList();
         // GeneralUser→UserProfile mapping ignores Contacts and Info because
         // the base domain type lacks them; UserDetails (the actual source
         // returned here) carries both. Populate them after the base map.
         profile.Contacts = user.Contacts
             .OrderBy(c => c.SortOrder)
-            .Select(_mapper.Map<Contact>)
+            .Select(_mapper.ToContact)
             .ToList();
         // Owner of the profile bio is the profile subject. Populate the
         // render-context envelope so the JSON converter honors the owner's
@@ -119,13 +118,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
 
         if (personalNote != null)
         {
-            profile.PersonalNote = new PersonalNote
-            {
-                Id = personalNote.Id,
-                Text = personalNote.Text,
-                CreatedUtc = personalNote.CreatedUtc,
-                ModifiedUtc = personalNote.ModifiedUtc
-            };
+            profile.PersonalNote = _mapper.ToPersonalNote(personalNote);
         }
 
         return new Envelope<UserProfile>(profile);

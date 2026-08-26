@@ -7,7 +7,7 @@ namespace DM.Web.API.IntegrationTests;
 /// The object store, as a dictionary.
 /// </summary>
 /// <remarks>
-/// The suite runs PostgreSQL, MongoDB and RabbitMQ in containers because the code
+/// The suite runs PostgreSQL and RabbitMQ in containers because the code
 /// under test depends on what those actually do. Object storage is different:
 /// nothing asserted here is about S3's behaviour, only about who is allowed to
 /// reach bytes that exist, so a bucket in a container would add a service to

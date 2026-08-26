@@ -1,12 +1,9 @@
 using System;
 using System.Collections.Generic;
-using Jamq.Client.Abstractions.Consuming;
-using Jamq.Client.Abstractions.Producing;
-using Jamq.Client.DependencyInjection;
-using Jamq.Client.Rabbit.DependencyInjection;
-using RabbitMQ.Client;
+using System.Threading;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Infrastructure.Messaging;
@@ -15,8 +12,8 @@ namespace DM.Infrastructure.Messaging;
 /// Configuration this module needs in order to work at all.
 /// </summary>
 /// <remarks>
-/// It ships next to <see cref="MessagingModule"/> so that registering the
-/// module and binding its options are one call. Written out by each host
+/// It ships next to <see cref="MessagingRegistrationExtensions"/> so that
+/// registering the module and binding its options are one call. Written out by each host
 /// instead, it went wrong the way it always goes wrong: the API validated the
 /// endpoint and refused to start without one, while both workers bound the
 /// section and validated nothing. A worker with an empty endpoint started,
@@ -58,46 +55,42 @@ public static class MessagingConfigurationExtensions
     }
 
     /// <summary>
-    /// Registers the message queuing client with the defaults every host shares.
+    /// Declares one middleware of the consumer pipeline of this host.
     /// </summary>
     /// <remarks>
-    /// The producer side is what this call exists for. Each host used to register
-    /// the client on its own, and a producer default written in one of them would
-    /// have been absent from the other two — persistence has to hold for every
-    /// publisher in the system or the queue it protects is emptied by whichever
-    /// process forgot it. The consumer pipeline is named by the host, because a
-    /// host is what decides whether what it takes off its queue is worth another
-    /// attempt. All three hosts consume: the two workers off the queues they were
-    /// written for, and the API off the realtime push. The workers install the
-    /// same <see cref="RetryingConsumerMiddleware"/> and differ in the queue they
-    /// register it for; the API passes one of its own, which leaves the retry out
-    /// for the reason that file states.
+    /// A host is what decides whether the messages it takes off its queue are
+    /// worth another attempt. All three hosts consume: the two workers declare
+    /// the same <see cref="RetryingConsumerMiddleware"/> and differ in the queue
+    /// they register it for; the API declares a middleware of its own, which
+    /// leaves the retry out for the reason that file states. The declaration
+    /// lives in the host's composition so the pipeline of a host is read where
+    /// the host is read.
+    ///
+    /// TryAdd rather than Add, because a middleware whose construction needs
+    /// more than the container gives — the retrying one takes its queue as a
+    /// string — is registered by its own extension first, and that registration
+    /// must not be replaced with one the container cannot activate.
     /// </remarks>
     /// <param name="services">Service collection.</param>
-    /// <param name="consumerBuilderDefaults">Consumer pipeline of this host, if it consumes at all.</param>
-    public static IServiceCollection AddDmJamqClient(
-        this IServiceCollection services,
-        Func<IConsumerBuilder, IConsumerBuilder>? consumerBuilderDefaults = null) =>
-        services
-            .AddTransient<PersistentDeliveryMiddleware>()
-            .AddJamqClient(
-                config => config.UseRabbit(),
-                producerBuilderDefaults: builder => builder.WithMiddleware<PersistentDeliveryMiddleware>(),
-                consumerBuilderDefaults: consumerBuilderDefaults);
+    public static IServiceCollection AddDmConsumerMiddleware<TMiddleware>(this IServiceCollection services)
+        where TMiddleware : class, IConsumerMiddleware
+    {
+        services.TryAddTransient<TMiddleware>();
+        services.AddSingleton(new ConsumerMiddlewareRegistration(typeof(TMiddleware)));
+        return services;
+    }
 
     /// <summary>
     /// Registers the retrying consumer middleware of a host, for the queue it reads.
     /// </summary>
     /// <remarks>
-    /// The client resolves an interface middleware out of the container by its type
-    /// and hands it nothing of its own, so the queue cannot travel with the pipeline
-    /// declaration - it has to be in the graph. Which is also what lets one middleware
-    /// serve both workers: the queue was the only thing their two copies did not
-    /// share.
+    /// The consumer resolves a middleware out of the message scope by its type
+    /// and hands it nothing of its own, so the queue cannot travel with the
+    /// pipeline declaration - it has to be in the graph. Which is also what lets
+    /// one middleware serve both workers: the queue was the only thing their two
+    /// copies did not share.
     ///
-    /// Per resolution, the way the assembly scan used to hand out those copies. A
-    /// message is handled in a scope of its own, and what the middleware builds
-    /// outlives none of them.
+    /// Per resolution, so what the middleware builds outlives no message scope.
     /// </remarks>
     /// <param name="services">Service collection.</param>
     /// <param name="queue">Queue this host consumes, as the metrics label it.</param>
@@ -107,7 +100,7 @@ public static class MessagingConfigurationExtensions
             queue, provider.GetRequiredService<ILogger<RetryingConsumerMiddleware>>()));
 
     /// <summary>
-    /// Adds a health check that actually opens a connection to the broker.
+    /// Adds a health check that actually reaches the broker.
     /// </summary>
     /// <remarks>
     /// For a consumer host this is the whole of its health: it exists to take
@@ -115,6 +108,12 @@ public static class MessagingConfigurationExtensions
     /// which registers the endpoint with nothing behind it and answers Healthy
     /// unconditionally — including while the process was failing every message
     /// it was handed.
+    ///
+    /// The probe opens a channel on the same connection the application
+    /// publishes and consumes on. That is the point rather than a shortcut: a
+    /// probe that dials a connection of its own answers about the broker in
+    /// general, while this one answers about the session everything in the host
+    /// actually depends on — credentials, virtual host and all.
     /// </remarks>
     /// <param name="services">Service collection.</param>
     /// <param name="configuration">Configuration to read the endpoint from.</param>
@@ -126,23 +125,17 @@ public static class MessagingConfigurationExtensions
 
         // A misconfigured endpoint is reported by AddDmMessageQueuing, whose
         // ValidateOnStart names the setting and says what a good value looks
-        // like. That runs when the host starts, which is after this method — so
-        // constructing the Uri unguarded here would pre-empt it with a bare
-        // UriFormatException and no mention of which setting is at fault.
+        // like. A host with no endpoint at all - a test host, typically - gets
+        // no broker probe rather than a permanently red one.
         if (!Uri.TryCreate(rabbitMq.Endpoint, UriKind.Absolute, out _))
         {
             return services;
         }
 
-        // The same factory the client connects with, credentials and all. Handed a
-        // bare endpoint instead, the probe fell back to the library defaults -
-        // guest/guest on the default virtual host - and reported a broker the
-        // application could not log in to as Healthy, on the one signal that exists
-        // to say the opposite.
-        var factory = rabbitMq.CreateConnectionFactory();
         services.AddHealthChecks()
             .AddRabbitMQ(
-                setup: options => options.ConnectionFactory = factory,
+                provider => provider.GetRequiredService<DmBrokerConnection>()
+                    .GetOpenConnection(CancellationToken.None),
                 name: "rabbitmq",
                 tags: tags);
 
@@ -163,7 +156,7 @@ public static class MessagingConfigurationExtensions
     public static IServiceCollection AddDmPublishedExchanges(
         this IServiceCollection services, params string[] exchangeNames) =>
         services.AddHostedService(provider => new PublishedExchangeDeclaration(
-            provider.GetRequiredService<IAsyncConnectionFactory>(),
+            provider.GetRequiredService<DmBrokerConnection>(),
             provider.GetRequiredService<ILogger<PublishedExchangeDeclaration>>(),
             exchangeNames));
 }

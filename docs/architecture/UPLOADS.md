@@ -9,7 +9,7 @@
 ```mermaid
 flowchart LR
     up["Клиент<br/>файл"] --> api["API<br/>magic bytes, EXIF strip,<br/>даунскейл до 1024px"]
-    api -->|"1: объект"| s3[("MinIO")]
+    api -->|"1: объект"| s3[("Объектное хранилище<br/>MinIO")]
     api -->|"2: строка"| pg[("PostgreSQL")]
     view["Браузер<br/>smallUrl / mediumUrl"] --> proxy["imgproxy<br/>ресайз, формат по Accept"]
     proxy --> s3

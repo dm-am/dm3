@@ -10,6 +10,8 @@ import { LoginPrompt } from "@/features/auth";
 import { WarningDialog } from "@/features/moderation-actions";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
+import { provideQuoteComposer } from "@/shared/lib/composables/useQuoteComposer";
+import { BODY_TEXT_MAX_LENGTH } from "@/shared/lib/constants/content";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
@@ -48,6 +50,16 @@ const isModerator = computed(() => userIsModerator(user.value));
 const canComment = computed(
   () => user.value && topic.value && !topic.value.isClosed,
 );
+
+// The reply composer of the topic is what every Quote button on this page
+// writes into — the one on the topic itself and the ones on the comments, which
+// are rendered by the list inside the router-view below. Handed down rather
+// than reached for, and handed down as nothing when the topic is closed or the
+// reader is a guest: an action that cannot end in an answer gets no control.
+provideQuoteComposer({
+  enabled: () => Boolean(canComment.value),
+  insert: (source) => editorRef.value?.insertBlock(source.text),
+});
 
 async function handleSend() {
   if (!newComment.value.trim() || sending.value) return;
@@ -264,6 +276,7 @@ function handleWarn(id: string) {
           :disabled="sending"
           :min-height="100"
           :max-height="300"
+          :max-length="BODY_TEXT_MAX_LENGTH"
           :resizable="true"
           :is-moderator="isModerator"
           @submit="handleSend"
@@ -298,7 +311,7 @@ function handleWarn(id: string) {
 </template>
 
 <style scoped lang="sass">
-@import "@/assets/styles/Inputs"
+@use "@/assets/styles/Inputs" as *
 
 .topic-filter
   margin-top: $medium
