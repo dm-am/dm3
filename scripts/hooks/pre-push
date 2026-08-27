@@ -25,9 +25,9 @@
 #                        порогом покрытия, сборка
 #   dependency-scan   +  уязвимые пакеты .NET и npm
 #   e2e               -  поднятый стек и двадцать с лишним минут
-#   compose-topology  +  shellcheck: единственный ее шаг не про развертывание,
-#                        и нужен ему только docker. Остальное про него: топология,
-#                        одиннадцать переменных и образы nginx с prometheus
+#   compose-topology  +  целиком: разбор скриптов, топология compose,
+#                        конфигурации nginx, установщик сервера, мониторинг.
+#                        Всей джобе нужен только docker, и идет она секунды
 #   deployment-smoke  -  поднимает деплойную пару целиком: docker и минуты
 #   publish           -  пишет образы в реестр по секретам GitHub
 #   publish-frontend  -  то же
@@ -67,12 +67,26 @@ node "$ROOT/.claude/hooks/block-new-migrations.test.js"
 say "Хуки: разбор пути для линта правки"
 node "$ROOT/.claude/hooks/lint-edited-file.test.js"
 
-# Гейт из джобы compose-topology, и единственный ее шаг, которому нужен только
-# docker. Пока он был виден лишь оттуда, его первым читателем становился
-# красный CI: цикл по одному элементу в scripts/verify-seed-reproducibility.sh
-# уехал в origin и остановил джобу, от которой зависит вся публикация.
+# Джоба compose-topology целиком. Всей ей нужен только docker, и вся она идет
+# двадцать две секунды, поэтому оставлять тут ее дешевую часть смысла нет:
+# правка файлов развертывания все равно красила бы пуш на той половине, что
+# осталась в CI. Так и прятался разбор скриптов: цикл по одному элементу в
+# scripts/verify-seed-reproducibility.sh уехал в origin и остановил джобу, от
+# которой зависит вся публикация.
 say "Скрипты оболочки: shellcheck"
 bash "$ROOT/scripts/check-shell-scripts.sh"
+
+say "Развертывание: топология compose"
+bash "$ROOT/scripts/deployment/check-compose-topology.sh"
+
+say "Развертывание: конфигурации nginx"
+bash "$ROOT/scripts/deployment/check-nginx-configuration.sh"
+
+say "Развертывание: установщик сервера"
+bash "$ROOT/scripts/deployment/check-server-installer.sh"
+
+say "Развертывание: мониторинг"
+bash "$ROOT/scripts/deployment/check-monitoring.sh"
 
 # npm ci, а не npm install: CI ставит пакеты только так, и эта форма падает,
 # когда package-lock.json разошелся с package.json. Гейты ниже гоняются по уже

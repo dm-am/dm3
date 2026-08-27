@@ -69,13 +69,21 @@ backend_tests() {
 }
 
 step "Хуки: собственные тесты" hook_tests
-# Разбор скриптов — единственный шаг джобы compose-topology, которому нужен
-# только docker, и до сих пор он был виден лишь из CI. (Слово shellcheck в
-# начале строки комментария этот же инструмент читает как свою директиву и
-# падает на ней, поэтому оно тут не первое.) --dry-run у npm ci не ставит
-# ничего: гейты ниже гоняются по уже разложенному node_modules, и рассинхрон
-# package-lock.json с package.json — ровно то, чего они не видят.
+# Джоба compose-topology целиком: разбор скриптов и четыре проверки
+# развертывания. Ей нужен только docker, а идет она двадцать две секунды при
+# сорока минутах всего прогона, поэтому делить ее на дешевое сюда и дорогое в
+# CI нечего: половина, оставленная там, все равно красила бы пуш на любой
+# правке файлов развертывания. Ровно так до сих пор и прятался разбор скриптов.
+# (Слово shellcheck в начале строки комментария этот же инструмент
+# читает как свою директиву и падает на ней, поэтому оно тут не первое.)
 step "Скрипты оболочки: shellcheck" bash "$ROOT/scripts/check-shell-scripts.sh"
+step "Развертывание: топология compose" bash "$ROOT/scripts/deployment/check-compose-topology.sh"
+step "Развертывание: конфигурации nginx" bash "$ROOT/scripts/deployment/check-nginx-configuration.sh"
+step "Развертывание: установщик сервера" bash "$ROOT/scripts/deployment/check-server-installer.sh"
+step "Развертывание: мониторинг" bash "$ROOT/scripts/deployment/check-monitoring.sh"
+# --dry-run у npm ci не ставит ничего: гейты ниже гоняются по уже разложенному
+# node_modules, и рассинхрон package-lock.json с package.json — ровно то, чего
+# они не видят.
 step "Фронтенд: синхронность lock-файла" in_client npm ci --dry-run
 step "Фронтенд: линт" in_client npm run lint:ci
 step "Фронтенд: типы" in_client npm run type-check

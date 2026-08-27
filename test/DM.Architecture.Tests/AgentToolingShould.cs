@@ -212,7 +212,7 @@ public class AgentToolingShould
     /// audit anything.
     /// </remarks>
     private static readonly Regex GateSyntax = new(
-        @"(npm run [a-z0-9:-]+|npm ci\b(?: --[a-z-]+)*|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|check-coverage\.sh|check-shell-scripts\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js)",
+        @"(npm run [a-z0-9:-]+|npm ci\b(?: --[a-z-]+)*|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|check-coverage\.sh|check-shell-scripts\.sh|check-compose-topology\.sh|check-nginx-configuration\.sh|check-server-installer\.sh|check-monitoring\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js)",
         RegexOptions.Compiled);
 
     /// <summary>The gate commands of a shell script, in the order it runs them.</summary>
@@ -383,29 +383,6 @@ public class AgentToolingShould
                 "missing project makes impossible",
             ["Point the moving names at this commit"] =
                 "moves tags inside the registry",
-
-            // compose-topology - everything about deploying, which is the job's
-            // subject; shellcheck is the one step that is not, and it runs locally
-            ["Validate the deployed overlay combination"] =
-                "deployment topology: three compose files and eleven deployment variables",
-            ["Every build context the overlay names must exist"] =
-                "deployment topology: reads the contexts out of a rendered overlay",
-            ["The unit systemd runs must name the same files and profiles as the installer"] =
-                "deployment topology: the systemd unit and the server installer",
-            ["The edge and the SPA server configurations must parse"] =
-                "deployment topology: four nginx containers and a generated certificate",
-            ["The installer must refuse a directory it would install over"] =
-                "deployment topology: the first act of the server installer",
-            ["The installer of the environment file must carry a new variable over"] =
-                "deployment topology: the environment file of a server, not of this machine",
-            ["The Prometheus configuration and its alert rules must parse"] =
-                "deployment topology: promtool inside the Prometheus image",
-            ["The alert rules must fire on what they are written for"] =
-                "deployment topology: the same image, replaying series through the rules",
-            ["Every alert rule must reach a receiver the stack runs"] =
-                "deployment topology: the alerting section against the deployed containers",
-            ["The alert receiver must render its configuration and start"] =
-                "deployment topology: starts alertmanager and waits for it to answer",
 
             // deployment-smoke
             ["Generate the stand credentials"] =
