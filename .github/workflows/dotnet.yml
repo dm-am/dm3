@@ -111,9 +111,17 @@ jobs:
         working-directory: src/DM.Web.Client
     steps:
     - uses: actions/checkout@v4
+    # The exact patch, not the major. npm ships inside the Node tarball, so the
+    # Node version decides which npm reads the lock file: '24' floated onto a
+    # patch carrying npm 11.17.0 while the file had been written on the owner's
+    # machine by the 11.6.2 that comes with 24.13.0, and `npm ci` rejected it -
+    # a red build whose cause was a number nobody had written down anywhere.
+    # The version lives in src/DM.Web.Client/package.json under engines, here,
+    # and in src/DM.Web.Client/Dockerfile; FrontendToolchainShould holds the
+    # three equal.
     - uses: actions/setup-node@v4
       with:
-        node-version: '24'
+        node-version: '24.13.0'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
     - run: npm ci
@@ -157,9 +165,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # Pinned to the patch, and to the same patch as everywhere else - see the
+    # frontend job for why the major alone reddened a build.
     - uses: actions/setup-node@v4
       with:
-        node-version: '24'
+        node-version: '24.13.0'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
 
@@ -321,9 +331,11 @@ jobs:
     # reason they are accepted.
     - name: .NET vulnerable packages
       run: ./scripts/check-vulnerable-packages.sh
+    # Pinned to the patch, and to the same patch as everywhere else - see the
+    # frontend job for why the major alone reddened a build.
     - uses: actions/setup-node@v4
       with:
-        node-version: '24'
+        node-version: '24.13.0'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
     # --omit=dev on purpose: an advisory in vite/eslint/playwright is a
@@ -766,13 +778,12 @@ jobs:
         docker rm -f alert-receiver-gate > /dev/null
         test "$ready" = 1 || { echo "::error::the alert receiver does not start with the configuration in this repository"; exit 1; }
 
-    # Every tracked script, not a hand kept list: the backup jobs run at two in
-    # the morning into a log nobody reads, so a typo in one of them is found by
-    # a failed restore.
+    # Through the script rather than inline: shellcheck needs docker and nothing
+    # else, so it belongs in the local set too, and a command written out in two
+    # places is one edit away from checking two different things. The file list
+    # and the reason for it are in the script.
     - name: Every shell script must pass shellcheck
-      run: |
-        docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.10.0 \
-          $(git ls-files '*.sh') scripts/hooks/pre-push
+      run: bash scripts/check-shell-scripts.sh
 
   # The pair that actually gets deployed had never been started by anything: e2e
   # brings up the base stack plus its own overlay and talks to the API directly,

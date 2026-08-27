@@ -29,6 +29,13 @@ namespace DM.Architecture.Tests;
 /// Cost is part of that decision rather than a footnote: a gate that takes twenty
 /// minutes gets bypassed with --no-verify, and a bypassed gate protects nobody.
 /// Which is why what belongs to CI stays in CI, and says why.
+///
+/// What the rules here assert about a job is specific: the configuration of the
+/// build job, the flags of the audit, the script names of the frontend job. Which
+/// gates a mirrored job has at all is the one question none of them asked, and
+/// that is how the threshold on backend coverage came to run in the build job and
+/// nowhere local. AgentToolingShould.RunEveryGateTheWorkflowRunsThatBelongsOnThisMachine
+/// asks it, in both directions.
 /// </remarks>
 public class PrePushGateShould
 {

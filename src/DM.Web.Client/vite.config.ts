@@ -58,14 +58,22 @@ export default defineConfig({
         // The denominator is the whole source tree (include: **/*.{ts,vue}), so
         // one uncovered 500-line component costs about 0.6 points of lines.
         //
-        // Measured on a full run of the suite (178 spec files, 1834 tests) on
-        // vitest 4 / @vitest/coverage-v8 4: 32.67% lines, 31.83% statements,
-        // 25.77% functions, 24.69% branches. The measurement is written down
+        // Measured on a full run of the suite (212 spec files, 2231 tests) on
+        // vitest 4 / @vitest/coverage-v8 4: 37.84% lines, 36.91% statements,
+        // 30.95% functions, 30.99% branches. The measurement is written down
         // for the same reason as in scripts/check-coverage.sh: without it
         // nobody can tell a ratchet that was just raised from one that has
         // stood still since the first audit — which is what these numbers had
         // done, sitting at roughly half of what the suite actually covered and
         // failing on nothing.
+        //
+        // The previous entry here (178 spec files, 1834 tests: 32.67% lines,
+        // 31.83% statements, 25.77% functions, 24.69% branches) is what the
+        // numbers below were set against, at 31/30/24/23. The suite grew by 34
+        // files and 397 tests without them moving, so against the measurement
+        // above the gap had widened to between 6.8 and 8.0 points — four to six
+        // times the band, which is a gate that no longer reports a loss until
+        // it is a large one.
         //
         // The vitest 2 baseline (33.78% lines and statements, 36.4% functions,
         // 74.44% branches) is not comparable: coverage-v8 4 remaps through the
@@ -77,11 +85,14 @@ export default defineConfig({
         //
         // The gap to the measurement is the backend's, 1.3 to 1.8 points: below
         // it the gate stops catching a real loss, above it a single large
-        // untested component turns CI red.
-        lines: 31,
-        functions: 24,
-        branches: 23,
-        statements: 30,
+        // untested component turns CI red. Each of the four below sits between
+        // 1.71 and 1.79 under the number measured for it. A tenth rather than a
+        // whole point because the band is half a point wide: rounded to whole
+        // points, three of these four land outside it.
+        lines: 36.1,
+        functions: 29.2,
+        branches: 29.2,
+        statements: 35.2,
       },
     },
   },

@@ -101,16 +101,17 @@ for run in 1 2; do
   snapshot "$snapshots/run$run"
 done
 
+# One comparison, not a loop over stores. The loop is what is left of the days
+# there were two of them, and a loop that walks a single item reads as though a
+# second store might appear in it.
 status=0
-for store in pg; do
-  if diff -u "$snapshots/run1.$store" "$snapshots/run2.$store" > "$snapshots/$store.diff"; then
-    echo "OK: $store identical across both runs ($(wc -l < "$snapshots/run1.$store") lines)."
-  else
-    echo "DIFFERENT: $store"
-    head -n 40 "$snapshots/$store.diff"
-    status=1
-  fi
-done
+if diff -u "$snapshots/run1.pg" "$snapshots/run2.pg" > "$snapshots/pg.diff"; then
+  echo "OK: both runs produced an identical dump ($(wc -l < "$snapshots/run1.pg") lines)."
+else
+  echo "DIFFERENT: the two dumps do not match."
+  head -n 40 "$snapshots/pg.diff"
+  status=1
+fi
 
 if [ "$status" -ne 0 ]; then
   cat <<'EOF'

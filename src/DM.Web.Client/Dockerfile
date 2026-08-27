@@ -1,5 +1,12 @@
 # Build stage
-FROM node:24-alpine AS build
+#
+# The exact patch, not the major. npm ships inside the Node tarball, and the
+# lock file it writes is read back by whichever npm the next machine happens to
+# have: 24-alpine floated onto a patch carrying npm 11.17.0 while the file had
+# been written by the 11.6.2 that comes with 24.13.0, and `npm ci` refused it.
+# Whoever raises this raises package.json and the workflow with it - the version
+# is one decision in three files, and FrontendToolchainShould holds them equal.
+FROM node:24.13.0-alpine AS build
 
 WORKDIR /app
 

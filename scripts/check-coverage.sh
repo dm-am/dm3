@@ -77,17 +77,33 @@ if [ -z "$(find "$RESULTS" -name coverage.cobertura.xml -print -quit 2>/dev/null
   exit 1
 fi
 
-# Only the newest run. Every collection drops a fresh GUID directory here and
-# nothing removes the previous ones, so a developer machine accumulates them -
-# eighteen of them, from eighteen different states of the code, were found in
-# one checkout. Merging that pile answers with the coverage of no version in
-# particular: a file deleted last week still contributes its old lines, and a
-# line uncovered today is reported covered because some older run covered it.
-# CI never saw this because its checkout starts empty, which is exactly why the
-# gate could lie locally and stay green.
-NEWEST_RUN="$(find "$RESULTS" -mindepth 1 -maxdepth 1 -type d -exec ls -1dt {} + 2>/dev/null | head -1)"
-if [ -n "$NEWEST_RUN" ]; then
-  RESULTS="$NEWEST_RUN"
+# One run, all of it. A GUID directory here is a test PROJECT, not a run: a
+# single `dotnet test` of the solution drops eighteen of them side by side, one
+# per test project, and each holds the assemblies that project happened to load.
+# Eighteen directories in a checkout is therefore the normal result of one run,
+# not evidence of eighteen - and keeping only the newest of them measures one
+# test project and reports it as the solution. That is what this gate did for
+# exactly one revision: 72.1% lines and 39.6% branches off the integration suite
+# alone, against 77.2% and 60.9% for the run it came from.
+#
+# What must not be merged is two runs, and those are told apart by span rather
+# than by directory count. Nothing removes the previous run's reports, so a
+# checkout accumulates them, and merging that pile answers with the coverage of
+# no version in particular: a file deleted last week still contributes its old
+# lines, and a line uncovered today is reported covered because some older run
+# covered it. The reports of one run land within its duration - minutes, and the
+# build job of the workflow may not exceed forty of them - so a spread of an
+# hour means two runs are lying in here and the answer would be about neither.
+# Refused rather than silently narrowed: age is not the test, spread is, so
+# reading yesterday's collection is still allowed.
+TIMES="$(find "$RESULTS" -name coverage.cobertura.xml -exec stat -c %Y {} + 2>/dev/null | sort -n)"
+OLDEST="$(printf '%s\n' "$TIMES" | head -1)"
+LATEST="$(printf '%s\n' "$TIMES" | tail -1)"
+if [ -n "$OLDEST" ] && [ -n "$LATEST" ] && [ "$((LATEST - OLDEST))" -gt 3600 ]; then
+  echo "ERROR: the reports under $RESULTS span more than an hour, so they come from more than one run." >&2
+  echo 'Merging them measures no version in particular. Collect once into an empty directory:' >&2
+  echo '  rm -rf TestResults && dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults' >&2
+  exit 1
 fi
 
 # Cached by version: downloaded once per machine rather than once per run.

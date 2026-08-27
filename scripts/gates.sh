@@ -10,8 +10,12 @@
 #
 # Почему один и тот же список живет в двух файлах: хук обязан быть
 # самодостаточным (клон без этого скрипта все равно защищен), а скрипт обязан
-# работать на нетронутом дереве. Расхождение ловит gatesMirrorTheHook в
-# DM.Architecture.Tests: он сверяет команды обоих файлов.
+# работать на нетронутом дереве. Расхождение ловит DM.Architecture.Tests, и
+# сверок там две: одна сличает команды этих двух файлов между собой, вторая —
+# со ВСЕМИ шагами обоих воркфлоу. Шаг, которого тут нет, обязан стоять в
+# именованном реестре сверки с причиной; молчание — это то, чем оба падения
+# уже оплачены: порог покрытия бэкенда стоял только в воркфлоу, а shellcheck
+# прятался в джобе compose-topology, которую сверка вообще не смотрела.
 #
 # Запуск целиком:
 #   bash scripts/gates.sh
@@ -50,7 +54,29 @@ hook_tests() {
 
 in_client() { (cd "$CLIENT" && "$@"); }
 
+# Тесты решения и сбор покрытия одним прогоном — так их получает CI: шаг Test
+# в .github/workflows/dotnet.yml пишет по отчету cobertura на тестовый проект в
+# --results-directory, а следующий шаг читает оттуда же. Порог поэтому идет
+# сразу за тестами и отдельным прогоном ничего не собирает.
+#
+# Каталог отдается пустым. У CI чекаут чистый, а на машине разработчика
+# TestResults копится прогонами, и отчет, слитый из нескольких состояний кода,
+# не описывает ни одно из них: удаленный вчера файл все еще приносит свои
+# строки. Это же требование записано в .gitignore рядом с самим каталогом.
+backend_tests() {
+  rm -rf "$ROOT/TestResults"
+  dotnet test "$ROOT/DM.sln" --no-build -c Release --nologo --results-directory "$ROOT/TestResults" --collect:"XPlat Code Coverage"
+}
+
 step "Хуки: собственные тесты" hook_tests
+# Разбор скриптов — единственный шаг джобы compose-topology, которому нужен
+# только docker, и до сих пор он был виден лишь из CI. (Слово shellcheck в
+# начале строки комментария этот же инструмент читает как свою директиву и
+# падает на ней, поэтому оно тут не первое.) --dry-run у npm ci не ставит
+# ничего: гейты ниже гоняются по уже разложенному node_modules, и рассинхрон
+# package-lock.json с package.json — ровно то, чего они не видят.
+step "Скрипты оболочки: shellcheck" bash "$ROOT/scripts/check-shell-scripts.sh"
+step "Фронтенд: синхронность lock-файла" in_client npm ci --dry-run
 step "Фронтенд: линт" in_client npm run lint:ci
 step "Фронтенд: типы" in_client npm run type-check
 step "Фронтенд: юнит-тесты с покрытием" in_client npm run test:coverage
@@ -59,6 +85,7 @@ step "Зависимости: пакеты npm" in_client npm audit --omit=dev -
 step "Зависимости: пакеты .NET" bash "$ROOT/scripts/check-vulnerable-packages.sh"
 step "Бэкенд: форматирование" dotnet format "$ROOT/DM.sln" whitespace --verify-no-changes
 step "Бэкенд: сборка Release" dotnet build "$ROOT/DM.sln" -c Release --nologo -v q
-step "Бэкенд: тесты Release" dotnet test "$ROOT/DM.sln" --no-build -c Release --nologo
+step "Бэкенд: тесты Release" backend_tests
+step "Бэкенд: покрытие" bash "$ROOT/scripts/check-coverage.sh"
 
 say "Все гейты зеленые"
