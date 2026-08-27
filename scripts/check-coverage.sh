@@ -26,26 +26,29 @@ set -euo pipefail
 # Ratchet, not a floor to duck under - the same rule as the frontend thresholds
 # in src/DM.Web.Client/vite.config.ts: raise after a gain, never lower after a
 # miss. Measured on the merged report of a full run of the solution with every
-# test project green: 75.2% lines, 57.2% branches (2026-08-24, first xunit.v3 run; 18 assemblies, unchanged by the move). Those are the two numbers this
-# script prints, read off the line-rate and branch-rate attributes of the merged
-# Cobertura report, which are the values the comparison below is made against.
-# The TextSummary of that same run reads a tenth lower on both, 72.2% and 52.4%,
-# because the awk below rounds the attribute and the summary does not. Taking the
-# pair from one source while comparing against the other spends a tenth of the
-# margin before anything is measured. Lines are the load-bearing number; branches
-# read low because files with no tests contribute few branch counters.
+# test project green, 18 assemblies: 77.1% lines, 60.8% branches (2026-08-27,
+# commit 0876d49f). Those are the two numbers this script prints, read off the
+# line-rate and branch-rate attributes of the merged Cobertura report, which are
+# the values the comparison below is made against. Lines are the load-bearing
+# number; branches read low because files with no tests contribute few branch
+# counters.
 #
-# The gap the two numbers below leave is a little over two points, and it is
-# deliberately not smaller: a ratchet set a hair under the last measurement turns
-# any difference between the CI runner and a developer's machine into a red
-# build, and a red build under time pressure gets fixed by lowering the number -
-# the one thing this must never be used for. What too wide a gap costs is what
-# the pair these replace cost. 64 and 43 trailed that measurement by more than
-# eight points and more than nine, and the same run with DM.Domain.Game.Tests
-# left out of the merge - one project, 637 tests - still measured 69.5% lines and
-# 46.0% branches and still cleared both of them. It clears neither of these.
-MIN_LINE_RATE=70
-MIN_BRANCH_RATE=50
+# The gap is 1.6 points, and the size is measured rather than guessed. The same
+# tree was merged on the CI runner and on a developer machine within the hour:
+# 77.1/60.8 there against 77.2/60.9 here, a tenth apart on both. The gap has to
+# cover that difference and nothing else, because a ratchet set a hair under the
+# last measurement turns the difference into a red build, and a red build under
+# time pressure gets fixed by lowering the number - the one use this must never
+# be put to. What too wide a gap costs is what the pair these replace cost: 70
+# and 50 trailed the measurement by seven points and eleven, so a third of the
+# tests could have been deleted with the gate still green.
+#
+# The TextSummary of the same merge can read a tenth below the attribute on
+# branches (60.8% against the 60.9% the awk below prints) because the two round
+# separately. Read the pair off one source, the way this script does; taking one
+# number from each spends a tenth of the gap before anything is measured.
+MIN_LINE_RATE=75.5
+MIN_BRANCH_RATE=59.2
 
 REPORTGENERATOR_VERSION=5.3.11
 
