@@ -57,7 +57,7 @@ printf "preview:\$apr1\$syntax\$0123456789abcdefghijk\n" > "$WORK/htpasswd"
 edge() {
   docker run --rm \
     --add-host dmapi:127.0.0.1 --add-host dmfront:127.0.0.1 \
-    --add-host minio:127.0.0.1 --add-host imgproxy:127.0.0.1 \
+    --add-host storage:127.0.0.1 --add-host imgproxy:127.0.0.1 \
     -v "$(host "$ROOT/docker/nginx/nginx.conf"):/etc/nginx/nginx.conf:ro" \
     -v "$(host "$ROOT/docker/nginx/edge-locations.conf"):/etc/nginx/edge-locations.conf:ro" \
     -v "$(host "$WORK/htpasswd"):/etc/nginx/.htpasswd:ro" \

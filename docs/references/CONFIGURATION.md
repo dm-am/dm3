@@ -21,7 +21,7 @@
 
 | Файл | Назначение |
 |------|------------|
-| `docker/.env` | Секреты Docker (пароли БД, MinIO, RabbitMQ, ключ шифрования) |
+| `docker/.env` | Секреты Docker (пароли БД, объектного хранилища, RabbitMQ, ключ шифрования) |
 | `src/DM.Web.API/appsettings.json` | Главный конфиг API |
 | `src/DM.Workers.*/appsettings.json` | Конфиги workers |
 | `src/*/appsettings.Development.json` | Учетные данные localhost для запуска из исходников |
@@ -102,7 +102,7 @@ Slash-команда `/connect` регистрируется один раз н�
 | `AuthenticationConfiguration` | Сессии, throttling, lockout | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `PasswordPolicyConfiguration` | Требования к паролям | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `TokenConfiguration` | Сроки жизни токенов | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
-| `CdnConfiguration` | MinIO/S3 source storage | [UPLOADS.md](../architecture/UPLOADS.md) |
+| `CdnConfiguration` | Объектное хранилище S3 для загрузок | [UPLOADS.md](../architecture/UPLOADS.md) |
 
 ---
 

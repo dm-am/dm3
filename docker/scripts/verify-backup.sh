@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Cron дает почти пустое окружение: без этого ночной запуск не видел ни пароля
-# MinIO, ни ключей offsite-репликации.
+# хранилища, ни ключей offsite-репликации.
 # shellcheck source=/dev/null
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_env.sh"
 
@@ -83,9 +83,10 @@ check_backup_dir() {
     fi
 }
 
-# MinIO пишет не файл, а каталог на запуск: mc mirror раскладывает объекты
-# бакета как есть. Проверка по -type f его не видела вовсе, поэтому сторож
-# рапортовал "All backups OK", пока бэкапов загрузок не существовало ни одного.
+# Бэкап хранилища файлов пишет не файл, а каталог на запуск: aws s3 sync
+# раскладывает объекты бакета как есть. Проверка по -type f его не видела
+# вовсе, поэтому сторож рапортовал "All backups OK", пока бэкапов загрузок не
+# существовало ни одного.
 check_backup_tree() {
     local DIR="$1"
     local LABEL="$2"
@@ -118,7 +119,7 @@ check_backup_tree() {
         EXIT_CODE=2
     fi
 
-    # Пустой каталог — это успешно отработавший mirror по пустому бакету или
+    # Пустой каталог — это успешно отработавший sync по пустому бакету или
     # молча провалившийся по непустому. Отличить их отсюда нельзя, поэтому
     # предупреждение, а не ошибка.
     if [ "$FILES" -eq 0 ]; then
@@ -133,7 +134,7 @@ echo ""
 
 check_backup_dir "${PG_BACKUP_DIR:-/var/backups/postgresql}" "PostgreSQL" "*.sql.gz"
 echo ""
-check_backup_tree "${MINIO_BACKUP_DIR:-/var/backups/minio}" "MinIO"
+check_backup_tree "${STORAGE_BACKUP_DIR:-/var/backups/storage}" "Object storage"
 echo ""
 
 echo "=== Result ==="

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Cron дает почти пустое окружение: без этого ночной запуск не видел ни пароля
-# MinIO, ни ключей offsite-репликации.
+# хранилища, ни ключей offsite-репликации.
 # shellcheck source=/dev/null
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_env.sh"
 

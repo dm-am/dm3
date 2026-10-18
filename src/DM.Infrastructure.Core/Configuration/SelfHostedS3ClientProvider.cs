@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace DM.Infrastructure.Core.Configuration;
 
-internal class MinioS3ClientProvider(IOptions<CdnConfiguration> cdnConfiguration) : IAmazonS3ClientProvider
+internal class SelfHostedS3ClientProvider(IOptions<CdnConfiguration> cdnConfiguration) : IAmazonS3ClientProvider
 {
     private readonly CdnConfiguration cdnConfiguration = cdnConfiguration.Value;
 
@@ -21,5 +21,5 @@ internal class MinioS3ClientProvider(IOptions<CdnConfiguration> cdnConfiguration
             });
     }
 
-    public bool CanBeUsed() => cdnConfiguration.Provider == S3Provider.Minio;
+    public bool CanBeUsed() => cdnConfiguration.Provider == S3Provider.SelfHosted;
 }

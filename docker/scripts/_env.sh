@@ -3,10 +3,11 @@
 #
 # Cron gives a job almost no environment: no PATH beyond the bare minimum, and
 # nothing from the shell that installed the crontab. Every backup script here
-# requires credentials — MINIO_ROOT_PASSWORD, and the AWS variables that switch
-# offsite replication on — and the MinIO one exits 1 when its password is unset.
-# So the nightly run failed every night, and the only watchman did not look at
-# MinIO at all and kept reporting that everything was fine.
+# requires credentials — STORAGE_BACKUP_PASSWORD, and the AWS variables that
+# switch offsite replication on — and the object storage one exits 1 when its
+# password is unset. Before this file the nightly run of that backup failed every
+# night, and the only watchman did not look at its directory at all and kept
+# reporting that everything was fine.
 #
 # Sourced by the scripts rather than written into the crontab line so that it
 # holds however the script is started: by cron, by hand, or from the installer.

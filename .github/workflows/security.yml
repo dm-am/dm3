@@ -128,7 +128,8 @@ jobs:
       - name: Start infrastructure with Docker Compose
         run: |
           cd docker
-          docker compose up -d postgres rabbitmq minio mailpit jaeger
+          docker compose up -d --wait storage seaweedfs
+          docker compose up -d postgres rabbitmq mailpit jaeger
           docker compose up -d --build --wait migration
 
       - name: Build and start API

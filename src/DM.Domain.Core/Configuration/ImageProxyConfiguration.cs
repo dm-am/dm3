@@ -29,7 +29,7 @@ public class ImageProxyConfiguration
 
     /// <summary>
     /// Source URL prefix for imgproxy (where it fetches the original).
-    /// For MinIO S3: <c>s3://dm-uploads/</c>. For an HTTPS CDN: <c>https://cdn.example.com/</c>.
+    /// For the self-hosted S3 store: <c>s3://dm-uploads/</c>. For an HTTPS CDN: <c>https://cdn.example.com/</c>.
     /// </summary>
     public string SourceUrlPrefix { get; set; } = string.Empty;
 }

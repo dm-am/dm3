@@ -4,8 +4,8 @@ set -euo pipefail
 # The one place that creates docker/.env.
 #
 # Copying the template is half the job. It ships the encryption key empty on
-# purpose, and the compose files declare that key - along with both MinIO
-# accounts - through ${...:?}, which stops
+# purpose, and the compose files declare that key - along with the object
+# storage accounts - through ${...:?}, which stops
 # interpolation before a single container starts. The server installer created
 # no .env at all and died on exactly that, with the systemd unit and four
 # nightly backup jobs already enabled.
@@ -140,17 +140,20 @@ set_if_empty IMGPROXY_KEY "$(openssl rand -hex 32)"
 set_if_empty IMGPROXY_SALT "$(openssl rand -hex 32)"
 
 if [ "$MODE" = "server" ] && [ "$EXISTING" = 0 ]; then
-    # The only moment these can be chosen: the MinIO accounts are created by
-    # minio-init, which runs once per empty volume. Keeping the template values would put every password of
-    # a public stand in a public repository.
+    # The only moment these can be chosen: the Postgres and RabbitMQ users are
+    # created with them once per empty volume. Keeping the template values would
+    # put every password of a public stand in a public repository.
     #
-    # Only on a file this run created. Rotating the passwords of a stand that is
-    # already up locks the API out of stores whose users were created with the
-    # old ones, so an existing file keeps whatever it holds and says so below.
+    # Only on a file this run created. Rotating the Postgres and RabbitMQ
+    # passwords of a stand that is already up locks the API out of stores whose
+    # users were created with the old ones, so an existing file keeps whatever it
+    # holds and says so below. The object storage accounts do not need the rule:
+    # storage-start.sh writes them from these values on every start, and they are
+    # generated here with the rest.
     for secret in POSTGRES_PASSWORD DM_APP_PASSWORD DM_EXPORTER_PASSWORD \
-                  RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
-                  GF_SECURITY_ADMIN_PASSWORD \
-                  MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD; do
+                  RABBITMQ_DEFAULT_PASS GF_SECURITY_ADMIN_PASSWORD \
+                  STORAGE_APP_PASSWORD STORAGE_IMGPROXY_PASSWORD \
+                  STORAGE_BACKUP_PASSWORD; do
         set_value "$secret" "$(openssl rand -hex 24)"
     done
 fi
@@ -217,9 +220,9 @@ if [ "$MODE" = "server" ]; then
     # there, generated above, and replaced outright on a server.
     SHARED=""
     for secret in POSTGRES_PASSWORD DM_APP_PASSWORD DM_EXPORTER_PASSWORD \
-                  RABBITMQ_DEFAULT_PASS MINIO_ROOT_PASSWORD \
-                  GF_SECURITY_ADMIN_PASSWORD \
-                  MINIO_APP_PASSWORD MINIO_IMGPROXY_PASSWORD; do
+                  RABBITMQ_DEFAULT_PASS GF_SECURITY_ADMIN_PASSWORD \
+                  STORAGE_APP_PASSWORD STORAGE_IMGPROXY_PASSWORD \
+                  STORAGE_BACKUP_PASSWORD; do
         example_value="$(sed -n "s|^${secret}=||p" "$EXAMPLE_FILE" | head -1)"
         actual_value="$(sed -n "s|^${secret}=||p" "$ENV_FILE" | head -1)"
         if [ -n "$example_value" ] && [ "$example_value" = "$actual_value" ]; then

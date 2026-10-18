@@ -2,7 +2,7 @@
 
 Платформа для текстовых ролевых игр.
 
-**Стек:** .NET 10, PostgreSQL, RabbitMQ, Vue 3, TypeScript
+Технологии и версии описаны в [STACK](./docs/STACK.md).
 
 ---
 
@@ -31,7 +31,7 @@ git config core.hooksPath scripts/hooks
 |--------|-----|
 | Frontend | http://localhost:5173 |
 | API / Swagger | http://localhost:5000 |
-| MinIO | http://localhost:9001 |
+| Объектное хранилище (S3) | http://localhost:9000 |
 | imgproxy | http://localhost:8080 |
 | Mailpit | http://localhost:8025 |
 
@@ -86,6 +86,9 @@ git config core.hooksPath scripts/hooks
 |----------|------------|
 | [Документация_по_разработке_DM3.docx](./docs/Документация_по_разработке_DM3.docx) | "Что строится целиком? Какой полный план функционала?" |
 | [PROGRESS](./docs/PROGRESS.md) | "Что уже готово?" |
+| [STATUS](./docs/STATUS.md) | "Какие страницы, кадры и ручки есть сейчас, чего нет у клиента, что держат тесты?" (считается скриптом) |
+| [STACK](./docs/STACK.md) | "Из чего собран DM3? Почему выбрано это, а не другое?" |
+| [STACK_DM2](./docs/STACK_DM2.md) | "Из чего собран DM2, старый живой сайт? Что о нем известно наверняка, а что только по документу?" |
 
 ### plans/ — Планы
 

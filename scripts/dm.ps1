@@ -424,7 +424,8 @@ function Start-Services {
         # stack that started nothing at all said one of them had made it.
         $infraServices = @(
             @{ Name = "dm-pg"; Label = "Postgres" },
-            @{ Name = "dm-minio"; Label = "MinIO" },
+            @{ Name = "dm-seaweedfs"; Label = "SeaweedFS" },
+            @{ Name = "dm-storage"; Label = "Storage" },
             @{ Name = "dm-imgproxy"; Label = "imgproxy" },
             @{ Name = "dm-loki"; Label = "Loki" },
             @{ Name = "dm-rmq"; Label = "RabbitMQ" }
@@ -434,7 +435,7 @@ function Start-Services {
         # alertmanager comes up with prometheus: started apart, prometheus
         # evaluates its rules into nothing, which is the state the deployment
         # spent its life in and the one a developer would never notice.
-        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres rabbitmq minio imgproxy mailpit jaeger loki prometheus alertmanager grafana")) {
+        if (-not (Invoke-WithAnimation -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres rabbitmq storage seaweedfs imgproxy mailpit jaeger loki prometheus alertmanager grafana")) {
             Write-FailedStep -Label "Infrastructure" -Current 0 -Total $infraServices.Count
             exit 1
         }
@@ -444,8 +445,9 @@ function Start-Services {
             exit 1
         }
 
-        # The MinIO bucket and its policies come from the minio-init container,
-        # which the stack starts before the API. There is no step to run by hand.
+        # The bucket, its accounts and the public prefixes come from
+        # storage-start.sh on every start of seaweedfs. There is no step to run
+        # by hand.
 
         # Migration
         & $script:DockerPath compose up -d migration 2>&1 | Out-Null
@@ -483,7 +485,7 @@ function Start-Services {
         Write-Host ""
         Write-Host "  API        http://localhost:5000"
         Write-Host "  RabbitMQ   http://localhost:15672" -ForegroundColor DarkGray
-        Write-Host "  MinIO      http://localhost:9001" -ForegroundColor DarkGray
+        Write-Host "  Storage    http://localhost:9000" -ForegroundColor DarkGray
         Write-Host "  Mailpit    http://localhost:8025" -ForegroundColor DarkGray
         Write-Host "  Grafana    http://localhost:3000" -ForegroundColor DarkGray
         Write-Host "  Prometheus http://localhost:9090" -ForegroundColor DarkGray
@@ -841,11 +843,11 @@ function Show-Status {
         return
     }
 
-    # Group services. Loki and the MinIO initialiser were in none of the three
+    # Group services. Loki was in none of the three
     # lists, so a container the start command waits on was missing from the
     # screen that exists to say what is up - which is why the last group below
     # is not a list at all but everything the three did not claim.
-    $infra = @("pg", "rmq", "minio", "minio-init", "imgproxy")
+    $infra = @("pg", "rmq", "seaweedfs", "storage", "imgproxy")
     $apps = @("api", "mail-worker", "notification-worker", "migration")
     $tools = @("mailpit", "grafana", "prometheus", "alertmanager", "jaeger", "loki")
 
@@ -858,7 +860,7 @@ function Show-Status {
         # Any published address, not 0.0.0.0 alone: the stack binds its ports to
         # 127.0.0.1 so that nothing outside the machine can reach them, and this
         # column has been empty ever since that was done. The optional range is
-        # MinIO, which publishes 9000-9001 as one mapping.
+        # a service that publishes several ports as one mapping.
         $port = ""
         if ($ports -match ':(\d+)(?:-\d+)?->') { $port = $matches[1] }
 

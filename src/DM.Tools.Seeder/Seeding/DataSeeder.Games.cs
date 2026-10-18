@@ -636,7 +636,7 @@ internal sealed partial class DataSeeder
                 result.CharactersCreated++;
 
                 // Add avatar for the Diopside character — the real pipeline:
-                // EXIF strip + downscale, one source object lands in MinIO.
+                // EXIF strip + downscale, one source object lands in object storage.
                 if (isDiopsideChar)
                 {
                     var bytes = ReadEmbeddedSeedBytes("DM.Tools.Seeder.Assets.Seed.diopside.jpg");

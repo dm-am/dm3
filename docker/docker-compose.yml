@@ -8,13 +8,22 @@ networks:
     ipam:
       config:
         - subnet: '172.28.0.0/16'
+  # The object store's own network, with no way out and nobody in it but the
+  # store and its proxy. SeaweedFS runs an admin server, a filer and a volume
+  # server that answer without a password and cannot be switched off; on the
+  # stand network imgproxy, the container that parses untrusted images, could
+  # erase the bucket through them past every account. The proxy "storage" is the
+  # only member of both networks and forwards S3 and metrics, nothing else.
+  storage-internal:
+    name: 'dm-storage-internal'
+    internal: true
 
 name: dm
 
 volumes:
   pgdata:
   lokidata:
-  miniodata:
+  storagedata:
   rmqdata:
   alertmanagerdata:
   prometheusdata:
@@ -62,20 +71,24 @@ x-workload-env: &workload-env
   DM_RabbitMqConfiguration__Username: guest
   DM_RabbitMqConfiguration__Password: ${RABBITMQ_DEFAULT_PASS}
 
-  # === CDN (MinIO) ===
-  DM_CdnConfiguration__Url: http://${MINIO_HOST:-dm-minio}:9000
+  # === CDN (object storage) ===
+  DM_CdnConfiguration__Url: http://${STORAGE_HOST:-dm-storage}:9000
   DM_CdnConfiguration__PublicUrl: ${CDN_PUBLIC_URL:-http://localhost:9000}
   DM_CdnConfiguration__Region: us-east-1
-  DM_CdnConfiguration__BucketName: dm-uploads
-  # Service account scoped to one bucket, not root. Object storage holds the
-  # only data nothing else can rebuild, and any leak of a workload's
+  # The same variable names the bucket the server creates and the one its health
+  # check looks for. Never changed after installation: on a volume that holds
+  # the old bucket a new name creates a second, empty one, and every health
+  # check stays green while the site loses its pictures.
+  DM_CdnConfiguration__BucketName: ${STORAGE_BUCKET:-dm-uploads}
+  # Service account scoped to one bucket, not an administrator. Object storage
+  # holds the only data nothing else can rebuild, and any leak of a workload's
   # configuration used to hand over administration of the store: dropping the
-  # bucket, rewriting its policy, minting further accounts. Created by
-  # minio-init creates it at stack start.
-  DM_CdnConfiguration__AccessKey: ${MINIO_APP_USER:-dm-app}
-  DM_CdnConfiguration__SecretKey: ${MINIO_APP_PASSWORD:?MINIO_APP_PASSWORD is required}
+  # bucket, rewriting its policy, minting further accounts. Declared in the
+  # identity file storage-start.sh writes on every start of seaweedfs.
+  DM_CdnConfiguration__AccessKey: ${STORAGE_APP_USER:-dm-app}
+  DM_CdnConfiguration__SecretKey: ${STORAGE_APP_PASSWORD:?STORAGE_APP_PASSWORD is required}
   DM_CdnConfiguration__Folder:
-  DM_CdnConfiguration__Provider: Minio
+  DM_CdnConfiguration__Provider: SelfHosted
 
   # === Image transforms (imgproxy) ===
   # Endpoint = публичный URL imgproxy (фронт обращается напрямую).
@@ -87,7 +100,7 @@ x-workload-env: &workload-env
   DM_ImageProxyConfiguration__Endpoint: ${IMGPROXY_PUBLIC_URL:-http://localhost:8080}
   DM_ImageProxyConfiguration__Key: ${IMGPROXY_KEY:?IMGPROXY_KEY is required, generate with openssl rand -hex 32}
   DM_ImageProxyConfiguration__Salt: ${IMGPROXY_SALT:?IMGPROXY_SALT is required, generate with openssl rand -hex 32}
-  DM_ImageProxyConfiguration__SourceUrlPrefix: s3://dm-uploads/
+  DM_ImageProxyConfiguration__SourceUrlPrefix: s3://${STORAGE_BUCKET:-dm-uploads}/
 
   # === Email ===
   DM_EmailConfiguration__ServerHost: ${MAIL_HOST:-dm-mailpit}
@@ -288,30 +301,49 @@ services:
 
   # --- Infrastructure: Object Storage ---
 
-  minio:
-    container_name: 'dm-minio'
-    # Deliberate ceiling, not a lag: the next release (RELEASE.2025-05-24)
-    # strips the admin features from the community console, and later community
-    # builds only cut deeper. This is the last full-featured image; it moves
-    # only together with a decision to leave MinIO (AWSSDK.S3 keeps the store
-    # swappable), and the mc line below moves in the same commit.
-    image: 'quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z'
-    command: server --console-address ':9001' /data/
-    ports:
-      - '127.0.0.1:9000:9000'
-      - '127.0.0.1:9001:9001'
+  # SeaweedFS in its one-process mode: master, volume server, filer, S3 and the
+  # admin server that runs vacuum. Why this store and not another is docs/STACK.md.
+  #
+  # Attached to storage-internal only and publishes nothing, for the reason
+  # written at that network above. The bucket, the accounts and the anonymous reads are set by
+  # storage-start.sh from the variables here, with no administrator account.
+  seaweedfs:
+    container_name: 'dm-seaweedfs'
+    # Tag and digest: a tag on Docker Hub can be rewritten, and the one-process
+    # mode is young enough for its defaults to move between releases. A new tag
+    # is taken only with check-storage.sh green in deployment-smoke.
+    image: 'chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d'
+    entrypoint: ["/bin/sh", "/storage-start.sh"]
     environment:
-      MINIO_ROOT_USER: 'minio'
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_REGION: 'us-east-1'
+      # Without a limit the collector lets the heap grow to 233 MiB under load
+      # against the 256M of the container, because the filer allocates large
+      # long-lived buffers up front. With it the peak stays near 120 MiB, paid
+      # for with a collector that never rests: about 8% of a core when idle.
+      # check-storage.sh holds both numbers.
+      GOMEMLIMIT: 180MiB
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-dm-uploads}
+      STORAGE_APP_USER: ${STORAGE_APP_USER:-dm-app}
+      STORAGE_APP_PASSWORD: ${STORAGE_APP_PASSWORD:?STORAGE_APP_PASSWORD is required}
+      STORAGE_IMGPROXY_USER: ${STORAGE_IMGPROXY_USER:-dm-imgproxy}
+      STORAGE_IMGPROXY_PASSWORD: ${STORAGE_IMGPROXY_PASSWORD:?STORAGE_IMGPROXY_PASSWORD is required}
+      STORAGE_BACKUP_USER: ${STORAGE_BACKUP_USER:-dm-backup}
+      STORAGE_BACKUP_PASSWORD: ${STORAGE_BACKUP_PASSWORD:?STORAGE_BACKUP_PASSWORD is required}
     volumes:
-      - miniodata:/data
+      - ./storage-start.sh:/storage-start.sh:ro
+      - storagedata:/data
+    networks:
+      - storage-internal
+    # Healthy only when S3 answers and the bucket exists. The server merely logs
+    # a failure to create the bucket, and its /healthz answers 200 regardless,
+    # so the filer is asked for the bucket directory directly. This holds on an
+    # empty volume only: where a bucket already exists, another name in
+    # STORAGE_BUCKET creates a second one and the check stays green.
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:8333/healthz && curl -fsS -o /dev/null -H 'Accept: application/json' http://127.0.0.1:8888/buckets/$${STORAGE_BUCKET}/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
     restart: unless-stopped
     deploy:
       resources:
@@ -319,45 +351,41 @@ services:
           memory: 256M
           cpus: '0.5'
 
-  # Bootstrap of the object store: root creates the bucket and the two scoped
-  # accounts here and is then out of the picture. Runs before anything that
-  # touches a bucket, and the workloads wait for it to succeed.
-  minio-init:
-    container_name: 'dm-minio-init'
-    # Тот же реестр, что у сервера выше: с Docker Hub образ minio/mc снят, и
-    # pull оттуда падает с "access denied". Та же строка стоит в backup-minio.sh
-    # и в DEPLOYMENT.md, и двигать их надо вместе.
-    # Пришпилен в шаг с сервером выше: mc ходит в administrative API, где согласие
-    # версий и проверяется, и двигаются обе строки одним коммитом. Метка своя —
-    # у клиента отдельный цикл выпусков, поэтому взят ближайший выпуск после
-    # серверного, а не та же строка. Неприпшпиленный клиент уезжает от сервера сам
-    # по себе, и первым признаком будет команда, которой сервер не знает.
-    image: 'quay.io/minio/mc:RELEASE.2025-05-21T01-59-54Z'
-    entrypoint: ["/bin/sh", "/minio-init.sh"]
-    environment:
-      MINIO_ENDPOINT: http://${MINIO_HOST:-dm-minio}:9000
-      BUCKET_NAME: dm-uploads
-      MINIO_ROOT_USER: 'minio'
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_APP_USER: ${MINIO_APP_USER:-dm-app}
-      MINIO_APP_PASSWORD: ${MINIO_APP_PASSWORD:?MINIO_APP_PASSWORD is required}
-      MINIO_IMGPROXY_USER: ${MINIO_IMGPROXY_USER:-dm-imgproxy}
-      MINIO_IMGPROXY_PASSWORD: ${MINIO_IMGPROXY_PASSWORD:?MINIO_IMGPROXY_PASSWORD is required}
+  # The object store as the stand sees it: S3 on 9000 and metrics on 9324, a
+  # TCP forward into storage-internal and nothing more. Every client, the edge
+  # and the host port talk to this name, and none of them can reach the rest of
+  # SeaweedFS. Its health says only that S3 answers through the proxy.
+  storage:
+    container_name: 'dm-storage'
+    # The same digest as nginx:1.27-alpine, which the preview edge runs: the
+    # branch is frozen, and the two share one image in the cache.
+    image: 'nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10'
     volumes:
-      - ./minio-init.sh:/minio-init.sh:ro
+      - ./storage/nginx-stream.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - '127.0.0.1:9000:9000'
+    networks:
+      - default
+      - storage-internal
     depends_on:
-      minio:
-        condition: service_healthy
-    restart: "no"
+      seaweedfs:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:9000/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 32M
           cpus: '0.25'
 
   # --- Infrastructure: Image transforms (imgproxy) ---
   # On-the-fly resize + format negotiation (AVIF/WebP/JPEG via Accept header).
-  # Reads from MinIO via S3 protocol, серверу аватаров достаточно хранить
+  # Reads from object storage via S3 protocol, серверу аватаров достаточно хранить
   # один source-file на upload — все thumbs генерируются по требованию.
   imgproxy:
     container_name: 'dm-imgproxy'
@@ -367,15 +395,15 @@ services:
     environment:
       IMGPROXY_KEY: ${IMGPROXY_KEY:?IMGPROXY_KEY is required, generate with openssl rand -hex 32}
       IMGPROXY_SALT: ${IMGPROXY_SALT:?IMGPROXY_SALT is required, generate with openssl rand -hex 32}
-      # S3 source — читаем напрямую из MinIO, без HTTP-роундтрипа.
+      # S3 source — читаем напрямую из хранилища, без HTTP-роундтрипа.
       IMGPROXY_USE_S3: 'true'
-      IMGPROXY_S3_ENDPOINT: 'http://dm-minio:9000'
+      IMGPROXY_S3_ENDPOINT: 'http://dm-storage:9000'
       IMGPROXY_S3_REGION: 'us-east-1'
       IMGPROXY_S3_BUCKET_LOOKUP_TYPE: 'force-path-style'
       # Read-only service account: imgproxy never writes to the bucket, and it
       # is the container that parses untrusted image data.
-      AWS_ACCESS_KEY_ID: ${MINIO_IMGPROXY_USER:-dm-imgproxy}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_IMGPROXY_PASSWORD:?MINIO_IMGPROXY_PASSWORD is required}
+      AWS_ACCESS_KEY_ID: ${STORAGE_IMGPROXY_USER:-dm-imgproxy}
+      AWS_SECRET_ACCESS_KEY: ${STORAGE_IMGPROXY_PASSWORD:?STORAGE_IMGPROXY_PASSWORD is required}
       # Format negotiation via Accept header.
       IMGPROXY_AUTO_WEBP: 'true'
       IMGPROXY_AUTO_AVIF: 'true'
@@ -390,9 +418,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    # The proxy started, not the store healthy: thumbnails of a store that is
+    # down fail one by one, and the transformer has no reason to stay down too.
     depends_on:
-      minio-init:
-        condition: service_completed_successfully
+      storage:
+        condition: service_started
     restart: unless-stopped
     deploy:
       resources:
@@ -694,8 +724,13 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
+      # Started, not healthy. A site without its store still serves every page,
+      # and only uploads and pictures fail; a site that waits for the store does
+      # not come up at all. The health of seaweedfs gates the seeder and every
+      # --wait of CI and the installer instead, and ObjectStorageDown says when
+      # the store is gone.
+      storage:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
       interval: 15s
@@ -729,8 +764,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
+      # The seeder writes pictures and has nothing to do without the bucket, so
+      # it waits for the store to be healthy, which is what proves the bucket,
+      # and starts the proxy it writes through.
+      storage:
+        condition: service_started
+      seaweedfs:
+        condition: service_healthy
     restart: "no"
     profiles:
       - tools

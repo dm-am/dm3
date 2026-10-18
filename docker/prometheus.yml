@@ -42,6 +42,13 @@ scrape_configs:
     static_configs:
       - targets: ['dm-rmq:15692']
 
+  # Object storage, through the proxy that is its one door into this network.
+  # The site does not wait for it to start, so a store that is down is a site
+  # that answers everything except its pictures, and nothing else says so.
+  - job_name: 'storage'
+    static_configs:
+      - targets: ['dm-storage:9324']
+
   # The log store is the one dependency whose failure erases its own evidence: a
   # sink cannot log that it failed to log. Applications write to the console as
   # well, so nothing is lost, but Grafana goes quiet and reads as a quiet site.

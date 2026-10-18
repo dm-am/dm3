@@ -77,7 +77,7 @@ public class SizeRatchetShould
         new("test/DM.Architecture.Tests/AgentToolingShould.cs", 769),
         new("test/DM.Architecture.Tests/CompositionRootShould.cs", 659),
         new("test/DM.Architecture.Tests/ConsumerMetricsShould.cs", 707),
-        new("test/DM.Architecture.Tests/DeploymentConfigurationShould.cs", 2486),
+        new("test/DM.Architecture.Tests/DeploymentConfigurationShould.cs", 2417),
         new("test/DM.Domain.Account.Tests/Features/Authentication/AuthenticationServiceShould.cs", 760),
         new("test/DM.Domain.Account.Tests/Features/UsernameChange/UsernameChangeServiceShould.cs", 697),
         new("test/DM.Domain.Blog.Tests/Authorization/BlogIntentionResolverShould.cs", 663),

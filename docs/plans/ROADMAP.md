@@ -4,11 +4,7 @@
 
 **Что уже готово:** [PROGRESS.md](../PROGRESS.md).
 
-## Стек
-
-- **Backend:** .NET 10, PostgreSQL, RabbitMQ
-- **Frontend:** Vue 3, TypeScript, Vite
-- **Инфраструктура:** Docker, Nginx, SignalR, Prometheus, Grafana, Jaeger
+Технологии и версии описаны в [STACK.md](../STACK.md).
 
 ---
 

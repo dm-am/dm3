@@ -5,7 +5,7 @@
 ```
 Internet → Nginx → Frontend (Vue.js)
                  → API (.NET 10)
-                 → MinIO (S3-compat, source-файлы)
+                 → storage (nginx stream) → SeaweedFS (S3, source-файлы)
                  → imgproxy (on-the-fly resize + AVIF/WebP)
                        ↓
               PostgreSQL / RabbitMQ
@@ -72,12 +72,16 @@ git clone https://github.com/dm-am/dm3.git && cd dm3/docker
 
 # Dev режим
 bash scripts/init-env.sh local
+docker compose up -d --wait storage seaweedfs
 docker compose up -d --build
 
 # Preview
 bash scripts/init-env.sh server
+docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d --wait storage seaweedfs
 docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d
 ```
+
+Хранилище поднимается первым и с `--wait`, как в установщике. Сайт стартует и без него, поэтому на пустом томе первого старта только этот шаг остановится, если бакет не создан. Иначе `/_ready` отвечает 200, а каждая загрузка 500.
 
 ### Preview окружение
 
@@ -211,11 +215,15 @@ docker compose --env-file .env.pop -f docker-compose.yml -f docker-compose.previ
 |-----------|------------|
 | Базы данных | `DM_ConnectionStrings__Rdb` |
 | RabbitMQ | `DM_RabbitMqConfiguration__*` |
-| MinIO (source storage) | `DM_CdnConfiguration__*` |
+| Объектное хранилище (source-файлы) | `DM_CdnConfiguration__*`, `STORAGE_*` |
 | imgproxy (transform layer) | `DM_ImageProxyConfiguration__Endpoint/Key/Salt/SourceUrlPrefix` |
 | Email | `DM_EmailConfiguration__*` |
 
-**Production:** `docker/.env` создает `docker/scripts/init-env.sh server` — копирует пример, генерирует крипто-ключ и все секреты (`POSTGRES_PASSWORD`, `DM_APP_PASSWORD`, `DM_EXPORTER_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `MINIO_ROOT_PASSWORD`, `MINIO_APP_PASSWORD`, `MINIO_IMGPROXY_PASSWORD`, `IMGPROXY_KEY`, `IMGPROXY_SALT`, `GF_SECURITY_ADMIN_PASSWORD`), ставит `ASPNETCORE_ENVIRONMENT=Production` и пинит `IMAGE_TAG`. Копия `.env.example` руками оставляет пароли из репозитория и пустой ключ, на котором compose останавливается до старта контейнеров.
+**Production:** `docker/.env` создает `docker/scripts/init-env.sh server`. Он копирует пример, генерирует крипто-ключ и все секреты (`POSTGRES_PASSWORD`, `DM_APP_PASSWORD`, `DM_EXPORTER_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, `STORAGE_APP_PASSWORD`, `STORAGE_IMGPROXY_PASSWORD`, `STORAGE_BACKUP_PASSWORD`, `IMGPROXY_KEY`, `IMGPROXY_SALT`, `GF_SECURITY_ADMIN_PASSWORD`), ставит `ASPNETCORE_ENVIRONMENT=Production` и пинит `IMAGE_TAG`. Копия `.env.example` руками оставляет пароли из репозитория и пустой ключ, на котором compose останавливается до старта контейнеров.
+
+**Имя бакета после установки не меняется.** `STORAGE_BUCKET` задают один раз, до первого старта. На томе с данными другое имя создает второй, пустой бакет, healthcheck остается зеленым, а старые картинки перестают открываться. Переименование бакета это перенос данных, а не правка `.env`. Перенос в любое другое S3-хранилище идет тем же путем, что восстановление: бэкап лежит обычными файлами.
+
+После пересоздания контейнера `storage` пересоздается и edge: nginx края узнает адрес `storage` один раз, при старте.
 
 ---
 
@@ -225,12 +233,30 @@ docker compose --env-file .env.pop -f docker-compose.yml -f docker-compose.previ
 |-------|---------|
 | Docker образ | `IMAGE_TAG=<sha>` в `docker/.env`, затем `sudo systemctl restart dm3` |
 | PostgreSQL | `gunzip -c /var/backups/postgresql/<файл>.sql.gz \| docker exec -i dm-pg psql -U postgres dm3` |
-| MinIO | `docker run --rm --network host -v /var/backups/minio/<каталог>:/backup --entrypoint sh quay.io/minio/mc:RELEASE.2025-05-21T01-59-54Z -c 'mc alias set dst "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc mirror /backup dst/dm-uploads'` |
+| Объектное хранилище | команда под таблицей |
 | Git | `git revert HEAD && git push` |
 
+```bash
+cd /opt/dm3/docker && . scripts/_env.sh
+(
+  export AWS_ACCESS_KEY_ID="${STORAGE_APP_USER:-dm-app}" AWS_SECRET_ACCESS_KEY="$STORAGE_APP_PASSWORD"
+  docker run --rm --network host -v /var/backups/storage/<каталог>:/backup \
+    -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
+    -e AWS_DEFAULT_REGION=us-east-1 -e AWS_REQUEST_CHECKSUM_CALCULATION=when_required \
+    --entrypoint sh amazon/aws-cli:2.37.9@sha256:92de75724b6a746951f0e8b915d86bbccd7cb55aff96cd0cb4f7017272160780 \
+    -c 'aws configure set default.s3.addressing_style path && exec aws "$@"' aws \
+    s3 cp /backup "s3://${STORAGE_BUCKET:-dm-uploads}" --recursive --endpoint-url http://127.0.0.1:9000 \
+    --cache-control "public, max-age=31536000, immutable"
+)
+```
+
 Команды восстановления соответствуют тому, что кладут скрипты бэкапа: дамп
-PostgreSQL сжат gzip-ом, а MinIO — каталог объектов, а не архив. Прежняя команда
-восстановления в этой таблице выполниться не могла: psql получал gzip вместо SQL.
+PostgreSQL сжат gzip-ом, а объектное хранилище лежит каталогом файлов, а не
+архивом. Прежняя команда восстановления в этой таблице выполниться не могла: psql
+получал gzip вместо SQL. Хранилище восстанавливается ключом `dm-app` и командой
+`cp --recursive`, а не `sync`: `sync` читает список бакета, а права List у ключа
+приложения нет. Тип файла aws-cli берет по расширению, каталог метаданных не
+хранит. Пароль `dm-app` берется из `docker/.env` через `_env.sh` и уходит в контейнер по имени переменной, как в скриптах бэкапа: значение в аргументе `docker run` видно в `ps` всем пользователям сервера, пока идет восстановление. Скобки держат ключ в подоболочке, ключи выносной копии в оболочке оператора остаются прежними.
 
 ---
 
@@ -275,7 +301,9 @@ Realtime-пуш этому не мешает, хотя карта соедине
 
 ## Бэкапы
 
-**Скрипты:** `docker/scripts/backup-postgres.sh`, `backup-minio.sh`
+**Скрипты:** `docker/scripts/backup-postgres.sh`, `backup-storage.sh` (ключом `dm-backup`, который только читает и перечисляет)
+
+**Проверка границ хранилища:** `docker/scripts/check-storage.sh` на поднятом стеке, тот же скрипт идет в `deployment-smoke`. Новый тег или дайджест SeaweedFS принимается только при зеленом `deployment-smoke`
 
 **Проверка:** `docker/scripts/verify-backup.sh` — возраст, размер, целостность gzip
 

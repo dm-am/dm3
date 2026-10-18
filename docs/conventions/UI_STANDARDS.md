@@ -731,7 +731,7 @@ html.classList.remove("no-transitions");
 Сервер отдает 3 URL в `picture: { smallUrl, mediumUrl, originalUrl }`:
 - `smallUrl` — 100×100 (через imgproxy, AVIF/WebP auto)
 - `mediumUrl` — 400×400 (через imgproxy)
-- `originalUrl` — ≤1024 px aspect-preserving (прямой MinIO link)
+- `originalUrl`: ≤1024 px aspect-preserving (прямой адрес S3)
 
 Подробнее: [UPLOADS.md](../architecture/UPLOADS.md).
 

@@ -95,9 +95,9 @@ public class RequiredConfigurationShould
 
             if (settings.Contains("\"CdnConfiguration\"", StringComparison.Ordinal))
             {
-                settings.Should().Contain($"\"{Declared("MINIO_APP_USER")}\"",
+                settings.Should().Contain($"\"{Declared("STORAGE_APP_USER")}\"",
                     $"{name} uses the account scoped to the bucket, not the administrator");
-                settings.Should().Contain($"\"{Declared("MINIO_APP_PASSWORD")}\"",
+                settings.Should().Contain($"\"{Declared("STORAGE_APP_PASSWORD")}\"",
                     $"{name} uses the secret of that account");
             }
         }

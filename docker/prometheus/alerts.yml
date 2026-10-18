@@ -156,6 +156,30 @@ groups:
           summary: "Low disk space"
           description: "Root filesystem usage is above 85% for 10 minutes."
 
+      # The site starts without object storage on purpose and keeps answering
+      # while it is gone: uploads fail with 500 and pictures with 502, one request
+      # at a time, and every other page is fine. That is exactly the failure no
+      # health check of the site shows, so the scrape target is the signal.
+      - alert: ObjectStorageDown
+        expr: up{job="storage"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Object storage is down"
+          description: "The metrics endpoint of object storage has been unreachable for more than 1 minute. Uploads fail and avatars and attachments do not load; check docker logs dm-seaweedfs and dm-storage."
+
+      # A renamed or removed scrape target produces no `up` series at all, so
+      # ObjectStorageDown stays silent on exactly the change that breaks it.
+      - alert: ObjectStorageScrapeTargetMissing
+        expr: absent(up{job="storage"})
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The object storage scrape target is not configured"
+          description: "Prometheus has no target for object storage - check the storage job in prometheus.yml and the metrics port of dm-storage."
+
   # The broker is the only place that knows a message exists between the service
   # that sent it and the worker that will act on it. Every rule above is about a
   # process answering, and all of them are true of a worker that has stopped

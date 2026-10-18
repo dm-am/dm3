@@ -16,7 +16,7 @@ public enum S3Provider
     CloudCube = 1,
 
     /// <summary>
-    /// MinIO
+    /// An S3-compatible store run beside the site, reached by path-style addresses
     /// </summary>
-    Minio = 2
+    SelfHosted = 2
 }

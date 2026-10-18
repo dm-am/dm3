@@ -80,7 +80,7 @@ fi
 
 echo "=== Подготовка docker/.env ==="
 # Everything below needs this file: the backup scripts source it, and the
-# compose files declare the encryption key, both MinIO
+# compose files declare the encryption key and the object storage
 # accounts through ${...:?}, which stops interpolation before the first
 # container. Nothing created it, so the installer died on its last line with the
 # unit and the nightly jobs already enabled.
@@ -107,6 +107,10 @@ sudo bash "$INSTALL_DIR/docker/scripts/install-cron.sh" "$INSTALL_DIR"
 
 echo "=== Запуск приложения ==="
 cd "$INSTALL_DIR/docker"
+# The object store first and with --wait. The site starts without it, so on the
+# empty volume of a first start this is the one step a bucket the server failed
+# to create stops, instead of every upload answering 500 behind a green health.
+sudo docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d --wait storage seaweedfs
 # No --build: CI builds the four images and pushes them, the server pulls them.
 # Building the solution here costs gigabytes of disk and peak memory on a
 # preview-class VPS, and it leaves a locally built image under the tag the

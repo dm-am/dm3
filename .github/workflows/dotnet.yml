@@ -67,6 +67,18 @@ jobs:
     # is what gets compiled and tested here.
     - name: Build
       run: dotnet build --no-restore -c Release
+    # StatusDocumentShould runs scripts/docs/build-status.mjs --check, and the
+    # script reads the client through the TypeScript compiler from the client's
+    # node_modules, so the packages have to be installed before the tests run.
+    # The same Node as the frontend job: FrontendToolchainShould holds them equal.
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24.13.0'
+        cache: 'npm'
+        cache-dependency-path: src/DM.Web.Client/package-lock.json
+    - name: Install client packages
+      run: npm ci
+      working-directory: src/DM.Web.Client
     - name: Test
       run: dotnet test --no-build -c Release --verbosity normal --logger trx --results-directory TestResults --collect:"XPlat Code Coverage"
     # The cobertura was collected and uploaded with if-no-files-found: error - a
@@ -227,7 +239,8 @@ jobs:
       working-directory: docker
       run: |
         docker compose config --quiet
-        docker compose up -d postgres rabbitmq minio mailpit jaeger
+        docker compose up -d --wait storage seaweedfs
+        docker compose up -d postgres rabbitmq mailpit jaeger
         docker compose up -d --build --wait migration
         docker compose up -d --build --wait dmapi
 
@@ -601,9 +614,13 @@ jobs:
       # start-up: the transform location names imgproxy literally, so without
       # that container the edge exits with "host not found in upstream" and the
       # whole job waits on a health check that will never pass. It is part of
-      # the pair being deployed, not a convenience.
+      # the pair being deployed, not a convenience. Object storage comes first
+      # and with --wait: the site starts without it, so this line is the one
+      # place an image the registry no longer serves, or a bucket the server did
+      # not create, stops the job.
       run: |
-        docker compose up -d postgres rabbitmq minio imgproxy mailpit jaeger
+        docker compose up -d --wait storage seaweedfs
+        docker compose up -d postgres rabbitmq imgproxy mailpit jaeger
         docker compose up -d --build --wait migration
         docker compose up -d --build --wait dmapi
         docker compose up -d --build --wait nginx
@@ -611,12 +628,22 @@ jobs:
     # The same script an operator runs against the public address after the
     # containers have been replaced. Written out here as well, the two lists were
     # one edit away from a pipeline that checks something the operator does not.
+    #
+    # The object storage check and the nightly backup ride along for the same
+    # reason: an operator runs both against the server, and this is the one
+    # Linux host where the host network reaches the published port the way it
+    # does there. A new SeaweedFS tag or digest is taken only with this green.
     - name: The edge answers where the deployment needs it to
-      run: bash docker/scripts/smoke-edge.sh http://localhost preview smoke-test-password
+      env:
+        BACKUP_DIR: ${{ runner.temp }}/storage-backup
+      run: |
+        bash docker/scripts/smoke-edge.sh http://localhost preview smoke-test-password
+        bash docker/scripts/check-storage.sh
+        bash docker/scripts/backup-storage.sh
 
     - name: Logs on failure
       if: failure()
       working-directory: docker
       env:
         COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
-      run: docker compose logs --tail=200 nginx dmapi dmfront
+      run: docker compose logs --tail=200 nginx dmapi dmfront storage seaweedfs

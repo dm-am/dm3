@@ -58,7 +58,7 @@ start_services() {
     echo -e "\n\033[32mServices started!\033[0m"
     echo "API: http://localhost:5000"
     echo "Swagger: http://localhost:5000/swagger"
-    echo "MinIO: http://localhost:9001"
+    echo "Storage: http://localhost:9000"
     echo "RabbitMQ: http://localhost:15672"
     echo ""
     echo "Note: Frontend runs separately - cd src/DM.Web.Client && npm run dev"
@@ -103,7 +103,7 @@ run_seed() {
     # the network. It runs under the "tools" compose profile, which never starts
     # with a plain "docker compose up". The API still has to be up: seeding
     # itself does not need it, but the restart at the end of this function does.
-    # The upload bucket is created by the minio-init container, not by the API.
+    # The upload bucket is created by seaweedfs on its own start, not by the API.
     #
     # The liveness endpoint, the one the container healthcheck and CI already
     # ask, rather than a product route: this used to be pinned to /v1/boards,

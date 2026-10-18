@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using DM.Domain.Core.Uploads;
 using AwesomeAssertions;
 using Xunit;
 
@@ -228,8 +227,8 @@ public class DeploymentConfigurationShould
     /// Whatever the installer schedules, the verifier looks at.
     /// </summary>
     /// <remarks>
-    /// Three backups ran nightly and one watchman checked two of them. The MinIO
-    /// backup could not have produced anything anyway — cron gives a job no
+    /// Three backups ran nightly and one watchman checked two of them. The object
+    /// storage backup could not have produced anything anyway — cron gives a job no
     /// environment, so the script exited on its missing password every night — and
     /// the watchman, blind to that directory, kept printing "All backups OK". A
     /// backup nobody verifies is not a backup; a verifier that skips one is worse,
@@ -242,7 +241,7 @@ public class DeploymentConfigurationShould
         var cron = File.ReadAllText(Path.Combine(scriptsDirectory, "install-cron.sh"));
         var verify = File.ReadAllText(Path.Combine(scriptsDirectory, "verify-backup.sh"));
 
-        var scheduled = new[] { "postgres", "minio" }
+        var scheduled = new[] { "postgres", "storage" }
             .Where(store => cron.Contains($"backup-{store}.sh", StringComparison.Ordinal))
             .ToList();
 
@@ -397,13 +396,13 @@ public class DeploymentConfigurationShould
 
     /// <summary>
     /// Every backup script loads the environment file. Cron hands a job almost
-    /// nothing, and these scripts need credentials — the MinIO one exits 1 without
+    /// nothing, and these scripts need credentials — the storage one exits 1 without
     /// its password, and the offsite replication in all three switches itself off
     /// silently when the AWS variables are absent.
     /// </summary>
     [Theory]
     [InlineData("backup-postgres.sh")]
-    [InlineData("backup-minio.sh")]
+    [InlineData("backup-storage.sh")]
     [InlineData("verify-backup.sh")]
     public void LoadTheEnvironmentInEveryScheduledScript(string script)
     {
@@ -447,72 +446,24 @@ public class DeploymentConfigurationShould
     /// the account a workload holds decides what a leaked configuration costs.
     /// </summary>
     /// <remarks>
-    /// The application, every worker and imgproxy were handed the MinIO root
-    /// account, which can drop the bucket, rewrite its policy and mint further
-    /// accounts.
+    /// Each workload is configured with the scoped account storage-start.sh
+    /// declares for it. An account that can drop the bucket, rewrite its policy
+    /// and mint further accounts is exactly what a leaked configuration must not
+    /// carry, and the store is started with no such account to hand out.
     /// </remarks>
     [Fact]
     public void GiveNoWorkloadTheObjectStoreRootAccount()
     {
         var compose = Read(BaseCompose);
 
-        FindValue(compose, "DM_CdnConfiguration__AccessKey:").Should().NotBe("minio",
-            "the application gets a service account scoped to its bucket, not the root user");
-        FindValue(compose, "DM_CdnConfiguration__SecretKey:").Should().NotContain("MINIO_ROOT_PASSWORD",
-            "the root password must not be readable from the application at all");
-        FindValue(compose, "AWS_ACCESS_KEY_ID:").Should().NotBe("minio",
+        FindValue(compose, "DM_CdnConfiguration__AccessKey:").Should().Be("${STORAGE_APP_USER:-dm-app}",
+            "the application gets a service account scoped to its bucket, not an administrator");
+        FindValue(compose, "DM_CdnConfiguration__SecretKey:").Should().StartWith("${STORAGE_APP_PASSWORD:?",
+            "and the secret of that account, demanded at start");
+        FindValue(compose, "AWS_ACCESS_KEY_ID:").Should().Be("${STORAGE_IMGPROXY_USER:-dm-imgproxy}",
             "imgproxy only ever reads objects, so it gets the read-only account");
-        FindValue(compose, "AWS_SECRET_ACCESS_KEY:").Should().NotContain("MINIO_ROOT_PASSWORD",
-            "nor from the container that parses untrusted image data");
-    }
-
-    /// <summary>
-    /// Anonymous reads reach the prefixes the product declared public, and no
-    /// others.
-    /// </summary>
-    /// <remarks>
-    /// One invariant, one owner. The prefixes are a product decision and live in
-    /// UploadFolder; the policy is an administrative call and is applied by the
-    /// bootstrap container, because the account the application runs as is
-    /// deliberately not allowed to make one. Nothing held the two together, and
-    /// they disagreed: the script granted mc's readonly policy on the whole
-    /// bucket — GetObject on every key and anonymous ListBucket with it — while
-    /// the application asserted a per-prefix policy it had no right to set, and
-    /// swallowed the refusal. The declaration everybody read was the one that
-    /// never took effect.
-    ///
-    /// Compared as sets of prefixes rather than by matching the text: the script
-    /// spells them as ARNs and the domain as folder names, and the point is that
-    /// they name the same things.
-    /// </remarks>
-    [Fact]
-    public void GrantAnonymousReadsOnlyToThePrefixesTheProductDeclaredPublic()
-    {
-        var script = File.ReadAllText(Path.Combine(DockerDirectory, "minio-init.sh"));
-
-        var declared = UploadFolder.AnonymouslyReadable
-            .Select(UploadFolder.For)
-            .OrderBy(folder => folder, StringComparer.Ordinal)
-            .ToArray();
-        declared.Should().NotBeEmpty("the rule below is written in terms of those prefixes");
-
-        var anonymousBlock = Between(script, "dm-anonymous-policy.json <<EOF", "EOF");
-        anonymousBlock.Should().NotBeNullOrWhiteSpace(
-            "the anonymous policy is written as a document, not as `mc anonymous set`: " +
-            "a prefixed set adds a statement without removing the one already in place");
-
-        var granted = Regex.Matches(anonymousBlock!, @"arn:aws:s3:::\$BUCKET/([^""*]+)/\*")
-            .Select(match => match.Groups[1].Value)
-            .OrderBy(folder => folder, StringComparer.Ordinal)
-            .ToArray();
-
-        granted.Should().Equal(declared,
-            "UploadFolder.AnonymouslyReadable is where the decision is made, and a type " +
-            "added to it without the script following is a prefix nobody can read");
-        anonymousBlock.Should().NotContain("arn:aws:s3:::$BUCKET/\"",
-            "a bucket-wide grant makes every later type public by default");
-        anonymousBlock.Should().NotContain("s3:ListBucket",
-            "listing turns the random suffix in an object key into a lookup");
+        FindValue(compose, "AWS_SECRET_ACCESS_KEY:").Should().StartWith("${STORAGE_IMGPROXY_PASSWORD:?",
+            "and the container that parses untrusted image data holds no other secret");
     }
 
     /// <summary>The text between two markers, or null when the opening one is absent.</summary>
@@ -535,7 +486,7 @@ public class DeploymentConfigurationShould
     /// </summary>
     /// <remarks>
     /// Both guides told the operator to copy .env.example, which carries the
-    /// repository's Postgres, MinIO, RabbitMQ and Grafana passwords — onto
+    /// repository's Postgres, object storage, RabbitMQ and Grafana passwords — onto
     /// a machine in another jurisdiction that runs no application code and
     /// connects to no store. The same command then stopped on interpolation
     /// anyway, demanding the session encryption key, which is the one thing the
@@ -561,8 +512,7 @@ public class DeploymentConfigurationShould
 
         foreach (var secret in new[]
                  {
-                     "POSTGRES_PASSWORD", "RABBITMQ_DEFAULT_PASS", "MINIO_ROOT_PASSWORD",
-                     "GF_SECURITY_ADMIN_PASSWORD",
+                     "POSTGRES_PASSWORD", "RABBITMQ_DEFAULT_PASS", "GF_SECURITY_ADMIN_PASSWORD",
                  })
         {
             content.Should().NotContain($"{secret}=",
@@ -572,7 +522,8 @@ public class DeploymentConfigurationShould
         foreach (var required in new[]
                  {
                      "DM_CryptoConfiguration__KeyBase64",
-                     "MINIO_APP_PASSWORD", "MINIO_IMGPROXY_PASSWORD", "IMGPROXY_KEY", "IMGPROXY_SALT",
+                     "STORAGE_APP_PASSWORD", "STORAGE_IMGPROXY_PASSWORD", "STORAGE_BACKUP_PASSWORD",
+                     "IMGPROXY_KEY", "IMGPROXY_SALT",
                  })
         {
             var line = content.Split('\n').FirstOrDefault(l => l.StartsWith($"{required}=", StringComparison.Ordinal));
@@ -638,27 +589,6 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
-    /// The scoped accounts have to exist before the first upload, and only root
-    /// can create them — which is the whole of what root is still for.
-    /// </summary>
-    [Fact]
-    public void CreateTheScopedObjectStoreAccountsFromABootstrapContainer()
-    {
-        var compose = Read(BaseCompose);
-        var scriptPath = Path.Combine(DockerDirectory, "minio-init.sh");
-
-        compose.Should().Contain("minio-init:",
-            "the accounts the workloads are configured with have to be created by something");
-        File.Exists(scriptPath).Should().BeTrue("the bootstrap container mounts it");
-
-        var script = File.ReadAllText(scriptPath);
-        script.Should().Contain("arn:aws:s3:::",
-            "a policy that names no resource grants the account the whole store");
-        script.Should().NotContain("consoleAdmin",
-            "attaching a built-in administrative policy puts the root privileges back");
-    }
-
-    /// <summary>
     /// The stand gives the API a place of its own for the country table, at the
     /// path the setting names, that the API can write and that outlives the
     /// container.
@@ -701,7 +631,7 @@ public class DeploymentConfigurationShould
     /// confirmation is owed, and the dead-letter queue is the only artefact left of
     /// one that could not be sent. Both queues are declared durable, and the broker
     /// was the single service with state and no named volume — pg, loki and
-    /// minio all had one — so every recreation of the container dropped them.
+    /// the object store all had one — so every recreation of the container dropped them.
     ///
     /// The node name is the other half. Mnesia keeps its data under a directory
     /// named after the node, so a container with a generated hostname mounts the
@@ -817,7 +747,7 @@ public class DeploymentConfigurationShould
     /// </summary>
     /// <remarks>
     /// The file is not in the repository, and compose declares the encryption
-    /// key and both MinIO accounts through ${...:?}, which
+    /// key and the object store accounts through ${...:?}, which
     /// rejects an empty value as hard as a missing one. So the last line of the
     /// installer stopped on interpolation, after it had already enabled the
     /// systemd unit and four nightly backup jobs, and what the operator saw was a
@@ -957,8 +887,8 @@ public class DeploymentConfigurationShould
     ///
     /// The two are fixed differently on purpose. The environment is read at
     /// startup and bound to nothing, so it is simply set. A password is baked
-    /// into the MinIO users at first boot, so rotating it on a live stand locks
-    /// the API out of its own store — the script refuses instead.
+    /// into the Postgres and RabbitMQ users at first boot, so rotating it on a
+    /// live stand locks the API out of its own stores — the script refuses instead.
     /// </remarks>
     [Fact]
     public void RefuseToApproveAServerFileStillHoldingTheTemplatesSecrets()
@@ -1007,11 +937,11 @@ public class DeploymentConfigurationShould
         var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
         var compose = Read(BaseCompose) + Read(PreviewCompose);
 
-        var start = installer.Split('\n')
-            .First(line => line.Contains("docker compose", StringComparison.Ordinal)
-                           && line.Contains("up -d", StringComparison.Ordinal));
+        var starts = installer.Split('\n')
+            .Where(line => line.Contains("docker compose", StringComparison.Ordinal)
+                           && line.Contains("up -d", StringComparison.Ordinal)).ToList();
 
-        start.Should().NotContain("--build",
+        starts.Should().NotBeEmpty().And.NotContain(line => line.Contains("--build", StringComparison.Ordinal),
             "the deployment pulls the published image, and building it here replaces it " +
             "with a local one under the same tag");
 
@@ -1464,7 +1394,7 @@ public class DeploymentConfigurationShould
     /// <remarks>
     /// A profile widens the default set instead of narrowing it, so the
     /// documented command brought up seventeen services: a local Postgres and
-    /// MinIO, a migration container that would have run Migrate() against the
+    /// object store, a migration container that would have run Migrate() against the
     /// main database, and no nginx at all — the edge lives only in the overlay,
     /// so the topology the guide drew was produced by no command.
     ///
@@ -1519,7 +1449,7 @@ public class DeploymentConfigurationShould
                 "serving the frontend from the door is the reason it exists: markup, scripts and " +
                 "styles stop crossing the network on every page");
 
-            foreach (var elsewhere in new[] { "dmapi", "postgres", "minio", "migration" })
+            foreach (var elsewhere in new[] { "dmapi", "postgres", "storage", "seaweedfs", "migration" })
             {
                 arguments.Should().NotContain(elsewhere,
                     $"{elsewhere} belongs to the main server, and a door that runs its own holds " +
@@ -1680,11 +1610,12 @@ public class DeploymentConfigurationShould
     /// the one that decides it: it mounts /var/run/docker.sock, which is full
     /// control of the host.
     ///
-    /// There is no exception. minio/mc used to be one, on the argument that a
-    /// client pinned apart from its server is the failure mode - which is true and
-    /// is an argument for pinning them together, not for leaving one of them
+    /// There is no exception, the client of the object store included. A client
+    /// pinned apart from its server is a failure mode, and that is an argument
+    /// for pinning the two together rather than for leaving one of them
     /// floating: an unpinned client walks away from the pinned server on its own
-    /// schedule, and the first sign is a command the server does not know.
+    /// schedule, and the first sign is a command the server does not know. Both
+    /// run by digest.
     ///
     /// "Names a version" used to be checked as "the last path segment contains a
     /// colon", which <c>containrrr/watchtower:latest</c> satisfies — the single

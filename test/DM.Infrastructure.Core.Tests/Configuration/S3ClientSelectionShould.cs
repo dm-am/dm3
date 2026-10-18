@@ -12,25 +12,25 @@ namespace DM.Infrastructure.Core.Tests.Configuration;
 /// The object storage client is built for the provider the configuration names.
 /// </summary>
 /// <remarks>
-/// The two providers want different clients from the same settings: MinIO
-/// answers only path-style addresses and signs for whatever region it is told,
-/// while CloudCube is an AWS bucket reached through its region's endpoint. The
-/// one chosen for the other provider starts without a complaint and fails on
-/// the first upload, so the choice is asserted on the client the container hands
-/// out rather than on the settings it was given.
+/// The two providers want different clients from the same settings: the store
+/// run beside the site answers only path-style addresses and signs for whatever
+/// region it is told, while CloudCube is an AWS bucket reached through its
+/// region's endpoint. The one chosen for the other provider starts without a
+/// complaint and fails on the first upload, so the choice is asserted on the
+/// client the container hands out rather than on the settings it was given.
 /// </remarks>
 public class S3ClientSelectionShould
 {
     private const string Endpoint = "http://storage.test:9000";
 
     [Fact]
-    public void ReachMinioByPathWithTheRegionItIsTold()
+    public void ReachTheSelfHostedStoreByPathWithTheRegionItIsTold()
     {
-        var config = ClientFor(S3Provider.Minio, "us-east-1");
+        var config = ClientFor(S3Provider.SelfHosted, "us-east-1");
 
         config.ForcePathStyle.Should().BeTrue(
-            "MinIO resolves the bucket from the path, and a virtual-host address names a host " +
-            "that does not exist");
+            "the self-hosted store resolves the bucket from the path, and a virtual-host " +
+            "address names a host that does not exist");
         config.AuthenticationRegion.Should().Be("us-east-1");
         config.ServiceURL.Should().StartWith(Endpoint);
     }

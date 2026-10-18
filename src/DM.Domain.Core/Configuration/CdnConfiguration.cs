@@ -41,7 +41,7 @@ public class CdnConfiguration
     public string Folder { get; set; } = string.Empty;
 
     /// <summary>
-    /// CDN is MinIO
+    /// Kind of S3 service the bucket lives in
     /// </summary>
     public S3Provider Provider { get; set; }
 }

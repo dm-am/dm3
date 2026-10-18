@@ -36,7 +36,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 - **Frontend:** http://localhost:5173
 - **API/Swagger:** http://localhost:5000
 - **Health:** http://localhost:5000/_health (liveness), http://localhost:5000/_ready (readiness)
-- **MinIO:** http://localhost:9001 (credentials из `docker/.env`) — bucket `dm-uploads` создает контейнер minio-init при подъеме стека, он же выставляет анонимный доступ на публичные префиксы
+- **Объектное хранилище (S3):** http://localhost:9000, учетки из `docker/.env`. Бакет `dm-uploads`, учетки и анонимное чтение публичных префиксов задает `docker/storage-start.sh` при старте `seaweedfs`. Веб-консоли у хранилища нет
 - **imgproxy:** http://localhost:8080 (on-the-fly resize + AVIF/WebP negotiation)
 
 ---
@@ -53,7 +53,7 @@ cd src/DM.Web.Client && npm install && npm run dev  # Frontend
 | Email Consumer | 5003 | — |
 | PostgreSQL | 5432 | из `docker/.env` |
 | RabbitMQ | 5672, 15672 | из `docker/.env` |
-| MinIO | 9000, 9001 | из `docker/.env` |
+| Объектное хранилище (S3) | 9000 | из `docker/.env` |
 | imgproxy | 8080 | HMAC key/salt из `docker/.env` |
 | Mailpit | 1025, 8025 | — |
 | Loki | 3100 | — |
@@ -87,7 +87,7 @@ powershell -File .\scripts\dm.ps1 seed   # Windows
 
 **Требования:** API запущен (порт 5000).
 
-Сид — отдельный консольный инструмент, а не эндпоинт: он пишет напрямую в Postgres и объектное хранилище, поэтому по сети он недоступен вовсе. Скрипт запускает его разовым контейнером под compose-профилем `tools`, который не поднимается обычным `docker compose up`. API при этом должен быть запущен: скрипт проверяет `/_health` и после сида перезапускает API, чтобы он пересчитал стартовые проекции; бакет для загрузок создает контейнер `minio-init`.
+Сид это отдельный консольный инструмент, а не эндпоинт: он пишет напрямую в Postgres и объектное хранилище, поэтому по сети он недоступен вовсе. Скрипт запускает его разовым контейнером под compose-профилем `tools`, который не поднимается обычным `docker compose up`. API при этом должен быть запущен: скрипт проверяет `/_health` и после сида перезапускает API, чтобы он пересчитал стартовые проекции. Бакет для загрузок создает сам `seaweedfs` при старте, и сид ждет его здоровья.
 
 **Тестовые аккаунты (пароль: `Test123!`):**
 
@@ -223,7 +223,7 @@ dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s s
 
 | Файл | Назначение |
 |------|------------|
-| [`docker/.env`](../../docker/.env.example) | Секреты Docker (пароли БД, MinIO, RabbitMQ) |
+| [`docker/.env`](../../docker/.env.example) | Секреты Docker (пароли БД, хранилища, RabbitMQ) |
 | [`src/DM.Web.API/appsettings.json`](../../src/DM.Web.API/appsettings.json) | Главный конфиг API (сессии, пароли, токены, CDN) |
 | [`src/DM.Web.Client/.env.local`](../../src/DM.Web.Client/) | Адрес API для запуска из исходников: dev-сервер и API отвечают на разных портах. В развернутом виде значение пусто, сайт и API живут на одном origin |
 
@@ -241,7 +241,7 @@ dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s s
 | `AuthenticationConfiguration` | Сессии (1 год), throttling, lockout | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `PasswordPolicyConfiguration` | Требования к паролям (8+ символов) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
 | `TokenConfiguration` | Срок жизни токенов (активация, сброс пароля) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
-| `CdnConfiguration` | MinIO/S3 для source-файлов | [UPLOADS.md](../architecture/UPLOADS.md) |
+| `CdnConfiguration` | Объектное хранилище S3 для source-файлов | [UPLOADS.md](../architecture/UPLOADS.md) |
 
 ### Frontend
 
@@ -256,7 +256,9 @@ VITE_API_HOST=http://localhost:5000
 ```bash
 POSTGRES_PASSWORD=...
 RABBITMQ_DEFAULT_PASS=...
-MINIO_ROOT_PASSWORD=...
+STORAGE_APP_PASSWORD=...
+STORAGE_IMGPROXY_PASSWORD=...
+STORAGE_BACKUP_PASSWORD=...
 IMGPROXY_KEY=...   # 64 hex chars (32 bytes), HMAC-SHA256 key
 IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 ```
@@ -269,7 +271,7 @@ IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
 |----------|---------|
 | Порт занят | `taskkill //F //IM node.exe` (Windows) |
 | Frontend не видит API | Проверить `.env.local`: `VITE_API_HOST=http://localhost:5000` |
-| Изображения не загружаются | Bucket и его политики создает контейнер `minio-init` до старта API. Проверь `docker logs dm-minio-init` |
+| Изображения не загружаются | API стартует и без хранилища, отказывают только загрузки и картинки. Проверь `docker ps` (`dm-seaweedfs` должен быть healthy) и `docker logs dm-seaweedfs` |
 | Thumbnails не отдаются (404 на imgproxy) | `docker ps \| grep imgproxy`. Проверить `IMGPROXY_KEY`/`IMGPROXY_SALT` в `docker/.env` (64 hex chars each) |
 | Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API --environment Development` |
 | Seed: "PostgreSQL not available" | Запусти: `docker compose up -d postgres` |

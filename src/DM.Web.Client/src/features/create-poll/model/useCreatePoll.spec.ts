@@ -200,6 +200,11 @@ describe("useCreatePoll bounds", () => {
     createPoll.mockReset();
     createPoll.mockResolvedValue({ data: { id: "p-1" }, error: null });
     vi.useFakeTimers({ now: new Date("2026-10-06T02:30:00Z") });
+    // The bounds are read on the site's clock, which for a signed-in reader is
+    // the zone of the account. Pinned here rather than through the device: the
+    // TZ of the file above is honoured by Date on this machine, but a vitest
+    // worker on Linux keeps the zone it was started with, and CI runs in UTC.
+    setAccountTimeZone("Europe/Moscow");
   });
 
   afterEach(() => {
@@ -217,7 +222,7 @@ describe("useCreatePoll bounds", () => {
 
   it("offers now as the start, and takes no earlier one", () => {
     const form = filled();
-    // Moscow, the device's zone for the file.
+    // Moscow, the zone of the account.
     expect(form.pollStartsUtc.value).toBe("2026-10-06T05:30");
     expect(form.startsMin.value).toBe("2026-10-06T05:30");
   });

@@ -206,10 +206,10 @@ async function rebuildStand({ root: tree, commit }) {
         )
       : attempt("bash", [join(tree, "scripts", "dm.sh"), command], tree);
 
-  // "start" again when the reset fails: on empty volumes MinIO and RabbitMQ
-  // can pass their healthchecks after the script has stopped waiting (on a
-  // busy machine RabbitMQ boots for minutes), and the stack then comes up on
-  // the next attempt with nothing lost - the databases are already empty.
+  // "start" again when the reset fails: on empty volumes object storage and
+  // RabbitMQ can pass their healthchecks after the script has stopped waiting
+  // (on a busy machine RabbitMQ boots for minutes), and the stack then comes up
+  // on the next attempt with nothing lost - the databases are already empty.
   if (manage("reset") !== 0 && manage("start") !== 0 && manage("start") !== 0)
     fail("the stack did not start");
   // The seed goes into a database nothing else has written to. The reset
