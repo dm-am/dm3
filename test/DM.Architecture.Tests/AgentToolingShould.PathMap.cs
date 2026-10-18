@@ -247,7 +247,7 @@ public partial class AgentToolingShould
 
         var asked = Regex.Matches(hook, @"\bwants ([a-z][a-z0-9-]*)")
             .Select(match => ("pre-push", match.Groups[1].Value))
-            .Concat(Regex.Matches(gates, @"^step (?:""([a-z0-9 -]+)""|([a-z0-9-]+)) ", RegexOptions.Multiline)
+            .Concat(Regex.Matches(gates, @"^\s*step (?:""([a-z0-9 -]+)""|([a-z0-9-]+)) ", RegexOptions.Multiline)
                 .SelectMany(match => (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value)
                     .Split(' ', StringSplitOptions.RemoveEmptyEntries))
                 .Select(job => ("gates.sh", job)))
@@ -257,6 +257,86 @@ public partial class AgentToolingShould
         asked.Should().Contain(question => question.Item1 == "gates.sh", "and so does scripts/gates.sh");
         Named(asked.Where(question => !map.Contains(question.Item2)).Select(question => $"{question.Item1}: {question.Item2}"))
             .Should().BeEmpty("the map answers false for a job it does not have, and the gates behind it never run again");
+    }
+
+    /// <summary>The one function both scripts ask whether the suite was asked for.</summary>
+    private const string EndToEndRequest = "e2e_requested";
+
+    /// <summary>A condition that holds only when the suite was asked for: the request, not negated.</summary>
+    private static readonly Regex AsksForTheSuite = new(
+        @"(?<!!\s*)\b" + EndToEndRequest + @"\b", RegexOptions.Compiled);
+
+    /// <summary>
+    /// The end-to-end suite, and the check of the stand it runs against, run on
+    /// a push of a branch only when they are asked for, whatever the map says.
+    /// </summary>
+    /// <remarks>
+    /// The one job the local scripts hold back after the map has called it. A
+    /// branch reaches dev only as a pull request, and the e2e job runs the suite
+    /// there against a stack it stands up itself. Run on a push, the suite
+    /// measured the owner's stand, and the stand check holds the API of that
+    /// stand to the commit being pushed, so every push of a branch meant
+    /// rebuilding the stand under it. A push to dev or main is refused before
+    /// any gate (PrePushGateShould.RefuseAPushToABranchThatTakesOnlyMerges), so
+    /// a push that gets as far as the suite is a push of a branch, and what is
+    /// left to run the suite locally is the request: DM_GATES_FULL, the switch
+    /// that makes the map call every job, and for scripts/gates.sh the name of a
+    /// step as well.
+    ///
+    /// Read as the conditions of the if blocks a gate stands in. The branch
+    /// after else or elif is not guarded by the condition of its if, and a
+    /// negated request is the opposite of one.
+    /// </remarks>
+    [Theory]
+    [InlineData("hooks/pre-push")]
+    [InlineData("gates.sh")]
+    public void RunTheEndToEndSuiteOnlyWhenAskedFor(string script)
+    {
+        var code = File.ReadAllLines(Path.Combine(RepositoryRoot, "scripts", script))
+            .Select(line => line.Trim())
+            .Where(line => !line.StartsWith("#", StringComparison.Ordinal))
+            .ToList();
+
+        var request = code.FirstOrDefault(line => line.StartsWith($"{EndToEndRequest}()", StringComparison.Ordinal));
+        request.Should().NotBeNull($"scripts/{script} asks whether the suite was asked for in one place, {EndToEndRequest}");
+        request.Should().Contain("DM_GATES_FULL",
+            "the switch that asks for the full set is the one that asks for the suite");
+
+        var guards = new Stack<string>();
+        var gates = new List<string>();
+        var unguarded = new List<string>();
+
+        foreach (var line in code)
+        {
+            if (line.StartsWith("if ", StringComparison.Ordinal) && !line.EndsWith("fi", StringComparison.Ordinal))
+            {
+                guards.Push(line);
+            }
+            else if (line.StartsWith("elif ", StringComparison.Ordinal) || line == "else")
+            {
+                guards.Pop();
+                guards.Push(line);
+            }
+            else if (line == "fi")
+            {
+                guards.Pop();
+            }
+            else if (line.Contains("check-e2e-stand.sh", StringComparison.Ordinal) ||
+                     line.Contains("npm run test:e2e", StringComparison.Ordinal))
+            {
+                gates.Add(line);
+                if (!guards.Any(AsksForTheSuite.IsMatch))
+                {
+                    unguarded.Add(line);
+                }
+            }
+        }
+
+        gates.Should().NotBeEmpty($"scripts/{script} runs the suite and checks its stand");
+        Named(unguarded).Should().BeEmpty(
+            $"scripts/{script} runs these on every push that touches what the suite covers: on a " +
+            "branch the e2e job runs them on the pull request, and here they wait for " +
+            $"{EndToEndRequest}, see the remarks");
     }
 
     /// <summary>

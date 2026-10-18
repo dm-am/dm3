@@ -414,9 +414,9 @@ public partial class AgentToolingShould
                 "after it can pass --no-restore on a checkout that has no packages at all",
 
             // e2e - the stack the suite needs standing. The suite itself, "Run the
-            // suite", is a local gate: the hook runs the same test:e2e:fast
-            // against the local stand once scripts/check-e2e-stand.sh has
-            // found that stand up and with rate limiting off.
+            // suite", is a local gate on request (RunTheEndToEndSuiteOnlyWhenAskedFor):
+            // the hook runs the same test:e2e:fast against the local stand once
+            // scripts/check-e2e-stand.sh has found it up and with rate limiting off.
             ["Generate the throwaway secrets compose refuses to start without"] =
                 "invents the values compose declares with ${...:?}; a machine here has " +
                 "docker/.env with values of its own",

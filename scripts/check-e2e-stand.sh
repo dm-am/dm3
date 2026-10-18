@@ -5,7 +5,7 @@
 # quietly restarted the API under an open tab would be a worse surprise than a
 # refusal.
 #
-# Run first by the pre-push hook and by scripts/gates.sh, well before the suite:
+# Run by the pre-push hook and by scripts/gates.sh when the suite is asked for (DM_GATES_FULL), well before the suite:
 # the suite is the last and the dearest gate, and a stack that is not there is
 # a thing to learn in a second, not after twenty minutes of the others.
 #

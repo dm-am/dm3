@@ -15,12 +15,9 @@ import type { Browser, Page } from "@playwright/test";
  *
  * The column is narrow: 300px at 1024, 556px at 1280, 642px at 1366 and on a
  * phone, 716px at 1440 and 1196px at 1920; the sidebars take the rest. A table
- * shows all of its columns at the widths they declare, its text breaks between
- * words only, as on DM2, and where even its least width, every word whole, is
- * wider than the column, the table scrolls sideways in its own frame
- * (DataTable) while the page stays put, and only there. That choice stands
- * while the owner's answer on tables wider than the column is open
- * (fixtures/tables.ts).
+ * shows all of its columns, its text breaks between words only, as on DM2,
+ * and a table wider than the column at its least scrolls in its own frame
+ * (DataTable) while the page stays put (fixtures/tables.ts).
  *
  * What is checked is what a reader sees, at every width in turn: every column
  * is there, in the header and in every row; no two headers run into each
@@ -320,8 +317,11 @@ function edgesAndHeads(): string[] {
         `the frame of ${name(table)} spans ${Math.round(edge.left)}-${Math.round(edge.right)}, the column ${Math.round(left)}-${Math.round(right)}`,
       );
     }
+    // Four pixels of play: the same text measures a few pixels wider under
+    // the fonts of another machine, and the page itself is held to one pixel
+    // above, so a box that only pokes into its own padding is not a scroll.
     for (let up = frame.parentElement; up && up !== content; ) {
-      if (up.scrollWidth > up.clientWidth + 1) {
+      if (up.scrollWidth > up.clientWidth + 4) {
         problems.push(
           `${name(up)} scrolls sideways: ${up.scrollWidth} > ${up.clientWidth}, children ${widths(up)}`,
         );
