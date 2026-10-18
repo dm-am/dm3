@@ -14,17 +14,13 @@ import type { Browser, Page } from "@playwright/test";
  * whole at every width, a phone included, and never widens the page.
  *
  * The column is narrow: 300px at 1024, 556px at 1280, 642px at 1366 and on a
- * phone, 716px at 1440 and 1196px at 1920; the sidebars take the rest. At
- * 1280 the headers of /games ran over each other and the boards table of
- * /forum pushed the right sidebar off the screen. A fix that folded the
- * secondary columns into a line under the main one was taken back, so was one
- * that broke words inside to fit, and so was one that left out the rarer
- * columns. A table shows all of its columns at the widths they declare, its
- * text breaks between words only, as on DM2, and where even its least width,
- * every word whole, is wider than the column, the table scrolls sideways in
- * its own frame (DataTable) while the page stays put, and only there. That
- * choice stands while the owner's answer on tables wider than the column is
- * open (fixtures/tables.ts).
+ * phone, 716px at 1440 and 1196px at 1920; the sidebars take the rest. A table
+ * shows all of its columns at the widths they declare, its text breaks between
+ * words only, as on DM2, and where even its least width, every word whole, is
+ * wider than the column, the table scrolls sideways in its own frame
+ * (DataTable) while the page stays put, and only there. That choice stands
+ * while the owner's answer on tables wider than the column is open
+ * (fixtures/tables.ts).
  *
  * What is checked is what a reader sees, at every width in turn: every column
  * is there, in the header and in every row; no two headers run into each
@@ -32,8 +28,6 @@ import type { Browser, Page } from "@playwright/test";
  * none is hyphenated; the frame keeps to the column and scrolls only a table
  * wider than the column at its least; nothing between the frame and the
  * column scrolls, and the page does not.
- *
- * The forum topics table has its own spec (topics-table-fit.spec.ts).
  */
 const WIDTHS = [1024, 1280, 1366, 1440, 1920];
 
@@ -300,6 +294,12 @@ function edgesAndHeads(): string[] {
     el.innerText.trim().replace(/\s+/g, " ").slice(0, 40);
   const name = (el: Element) =>
     `${el.tagName.toLowerCase()}.${[...el.classList].join(".")}`;
+  /** The children of a box with their drawn and scrolling widths, for a run without a browser. */
+  const widths = (box: HTMLElement) =>
+    [...box.children]
+      .filter((c): c is HTMLElement => c instanceof HTMLElement && shown(c))
+      .map((c) => `${name(c)} ${c.offsetWidth}/${c.scrollWidth} "${text(c)}"`)
+      .join(", ");
   /** The boxes of the text a cell draws, one per line. */
   const textBoxes = (cell: Element) => {
     const range = document.createRange();
@@ -323,7 +323,7 @@ function edgesAndHeads(): string[] {
     for (let up = frame.parentElement; up && up !== content; ) {
       if (up.scrollWidth > up.clientWidth + 1) {
         problems.push(
-          `${name(up)} scrolls sideways: ${up.scrollWidth} > ${up.clientWidth}`,
+          `${name(up)} scrolls sideways: ${up.scrollWidth} > ${up.clientWidth}, children ${widths(up)}`,
         );
       }
       up = up.parentElement;

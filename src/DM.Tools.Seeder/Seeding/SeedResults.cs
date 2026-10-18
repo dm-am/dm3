@@ -99,6 +99,11 @@ internal class ComprehensiveSeedResult
     public int BoardModeratorsAssigned { get; set; }
 
     /// <summary>
+    /// Number of notifications created
+    /// </summary>
+    public int NotificationsCreated { get; set; }
+
+    /// <summary>
     /// Skipped items (already existed)
     /// </summary>
     public int Skipped { get; set; }

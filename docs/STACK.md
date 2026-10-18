@@ -187,12 +187,12 @@
 - GitHub Actions: формат и сборка, тесты с порогом покрытия, гейты фронтенда,
   сквозные тесты на стенде, сканирование зависимостей, CodeQL и OWASP ZAP,
   публикация образов в ghcr.io.
-- `actions/checkout` v4, `actions/setup-dotnet` v4, `actions/setup-node` v4,
-  `actions/upload-artifact` v4.
-- `docker/setup-buildx-action` v3, `docker/login-action` v3,
-  `docker/metadata-action` v5, `docker/build-push-action` v5.
-- `github/codeql-action/*` v3, статический анализ.
-- `zaproxy/action-baseline` v0.14.0, базовое сканирование безопасности.
+- `actions/checkout` v7, `actions/setup-dotnet` v6, `actions/setup-node` v7,
+  `actions/upload-artifact` v7.
+- `docker/setup-buildx-action` v4, `docker/login-action` v4,
+  `docker/metadata-action` v6, `docker/build-push-action` v7.
+- `github/codeql-action/*` v4, статический анализ.
+- `zaproxy/action-baseline` v0.15.0, базовое сканирование безопасности.
 
 ### Мониторинг и логи
 

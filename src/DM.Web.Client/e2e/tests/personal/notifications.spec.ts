@@ -26,8 +26,8 @@ test.describe("Notifications API", () => {
     // A row says what happened, where it leads and when, in the server's words:
     // the page names no event and builds no path of its own. The path is left
     // out of a row that leads nowhere (the API writes no null fields). The seed
-    // writes no notifications, so on a fresh stand the list may hold none, and
-    // the rows the account has gathered are what is read.
+    // writes TestUser a few rows, and this account reads the rows it has
+    // gathered, which on a fresh stand may be none.
     type Detail = { label: unknown; value: unknown; isMoment: unknown };
     const told = (row: Record<string, unknown>) =>
       typeof row.title === "string" &&

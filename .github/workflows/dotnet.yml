@@ -40,8 +40,8 @@ env:
   # (ghcr.io/<owner>/dm-api, dm-worker-*), otherwise CI publishes artifacts
   # no deployment ever consumes.
   IMAGE_PREFIX: ${{ github.repository_owner }}/dm
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Every job pins its runner image: ubuntu-latest becomes Ubuntu 26 on 2026-10-19, and we move when we choose.
 jobs:
   # Which jobs this change needs, from the one map of paths in
   # scripts/ci-paths.json. The pre-push hook and scripts/gates.sh read the same
@@ -62,7 +62,7 @@ jobs:
   # second reader of the map in a syntax the hook cannot run.
   changes:
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read
@@ -77,10 +77,10 @@ jobs:
       compose-topology: ${{ steps.select.outputs.compose-topology }}
       docs: ${{ steps.select.outputs.docs }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
     # The summary of this job says which groups of paths changed and, for every
@@ -120,11 +120,11 @@ jobs:
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 40
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
     - name: Restore dependencies
@@ -149,7 +149,7 @@ jobs:
     # script reads the client through the TypeScript compiler from the client's
     # node_modules, so the packages have to be installed before the tests run.
     # The same Node as the frontend job: FrontendToolchainShould holds them equal.
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
         cache: 'npm'
@@ -167,13 +167,13 @@ jobs:
     - name: Coverage threshold
       run: bash scripts/check-coverage.sh
     - name: Upload test results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: test-results
         path: TestResults/
     - name: Upload coverage reports
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: coverage-reports
@@ -183,7 +183,7 @@ jobs:
     # is not served in production. The integration suite writes it out so it can
     # be diffed between builds and consumed outside the process.
     - name: Upload OpenAPI contract
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: openapi-contract
@@ -197,12 +197,12 @@ jobs:
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: src/DM.Web.Client
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     # The exact patch, not the major. npm ships inside the Node tarball, so the
     # Node version decides which npm reads the lock file: '24' floated onto a
     # patch carrying npm 11.17.0 while the file had been written on the owner's
@@ -211,7 +211,7 @@ jobs:
     # The version lives in src/DM.Web.Client/package.json under engines, here,
     # and in src/DM.Web.Client/Dockerfile; FrontendToolchainShould holds the
     # three equal.
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
         cache: 'npm'
@@ -223,7 +223,7 @@ jobs:
     - run: npm run build
     - run: npm run test:coverage
     - name: Upload frontend coverage
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: frontend-coverage
@@ -244,7 +244,7 @@ jobs:
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 45
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       # Every compose invocation in this job means the pair, and repeating the
       # flags five times is how one of them ends up missing the overlay.
@@ -257,18 +257,18 @@ jobs:
       # in: compose prefers the environment over .env.
       ASPNETCORE_ENVIRONMENT: Production
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     # Pinned to the patch, and to the same patch as everywhere else - see the
     # frontend job for why the major alone reddened a build.
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     # docker/.env.example ships the encryption key and the imgproxy signing pair
     # empty, and compose declares all three with ${...:?}, which rejects an empty
@@ -398,7 +398,7 @@ jobs:
         '
 
     - name: Upload Playwright report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: playwright-report
@@ -420,11 +420,11 @@ jobs:
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 20
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
     # Gate, not a report: any advisory outside the reviewed allow-list fails
@@ -434,7 +434,7 @@ jobs:
       run: ./scripts/check-vulnerable-packages.sh
     # Pinned to the patch, and to the same patch as everywhere else - see the
     # frontend job for why the major alone reddened a build.
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
         cache: 'npm'
@@ -474,16 +474,16 @@ jobs:
     timeout-minutes: 30
     needs: [changes]
     if: needs.changes.outputs.docs == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
     # StatusDocumentShould reads the client through the TypeScript compiler of
     # its node_modules, as in the build job.
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
         cache: 'npm'
@@ -504,7 +504,7 @@ jobs:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
     needs: [changes, build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security, docs]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Every check succeeded or was skipped by the map, written out rather than
     # left to the implicit success(): that one counts a skipped check as a
     # reason to skip the publisher too. Failed and cancelled are named, since
@@ -523,7 +523,7 @@ jobs:
           - project: DM.Workers.NotificationDispatcher
             image_suffix: worker-notification
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     # A renamed or mistyped project must fail here in one second, not five
     # minutes later inside a Docker restore layer.
@@ -531,10 +531,10 @@ jobs:
       run: test -f "src/${{ matrix.project }}/${{ matrix.project }}.csproj"
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     - name: Log in to Container Registry
-      uses: docker/login-action@v3
+      uses: docker/login-action@v4
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
@@ -542,7 +542,7 @@ jobs:
 
     - name: Extract metadata for Docker
       id: meta
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@v6
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.image_suffix }}
         # One tag, and it names a commit. The moving names - latest, the branch,
@@ -553,7 +553,7 @@ jobs:
         tags: type=sha,prefix=
 
     - name: Build and push image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v7
       with:
         context: .
         file: ./docker/app.Dockerfile
@@ -579,7 +579,7 @@ jobs:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
     needs: [changes, build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security, docs]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Every check succeeded or was skipped by the map, written out rather than
     # left to the implicit success(): that one counts a skipped check as a
     # reason to skip the publisher too. Failed and cancelled are named, since
@@ -589,13 +589,13 @@ jobs:
       contents: read
       packages: write
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     - name: Log in to Container Registry
-      uses: docker/login-action@v3
+      uses: docker/login-action@v4
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
@@ -603,7 +603,7 @@ jobs:
 
     - name: Extract metadata for Docker
       id: meta
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@v6
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-front
         # One tag, and it names a commit. The moving names - latest, the branch,
@@ -614,7 +614,7 @@ jobs:
         tags: type=sha,prefix=
 
     - name: Build and push image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v7
       with:
         context: ./src/DM.Web.Client
         push: true
@@ -637,7 +637,7 @@ jobs:
   # the bytes a moving name resolves to are the bytes that were tested.
   promote-images:
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ publish, publish-frontend ]
     if: github.event_name == 'push'
     permissions:
@@ -645,7 +645,7 @@ jobs:
       packages: write
     steps:
     - name: Log in to the registry
-      uses: docker/login-action@v3
+      uses: docker/login-action@v4
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
@@ -683,9 +683,9 @@ jobs:
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     # Through scripts rather than inline, the way shellcheck already was: every
     # check of this job needs docker and nothing else, so all of it belongs in
@@ -723,12 +723,12 @@ jobs:
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     # The same three the end-to-end tier generates, and for the same reason:
     # compose declares them with ${...:?} and stops on interpolation before it

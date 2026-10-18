@@ -205,6 +205,7 @@ internal static class Program
             ("testimonials", result.TestimonialsCreated),
             ("likes", result.LikesCreated),
             ("board moderators", result.BoardModeratorsAssigned),
+            ("notifications", result.NotificationsCreated),
         };
 
         Console.WriteLine($"content: {Summarize(counters)}");

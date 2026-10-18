@@ -129,8 +129,6 @@ internal sealed partial class DataSeeder
         // Categorize users by role
         var admin = users.FirstOrDefault(u => u.Role == UserRole.Admin);
         var seniorMod = users.FirstOrDefault(u => u.Role == UserRole.SeniorModerator);
-        var moderator = users.FirstOrDefault(u => u.Role == UserRole.Moderator);
-        var mentor = users.FirstOrDefault(u => u.Role == UserRole.Mentor);
         var regularUsers = users.Where(u => u.Role == UserRole.RegularUser).ToList();
 
         if (admin == null || seniorMod == null || regularUsers.Count < 3)
@@ -305,13 +303,15 @@ internal sealed partial class DataSeeder
         await SeedWarnings(users, now, result);
 
         // ═══════════════════════════════════════════════════════════════════
-        // 20. SEED A REMOVED ACCOUNT FOR THE "АККАУНТ УДАЛЕН" PROFILE
+        // 20. SEED A REMOVED ACCOUNT FOR "АККАУНТ УДАЛЕН", THEN THE NOTIFICATIONS
         // Everything a removed account wrote stays where it was, signed by
-        // nobody, and the profile under that name gathers it. Last, because
-        // the step removes the account it writes and every step above reads
-        // live accounts only.
+        // nobody, and the profile under that name gathers it. After the
+        // content, because the step removes the account it writes and every
+        // step above reads live accounts only. The notifications of TestUser
+        // go last of all, for the identifiers they draw (SeedNotifications).
         // ═══════════════════════════════════════════════════════════════════
         await SeedRemovedAccount(users, now, result);
+        await SeedNotifications(users, now, result);
 
         result.Details.Add($"Comprehensive seed completed at {now:dd.MM.yyyy в HH:mm}");
         return result;

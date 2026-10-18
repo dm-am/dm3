@@ -33,9 +33,7 @@ concurrency:
   group: security-scanning-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
+# Every job pins its runner image: ubuntu-latest becomes Ubuntu 26 on 2026-10-19, and we move when we choose.
 jobs:
   # Static analysis. DAST (below) only sees what it can reach over HTTP; the
   # defect classes that matter most here — unescaped output reaching a rendered
@@ -48,7 +46,7 @@ jobs:
     # GitHub allows by default. Far above the real time on purpose:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       security-events: write
@@ -64,10 +62,10 @@ jobs:
           - language: javascript-typescript
             build-mode: none
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -78,7 +76,7 @@ jobs:
 
       - name: Setup .NET
         if: matrix.language == 'csharp'
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -87,7 +85,7 @@ jobs:
         run: dotnet build DM.sln -c Release
 
       - name: Analyze
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: /language:${{ matrix.language }}
 
@@ -97,7 +95,7 @@ jobs:
     # GitHub allows by default. Far above the real time on purpose:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       # docker/.env.example ends with Development for local work, and a scan of
       # Development is a scan of a surface that never ships: Swagger is mapped
@@ -108,10 +106,10 @@ jobs:
       # environment over .env.
       ASPNETCORE_ENVIRONMENT: Production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # The example file ships the encryption key and the imgproxy signing pair
       # empty, and compose declares all three with ${...:?} — which rejects an
@@ -165,7 +163,7 @@ jobs:
       # way round is the trap: the file holds no FAIL line and the gate still
       # works, because silence is the failing state here, not the passing one.
       - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.14.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           target: 'http://localhost:5000'
           rules_file_name: '.zap/rules.tsv'
