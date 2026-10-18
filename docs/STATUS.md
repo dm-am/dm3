@@ -2,7 +2,7 @@
 
 # Состояние сайта
 
-Маршрутов 96, с кадром 50, ручек 403, без клиента 49, страниц без входа 8, документов 32, с отдельным тестом 14.
+Маршрутов 96, с кадром 50, ручек 403, без клиента 49, страниц без входа 8, документов 32, с отдельным тестом 10.
 
 Как считается:
 
@@ -10,7 +10,9 @@
 - доступ "вход" значит `requiresAuth` на записи или выше нее; проверки ролей внутри страниц сюда не входят;
 - кадр это состояние `scripts/visual/states.ts`, адрес которого открывает маршрут; куда состояние уходит кликами, не учитывается;
 - ручки берутся из `artifacts/openapi-routes.json`; у ручки есть клиент, если на нее ведет вызов Api или адрес, который сервер пишет в ответ, а клиент открывает через `apiUrl`;
-- тест `test/DM.Architecture.Tests` обходит все документы, если в коде отбирает `.md` по целому дереву, и открывает документ, если в коде называет его путь от корня строковыми литералами; комментарии, сообщения и фикстуры не в счет.
+- тест `test/DM.Architecture.Tests` обходит все документы, если в коде отбирает `.md` по целому дереву, и открывает документ, если в коде называет его путь от корня строковыми литералами; комментарии, сообщения и фикстуры не в счет;
+- тест это класс с именем на Should, общий помощник им не считается, а тот, кто зовет обход помощника, обходит все документы сам;
+- строка реестра исключений (`new("путь", ...)`, голый литерал в списке, `[InlineData]`) документ не открывает: такой тест идет в колонку "Только в реестре" и в итог "с отдельным тестом" не входит.
 
 ## Маршруты
 
@@ -264,39 +266,39 @@
 
 ## Документы
 
-Обходят все документы: DeploymentConfigurationShould, DocumentReferencesShould, DocumentSizeShould, DocumentedPathsShould, DocumentedTablesShould, InterfaceVocabularyShould.
+Обходят все документы: DeploymentConfigurationShould, DocumentExampleTypesShould, DocumentLineReferencesShould, DocumentPunctuationShould, DocumentReachabilityShould, DocumentReferencesShould, DocumentSizeShould, DocumentSnapshotsShould, DocumentedCommandsShould, DocumentedPathsShould, DocumentedTablesShould, InterfaceVocabularyShould.
 
-| Документ | Открывают по пути |
-|---|---|
-| `README.md` | DeploymentConfigurationShould, InterfaceVocabularyShould |
-| `docs/PROGRESS.md` | отдельного теста нет |
-| `docs/STACK.md` | StackDocumentShould |
-| `docs/STACK_DM2.md` | отдельного теста нет |
-| `docs/STATUS.md` | StatusDocumentShould |
-| `docs/SURFACES.md` | DocumentSizeShould |
-| `docs/architecture/AUTHENTICATION.md` | отдельного теста нет |
-| `docs/architecture/AUTHORIZATION.md` | отдельного теста нет |
-| `docs/architecture/BBCODE_RENDERING.md` | DocumentSizeShould |
-| `docs/architecture/SYSTEM.md` | отдельного теста нет |
-| `docs/architecture/UPLOADS.md` | отдельного теста нет |
-| `docs/conventions/API_DESIGN.md` | RateLimitPipelineShould |
-| `docs/conventions/CODE_STYLE.md` | отдельного теста нет |
-| `docs/conventions/DATA_STORAGE.md` | отдельного теста нет |
-| `docs/conventions/PATTERNS.md` | отдельного теста нет |
-| `docs/conventions/PERFORMANCE.md` | отдельного теста нет |
-| `docs/conventions/PROCESS.md` | отдельного теста нет |
-| `docs/conventions/SECURITY.md` | IdentifierDisclosureShould |
-| `docs/conventions/UI_STANDARDS.md` | DocumentSizeShould |
-| `docs/conventions/URL_STRUCTURE.md` | отдельного теста нет |
-| `docs/conventions/USERNAME_POLICY.md` | отдельного теста нет |
-| `docs/guides/DEPLOYMENT.md` | DeploymentConfigurationShould, StorageConfigurationShould |
-| `docs/guides/LOCAL_SETUP.md` | отдельного теста нет |
-| `docs/guides/MONITORING.md` | DeploymentConfigurationShould, LogDeliveryVisibilityShould |
-| `docs/guides/POINT_OF_PRESENCE.md` | DeploymentConfigurationShould |
-| `docs/guides/TESTING.md` | DocumentedTestTiersShould |
-| `docs/plans/DIALOGS.md` | DocumentSizeShould |
-| `docs/plans/DM2_MIGRATION.md` | DocumentedTablesShould |
-| `docs/plans/ERROR_PAGES_AND_LORE.md` | отдельного теста нет |
-| `docs/plans/ROADMAP.md` | отдельного теста нет |
-| `docs/references/CONFIGURATION.md` | отдельного теста нет |
-| `docs/references/GLOSSARY.md` | отдельного теста нет |
+| Документ | Открывают по пути | Только в реестре |
+|---|---|---|
+| `README.md` | DeploymentConfigurationShould, DocumentReachabilityShould | DocumentPunctuationShould |
+| `docs/PROGRESS.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/STACK.md` | StackDocumentShould | - |
+| `docs/STACK_DM2.md` | отдельного теста нет | - |
+| `docs/STATUS.md` | StatusDocumentShould | - |
+| `docs/SURFACES.md` | отдельного теста нет | DocumentPunctuationShould, DocumentSizeShould, DocumentSnapshotsShould |
+| `docs/architecture/AUTHENTICATION.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/architecture/AUTHORIZATION.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/architecture/BBCODE_RENDERING.md` | отдельного теста нет | DocumentPunctuationShould, DocumentSizeShould |
+| `docs/architecture/SYSTEM.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/architecture/UPLOADS.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/conventions/API_DESIGN.md` | RateLimitPipelineShould | DocumentPunctuationShould |
+| `docs/conventions/CODE_STYLE.md` | отдельного теста нет | DocumentPunctuationShould, DocumentSnapshotsShould |
+| `docs/conventions/DATA_STORAGE.md` | отдельного теста нет | DocumentExampleTypesShould, DocumentPunctuationShould |
+| `docs/conventions/PATTERNS.md` | отдельного теста нет | DocumentExampleTypesShould, DocumentPunctuationShould |
+| `docs/conventions/PERFORMANCE.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/conventions/PROCESS.md` | отдельного теста нет | AgentInstructionSizeShould, DocumentPunctuationShould |
+| `docs/conventions/SECURITY.md` | IdentifierDisclosureShould | DocumentPunctuationShould |
+| `docs/conventions/UI_STANDARDS.md` | отдельного теста нет | DocumentPunctuationShould, DocumentSizeShould, DocumentSnapshotsShould |
+| `docs/conventions/URL_STRUCTURE.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/conventions/USERNAME_POLICY.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/guides/DEPLOYMENT.md` | DeploymentConfigurationShould, StorageConfigurationShould | DocumentPunctuationShould |
+| `docs/guides/LOCAL_SETUP.md` | отдельного теста нет | DocumentPunctuationShould, DocumentedCommandsShould |
+| `docs/guides/MONITORING.md` | DeploymentConfigurationShould, LogDeliveryVisibilityShould | DocumentPunctuationShould |
+| `docs/guides/POINT_OF_PRESENCE.md` | DeploymentConfigurationShould | DocumentPunctuationShould |
+| `docs/guides/TESTING.md` | DocumentedTestTiersShould | DocumentExampleTypesShould, DocumentPunctuationShould |
+| `docs/plans/DIALOGS.md` | отдельного теста нет | DocumentLineReferencesShould, DocumentPunctuationShould, DocumentReachabilityShould, DocumentSizeShould, DocumentSnapshotsShould |
+| `docs/plans/DM2_MIGRATION.md` | DocumentedTablesShould | DocumentPunctuationShould |
+| `docs/plans/ERROR_PAGES_AND_LORE.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/plans/ROADMAP.md` | отдельного теста нет | DocumentPunctuationShould, DocumentSnapshotsShould |
+| `docs/references/CONFIGURATION.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/references/GLOSSARY.md` | отдельного теста нет | DocumentPunctuationShould |

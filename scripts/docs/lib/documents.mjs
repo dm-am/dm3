@@ -17,6 +17,17 @@
 //     directory is not the document, and a line that writes a file builds a
 //     fixture, not a read.
 //
+// A line that only records a document in a register is not a read of it: a row
+// new("docs/X.md", ...) of a list of exceptions, a bare literal row of a
+// list of names, or a case of [InlineData]. Such a test holds the document only
+// to the count the register gives, and the cleanup that empties the register
+// would otherwise read as coverage lost. Those are listed in a column of their
+// own and stay out of the count of documents with a test.
+//
+// Only a class named ...Should is a test. A shared helper that the gates call is
+// not one: the tests that call HandwrittenDocuments.All walk every document
+// through it, and are listed as walkers themselves.
+//
 // The match is by text, so a test that names a file of the same name elsewhere
 // in the tree is counted too.
 import { basename, join } from "node:path";
@@ -34,6 +45,9 @@ const WALK_WINDOW = 10;
 const PATH_WINDOW = 3;
 
 const MARKDOWN_FILTER = /"\*\.md"|EndsWith\("\.md"/;
+const HELPER_WALK = /\bHandwrittenDocuments\.All\b/;
+const REGISTER_ROW = /^\s*(?:new\s*\(\s*"[^"]*"\s*,|"[^"]*",?\s*$|\[InlineData\()/;
+const TEST_CLASS = /Should$/;
 const WHOLE_TREE = /"docs"|CommittableFiles\(\)/;
 const WRITES_FILE = /\bFile\.Write/;
 const LITERAL = /"((?:[^"\\]|\\.)*)"/g;
@@ -45,6 +59,7 @@ function codeLines(path) {
 }
 
 function walksDocuments(lines) {
+  if (lines.some((line) => HELPER_WALK.test(line))) return true;
   return lines.some((line, i) => {
     if (!MARKDOWN_FILTER.test(line)) return false;
     const around = lines.slice(Math.max(0, i - WALK_WINDOW), i + WALK_WINDOW + 1);
@@ -70,27 +85,45 @@ function opens(literals, path) {
   });
 }
 
+/** Every test class, a partial class once per file, with what its lines read and record. */
 function readTests() {
-  return walk(TESTS, (p) => p.endsWith(".cs")).map((path) => {
-    const lines = codeLines(path);
-    return { name: basename(path, ".cs"), walks: walksDocuments(lines), literals: literalLines(lines) };
-  });
+  return walk(TESTS, (p) => p.endsWith(".cs"))
+    .map((path) => ({ path, name: basename(path, ".cs").split(".")[0] }))
+    .filter((file) => TEST_CLASS.test(file.name))
+    .map(({ path, name }) => {
+      const lines = codeLines(path);
+      const rows = lines.map((line) => REGISTER_ROW.test(line));
+      const literals = literalLines(lines);
+      return {
+        name,
+        walks: walksDocuments(lines),
+        reads: literals.map((set, i) => (rows[i] ? new Set() : set)),
+        records: literals.map((set, i) => (rows[i] ? set : new Set())),
+      };
+    });
 }
 
-/** The tests that walk every document, and for each document the tests that open it. */
+/** The names of the tests whose lines of the given kind name the path, once each. */
+function naming(tests, kind, path) {
+  return [...new Set(tests.filter((test) => opens(test[kind], path)).map((test) => test.name))].sort(compare);
+}
+
+/**
+ * The tests that walk every document, and for each document the tests that open
+ * it and the tests that only record it in a register.
+ */
 export function readDocuments() {
   const documents = [join(ROOT, "README.md"), ...walk(join(ROOT, "docs"), (p) => p.endsWith(".md"))];
   const tests = readTests();
-  const walkers = tests.filter((test) => test.walks).map((test) => test.name).sort(compare);
+  const walkers = [...new Set(tests.filter((test) => test.walks).map((test) => test.name))].sort(compare);
   const list = documents
     .map((path) => {
       const repoPath = rel(path);
+      const reads = naming(tests, "reads", repoPath);
       return {
         path: repoPath,
-        tests: tests
-          .filter((test) => opens(test.literals, repoPath))
-          .map((test) => test.name)
-          .sort(compare),
+        tests: reads,
+        registers: naming(tests, "records", repoPath).filter((name) => !reads.includes(name)),
       };
     })
     .sort((a, b) => compare(a.path, b.path));

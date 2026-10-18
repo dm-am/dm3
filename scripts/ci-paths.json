@@ -1,0 +1,91 @@
+{
+  "groups": [
+    {
+      "name": "infrastructure",
+      "paths": ["docker/**", "scripts/**", ".github/**", "src/DM.Web.Client/nginx.conf"],
+      "why": "the stack, the gates and the pipeline themselves: whatever runs the checks has changed, so every check runs. The nginx.conf of the SPA is here because scripts/deployment/check-nginx-configuration.sh, a step of compose-topology, parses it"
+    },
+    {
+      "name": "client-read-by-server",
+      "paths": [
+        "src/DM.Web.Client/src/assets/styles/**",
+        "src/DM.Web.Client/src/authorEditRoundTrip.spec.ts",
+        "src/DM.Web.Client/src/shared/lib/utils/bbcodeGrammar.cases.ts",
+        "src/DM.Web.Client/src/shared/lib/utils/hintMarkup.cases.ts",
+        "src/DM.Web.Client/src/shared/lib/testing/markupCorpus.golden.json",
+        "src/DM.Web.Client/src/shared/lib/testing/markupAlphabet.ts"
+      ],
+      "why": "client files that .NET tests outside DM.Architecture.Tests read as data: EmailThemeShould the styles, the markup tests the grammar, hint, corpus, alphabet and round-trip tables. Ahead of client, which would otherwise claim them without the build job"
+    },
+    {
+      "name": "client",
+      "paths": ["src/DM.Web.Client/**"],
+      "why": "the SPA, its configs and its end-to-end suite; ahead of server, which would otherwise claim it through src/**"
+    },
+    {
+      "name": "server",
+      "paths": [
+        "src/**",
+        "test/**",
+        "artifacts/**",
+        ".zap/**",
+        "DM.sln",
+        "Directory.Build.props",
+        "Directory.Packages.props",
+        "global.json",
+        "docs/conventions/API_DESIGN.md"
+      ],
+      "why": "the solution and what it builds from; API_DESIGN.md sits here because OpenApiContractShould, an integration test of the build job, reads it"
+    },
+    {
+      "name": "docs",
+      "paths": ["docs/**", "**/*.md", ".claude/**", "skills-lock.json"],
+      "why": "prose and agent configuration; read by DM.Architecture.Tests and by client unit specs that resolve file names and quote documents"
+    }
+  ],
+  "unmatched": "other",
+  "full": {
+    "groups": ["infrastructure", "other"],
+    "together": [["client", "server"], ["client-read-by-server", "server"]],
+    "why": "a path no group names is a path nobody has decided about, so it runs everything rather than nothing"
+  },
+  "jobs": {
+    "build": {
+      "groups": ["server", "client-read-by-server"],
+      "why": "format, Release build, every .NET test and the coverage threshold"
+    },
+    "frontend": {
+      "groups": ["client", "client-read-by-server", "server"],
+      "why": "client specs read the server tree: artifacts/openapi-*.json, controllers, every file a comment names"
+    },
+    "e2e": {
+      "groups": ["client", "client-read-by-server", "server"],
+      "why": "the suite drives both halves through a browser"
+    },
+    "deployment-smoke": {
+      "groups": ["client", "client-read-by-server", "server"],
+      "why": "builds the API and the SPA images and serves them through the edge"
+    },
+    "dependency-scan": {
+      "groups": ["client", "client-read-by-server", "server"],
+      "why": "the packages of both halves; advisories that appear without a change are the nightly run's"
+    },
+    "codeql": {
+      "groups": ["client", "client-read-by-server", "server"],
+      "why": "analyses C# and TypeScript"
+    },
+    "zap-scan": {
+      "groups": ["server"],
+      "why": "scans the API on its own port, the SPA is not in its target"
+    },
+    "compose-topology": {
+      "groups": [],
+      "why": "reads docker/, scripts/ and the nginx.conf of the SPA, all of them infrastructure, so it runs on a full run alone"
+    },
+    "docs": {
+      "groups": ["docs", "client"],
+      "unless": "build",
+      "why": "DM.Architecture.Tests and the client unit specs; the build job runs the former anyway and the frontend job the latter"
+    }
+  }
+}

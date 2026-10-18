@@ -272,12 +272,14 @@ expect "anonymous PutObject" 403 PUT "/$BUCKET/avatars/$PROBE-anonymous.webp" --
 expect "anonymous DeleteObject" 403 DELETE "/$BUCKET/avatars/$PROBE-missing.webp"
 
 # A public prefix read as a directory answers with an empty body or 404, never
-# with a listing: the random part of a key is what keeps it unguessable.
+# with a listing: the random part of a key is what keeps it unguessable. The
+# not-found error echoes the asked key in a <Key> tag, so a listing is told by
+# its root element rather than by that tag.
 for prefix in $PUBLIC_PREFIXES; do
     for query in "" "?delimiter=/&list-type=2" "?list-type=2&prefix=$prefix/"; do
         got="$(status GET "/$BUCKET/$prefix/$query")"
-        if { [ "$got" = 200 ] || [ "$got" = 404 ]; } && ! grep -q '<Key>' "$WORK/body"; then
-            pass "$prefix/$query -> $got, no keys"
+        if { [ "$got" = 200 ] || [ "$got" = 404 ]; } && ! grep -q '<ListBucketResult' "$WORK/body"; then
+            pass "$prefix/$query -> $got, no listing"
         else
             fail "$prefix/$query answered $got: $(head -c 200 "$WORK/body")"
         fi

@@ -10,6 +10,12 @@ on:
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, dev ]
+  # The full set once a day on dev, the default branch and so the one schedule
+  # runs on. A push runs what its paths need (the changes job below), and what
+  # changes without a commit - an advisory against a package, a base image, a
+  # runner - is found here rather than by the next unrelated push.
+  schedule:
+    - cron: '0 2 * * *'
 
 # Least privilege by default; the publish job widens it for itself only.
 permissions:
@@ -37,7 +43,79 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Which jobs this change needs, from the one map of paths in
+  # scripts/ci-paths.json. The pre-push hook and scripts/gates.sh read the same
+  # map through the same script, so what CI skips is what the hook skipped.
+  #
+  # The base of a push is the last green run of this workflow on the branch,
+  # not github.event.before: a push that follows a red one would otherwise
+  # compare against the red commit and skip the very jobs that were red. Every
+  # green run proved what changed since the green run before it, so the tree of
+  # the last one is the tree whose every group has passed. A tree diff against
+  # it holds across a force push too, and a commit the clone no longer has is a
+  # diff git cannot build, which the script answers with the full set. A pull
+  # request compares with the merge base of its target, the way review reads it.
+  # Tags and the schedule run everything.
+  #
+  # Built in rather than dorny/paths-filter: that action compares a push with
+  # github.event.before, which is the hole described above, and it would be a
+  # second reader of the map in a syntax the hook cannot run.
+  changes:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      build: ${{ steps.select.outputs.build }}
+      frontend: ${{ steps.select.outputs.frontend }}
+      e2e: ${{ steps.select.outputs.e2e }}
+      deployment-smoke: ${{ steps.select.outputs.deployment-smoke }}
+      dependency-scan: ${{ steps.select.outputs.dependency-scan }}
+      codeql: ${{ steps.select.outputs.codeql }}
+      zap-scan: ${{ steps.select.outputs.zap-scan }}
+      compose-topology: ${{ steps.select.outputs.compose-topology }}
+      docs: ${{ steps.select.outputs.docs }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24.13.0'
+    # The summary of this job says which groups of paths changed and, for every
+    # job, whether it runs and why: a skipped job is one line on the run page,
+    # never a silence.
+    - name: Select the jobs this change needs
+      id: select
+      env:
+        GH_TOKEN: ${{ github.token }}
+        EVENT: ${{ github.event_name }}
+        REF: ${{ github.ref }}
+        BRANCH: ${{ github.ref_name }}
+        BASE_REF: ${{ github.base_ref }}
+      run: |
+        set -euo pipefail
+        case "$EVENT/$REF" in
+          pull_request/*)
+            SOURCE=(--diff "origin/$BASE_REF...HEAD") ;;
+          push/refs/heads/*)
+            GREEN=$(gh run list --workflow dotnet.yml --branch "$BRANCH" --status success --limit 20 \
+              --json headSha,event --jq '[.[] | select(.event == "push" or .event == "schedule")][0].headSha // ""') \
+              || GREEN=""
+            if [ -n "$GREEN" ]; then
+              SOURCE=(--diff "$GREEN..HEAD")
+            else
+              SOURCE=(--full "no green run of this workflow on $BRANCH to compare with")
+            fi ;;
+          *)
+            SOURCE=(--full "$EVENT on $REF") ;;
+        esac
+        node scripts/ci-paths.mjs "${SOURCE[@]}" --summary "$GITHUB_STEP_SUMMARY" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: [changes]
+    if: needs.changes.outputs.build == 'true'
     # Ends a hang instead of holding the branch for the six hours
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
@@ -113,6 +191,8 @@ jobs:
         if-no-files-found: error
 
   frontend:
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true'
     # Ends a hang instead of holding the branch for the six hours
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
@@ -158,6 +238,8 @@ jobs:
   # asserts on what a browser renders — so the shape below is the one zap-scan
   # already uses, plus a seed.
   e2e:
+    needs: [changes]
+    if: needs.changes.outputs.e2e == 'true'
     # Ends a hang instead of holding the branch for the six hours
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
@@ -243,6 +325,10 @@ jobs:
         docker compose up -d postgres rabbitmq mailpit jaeger
         docker compose up -d --build --wait migration
         docker compose up -d --build --wait dmapi
+        # The two workers the stand scripts start beside the API: notifications
+        # are born in one of them, and a suite against the API alone reads a
+        # notifications page that stays empty.
+        docker compose up -d --build --wait dm-mail-worker dm-notification-worker
 
     - name: Wait for API health
       run: timeout 60 bash -c 'until curl -sf http://localhost:5000/_health; do sleep 2; done'
@@ -328,6 +414,8 @@ jobs:
       run: docker compose logs --tail=300 dmapi migration
 
   dependency-scan:
+    needs: [changes]
+    if: needs.changes.outputs.dependency-scan == 'true'
     # Ends a hang instead of holding the branch for the six hours
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
@@ -360,20 +448,68 @@ jobs:
   # CodeQL and the ZAP scan, pulled into this graph so that publishing can wait
   # for them. They used to live in a workflow of their own, triggered by the same
   # push and reachable from no `needs` at all.
+  #
+  # Called on every run: each of its jobs carries its own condition, handed in
+  # from the map, so a scan the change does not need is skipped by name there.
   security:
+    needs: [changes]
     uses: ./.github/workflows/security.yml
     permissions:
       contents: read
       security-events: write
+    with:
+      codeql: ${{ needs.changes.outputs.codeql == 'true' }}
+      zap-scan: ${{ needs.changes.outputs.zap-scan == 'true' }}
+
+  # DM.Architecture.Tests and the client unit specs, for a change the build job
+  # is not called for: both read the documents, the agent configuration and the
+  # client, and a rename there reddens them. The build job runs the same
+  # architecture tests inside the solution, so the map calls this one only
+  # without it, and the frontend job runs the same specs, so they are skipped
+  # here whenever it runs.
+  docs:
+    # Ends a hang instead of holding the branch for the six hours
+    # GitHub allows by default. Deliberately far above the real time:
+    # a ceiling guessed close turns a slow runner into a red build.
+    timeout-minutes: 30
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+    # StatusDocumentShould reads the client through the TypeScript compiler of
+    # its node_modules, as in the build job.
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24.13.0'
+        cache: 'npm'
+        cache-dependency-path: src/DM.Web.Client/package-lock.json
+    - name: Install client packages
+      run: npm ci
+      working-directory: src/DM.Web.Client
+    - name: Architecture tests
+      run: dotnet test test/DM.Architecture.Tests -c Release --verbosity normal
+    - name: Client unit tests
+      if: needs.changes.outputs.frontend != 'true'
+      run: npm run test:coverage
+      working-directory: src/DM.Web.Client
 
   publish:
     # Ends a hang instead of holding the branch for the six hours
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
-    needs: [build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security]
+    needs: [changes, build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security, docs]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v'))
+    # Every check succeeded or was skipped by the map, written out rather than
+    # left to the implicit success(): that one counts a skipped check as a
+    # reason to skip the publisher too. Failed and cancelled are named, since
+    # failure() alone lets a check cancelled by concurrency through.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
     permissions:
       contents: read
       packages: write
@@ -442,9 +578,13 @@ jobs:
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
-    needs: [build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security]
+    needs: [changes, build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security, docs]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v'))
+    # Every check succeeded or was skipped by the map, written out rather than
+    # left to the implicit success(): that one counts a skipped check as a
+    # reason to skip the publisher too. Failed and cancelled are named, since
+    # failure() alone lets a check cancelled by concurrency through.
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
     permissions:
       contents: read
       packages: write
@@ -537,6 +677,8 @@ jobs:
   # server. This is the check that would have caught the frontend context
   # pointing at a directory removed long ago.
   compose-topology:
+    needs: [changes]
+    if: needs.changes.outputs.compose-topology == 'true'
     # Ends a hang instead of holding the branch for the six hours
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.
@@ -575,6 +717,8 @@ jobs:
   # perimeter, the session cookie, the unreachable transform layer - are that one
   # class, and none of them could have failed a gate.
   deployment-smoke:
+    needs: [changes]
+    if: needs.changes.outputs.deployment-smoke == 'true'
     # Ends a hang instead of holding the branch for the six hours
     # GitHub allows by default. Deliberately far above the real time:
     # a ceiling guessed close turns a slow runner into a red build.

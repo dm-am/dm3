@@ -138,7 +138,7 @@ public class DocumentReferencesShould
             .Where(entry => !Exists(Resolve(entry.File, entry.Link.Target)))
             .Select(entry => $"{Relative(entry.File)} -> {entry.Link.Target}")
             .Should().HaveCount(0,
-                "a relative link whose file is gone leads the reader nowhere");
+                "a relative link whose file is gone, or was never committed, leads the reader nowhere");
     }
 
     // ── Anchors ──
@@ -324,7 +324,28 @@ public class DocumentReferencesShould
             Path.GetDirectoryName(from)!,
             Uri.UnescapeDataString(target.Split('?')[0]).Replace('/', Path.DirectorySeparatorChar)));
 
-    private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
+    /// <summary>
+    /// Whether the path is a file a commit carries, or a folder holding one. Asked of
+    /// git rather than of the disk: a link to a file the ignore list keeps out, such
+    /// as build output or a local settings file, resolves on the machine that wrote
+    /// it and nowhere else, so a link has to reach what the repository holds.
+    /// </summary>
+    private static bool Exists(string path) =>
+        CommittedPaths.Value.Contains(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+    private static readonly Lazy<HashSet<string>> CommittedPaths = new(() =>
+    {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in RepositoryFiles.CommittableFiles())
+        {
+            for (var path = file; path is not null && path.Length > RepositoryRoot.Length; path = Path.GetDirectoryName(path))
+            {
+                paths.Add(path);
+            }
+        }
+
+        return paths;
+    });
 
     /// <summary>
     /// The anchors the headings of a document answer to: the heading as rendered,

@@ -47,23 +47,16 @@ internal static class Program
 
         try
         {
-            // Args are commands, not configuration: Host.CreateDefaultBuilder would
-            // reject a bare positional argument as an unrecognized switch.
-            using var host = CreateHostBuilder().Build();
-            await using var scope = host.Services.CreateAsyncScope();
-
-            var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
-
             if (command is AllCommand or UsersCommand)
             {
-                PrintUsers(await seeder.SeedTestUsers());
+                PrintUsers(await RunPhase(seeder => seeder.SeedTestUsers()));
             }
 
             // The content seed reads the users it attaches everything to, so on
             // "all" it always runs second.
             if (command is AllCommand or ContentCommand)
             {
-                PrintContent(await seeder.SeedComprehensiveData());
+                PrintContent(await RunPhase(seeder => seeder.SeedComprehensiveData()));
             }
 
             return 0;
@@ -73,6 +66,23 @@ internal static class Program
             Console.Error.WriteLine($"Seeding failed: {exception}");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// One phase on a host of its own, so that "all" lays out the fixture that
+    /// "users" followed by "content" lays out in two processes, which is how the
+    /// stand scripts seed. The generator and the identifier counter are
+    /// singletons of the host: shared across the phases, the content phase
+    /// started where the users phase had stopped drawing, and the stand and the
+    /// pipeline disagreed on which accounts play which game.
+    /// </summary>
+    private static async Task<T> RunPhase<T>(Func<DataSeeder, Task<T>> phase)
+    {
+        // Args are commands, not configuration: Host.CreateDefaultBuilder would
+        // reject a bare positional argument as an unrecognized switch.
+        using var host = CreateHostBuilder().Build();
+        await using var scope = host.Services.CreateAsyncScope();
+        return await phase(scope.ServiceProvider.GetRequiredService<DataSeeder>());
     }
 
     /// <summary>

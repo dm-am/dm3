@@ -18,6 +18,10 @@
 # читателем становился красный CI. Строка на джобу прячет шаг ценой в секунды
 # за ценой шага в минуты, поэтому шаги считаются поштучно —
 # AgentToolingShould.RunEveryGateTheWorkflowRunsThatBelongsOnThisMachine.
+#   changes           +  карта путей scripts/ci-paths.json: решает, какие
+#                        гейты ниже нужны этому пушу, и печатает почему
+#   docs              +  архитектурные тесты и юнит-тесты клиента, когда
+#                        build не нужен: оба читают документы
 #   build             +  форматирование, сборка и тесты решения в Release,
 #                        порог покрытия. Сбор покрытия удлиняет прогон тестов,
 #                        и это плата за то, чтобы порог не падал впервые в CI
@@ -49,6 +53,16 @@
 #   git push --no-verify
 #
 # Порядок гейтов — от самого дешевого к самому дорогому, чтобы падать раньше.
+#
+# Гейты идут не все, а те, что нужны изменениям пуша: git diff origin/dev...HEAD
+# раскладывается по группам путей карты scripts/ci-paths.json, и карта решает,
+# какие джобы CI нужны, тем же скриптом, что и джоба changes воркфлоу. Карта у
+# них одна (AgentToolingShould.ReadOneMapOfPaths), а база разная: CI сравнивает
+# с последним зеленым прогоном ветки, хук только с origin/dev. После красного
+# пуша CI гонит упавшее снова, а хук смотрит лишь на новые коммиты и может его
+# пропустить: хук проверяет не больше, чем CI. Путь, которого карта не знает, и
+# diff, который git не смог построить, дают полный набор. Полный набор по своей воле:
+#   DM_GATES_FULL=1 git push
 
 set -e
 
@@ -71,13 +85,22 @@ node "$ROOT/.claude/hooks/block-new-migrations.test.js"
 say "Хуки: разбор пути для линта правки"
 node "$ROOT/.claude/hooks/lint-edited-file.test.js"
 
+# Решение карты: строка "<джоба>=true|false" на каждую джобу. Отчет о группах
+# и о том, что пропущено и почему, скрипт печатает в stderr, то есть сюда же.
+say "Пути: какие гейты нужны этому пушу"
+SELECTION=$(node "$ROOT/scripts/ci-paths.mjs" --diff origin/dev...HEAD)
+
+wants() { printf '%s\n' "$SELECTION" | grep -qx "$1=true"; }
+
 # Стенд для e2e проверяется здесь, а сам набор идет последним. Набор самый
 # дорогой из гейтов, и узнать, что ему не на чем бежать, надо за секунду, а не
 # после двадцати минут остальных. Скрипт ничего не поднимает: при отказе он
 # называет команду, которая готовит стенд (dm.ps1 e2e или dm.sh e2e выключают
 # лимит запросов так же, как оверлей джобы e2e в CI).
-say "e2e: стенд"
-bash "$ROOT/scripts/check-e2e-stand.sh"
+if wants e2e; then
+  say "e2e: стенд"
+  bash "$ROOT/scripts/check-e2e-stand.sh"
+fi
 
 # Джоба compose-topology целиком. Всей ей нужен только docker, и вся она идет
 # двадцать две секунды, поэтому оставлять тут ее дешевую часть смысла нет:
@@ -85,81 +108,103 @@ bash "$ROOT/scripts/check-e2e-stand.sh"
 # осталась в CI. Так и прятался разбор скриптов: цикл по одному элементу в
 # scripts/verify-seed-reproducibility.sh уехал в origin и остановил джобу, от
 # которой зависит вся публикация.
-say "Скрипты оболочки: shellcheck"
-bash "$ROOT/scripts/check-shell-scripts.sh"
+if wants compose-topology; then
+  say "Скрипты оболочки: shellcheck"
+  bash "$ROOT/scripts/check-shell-scripts.sh"
 
-say "Развертывание: топология compose"
-bash "$ROOT/scripts/deployment/check-compose-topology.sh"
+  say "Развертывание: топология compose"
+  bash "$ROOT/scripts/deployment/check-compose-topology.sh"
 
-say "Развертывание: конфигурации nginx"
-bash "$ROOT/scripts/deployment/check-nginx-configuration.sh"
+  say "Развертывание: конфигурации nginx"
+  bash "$ROOT/scripts/deployment/check-nginx-configuration.sh"
 
-say "Развертывание: установщик сервера"
-bash "$ROOT/scripts/deployment/check-server-installer.sh"
+  say "Развертывание: установщик сервера"
+  bash "$ROOT/scripts/deployment/check-server-installer.sh"
 
-say "Развертывание: мониторинг"
-bash "$ROOT/scripts/deployment/check-monitoring.sh"
+  say "Развертывание: мониторинг"
+  bash "$ROOT/scripts/deployment/check-monitoring.sh"
+fi
 
 # npm ci, а не npm install: CI ставит пакеты только так, и эта форма падает,
 # когда package-lock.json разошелся с package.json. Гейты ниже гоняются по уже
 # разложенному node_modules и рассинхрона не видят вовсе — им все равно, чем и
 # когда он был разложен. --dry-run ничего не ставит и не трогает дерево:
 # проверяется ровно то, из-за чего CI отверг lock-файл.
-say "Фронтенд: синхронность lock-файла"
-(cd "$CLIENT" && npm ci --dry-run)
+if wants frontend; then
+  say "Фронтенд: синхронность lock-файла"
+  (cd "$CLIENT" && npm ci --dry-run)
 
-say "Фронтенд: линт"
-(cd "$CLIENT" && npm run lint:ci)
+  say "Фронтенд: линт"
+  (cd "$CLIENT" && npm run lint:ci)
 
-say "Фронтенд: типы"
-(cd "$CLIENT" && npm run type-check)
+  say "Фронтенд: типы"
+  (cd "$CLIENT" && npm run type-check)
+fi
 
-say "Фронтенд: юнит-тесты"
+# Юнит-тесты клиента читают документы: имена файлов в комментариях проверяются
+# по дереву, SURFACES.md и BBCODE_RENDERING.md разбираются как данные. Поэтому
+# они идут и тогда, когда пуш правит одни документы (джоба docs).
+if wants frontend || wants docs; then
+  say "Фронтенд: юнит-тесты"
 # Через npm run test:coverage, а не npx vitest run: пороги покрытия объявлены в
 # блоке coverage.thresholds (vite.config.ts) и применяются только при --coverage.
 # Голой командой хук гонял те же тесты и не проверял тот же порог.
-(cd "$CLIENT" && npm run test:coverage)
+  (cd "$CLIENT" && npm run test:coverage)
+fi
 
-say "Фронтенд: сборка"
-(cd "$CLIENT" && npm run build)
+if wants frontend; then
+  say "Фронтенд: сборка"
+  (cd "$CLIENT" && npm run build)
+fi
 
 # Джоба dependency-scan стоит в needs у обеих джоб публикации, поэтому ее
 # падение останавливает выкладку целиком, а уязвимые пакеты в истории проекта
 # доезжали до origin дважды. npm ci, в отличие от CI, тут не нужен: на клоне
 # node_modules уже стоят, а audit читает package-lock.json.
-say "Зависимости: пакеты npm"
-(cd "$CLIENT" && npm audit --omit=dev --audit-level=high)
+if wants dependency-scan; then
+  say "Зависимости: пакеты npm"
+  (cd "$CLIENT" && npm audit --omit=dev --audit-level=high)
 
-say "Зависимости: пакеты .NET"
-bash "$ROOT/scripts/check-vulnerable-packages.sh"
+  say "Зависимости: пакеты .NET"
+  bash "$ROOT/scripts/check-vulnerable-packages.sh"
+fi
 
-say "Бэкенд: форматирование"
-dotnet format "$ROOT/DM.sln" whitespace --verify-no-changes
+# Джоба docs: архитектурные тесты без остального решения. Карта зовет ее только
+# тогда, когда build не нужен, а build гоняет эти же тесты в составе решения.
+if wants docs; then
+  say "Документы: архитектурные тесты Release"
+  dotnet test "$ROOT/test/DM.Architecture.Tests" -c Release --nologo
+fi
 
-say "Бэкенд: сборка Release"
-dotnet build "$ROOT/DM.sln" -c Release --nologo -v q
+if wants build; then
+  say "Бэкенд: форматирование"
+  dotnet format "$ROOT/DM.sln" whitespace --verify-no-changes
 
-# Интеграционные тесты поднимают Testcontainers: нужен docker. Если демон не
-# отвечает, это не повод пропустить гейт молча.
-#
-# --no-build: решение собрано строкой выше. С -c Debug, который стоял здесь
-# раньше, хук компилировал решение второй раз и проверял не те бинари, что
-# прошли гейт сборки.
-#
-# Покрытие собирается этим же прогоном — так его получает CI: шаг Test в
-# .github/workflows/dotnet.yml пишет по отчету cobertura на тестовый проект в
-# --results-directory, а шаг Coverage threshold читает оттуда же. Каталог
-# отдается пустым: у CI чекаут чистый, а тут TestResults копится прогонами, и
-# отчет, слитый из нескольких состояний кода, не описывает ни одно из них.
-say "Бэкенд: тесты Release"
-rm -rf "$ROOT/TestResults"
-dotnet test "$ROOT/DM.sln" --no-build -c Release --nologo --results-directory "$ROOT/TestResults" --collect:"XPlat Code Coverage"
+  say "Бэкенд: сборка Release"
+  dotnet build "$ROOT/DM.sln" -c Release --nologo -v q
 
-# Порог покрытия решения. Стоял только в CI, и это ровно тот случай, ради
-# которого хук существует: узнать о падении на двадцатой минуте прогона, уже
-# после пуша.
-say "Бэкенд: покрытие"
-bash "$ROOT/scripts/check-coverage.sh"
+  # Интеграционные тесты поднимают Testcontainers: нужен docker. Если демон не
+  # отвечает, это не повод пропустить гейт молча.
+  #
+  # --no-build: решение собрано строкой выше. С -c Debug, который стоял здесь
+  # раньше, хук компилировал решение второй раз и проверял не те бинари, что
+  # прошли гейт сборки.
+  #
+  # Покрытие собирается этим же прогоном — так его получает CI: шаг Test в
+  # .github/workflows/dotnet.yml пишет по отчету cobertura на тестовый проект в
+  # --results-directory, а шаг Coverage threshold читает оттуда же. Каталог
+  # отдается пустым: у CI чекаут чистый, а тут TestResults копится прогонами, и
+  # отчет, слитый из нескольких состояний кода, не описывает ни одно из них.
+  say "Бэкенд: тесты Release"
+  rm -rf "$ROOT/TestResults"
+  dotnet test "$ROOT/DM.sln" --no-build -c Release --nologo --results-directory "$ROOT/TestResults" --collect:"XPlat Code Coverage"
+
+  # Порог покрытия решения. Стоял только в CI, и это ровно тот случай, ради
+  # которого хук существует: узнать о падении на двадцатой минуте прогона, уже
+  # после пуша.
+  say "Бэкенд: покрытие"
+  bash "$ROOT/scripts/check-coverage.sh"
+fi
 
 # Тот же test:e2e:fast, что зовет джоба e2e: один профиль браузера, весь набор.
 # Бандл конфиг собирает и поднимает сам, от стенда нужен только API. Открывать
@@ -175,7 +220,9 @@ bash "$ROOT/scripts/check-coverage.sh"
 # Код возврата у набора честный. Строка "1 did not run" в итоге значит тест из
 # группы, чей beforeAll упал: сам он не запускался, а падение хука засчитано
 # тесту, в котором хук выполнялся, и стоит в строке "N failed" выше по выводу.
-say "e2e: набор на одном профиле"
-(cd "$CLIENT" && CI=1 PLAYWRIGHT_HTML_OPEN=never npm run test:e2e:fast -- --global-timeout=1800000)
+if wants e2e; then
+  say "e2e: набор на одном профиле"
+  (cd "$CLIENT" && CI=1 PLAYWRIGHT_HTML_OPEN=never npm run test:e2e:fast -- --global-timeout=1800000)
+fi
 
-say "Все гейты зеленые"
+say "Все нужные гейты зеленые"

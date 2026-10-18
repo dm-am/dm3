@@ -279,23 +279,19 @@ public class InterfaceVocabularyShould
     /// is left out because it checks itself, and the audit reports at the root
     /// are left out because they quote the violations they name.
     /// </summary>
+    /// <remarks>
+    /// The documents are every markdown file a commit carries, asked of git: a
+    /// walk of README, docs and .claude left out the guides that live beside the
+    /// scripts they describe (scripts/visual/README.md), and the other gates over
+    /// hand-written documents (DocumentPunctuationShould and its neighbours) read
+    /// the same set.
+    /// </remarks>
     private static IEnumerable<string> ReadableText(string root)
     {
-        var readme = Path.Combine(root, "README.md");
-        if (File.Exists(readme))
+        foreach (var file in RepositoryFiles.CommittableFiles())
         {
-            yield return readme;
-        }
-
-        foreach (var directory in new[] { "docs", ".claude" })
-        {
-            var full = Path.Combine(root, directory);
-            if (!Directory.Exists(full))
-            {
-                continue;
-            }
-
-            foreach (var file in FilesUnder(full, "*.md"))
+            if (file.EndsWith(".md", StringComparison.OrdinalIgnoreCase) &&
+                !Relative(root, file).StartsWith("AUDIT-", StringComparison.Ordinal))
             {
                 yield return file;
             }

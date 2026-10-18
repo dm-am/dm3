@@ -7,6 +7,15 @@ on:
   # a red CodeQL or a red ZAP reached the registry, took the `latest` tag on
   # main, and watchtower installed it within five minutes.
   workflow_call:
+    # Which scans the change needs, as the map of scripts/ci-paths.json decided
+    # in the changes job of the caller. One input per job, named as the job.
+    inputs:
+      codeql:
+        type: boolean
+        default: true
+      zap-scan:
+        type: boolean
+        default: true
   # The weekly full scan stands on its own: it is about the code as it sits, not
   # about a change, and there is no build to gate.
   schedule:
@@ -32,6 +41,9 @@ jobs:
   # defect classes that matter most here — unescaped output reaching a rendered
   # surface, injection, unsafe deserialisation — are source-level.
   codeql:
+    # On its own schedule there are no inputs, and an absent input reads as
+    # false, so the weekly scan is let through by name.
+    if: github.event_name == 'schedule' || inputs.codeql
     # Ends a hang instead of holding the branch for the six hours
     # GitHub allows by default. Far above the real time on purpose:
     # a ceiling guessed close turns a slow runner into a red build.
@@ -80,6 +92,7 @@ jobs:
           category: /language:${{ matrix.language }}
 
   zap-scan:
+    if: github.event_name == 'schedule' || inputs.zap-scan
     # Ends a hang instead of holding the branch for the six hours
     # GitHub allows by default. Far above the real time on purpose:
     # a ceiling guessed close turns a slow runner into a red build.
