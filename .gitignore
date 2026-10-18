@@ -99,6 +99,3 @@ src/DM.Web.Client/playwright-report/
 src/DM.Web.Client/blob-report/
 
 src/DM.Web.Client/e2e/.auth/
-
-# Word lock files (open document markers)
-~$*.docx

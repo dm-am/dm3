@@ -65,6 +65,14 @@ public class PrePushGateShould
 
     private static readonly Regex Flag = new(@"--[\w-]+(?:=[\w.]+)?", RegexOptions.Compiled);
 
+    /// <summary>A line of the hook that runs a gate, the first of which is the test of a hook.</summary>
+    private static readonly Regex GateInvocation = new(
+        @"^(?:node|bash|npm|dotnet)\s|^\(cd\s|=\$\(node\s", RegexOptions.Compiled);
+
+    /// <summary>The branches pull requests are opened against, as the trigger of the workflow lists them.</summary>
+    private static readonly Regex PullRequestTargets = new(
+        @"^  pull_request:\s+branches:\s*\[([^\]]*)\]", RegexOptions.Compiled | RegexOptions.Multiline);
+
     private static readonly string[] Workflows = ["dotnet.yml", "security.yml"];
 
     private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
@@ -299,6 +307,51 @@ public class PrePushGateShould
             "the header marks every job as run (+) or as left to CI (-) with the reason; a job " +
             "missing from the table is the silent gap this hook shipped with, and a row naming a " +
             "job that no longer exists is a promise about nothing");
+    }
+
+    /// <summary>
+    /// A push to a branch that takes only merges is refused before any gate runs.
+    /// </summary>
+    /// <remarks>
+    /// dev takes a change only as the squash of a pull request whose checks are
+    /// green, and the protection of the branch refuses a direct push anyway. The
+    /// hook says so first, rather than after twenty minutes of gates spent on a
+    /// push that cannot land. The branches are read out of the pull_request
+    /// trigger of the workflow rather than written here: a branch pull requests
+    /// are opened against is a branch that takes them, and one added there with
+    /// no refusal here would take the direct push the hook waved through.
+    /// </remarks>
+    [Fact]
+    public void RefuseAPushToABranchThatTakesOnlyMerges()
+    {
+        var trigger = PullRequestTargets.Match(File.ReadAllText(WorkflowPath("dotnet.yml")));
+        trigger.Success.Should().BeTrue("dotnet.yml runs on the pull requests into the branches that take them");
+
+        var branches = trigger.Groups[1].Value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        branches.Should().Contain("dev", "dev is where every change lands");
+
+        var hook = HookCommands();
+        var refs = hook.FindIndex(line => line.StartsWith("while read", StringComparison.Ordinal));
+        var firstGate = hook.FindIndex(GateInvocation.IsMatch);
+
+        refs.Should().BeGreaterThan(-1, "git hands the hook the refs being pushed on stdin, one per line");
+        firstGate.Should().BeGreaterThan(-1, "the hook runs gates");
+
+        foreach (var branch in branches)
+        {
+            var arm = hook.FindIndex(line => line.EndsWith(')')
+                && line[..^1].Split('|', StringSplitOptions.TrimEntries).Contains($"refs/heads/{branch}"));
+
+            arm.Should().BeGreaterThan(refs, $"a push to {branch} is told apart by the remote ref the hook reads");
+            arm.Should().BeLessThan(firstGate, $"a push to {branch} is refused before the gates spend their minutes on it");
+
+            var body = hook.Skip(arm + 1).TakeWhile(line => line != ";;").ToList();
+            body.Should().Contain(line => line.Contains("принимает только слияния PR", StringComparison.Ordinal),
+                "the refusal names the way a change does reach the branch");
+            body.Should().Contain(line => Regex.IsMatch(line, @"^exit [1-9]"),
+                "a refusal that exits with 0 lets the push through");
+        }
     }
 
     /// <summary>

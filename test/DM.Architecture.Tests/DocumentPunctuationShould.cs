@@ -56,7 +56,7 @@ public class DocumentPunctuationShould
 
     private static readonly Recorded[] Register =
     [
-        new(".claude/CLAUDE.md", "em dash", 22),
+        new(".claude/CLAUDE.md", "em dash", 20),
         new(".claude/CLAUDE.md", "semicolon", 7),
         new(".claude/agents/code-reviewer.md", "em dash", 7),
         new(".claude/agents/code-reviewer.md", "semicolon", 8),
@@ -69,7 +69,7 @@ public class DocumentPunctuationShould
         new(".claude/skills/review/SKILL.md", "en dash", 2),
         new("README.md", "em dash", 16),
         new("docs/PROGRESS.md", "ellipsis", 1),
-        new("docs/PROGRESS.md", "em dash", 35),
+        new("docs/PROGRESS.md", "em dash", 24),
         new("docs/PROGRESS.md", "semicolon", 32),
         new("docs/SURFACES.md", "ellipsis", 3),
         new("docs/SURFACES.md", "em dash", 115),
@@ -112,7 +112,7 @@ public class DocumentPunctuationShould
         new("docs/guides/MONITORING.md", "em dash", 33),
         new("docs/guides/MONITORING.md", "semicolon", 6),
         new("docs/guides/POINT_OF_PRESENCE.md", "em dash", 5),
-        new("docs/guides/TESTING.md", "em dash", 16),
+        new("docs/guides/TESTING.md", "em dash", 15),
         new("docs/guides/TESTING.md", "semicolon", 6),
         new("docs/plans/DIALOGS.md", "semicolon", 7),
         new("docs/plans/DM2_MIGRATION.md", "em dash", 7),
@@ -122,7 +122,7 @@ public class DocumentPunctuationShould
         new("docs/plans/ROADMAP.md", "semicolon", 4),
         new("docs/references/CONFIGURATION.md", "em dash", 8),
         new("docs/references/CONFIGURATION.md", "semicolon", 1),
-        new("docs/references/GLOSSARY.md", "em dash", 39),
+        new("docs/references/GLOSSARY.md", "em dash", 38),
         new("docs/references/GLOSSARY.md", "semicolon", 4),
         new("scripts/visual/README.md", "semicolon", 4),
     ];
