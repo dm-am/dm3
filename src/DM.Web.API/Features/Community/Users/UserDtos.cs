@@ -49,27 +49,6 @@ public class User : UserRef
     /// </summary>
     public UserPicture Picture { get; set; } = new();
 
-    /// <summary>
-    /// Whether this account's rank is withheld for want of a second factor
-    /// </summary>
-    /// <remarks>
-    /// Not a column of the user row: it is a property of the identity the
-    /// request was made with, folded in where that identity is built. So only
-    /// the answers about the caller themselves - the sign-in, the second step
-    /// that finishes it and the own profile - fill it, and everywhere else it
-    /// is absent rather than false. That distinction is the contract: the field
-    /// is present when the response is about the reader, and the security
-    /// posture of somebody else's account is not something a list of comment
-    /// authors gets to say.
-    ///
-    /// Delivered with the viewer rather than asked for separately, which was the
-    /// alternative: a request per page load, paid by everyone for a state two
-    /// accounts are in, plus the window in which the interface is already drawn
-    /// and the answer has not arrived. The recorded role travels beside it in
-    /// <see cref="UserRef.Role" /> and is the real one - only the role
-    /// permissions are compared against is withheld (INV-11).
-    /// </remarks>
-    public bool? PrivilegeWithheld { get; set; }
 
     // ========== Statistics, present only where somebody counted them ==========
     //
@@ -338,6 +317,27 @@ public class UserProfile : User
     public PersonalNote? PersonalNote { get; set; }
 
     /// <summary>
+    /// Whether this user is on the viewer's personal blacklist. False for a guest
+    /// and on the viewer's own profile.
+    /// </summary>
+    /// <remarks>
+    /// What the profile's "В черный список" button is drawn from. The page used to
+    /// look the name up in the first page of the viewer's list, so to somebody
+    /// with a longer list it offered to block a person already blocked. Only the
+    /// viewer's own list is read: whether this user blocked the viewer is theirs
+    /// to know and is not said here. <see cref="Viewer" /> says no more of it
+    /// than the refusal of a message does.
+    /// </remarks>
+    public bool BlockedByViewer { get; set; }
+
+    /// <summary>
+    /// What the viewer may do with this user. Null on the profile of "Аккаунт
+    /// удален" and in the answers of the moderation: it is answered on the read
+    /// of a profile, the shape the page offers its actions from
+    /// </summary>
+    public ProfileViewer? Viewer { get; set; }
+
+    /// <summary>
     /// User profile picture (small + medium URLs in profile view)
     /// </summary>
     /// <remarks>
@@ -347,6 +347,22 @@ public class UserProfile : User
     /// - PersonalProfile uses AccountPicture which includes OriginalUrl
     /// </remarks>
     public new UserPicture Picture { get; set; } = new();
+}
+
+/// <summary>
+/// What the viewer may do with the user of a profile. Each flag is asked by the
+/// same code the write it stands for is refused by, so a page that offers by it
+/// offers only what the server takes; the server refuses all the same.
+/// </summary>
+public class ProfileViewer
+{
+    /// <summary>
+    /// Whether the viewer may write to this user in private: signed in, not his
+    /// own profile, and not on this user's blacklist with private messages
+    /// blocked. The last is what the refusal of the message would have said
+    /// after it was written, and says nothing more
+    /// </summary>
+    public bool CanMessage { get; set; }
 }
 
 /// <summary>

@@ -20,7 +20,7 @@
     <li v-else class="tag-cloud">
       <Tooltip v-for="tag in sortedTags" :key="tag.id">
         <template #content>
-          <TooltipContent :text="tag.description || tag.title" />
+          <TooltipContent :html="tag.description" :text="tag.title" />
         </template>
         <router-link
           :to="{ name: 'games', query: { requiredTags: String(tag.id) } }"
@@ -97,12 +97,6 @@ onMounted(() => {
   align-items: center
   gap: $tiny $small
   line-height: 1.4
-
-.tag
-  transition: opacity 0.15s ease
-
-  &:hover
-    opacity: 0.8
 
 .retry-link
   +inline-link-button

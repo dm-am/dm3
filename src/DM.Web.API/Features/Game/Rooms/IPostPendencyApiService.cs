@@ -13,9 +13,9 @@ public interface IPostPendencyApiService
     /// Create new post pendency
     /// </summary>
     /// <param name="roomId">Room identifier</param>
-    /// <param name="postPendency">API DTO model</param>
+    /// <param name="request">Character whose turn it is to post</param>
     /// <returns>Envelope containing the created post pendency</returns>
-    Task<Envelope<PostPendency>> Create(Guid roomId, PostPendency postPendency);
+    Task<Envelope<PostPendency>> Create(Guid roomId, CreatePostPendencyRequest request);
 
     /// <summary>
     /// Delete existing post pendency

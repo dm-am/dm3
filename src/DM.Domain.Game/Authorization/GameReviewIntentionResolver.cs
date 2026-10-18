@@ -25,13 +25,13 @@ internal class GameReviewIntentionResolver :
     public bool IsAllowed(IAuthorizationSubject user, GameReviewIntention intention, GameReview target) => intention switch
     {
         // Edit is allowed for the author
-        GameReviewIntention.Edit => user.UserId == target.Author.UserId,
+        GameReviewIntention.Edit => user.UserId == target.Author?.UserId,
 
         // Deleting somebody's stated opinion is a step above deleting a comment,
         // and AUTHORIZATION.md puts it there with profile moderation: the author
         // themselves, or a senior moderator.
         GameReviewIntention.Delete =>
-            user.UserId == target.Author.UserId || user.Role >= UserRole.SeniorModerator,
+            user.UserId == target.Author?.UserId || user.Role >= UserRole.SeniorModerator,
 
         _ => false
     };

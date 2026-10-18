@@ -245,4 +245,49 @@ public class ChatIntentionResolverShould
 
         result.Should().BeFalse();
     }
+
+    /// <summary>
+    /// A group is left by its participant; a direct chat is not left at all, and
+    /// a stranger has nothing to leave. The global chat and a game room chat
+    /// carry no participant rows.
+    /// </summary>
+    [Theory]
+    [InlineData(ChatType.Group, true, true)]
+    [InlineData(ChatType.Group, false, false)]
+    [InlineData(ChatType.Direct, true, false)]
+    [InlineData(ChatType.Global, false, false)]
+    [InlineData(ChatType.GameRoom, false, false)]
+    public void AllowLeavingAGroupToItsParticipantOnly(ChatType type, bool participates, bool expected)
+    {
+        var user = CreateUser(_testUserId);
+
+        _resolver.IsAllowed(user, ChatIntention.LeaveChat, ChatOf(type, participates)).Should().Be(expected);
+    }
+
+    /// <summary>
+    /// The history is cleared by a participant of a direct or group chat, for
+    /// himself. A stranger has no history there to clear, and the global chat
+    /// and a game room chat have no participant row to keep the mark on.
+    /// </summary>
+    [Theory]
+    [InlineData(ChatType.Group, true, true)]
+    [InlineData(ChatType.Direct, true, true)]
+    [InlineData(ChatType.Group, false, false)]
+    [InlineData(ChatType.Direct, false, false)]
+    [InlineData(ChatType.Global, false, false)]
+    [InlineData(ChatType.GameRoom, false, false)]
+    public void AllowClearingTheHistoryToAParticipantOfAConversation(ChatType type, bool participates, bool expected)
+    {
+        var user = CreateUser(_testUserId);
+
+        _resolver.IsAllowed(user, ChatIntention.ClearHistory, ChatOf(type, participates)).Should().Be(expected);
+    }
+
+    private Chat ChatOf(ChatType type, bool participates) => new()
+    {
+        Type = type,
+        Participants = participates
+            ? new[] { new GeneralUser { UserId = _testUserId }, new GeneralUser { UserId = Guid.NewGuid() } }
+            : new[] { new GeneralUser { UserId = Guid.NewGuid() } }
+    };
 }

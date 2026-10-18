@@ -36,14 +36,26 @@ internal static class MessagingMappers
             };
 
     /// <summary>
-    /// EF projection to the domain chat. Live participant links only,
-    /// spelled out: the global soft-delete filter already drops removed
-    /// links, but the rule that reads a chat of two as private
-    /// correspondence counts exactly these people, and that count must not
-    /// depend on a filter declared elsewhere. Unread and total counters are
-    /// filled by the repository.
+    /// EF projection to the domain chat, read for nobody in particular: the
+    /// last message as it is, and no cleared history. For the reads that decide
+    /// something about the chat rather than show it to a reader.
     /// </summary>
     public static IQueryable<Chat> ProjectToChat(this IQueryable<DbChat> query) =>
+        // No participant link carries the empty identifier, so the viewer's part
+        // of the formula below finds nothing and changes nothing.
+        query.ProjectToChat(Guid.Empty);
+
+    /// <summary>
+    /// EF projection to the domain chat as the viewer reads it. Live participant
+    /// links only, spelled out: the global soft-delete filter already drops
+    /// removed links, but the rule that reads a chat of two as private
+    /// correspondence counts exactly these people, and that count must not
+    /// depend on a filter declared elsewhere. The last message is left out when
+    /// the viewer cleared the history after it was written, the same boundary
+    /// the reads of the messages keep. Unread and total counters are filled by
+    /// the repository.
+    /// </summary>
+    public static IQueryable<Chat> ProjectToChat(this IQueryable<DbChat> query, Guid viewerId) =>
         query.Select(ExpressionSplicer.Expand<Func<DbChat, Chat>>(c => new Chat
         {
             Id = c.ChatId,
@@ -54,7 +66,13 @@ internal static class MessagingMappers
                 .Where(l => !l.IsRemoved)
                 .Select(l => GeneralUserProjections.Projection.Splice(l.User))
                 .ToList(),
-            LastMessage = c.LastMessage == null
+            HistoryClearedUtc = c.UserLinks
+                .Where(l => !l.IsRemoved && l.UserId == viewerId)
+                .Select(l => l.HistoryClearedUtc)
+                .FirstOrDefault(),
+            LastMessage = c.LastMessage == null ||
+                          c.UserLinks.Any(l => !l.IsRemoved && l.UserId == viewerId &&
+                                               l.HistoryClearedUtc >= c.LastMessage.CreatedUtc)
                 ? null!
                 : new Message
                 {
@@ -86,9 +104,11 @@ internal static class MessagingMappers
     /// polymorphic Likes table (EntityType + EntityId) with no navigation to
     /// project through, and the repository backfills them for a whole page at
     /// once (MessageRepository.FillLikes) rather than one subquery per row.
+    /// Keeps the messages of removed accounts, signed by nobody
+    /// (<see cref="RemovedAuthors"/>).
     /// </summary>
     public static IQueryable<Message> ProjectToMessage(this IQueryable<DbMessage> query) =>
-        query.Select(ExpressionSplicer.Expand<Func<DbMessage, Message>>(m => new Message
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<DbMessage, Message>>(m => new Message
         {
             Id = m.MessageId,
             ChatId = m.ChatId,

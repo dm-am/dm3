@@ -17,6 +17,12 @@ internal class RoomIntentionResolver :
     IIntentionResolver<RoomIntention, PostPendency>
 {
     /// <inheritdoc />
+    /// <remarks>
+    /// Who writes in a room is decided by the room and the roster and by nothing
+    /// else: the access row with its policy, the character being in play, the
+    /// lead's role. The game's blacklist is not asked; it closes the
+    /// discussion and the application, not the rooms.
+    /// </remarks>
     public bool IsAllowed(IAuthorizationSubject user, RoomIntention intention, (RoomToUpdate, Guid?) target)
     {
         var (room, characterId) = target;
@@ -30,6 +36,7 @@ internal class RoomIntentionResolver :
                 // as an NPC into a null reference before the rule was reached.
                 return access != null &&
                        GrantsWriting(access) &&
+                       InPlay(access) &&
                        (access.Character.Author?.UserId == user.UserId ||
                         access.Character.IsNpc &&
                         room.Game.GetRoles(user.UserId).HasEditAccess());
@@ -50,26 +57,53 @@ internal class RoomIntentionResolver :
         }
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// The open arm of ViewMessages asks nothing about the game, and it does not
+    /// have to: a chat room reaches this overload only through
+    /// RoomService.GetChatRoomAsync, which reads it with RoomAvailable, and that
+    /// filter has already turned away a room of a game the reader does not see
+    /// (held end to end by ChatRoomMessagesShould,
+    /// KeepTheOpenChatRoomOfAGameAStrangerDoesNotSeeShut). The same filter
+    /// admits every row of the reader's characters, whatever the policy and
+    /// whatever became of the character, and reading here answers the same, so
+    /// for every reader but one the room page and its menu row never open on a
+    /// history that refuses him. The one is the judge of premoderation, who is
+    /// let into a game that waits for his verdict by his rank: the menu and the
+    /// room page are read with the rank (GetAllVisible, GetAvailable) and the
+    /// history without it (GetForUpdate), so he finds the chat room in the menu,
+    /// opens its page and gets 404 for its messages, as he did before the open
+    /// arm. The chat used to ask reader rows alone and never the room's access
+    /// type: an open chat room refused every player, and a closed one refused
+    /// the players its character rows had let in.
+    /// </remarks>
     public bool IsAllowed(IAuthorizationSubject user, RoomIntention intention, RoomToUpdate target) => intention switch
     {
-        RoomIntention.CreatePostPendency => target.Accesses.Any(a => a.Character?.Author?.UserId == user.UserId) ||
+        // A player marks the turn through a character in play, the way he posts.
+        RoomIntention.CreatePostPendency => target.Accesses.Any(a =>
+                                                a.Character?.Author?.UserId == user.UserId && InPlay(a)) ||
                                             target.Game.GetRoles(user.UserId).HasEditAccess(),
-        // Chat room history: master/assistant, or anybody the room was opened to
+        // Chat room history. Openness is about reading: an open room is read by
+        // everybody who sees the game, a closed one by the leads and by whoever
+        // it was opened to, as a reader or through a character.
         RoomIntention.ViewMessages =>
             target.Type == RoomType.Chat &&
-            (target.Game.GetRoles(user.UserId).HasEditAccess() ||
-             MayReadAsReader(target, user)),
-        // Writing in it takes the same seat plus the policy that admits writing
+            (target.AccessType == RoomAccessType.Open ||
+             target.Game.GetRoles(user.UserId).HasEditAccess() ||
+             HoldsARow(target, user)),
+        // Writing in it is the room's to give, open or closed alike: the leads,
+        // and the people it was opened to with the policy that admits writing.
         RoomIntention.SendMessage =>
             target.Type == RoomType.Chat &&
             (target.Game.GetRoles(user.UserId).HasEditAccess() ||
-             MayWriteAsReader(target, user)),
+             MayWriteAsReader(target, user) ||
+             MayWriteAsCharacter(target, user)),
         _ => false
     };
 
     public bool IsAllowed(IAuthorizationSubject user, RoomIntention intention, PostPendency target) => intention switch
     {
-        RoomIntention.DeletePostPendency => target.CreatedBy.UserId == user.UserId,
+        RoomIntention.DeletePostPendency => target.CreatedBy?.UserId == user.UserId,
         _ => false
     };
 
@@ -83,6 +117,20 @@ internal class RoomIntentionResolver :
     /// wrote exactly as a Full one did, both as a character and as a reader.
     /// </remarks>
     private static bool GrantsWriting(RoomAccess access) => access.Policy == RoomAccessPolicy.Full;
+
+    /// <summary>
+    /// The row's character is in play: accepted and not retired.
+    /// </summary>
+    /// <remarks>
+    /// The access rows of a character stay with the room when it leaves the game
+    /// - dead, exiled, or walked away - and the roster is what says it no longer
+    /// plays. The composer only ever offered active characters, while the server
+    /// asked the row alone, so a player who had left kept writing through the
+    /// rows of his retired character to anybody who sent the request by hand.
+    /// The game's blacklist used to stand in for this rule for the one person it
+    /// held.
+    /// </remarks>
+    private static bool InPlay(RoomAccess access) => access.Character?.Status == CharacterStatus.Active;
 
     /// <summary>
     /// The reader rows of this user in this room, asked by three of the arms above.
@@ -99,11 +147,35 @@ internal class RoomIntentionResolver :
             a.TargetType == RoomAccessTargetType.Reader &&
             a.User?.UserId == user.UserId);
 
-    /// <summary>The room was opened to this user as a reader.</summary>
-    private static bool MayReadAsReader(RoomToUpdate room, IAuthorizationSubject user) =>
-        ReaderRows(room, user).Any();
+    /// <summary>
+    /// The rows of this user's own characters in this room, whatever became of the
+    /// characters since.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the character's author, the way the posting and the pendency
+    /// arms match it, and not on the row's User: that field holds the author for
+    /// a character row too, but only because a projection put it there.
+    /// </remarks>
+    private static IEnumerable<RoomAccess> CharacterRows(RoomToUpdate room, IAuthorizationSubject user) =>
+        room.Accesses.Where(a =>
+            a.TargetType == RoomAccessTargetType.Character &&
+            a.Character?.Author?.UserId == user.UserId);
 
-    /// <summary>One of those rows also grants them writing.</summary>
+    /// <summary>
+    /// The room was opened to this user: as a reader, or through a character of
+    /// theirs.
+    /// </summary>
+    private static bool HoldsARow(RoomToUpdate room, IAuthorizationSubject user) =>
+        ReaderRows(room, user).Any() || CharacterRows(room, user).Any();
+
+    /// <summary>One of the reader rows also grants them writing.</summary>
     private static bool MayWriteAsReader(RoomToUpdate room, IAuthorizationSubject user) =>
         ReaderRows(room, user).Any(GrantsWriting);
+
+    /// <summary>
+    /// A character of theirs in play holds a row that grants writing: the same
+    /// three conditions a post spoken by that character is held to.
+    /// </summary>
+    private static bool MayWriteAsCharacter(RoomToUpdate room, IAuthorizationSubject user) =>
+        CharacterRows(room, user).Any(a => GrantsWriting(a) && InPlay(a));
 }

@@ -14,6 +14,14 @@ namespace BBCodeParser.Nodes
         protected List<Node> ChildNodes { get; set; }
         internal Node ParentNode { get; set; }
 
+        // DM3 addition against the original: the children of the node, in
+        // document order, for a reader of the tree that is not its renderer.
+        public IReadOnlyList<Node> Children => (IReadOnlyList<Node>)ChildNodes ?? Array.Empty<Node>();
+
+        // DM3 addition against the original: the node this one stands in, null
+        // for the root, for a tag whose markup depends on where it stands.
+        public Node Parent => ParentNode;
+
         // DM3 change against the original: the three internal abstract
         // renderers - ToHtml, ToText and ToBb, each overridden once per node
         // type and each calling itself on every child - are replaced by one
@@ -48,9 +56,8 @@ namespace BBCodeParser.Nodes
         internal abstract void Emit(
             StringBuilder output,
             Stack<EmitStep> pending,
-            EmitMode mode,
+            EmitStep step,
             Dictionary<string, string> securitySubstitutions,
-            Dictionary<string, string> aliasSubstitutions,
             Func<Node, bool> filter,
             Func<Node, string, string> filterAttributeValue);
 
@@ -70,17 +77,35 @@ namespace BBCodeParser.Nodes
             var pending = new Stack<EmitStep>();
             pending.Push(new EmitStep(root, mode, aliasSubstitutions));
 
+            // DM3 addition against the original: a tag the filter leaves with
+            // nothing to hold is left out with what the filter erased (see
+            // Visibility).
+            filter = Visibility.Of(filter);
+
+            // DM3 addition against the original: set when the last thing written
+            // closed a block that ends its line (Tag.DropsLineBreakAfter), and
+            // spent on whatever is written next. Only text that follows the
+            // closing tag directly loses its first line break: a tag between the
+            // two, even an empty one, keeps it.
+            var lineEnded = false;
+
             while (pending.Count > 0)
             {
                 var step = pending.Pop();
                 if (step.Literal != null)
                 {
                     output.Append(step.Literal);
+                    lineEnded = step.EndsLine;
                     continue;
                 }
 
-                step.Node.Emit(output, pending, step.Mode, securitySubstitutions,
-                    step.AliasSubstitutions, filter, filterAttributeValue);
+                if (lineEnded && step.Mode == EmitMode.Html && step.Node is TextNode text)
+                {
+                    step = new EmitStep(text.WithoutLeadingLineBreak(), step.Mode, step.AliasSubstitutions);
+                }
+
+                lineEnded = false;
+                step.Node.Emit(output, pending, step, securitySubstitutions, filter, filterAttributeValue);
             }
 
             return output.ToString();
@@ -101,12 +126,39 @@ namespace BBCodeParser.Nodes
             Dictionary<string, string> childAliasSubstitutions,
             Func<Node, bool> filter)
         {
+            // DM3 addition against the original: a line left with nothing but
+            // what the filter erases goes with one of its line breaks (see
+            // ErasedLines). The filter is asked once per child, and the answer
+            // serves both the lines and the walk.
+            bool[] shown = null;
+            Dictionary<int, TextNode> trimmed = null;
+            if (filter != null)
+            {
+                shown = new bool[ChildNodes.Count];
+                for (var i = 0; i < ChildNodes.Count; i++)
+                {
+                    shown[i] = filter(ChildNodes[i]);
+                }
+
+                trimmed = ErasedLines.Trim(this, shown);
+            }
+
             for (var i = ChildNodes.Count - 1; i >= 0; i--)
             {
                 var childNode = ChildNodes[i];
-                if (filter != null && !filter(childNode))
+                if (shown != null && !shown[i])
                 {
                     continue;
+                }
+
+                if (trimmed != null && trimmed.TryGetValue(i, out var text))
+                {
+                    if (text == null)
+                    {
+                        continue;
+                    }
+
+                    childNode = text;
                 }
 
                 pending.Push(new EmitStep(childNode, childMode, childAliasSubstitutions));
@@ -117,5 +169,58 @@ namespace BBCodeParser.Nodes
         {
             ChildNodes.Add(node);
         }
+
+        // DM3 addition against the original: whether what this node holds runs
+        // to the very end of the text - the root does, and so does a tag nobody
+        // closed that stands last in a node that does. Read by ErasedLines, for
+        // which the end of the text ends a line.
+        //
+        // Remembered per node, and asked without recursion: a tag soup nests
+        // thousands of levels deep, and a walk to the root from every level of
+        // it would cost the square of the depth.
+        internal bool ReachesTextEnd()
+        {
+            var path = new List<Node>();
+            var node = this;
+            bool reaches;
+            while (true)
+            {
+                if (node.reachesTextEnd.HasValue)
+                {
+                    reaches = node.reachesTextEnd.Value;
+                    break;
+                }
+
+                if (node.ParentNode == null)
+                {
+                    reaches = node is NodeTree;
+                    node.reachesTextEnd = reaches;
+                    break;
+                }
+
+                var siblings = node.ParentNode.ChildNodes;
+                if ((node is TagNode tag && tag.IsClosed) ||
+                    siblings.Count == 0 || !ReferenceEquals(siblings[siblings.Count - 1], node))
+                {
+                    reaches = false;
+                    node.reachesTextEnd = false;
+                    break;
+                }
+
+                path.Add(node);
+                node = node.ParentNode;
+            }
+
+            // Every node on the way up stood last and open, so each reaches the
+            // end exactly when the one it stands in does.
+            foreach (var step in path)
+            {
+                step.reachesTextEnd = reaches;
+            }
+
+            return reaches;
+        }
+
+        private bool? reachesTextEnd;
     }
 }

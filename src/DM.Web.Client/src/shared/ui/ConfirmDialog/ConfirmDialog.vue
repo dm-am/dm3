@@ -1,19 +1,44 @@
 <script setup lang="ts">
 /**
- * ConfirmDialog — a modal confirmation prompt (title + message + confirm/cancel).
+ * ConfirmDialog — the window that asks before an action the reader cannot take
+ * back: a question for a heading, one sentence naming the consequence, and the
+ * two ways out standing side by side.
  *
- * Reuses the InputDialog modal shell (backdrop / container / header / footer,
- * Escape-to-cancel, backdrop-click-to-cancel) but carries a read-only message
- * instead of input fields. Used for destructive/irreversible confirms
- * (premoderation, delete game, reset recruitment, delete NPC, room delete).
+ * It is drawn as a guest card, because a confirmation is the same kind of
+ * object as the login dialog: a short card standing over a dimmed page, with
+ * the page's own fill, no frame, no shadow and a cross in the corner. The card,
+ * the cross, the heading and the row of buttons are the window surface of
+ * _DialogSurface.sass, which the window with a form (Layout/Dialog.vue) draws
+ * too, so the two windows of the site cannot drift apart.
  *
- * The `danger` flag paints the confirm button in the accent-red action color.
+ * Nothing in the window is red but a refusal. The danger is carried by the
+ * words — the heading asks with the verb of the button, the sentence says what
+ * is lost — and not by a fill, a border or a caption, so the reader has to read
+ * the question rather than recognise a colour. Owner's call, 21 September 2026.
+ *
+ * The buttons are the site's own: the main action is the primary of
+ * shared/ui/Button, the way out is a plain one, and the row is two equal
+ * halves at the window's control height. Order follows Form.vue, the action
+ * first and "Отмена" after it. The caret starts on "Отмена", the step that
+ * loses nothing: a reader who presses Enter without reading has taken the way
+ * out, not the action.
+ *
+ * Handed an `action`, the window runs it (useDialogAction): it stays open until
+ * the answer and is shut while it waits, a refusal stands in a line over the
+ * row, and it closes on success alone. Without one it only says `confirm`,
+ * and the caller closes it: the guard of unsaved input sends no request.
+ *
  * A minimal focus trap keeps Tab within the dialog while it is open and
- * restores focus to the previously-focused element on close.
+ * restores focus to the previously-focused element on close (useDialogShell).
  */
-import { computed, ref } from "vue";
-import { symbols } from "@/shared/lib/utils/icons";
+import { computed, ref, watch } from "vue";
+import Button from "@/shared/ui/Button/Button.vue";
 import { useDialogShell } from "@/shared/lib/composables/useDialogShell";
+import {
+  useDialogAction,
+  type DialogAction,
+  type DialogActionResult,
+} from "@/shared/lib/composables/useDialogAction";
 
 const props = withDefaults(
   defineProps<{
@@ -22,81 +47,117 @@ const props = withDefaults(
     message?: string;
     confirmLabel?: string;
     cancelLabel?: string;
-    /** Render the confirm action as destructive (accent-red). */
-    danger?: boolean;
     /**
-     * The confirm action is in flight: the button stops answering clicks and
-     * carries the busy bar every control on the site draws for that state.
+     * What the main button does: a request that resolves to the client's
+     * `{ data, error }`, or a function that asks no server. The window runs
+     * it, shows the wait and the refusal, and closes after success.
+     */
+    action?: DialogAction;
+    /**
+     * The refusal line's sentence for a failure the server did not word
+     * ("Не удалось удалить файл"). The server's own sentence wins over it.
+     */
+    failure?: string;
+    /**
+     * The caller runs a request of its own after `confirm`: the window is shut
+     * the way it is shut while its own action runs.
      */
     loading?: boolean;
+    /**
+     * Drawn where it is written and not carried to <body>: the question over a
+     * window of the vue-final-modal tier, whose focus trap keeps the caret
+     * inside that window and would take it back from a card outside it.
+     */
+    inline?: boolean;
   }>(),
   {
     message: "",
     confirmLabel: "Подтвердить",
     cancelLabel: "Отмена",
-    danger: false,
+    action: undefined,
+    failure: undefined,
     loading: false,
+    inline: false,
   },
 );
 
 const emit = defineEmits<{
   (e: "update:show", value: boolean): void;
+  /** Pressed with no action to run: the caller does the rest. */
   (e: "confirm"): void;
+  /** The action succeeded; the window closes after this. */
+  (e: "done", result: DialogActionResult): void;
+  /** The window closed with no result: the reader left, or the session ended. */
   (e: "cancel"): void;
 }>();
 
 const container = ref<HTMLElement | null>(null);
-const confirmBtn = ref<HTMLButtonElement | null>(null);
-
-const shell = useDialogShell({
-  show: computed(() => props.show),
-  container,
-  initialFocus: () => confirmBtn.value,
-  onDismiss: () => handleCancel(),
-});
+const cross = ref<HTMLButtonElement | null>(null);
 
 function close() {
   emit("update:show", false);
 }
 
+const request = useDialogAction({
+  onSuccess: (result) => {
+    emit("done", result);
+    close();
+  },
+  onExpired: () => {
+    emit("cancel");
+    close();
+  },
+  failure: () => props.failure,
+  spare: () => cross.value,
+});
+const { refusal, waiting } = request;
+
+/** Every way out is shut, and the main button is busy. */
+const busy = computed(() => request.busy.value || props.loading);
+
+const shell = useDialogShell({
+  show: computed(() => props.show),
+  container,
+  // "Отмена" is found inside the container rather than held in a template ref,
+  // because the row is drawn by the site's Button component and a ref on a
+  // component is the instance, not the element.
+  initialFocus: () =>
+    container.value?.querySelector<HTMLButtonElement>(".dialog-btn-cancel"),
+  onDismiss: () => handleCancel(),
+  holdPage: true,
+});
+
+// A window that opens again starts from a clean slate: the refusal of the
+// last time was about the last time.
+watch(
+  () => props.show,
+  (open) => {
+    if (open) request.reset();
+  },
+);
+
 function handleConfirm() {
-  if (props.loading) return;
-  emit("confirm");
+  if (busy.value) return;
+  if (props.action) void request.run(props.action);
+  else emit("confirm");
 }
 
 function handleCancel() {
+  if (busy.value) return;
   emit("cancel");
   close();
-}
-
-function handleKeydown(e: KeyboardEvent) {
-  if (shell.handleKeydown(e)) return;
-
-  if (e.key === "Enter") {
-    // Enter confirms only when focus is NOT on one of the dialog buttons —
-    // otherwise a focused "Отмена"/close button would trigger the (possibly
-    // destructive) confirm instead of its own native Enter activation.
-    const active = document.activeElement;
-    if (
-      active instanceof HTMLButtonElement &&
-      container.value?.contains(active)
-    ) {
-      return;
-    }
-    e.preventDefault();
-    handleConfirm();
-  }
 }
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport to="body" :disabled="inline">
     <Transition name="dialog">
       <div
         v-if="show"
         class="dialog-backdrop"
+        @mousedown="shell.handleBackdropPress"
         @click="shell.handleBackdropClick"
-        @keydown="handleKeydown"
+        @keydown="shell.handleKeydown"
       >
         <!-- tabindex="-1" is not decoration. The Escape listener sits on the
              backdrop, and a click on the dialog's own heading or sentence moves
@@ -104,50 +165,55 @@ function handleKeydown(e: KeyboardEvent) {
              is the backdrop's ANCESTOR, and never reaches the listener — so
              Escape stopped closing the dialog the reader was looking at. A
              container that can hold focus itself takes that click instead, and
-             the event has a path back down. -->
+             the event has a path back down.
+
+             role="alertdialog" and not "dialog": this window interrupts the
+             page to state a consequence and take a decision, which is the role
+             a screen reader announces together with the text inside it. -->
         <div
           ref="container"
           class="dialog-container"
           tabindex="-1"
-          role="dialog"
+          role="alertdialog"
           aria-modal="true"
           :aria-label="title"
         >
-          <div class="dialog-header">
-            <h3 class="dialog-title">{{ title }}</h3>
-            <button
-              type="button"
-              class="dialog-close"
-              aria-label="Закрыть"
-              @click="handleCancel"
-            >
-              {{ symbols.close }}
-            </button>
-          </div>
+          <!-- Empty on purpose: the two bars of the cross are drawn by the
+               stylesheet, and a glyph inside would stand behind them. -->
+          <button
+            ref="cross"
+            type="button"
+            class="dialog-close"
+            aria-label="Закрыть"
+            :aria-disabled="busy || undefined"
+            @click="handleCancel"
+          ></button>
 
-          <div v-if="message" class="dialog-content">
-            <p class="dialog-message">{{ message }}</p>
-          </div>
+          <h3 class="dialog-title">{{ title }}</h3>
+          <p v-if="message" class="dialog-message">{{ message }}</p>
+          <p v-if="refusal" class="dialog-refusal" role="alert">
+            {{ refusal }}
+          </p>
 
-          <div class="dialog-footer">
-            <button
+          <div class="dialog-actions">
+            <Button
               type="button"
-              class="dialog-btn dialog-btn-cancel"
-              @click="handleCancel"
-            >
-              {{ cancelLabel }}
-            </button>
-            <button
-              ref="confirmBtn"
-              type="button"
-              class="dialog-btn dialog-btn-submit"
-              :class="{ danger }"
-              :disabled="loading"
-              :aria-busy="loading || undefined"
+              variant="primary"
+              class="dialog-btn-submit"
+              :loading="busy"
+              :disabled="waiting"
               @click="handleConfirm"
             >
               {{ confirmLabel }}
-            </button>
+            </Button>
+            <Button
+              type="button"
+              class="dialog-btn-cancel"
+              :disabled="busy"
+              @click="handleCancel"
+            >
+              {{ cancelLabel }}
+            </Button>
           </div>
         </div>
       </div>
@@ -156,78 +222,74 @@ function handleKeydown(e: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
 @use "@/assets/styles/ZIndex" as *
-@use "@/assets/styles/Animations" as *
+@use "@/assets/styles/DialogSurface" as *
 
+// The dimmed page under the window, in the token the guest dialogs dim with
+// (.vfm__overlay.dialog-overlay, ThemeVariables.css) and with no blur, for the
+// same reason they have none: the question is about something the reader was
+// just looking at, and a blur takes it away while he decides.
+//
+// It is also the frame that scrolls a card taller than the screen, the way the
+// window with a form scrolls: the card centres itself with `margin: auto`,
+// which starts one that does not fit at the top instead of cutting it at both
+// ends, and the padding is the edge the card keeps from the screen.
 .dialog-backdrop
   position: fixed
   inset: 0
   z-index: $z-dialog
   display: flex
-  align-items: center
-  justify-content: center
-  background-color: $overlay-bg
-  backdrop-filter: blur(2px)
-
-.dialog-container
-  width: 100%
-  max-width: 420px
-  margin: $medium
-  border-radius: $border-radius
-  box-shadow: 0 8px 32px var(--shadow-color)
-  background-color: $bg-element
-  border: 1px solid $border
-
-.dialog-header
-  display: flex
-  justify-content: space-between
-  align-items: center
+  box-sizing: border-box
   padding: $medium
-  border-bottom: 1px solid
-  border-color: $border
+  overflow-y: auto
+  overscroll-behavior: contain
+  background-color: $overlay-bg
 
-.dialog-title
-  margin: 0
-  font-size: $font-size
-  font-weight: 600
+// The card of the window surface at the compact measure, the only one this
+// window has: what it holds is a question and a single sentence, so there is
+// nothing for a second width to do.
+.dialog-container
+  +dialog-card
+  display: flex
+  flex-direction: column
+  // The rhythm of the card: this gap between the question and the sentence
+  // under it, and this gap plus the row's own margin before the buttons.
+  // Written as a gap rather than as margins on the blocks, so a window with no
+  // sentence in it keeps the same distance from the question to the row
+  // instead of growing a strip of nothing where the sentence would have been.
+  gap: 12px
+  width: $dialog-width-compact
+  margin: auto
+  text-align: center
 
 .dialog-close
-  padding: $minor $small
-  border: none
-  background: none
-  font-size: 20px
-  cursor: pointer
-  color: $text-muted
+  +dialog-close
 
-  &:hover
-    color: $text
+// The question, in the heading style of the surface and centred, as the
+// sentence under it is. The reserve is taken on both sides, so the centring
+// stays honest against the cross and a long question wraps before it runs
+// under it.
+.dialog-title
+  +dialog-title
+  padding: 0 $dialog-close-reserve
 
-.dialog-content
-  padding: $medium
-
+// One sentence, naming what the action costs.
 .dialog-message
   margin: 0
   color: $text
   line-height: 1.5
 
-.dialog-footer
-  display: flex
-  justify-content: flex-start
-  gap: $small
-  padding: $medium
-  border-top: 1px solid
-  border-color: $border
+// The refusal, one more line of the card's rhythm and centred with the rest.
+.dialog-refusal
+  +dialog-refusal
 
-.dialog-btn
-  font-size: $secondary-font-size
-  +button
-  +button-busy
+.dialog-actions
+  +dialog-actions
+  margin-top: 12px
 
-  &.danger
-    +button-danger
-
-// Transition animations
+// The window fades in and out and does nothing else. A card that also scaled
+// drew attention to its own arrival, which is the one thing a question about
+// losing something does not need.
 .dialog-enter-active,
 .dialog-leave-active
   transition: opacity 0.2s ease
@@ -237,13 +299,4 @@ function handleKeydown(e: KeyboardEvent) {
 .dialog-enter-from,
 .dialog-leave-to
   opacity: 0
-
-  .dialog-container
-    transform: scale(0.95)
-
-.dialog-enter-active .dialog-container,
-.dialog-leave-active .dialog-container
-  transition: transform 0.2s ease
-  @media (prefers-reduced-motion: reduce)
-    transition: none
 </style>

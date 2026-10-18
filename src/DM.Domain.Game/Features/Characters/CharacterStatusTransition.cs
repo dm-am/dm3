@@ -11,6 +11,11 @@ namespace DM.Domain.Game.Features.Characters;
 /// named no reason had no arm to land in and answered 500.
 ///
 /// Same shape as GameStatusTransition, for the same reason.
+///
+/// Every way back into play undoes a move of the lead: Accept undoes Decline,
+/// Resurrect undoes Kill, Readmit undoes Exile. A character its player took out
+/// of the game (Leave) is brought back by nobody, the player, the lead and the
+/// moderation alike.
 /// </remarks>
 public enum CharacterStatusTransition
 {
@@ -32,6 +37,9 @@ public enum CharacterStatusTransition
     /// <summary>Undo a death: Retired to Active. Game lead.</summary>
     Resurrect = 5,
 
-    /// <summary>Come back after leaving: Retired to Active. The player.</summary>
-    Return = 6,
+    // 6 was Return, the player bringing back a character he took out of the
+    // game. Removed: leaving is final.
+
+    /// <summary>Undo an exile: Retired to Active. Game lead.</summary>
+    Readmit = 7,
 }

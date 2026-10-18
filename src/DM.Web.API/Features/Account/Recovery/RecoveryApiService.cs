@@ -34,8 +34,10 @@ internal class RecoveryApiService : IRecoveryApiService
             {
                 RecoveryResult.PasswordReset => RecoveryStatus.PasswordResetSent,
                 RecoveryResult.ActivationResent => RecoveryStatus.ActivationResent,
-                // NotFound is also what an unknown enum value answers with:
-                // recovery never tells the caller whether the address exists.
+                // NotFound is also what an unknown enum value answers with.
+                // Recovery does tell the caller the address is unknown - a
+                // recorded exception (SECURITY.md) - so a value this switch does
+                // not know must not read as a letter that went out.
                 _ => RecoveryStatus.NotFound
             },
             Email = request.Email

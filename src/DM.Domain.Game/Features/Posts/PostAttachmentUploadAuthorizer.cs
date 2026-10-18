@@ -66,7 +66,7 @@ internal class PostAttachmentUploadAuthorizer : IUploadTargetAuthorizer
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
         }
 
-        if (post.Author.UserId != userId)
+        if (post.Author?.UserId != userId)
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }

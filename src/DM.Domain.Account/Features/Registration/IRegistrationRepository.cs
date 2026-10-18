@@ -34,8 +34,15 @@ public interface IRegistrationRepository
     Task<bool> PendingExists(string email, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Add new pending registration
+    /// Record a pending registration, replacing whatever the address already has
     /// </summary>
+    /// <remarks>
+    /// One write and not a check followed by an insert: two submissions of the
+    /// form arriving together both found the address free and both wrote it, and
+    /// the one that lost was answered with a failure of the storage engine rather
+    /// than with a letter. The row keeps its original start date, which is what
+    /// the sweep that frees an abandoned address counts from.
+    /// </remarks>
     Task AddPending(PendingRegistration pending);
 
     /// <summary>

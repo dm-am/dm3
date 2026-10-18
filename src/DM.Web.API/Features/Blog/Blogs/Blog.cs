@@ -46,11 +46,6 @@ public class Blog : BlogRef
     public PremoderationStatus PremoderationStatus { get; set; }
 
     /// <summary>
-    /// Whether comments are enabled
-    /// </summary>
-    public bool CommentsEnabled { get; set; }
-
-    /// <summary>
     /// Total publication count
     /// </summary>
     public int PublicationCount { get; set; }
@@ -64,6 +59,41 @@ public class Blog : BlogRef
     /// Blog rubrics (categories)
     /// </summary>
     public IEnumerable<Rubric> Rubrics { get; set; } = [];
+
+    /// <summary>
+    /// Whether the viewer is on the blog's blacklist. False for a guest.
+    /// </summary>
+    /// <remarks>
+    /// Lets the page leave out the edit of one's own comment, in the blog and
+    /// under its publications, instead of refusing the text after it was
+    /// written. The server asks the same rule on the comments it closes
+    /// (BlogRoleExtensions.IsBlacklisted), so the flag decides what is offered,
+    /// never what is allowed. The comment form goes by <see cref="Viewer" />,
+    /// which answers for every reason at once.
+    /// </remarks>
+    public bool ViewerBlacklisted { get; set; }
+
+    /// <summary>
+    /// What the viewer may do in this blog. Null in a list of blogs: it is
+    /// answered on a read of one blog and on every write that returns one, the
+    /// shape a page offers something from
+    /// </summary>
+    public BlogViewer? Viewer { get; set; }
+}
+
+/// <summary>
+/// What the viewer may do in a blog. Each flag is asked by the same code the
+/// write it stands for is refused by, so a page that offers by it offers only
+/// what the server takes; the server refuses all the same.
+/// </summary>
+public class BlogViewer
+{
+    /// <summary>
+    /// Whether the viewer may write a new comment in the blog's discussion:
+    /// comments on, the draft open to the viewer, the blog's blacklist and the
+    /// ban, all at once. False for a guest
+    /// </summary>
+    public bool CanComment { get; set; }
 }
 
 /// <summary>
@@ -129,14 +159,11 @@ public class CreateBlogRequest
     public DraftVisibility DraftVisibility { get; set; } = DraftVisibility.Public;
 
     /// <summary>
-    /// Whether comments are enabled (default: true)
+    /// Copy the creator's personal blacklist into the blog's. Absent, the
+    /// creator's account setting "Переносить черный список в новые игры и
+    /// блоги" decides.
     /// </summary>
-    public bool CommentsEnabled { get; set; } = true;
-
-    /// <summary>
-    /// Copy personal blacklist to blog blacklist on creation
-    /// </summary>
-    public bool CopyBlacklist { get; set; }
+    public bool? CopyBlacklist { get; set; }
 }
 
 /// <summary>
@@ -160,11 +187,6 @@ public class UpdateBlogRequest
     /// Draft visibility (optional)
     /// </summary>
     public DraftVisibility? DraftVisibility { get; set; }
-
-    /// <summary>
-    /// Whether comments are enabled (optional)
-    /// </summary>
-    public bool? CommentsEnabled { get; set; }
 }
 
 /// <summary>

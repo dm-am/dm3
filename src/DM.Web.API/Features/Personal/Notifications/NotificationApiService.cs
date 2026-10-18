@@ -28,12 +28,7 @@ internal class NotificationApiService : INotificationApiService
     public async Task<ListEnvelope<Notification>> GetNotifications(PagingQuery query)
     {
         var (notifications, paging) = await _notificationService.GetAsync(query);
-        var mapped = notifications.Select(n => new Notification
-        {
-            Id = n.NotificationId,
-            EventType = n.EventType,
-            Payload = n.Metadata
-        });
+        var mapped = notifications.Select(NotificationMapper.ToNotification);
 
         return new ListEnvelope<Notification>(mapped, new PagingInfo(paging));
     }

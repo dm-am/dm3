@@ -98,8 +98,7 @@ public class PostReviewController : ControllerBase
     /// <response code="401">User not authenticated</response>
     /// <response code="403">Not allowed (own post, newbie restriction)</response>
     /// <response code="404">Post not found</response>
-    /// <response code="409">Review already exists for this post</response>
-    /// <response code="429">Too many requests (cooldown period)</response>
+    /// <response code="409">Review already exists for this post, or the author reviewed a post of this game during the last three days</response>
     [HttpPost("~/v1/posts/{postId:guid}/reviews", Name = nameof(CreatePostReview))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<PostReviewDto>), StatusCodes.Status201Created)]
@@ -108,7 +107,6 @@ public class PostReviewController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CreatePostReview(Guid postId, [FromBody] CreatePostReviewRequest request)
     {
         var result = await _postReviewApiService.Create(postId, request);

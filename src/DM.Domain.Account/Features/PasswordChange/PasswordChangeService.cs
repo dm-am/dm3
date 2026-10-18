@@ -159,7 +159,7 @@ internal class PasswordChangeService : IPasswordChangeService
         await _eventProducer.SendAsync(EventType.PasswordChanged, user.UserId);
 
         // Send notification email
-        await _notificationSender.Send(user.Email ?? string.Empty, user.Username);
+        await _notificationSender.Send(user.Email ?? string.Empty);
 
         return user;
     }

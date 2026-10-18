@@ -17,10 +17,10 @@ public interface IUsernameChangeMailSender
     /// to know it. Every other sender in this module builds its own link the
     /// same way, from SiteAddressConfiguration.
     /// </remarks>
-    Task SendApprovalAsync(string email, string username, Guid approvalToken);
+    Task SendApprovalAsync(string email, Guid approvalToken);
 
     /// <summary>
     /// Send notification about request rejection
     /// </summary>
-    Task SendRejectionAsync(string email, string username, string? reason);
+    Task SendRejectionAsync(string email, string? reason);
 }

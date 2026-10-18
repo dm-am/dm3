@@ -42,14 +42,20 @@ namespace BBCodeParser
             {">", "&gt;"}
         };
 
+        // DM3 addition against the original: what the alias substitutions are in
+        // the plain text, where they cannot be markup. See NodeTree.ToText.
+        private readonly Dictionary<string, string> textSubstitutions;
+
         public BbParser(
             Tag[] tags,
             Dictionary<string, string> securitySubstitutions,
-            Dictionary<string, string> aliasSubstitutions)
+            Dictionary<string, string> aliasSubstitutions,
+            Dictionary<string, string> textSubstitutions = null)
         {
             this.tags = tags;
             this.securitySubstitutions = securitySubstitutions;
             this.aliasSubstitutions = aliasSubstitutions;
+            this.textSubstitutions = textSubstitutions;
         }
 
         // DM3 addition against the original: what a character cannot be.
@@ -61,28 +67,34 @@ namespace BBCodeParser
         // characters locally because the result preview marks a match with two
         // of them, and one arriving inside a body would be read as a mark. That
         // is one consumer out of however many there will be, and the fix has to
-        // be where all of them pass - here. Not in the wrapper around this
-        // class: the wrapper rewrites its input before handing it over, so a
-        // rule placed there is a rule about the wrapper's text rather than
-        // about the text this parser reads.
+        // be where all of them pass - here, before anything is read.
         //
         // Removed: the C0 and C1 control characters other than tab, line feed
         // and carriage return, which are the three that mean something in a
         // body.
+        //
+        // Removed as well: the characters that reverse the order in which text
+        // is drawn, the embeddings and overrides U+202A..U+202E and the isolates
+        // U+2066..U+2069. With one of them a word on the page reads differently
+        // from the word that is stored, and in the middle of a tag name it split
+        // the name for one reader of the text and not for another. The marks
+        // U+200E and U+200F reorder nothing and stay.
         //
         // Replaced with U+FFFD: a surrogate with no partner. On its own it is
         // not a character at all, and every layer below answers for it
         // differently - System.Text.Json substitutes U+FFFD, PostgreSQL refuses
         // the whole string - so it is decided once, here.
         //
-        // Deliberately untouched: the characters that reorder text for display,
-        // U+202A..U+202E and the isolates near them. Stripping them changes what
-        // a reader sees, which is a product decision and not one this class gets
-        // to make on its own.
+        // The save path reads the text after the same removal (ParserInput in
+        // DM.Domain.Core, which cannot reference this assembly), because removing
+        // a character joins what stood on either side of it, and the join can be
+        // a tag. ControlCharacterMarkupShould holds the two to one answer.
         private const char Replacement = '\uFFFD';
 
-        private static bool IsStrippedControl(char character) =>
-            char.IsControl(character) && character != '\t' && character != '\n' && character != '\r';
+        private static bool IsStripped(char character) =>
+            (char.IsControl(character) && character != '\t' && character != '\n' && character != '\r') ||
+            (character >= '\u202A' && character <= '\u202E') ||
+            (character >= '\u2066' && character <= '\u2069');
 
         /// <summary>
         /// Index of the first character the normalisation would change, or -1
@@ -94,7 +106,7 @@ namespace BBCodeParser
             for (var i = 0; i < input.Length; i++)
             {
                 var character = input[i];
-                if (IsStrippedControl(character))
+                if (IsStripped(character))
                 {
                     return i;
                 }
@@ -132,7 +144,7 @@ namespace BBCodeParser
             for (var i = first; i < input.Length; i++)
             {
                 var character = input[i];
-                if (IsStrippedControl(character))
+                if (IsStripped(character))
                 {
                     continue;
                 }
@@ -170,8 +182,7 @@ namespace BBCodeParser
         {
             input = string.IsNullOrEmpty(input) ? input : Normalise(input);
 
-            var nodeTree = new NodeTree(securitySubstitutions, aliasSubstitutions);
-            var treeDepth = 0;
+            var nodeTree = new NodeTree(securitySubstitutions, aliasSubstitutions, textSubstitutions);
             if (string.IsNullOrWhiteSpace(input))
             {
                 nodeTree.AddChild(new TextNode(string.Empty));
@@ -180,106 +191,127 @@ namespace BBCodeParser
 
             var reader = new Reader(input, tags);
             var current = (Node)nodeTree;
-            if (!reader.TryRead(out var tagResult))
+            var treeDepth = 0;
+
+            while (reader.TryRead(out var token))
             {
-                current.AddChild(new TextNode(input));
-            }
-            else
-            {
-                do
+                switch (token.TagType)
                 {
-                    if (!string.IsNullOrEmpty(tagResult.Text))
-                    {
-                        current.AddChild(new TextNode(tagResult.Text));
-                    }
+                    case TagType.NoResult:
+                        AddText(current, token);
+                        break;
 
-                    // no parsing inside CodeTag
-                    var isInsideCodeTag = (current as TagNode)?.Tag is CodeTag;
-                    var resultIsClosingCodeTag = tagResult.Tag is CodeTag && tagResult.TagType == TagType.Close;
-                    if (isInsideCodeTag && !resultIsClosingCodeTag && !string.IsNullOrEmpty(tagResult.Match) &&
-                        tagResult.Tag != null)
-                    {
-                        current.AddChild(new TextNode(tagResult.Match));
-                        continue;
-                    }
-
-                    switch (tagResult.TagType)
-                    {
-                        case TagType.NoResult:
-                            continue;
-                        case TagType.Open:
-                            var tagNode = new TagNode(tagResult.Tag, current, tagResult.AttributeValue);
-                            current.AddChild(tagNode);
-
-                            if (!tagResult.Tag.RequiresClosing) continue;
-
-                            current = tagNode;
-                            treeDepth++;
-                            if (treeDepth > TreeMaxDepth)
-                            {
-                                throw new BbParserException();
-                            }
-
+                    case TagType.Open:
+                        var tagNode = Open(current, token, ref treeDepth);
+                        if (!token.Tag.RequiresClosing)
+                        {
                             break;
-                        default:
-                            if (tagResult.TagType == TagType.Close && current != nodeTree)
-                            {
-                                // DM3 change against the original: which node a
-                                // closing tag closes.
-                                //
-                                // The loop that stood here read the name of the
-                                // open node once, before it started, and
-                                // compared that same captured name on every
-                                // turn. The comparison could therefore never
-                                // become false, so a closing tag that did not
-                                // match the open node unwound the whole stack to
-                                // the root - and everything written after it
-                                // left the block it was written inside.
-                                //
-                                // For formatting that lost markup nobody asked
-                                // to lose: [b][i]x[/i]y[/b] kept y bold only by
-                                // accident of order. For [private] it was a
-                                // leak. Given
-                                //
-                                //     [private="X"]secret[/b]tail[/private]
-                                //
-                                // the private node was closed by the stray [/b],
-                                // "tail" was added to the root, and the closing
-                                // [/private] found nothing left to close: the
-                                // visibility filter removed the private node and
-                                // the page printed "tail" to everyone. None of
-                                // the three checks around it could see that -
-                                // the save-time balance check counts [private]
-                                // tags and finds one of each, the normaliser
-                                // rewrites spellings rather than structure, and
-                                // the depth guard measures depth.
-                                //
-                                // The search below stops at the nearest ancestor
-                                // of that name, and never crosses a sealed one
-                                // (see Tag.SealedByOwnTag). A closing tag that
-                                // finds no such ancestor closes nothing, which
-                                // is what it already did when the stack held
-                                // nothing of that name at all.
-                                var target = FindNodeToClose(current, nodeTree, tagResult.Tag.Name);
-                                while (target != null && current != target)
-                                {
-                                    current = current.ParentNode;
-                                    treeDepth--;
-                                }
+                        }
 
-                                if (target != null)
-                                {
-                                    current = current.ParentNode;
-                                    treeDepth--;
-                                }
-                            }
-
+                        // DM3 change against the original: a block shown as
+                        // written is read as one piece, up to its own closing
+                        // tag. The original fed every tag found inside it back
+                        // as text one match at a time, which is the same thing
+                        // for a closed block. Such a block is a CodeTag, and
+                        // the catalogue declares one: [noparse] (see CodeTag).
+                        //
+                        // A block nobody closed is no example of anything: it
+                        // stays open like any other tag, what follows it is read
+                        // as markup, and it renders as the text it is (see
+                        // TagNode). A hiding block written under it is then a
+                        // hiding block, as it is anywhere else.
+                        if (token.Tag is CodeTag && !token.Broken &&
+                            reader.TryReadVerbatim(token.Tag, out var content, out var closer))
+                        {
+                            AddText(tagNode, content);
+                            tagNode.Close(closer);
+                            treeDepth--;
                             break;
-                    }
-                } while (reader.TryRead(out tagResult));
+                        }
+
+                        current = tagNode;
+                        break;
+
+                    case TagType.Close:
+                        // DM3 change against the original: which node a
+                        // closing tag closes.
+                        //
+                        // The loop that stood here read the name of the open
+                        // node once, before it started, and compared that same
+                        // captured name on every turn. The comparison could
+                        // therefore never become false, so a closing tag that
+                        // did not match the open node unwound the whole stack to
+                        // the root - and everything written after it left the
+                        // block it was written inside.
+                        //
+                        // For formatting that lost markup nobody asked to lose:
+                        // [b][i]x[/i]y[/b] kept y bold only by accident of
+                        // order. For [private] it was a leak. Given
+                        //
+                        //     [private="X"]secret[/b]tail[/private]
+                        //
+                        // the private node was closed by the stray [/b], "tail"
+                        // was added to the root, and the closing [/private]
+                        // found nothing left to close: the visibility filter
+                        // removed the private node and the page printed "tail"
+                        // to everyone.
+                        //
+                        // The search below stops at the nearest ancestor of that
+                        // name, and never crosses a sealed one (see
+                        // Tag.SealedByOwnTag). What is opened inside the node it
+                        // closes and left open stays unclosed, and renders as
+                        // the text it is.
+                        //
+                        // A closing tag that finds no such ancestor closes
+                        // nothing and is printed as it was typed. The original
+                        // dropped it, and an author explaining how a tag is
+                        // closed lost half the explanation without a word.
+                        var target = FindNodeToClose(current, nodeTree, token.Tag.Name);
+                        if (target == null)
+                        {
+                            AddText(current, token);
+                            break;
+                        }
+
+                        ((TagNode)target).Close(token.Text);
+                        while (current != target)
+                        {
+                            current = current.ParentNode;
+                            treeDepth--;
+                        }
+
+                        current = current.ParentNode;
+                        treeDepth--;
+                        break;
+                }
             }
 
             return nodeTree;
+        }
+
+        private static void AddText(Node parent, TagResult token)
+        {
+            if (!string.IsNullOrEmpty(token.Text))
+            {
+                parent.AddChild(new TextNode(token.Text));
+            }
+        }
+
+        private static TagNode Open(Node parent, TagResult token, ref int treeDepth)
+        {
+            var tagNode = new TagNode(token.Tag, parent, token.AttributeValue, token.Parameters, token.Broken,
+                token.Text);
+            parent.AddChild(tagNode);
+            if (token.Tag.RequiresClosing)
+            {
+                treeDepth++;
+                if (treeDepth > TreeMaxDepth)
+                {
+                    throw new BbParserException();
+                }
+            }
+
+            return tagNode;
         }
 
         /// <summary>

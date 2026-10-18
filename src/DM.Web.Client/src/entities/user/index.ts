@@ -24,6 +24,7 @@ export {
 // UI Components
 export {
   UserLink,
+  RemovedAccountLink,
   UserRating,
   UserAutocomplete,
   UserMultiSelect,

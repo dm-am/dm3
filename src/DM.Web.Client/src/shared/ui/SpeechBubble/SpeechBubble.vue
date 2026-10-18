@@ -30,8 +30,22 @@
         "
         @transitionend="onTransitionEnd"
       >
+        <!-- Holds the corner the actions below stand in, so a first line long
+             enough to reach them wraps short instead of running under them. -->
+        <span
+          v-if="$slots.actions"
+          class="bubble-actions-space"
+          aria-hidden="true"
+        />
         <slot />
       </div>
+      <!-- The icons that act on what is said: in the top right corner of the
+           bubble, whatever height the text is centered at. After the text in
+           the DOM, so a screen reader hears what is being edited before the
+           controls, and so the box paints above the content it overlaps. -->
+      <span v-if="$slots.actions" class="bubble-actions"
+        ><slot name="actions"
+      /></span>
       <button
         v-if="expandable && isOverflowing"
         type="button"
@@ -73,6 +87,10 @@
  * Extracted from TestimonialCard, which now renders through it unchanged. The
  * bubble knows nothing about authors or dates: the footer is a slot, because
  * its links come from the user slice and shared may not reach for it.
+ *
+ * The `actions` slot is the top right corner: the edit and delete icons
+ * (BubbleAction) of whoever may act on the entry. The caller decides who that
+ * is; a slot that renders nothing for the viewer holds no space.
  */
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import SvgIcon from "@/shared/ui/Icon/SvgIcon.vue";
@@ -260,6 +278,10 @@ onBeforeUnmount(() => {
 @use "@/assets/styles/Inputs" as *
 @use "@/assets/styles/Animations" as *
 
+// The side padding of the bubble, named because the corner actions hold a
+// share of the first line measured from the same edge.
+$bubble-padding-x: $medium + $small
+
 .bubble-card
   margin: 0
 
@@ -288,7 +310,7 @@ onBeforeUnmount(() => {
   flex-direction: column
   justify-content: center
   box-sizing: border-box
-  padding: $medium + $tiny $medium + $small
+  padding: $medium + $tiny $bubble-padding-x
   margin-bottom: $small
   border-radius: $bubble-radius
   background-color: $bg-highlight-green
@@ -372,7 +394,7 @@ onBeforeUnmount(() => {
   min-height: $medium + $tiny
   padding: 0 $small
   border: none
-  border-radius: $small
+  border-radius: $border-radius
   background: transparent
   color: $text-on-green
   cursor: pointer
@@ -398,6 +420,46 @@ onBeforeUnmount(() => {
   &.expanded
     transform: rotate(180deg)
     transition-duration: $expand-duration
+
+// Corner actions (the `actions` slot). Absolute, pinned to the bubble and not
+// to the text: the text is centered in a box reserved for three lines, and
+// icons that followed it would stand halfway down beside a one-line entry.
+// The 16px glyphs land 12px from the top edge and 14px from the right one,
+// each 4px inside its button.
+$actions-top: $small
+$actions-right: $small + $tiny
+$actions-gap: $minor
+$action-glyph-inset: $minor
+
+.bubble-actions
+  position: absolute
+  top: $actions-top
+  right: $actions-right
+  display: flex
+  gap: $actions-gap
+
+  // Nothing the viewer may do: the slot renders only comments, and the
+  // corner stays free.
+  &:empty
+    display: none
+
+  // The keyboard ring of a corner control is drawn in the bubble's ink, like
+  // the chevron's: $link has nothing to stand against on the green fill.
+  :deep(button:focus-visible)
+    outline: 2px solid $text-on-green
+    outline-offset: -2px
+
+// The first line's share of that corner, so text long enough to reach the
+// icons wraps short of them with a $medium gap before the first glyph. Only
+// the first line can meet them: the second starts below the buttons. Sized
+// for both icons, since a slot does not say how many it holds.
+.bubble-actions-space
+  float: right
+  width: $actions-right + 2 * $bubble-action-size + $actions-gap + $medium - $action-glyph-inset - $bubble-padding-x
+  height: 1em
+
+.bubble:has(> .bubble-actions:empty) .bubble-actions-space
+  display: none
 
 // Block line, NOT flex — see the template comment for why.
 .bubble-footer

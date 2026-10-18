@@ -15,6 +15,8 @@ namespace DM.Web.API.Features.Personal.Webhooks;
 ///
 /// Supported commands:
 /// - "/connect {code}" - links the Telegram chat to a user account
+/// - "/start {code}" - the same: what Telegram sends when the reader opens
+///   the deep link t.me/{bot}?start={code} and presses Start in the chat
 /// - "/start" - logged only
 ///
 /// No replies are sent from here: outgoing bot messages are handled
@@ -22,7 +24,12 @@ namespace DM.Web.API.Features.Personal.Webhooks;
 /// </remarks>
 internal class TelegramWebhookHandler : IWebhookHandler
 {
-    private const string ConnectCommandPrefix = "/connect ";
+    /// <summary>
+    /// The commands that carry a link code after them. The account page hands
+    /// the code out as a deep link, which arrives as "/start", and the command
+    /// typed by hand stays "/connect".
+    /// </summary>
+    private static readonly string[] LinkCommandPrefixes = ["/connect ", "/start "];
 
     private readonly IBotLinkService _botLinkService;
     private readonly ILogger<TelegramWebhookHandler> _logger;
@@ -52,15 +59,35 @@ internal class TelegramWebhookHandler : IWebhookHandler
 
         var chatIdStr = chatId.GetRawText();
 
-        if (text.StartsWith(ConnectCommandPrefix))
+        var code = LinkCode(text);
+        if (code != null)
         {
-            var code = text[ConnectCommandPrefix.Length..].Trim();
             var result = await _botLinkService.VerifyAndLink(code, BotType, chatIdStr);
-            _logger.LogInformation("Telegram /connect from chat {ChatId}: {Success}", chatIdStr, result.Success);
+            _logger.LogInformation("Telegram link code from chat {ChatId}: {Success}", chatIdStr, result.Success);
         }
-        else if (text == "/start")
+        else if (text.Trim() == "/start")
         {
             _logger.LogInformation("Telegram /start from chat {ChatId}", chatIdStr);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The code after a link command, or null when the text is not one or names
+    /// no code.
+    /// </summary>
+    private static string? LinkCode(string text)
+    {
+        foreach (var prefix in LinkCommandPrefixes)
+        {
+            if (!text.StartsWith(prefix))
+            {
+                continue;
+            }
+
+            var code = text[prefix.Length..].Trim();
+            return code.Length == 0 ? null : code;
         }
 
         return null;

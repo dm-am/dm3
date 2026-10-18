@@ -1,8 +1,9 @@
 /**
  * Custom BBCode Image Extension for Tiptap.
  *
- * Renders images in the unified shape shared by the frontend bbcode
- * parser, backend BbParserWrapper, and every TruncatedContent consumer:
+ * Renders [img width="300" height="200"]address[/img] in the unified shape
+ * shared by the frontend bbcode converter, backend BbParserWrapper, and every
+ * TruncatedContent consumer:
  *
  *   - Default size: <img class="bb-image" data-bb-tag="img" src="..." alt="">
  *   - Custom size:  <span class="bb-image-frame" data-bb-width="W" data-bb-height="H"
@@ -14,6 +15,11 @@
  * (see _BbcodeContent.sass image contract). No inline max-width/max-height
  * on the <img> — this lets ancestors like TruncatedContent override image
  * sizing via normal class rules without !important.
+ *
+ * The alt is always empty: an image has no alt in the markup (a reader never
+ * sees one, and text nobody sees on the page is where an insult goes
+ * unnoticed), and an alt that came with pasted HTML is not kept.
+ * data-bb-source keeps a spelling of the tag the canonical one would change.
  */
 
 import { Node, mergeAttributes } from "@tiptap/core";
@@ -29,12 +35,17 @@ declare module "@tiptap/core" {
     bbImage: {
       setBbImage: (attributes: {
         src: string;
-        alt?: string;
-        width?: number;
-        height?: number;
+        width?: number | null;
+        height?: number | null;
       }) => ReturnType;
     };
   }
+}
+
+/** A size of the frame, when the frame gives one. */
+function sizeOf(frame: Element | null, name: string): number | null {
+  const value = frame?.getAttribute(name);
+  return value ? parseInt(value, 10) : null;
 }
 
 export const BbImage = Node.create<BbImageOptions>({
@@ -68,25 +79,26 @@ export const BbImage = Node.create<BbImageOptions>({
       src: {
         default: null,
       },
-      alt: {
-        default: "",
+      // Each attribute reads its own element: a parse rule's getAttrs does
+      // not have the last word, the attribute's parseHTML does.
+      source: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-bb-source"),
+        renderHTML: (attributes) =>
+          attributes.source === null
+            ? {}
+            : { "data-bb-source": attributes.source },
       },
+      // Width and height live on the wrapper <span> of a sized image; the
+      // bare <img> of a default one has neither.
       width: {
         default: null,
-        // Width lives on the wrapper <span> for custom-sized images. For
-        // bare default-size <img> Tiptap falls back to null via getAttrs.
-        parseHTML: (element) => {
-          const w = element.getAttribute("data-bb-width");
-          return w ? parseInt(w, 10) : null;
-        },
+        parseHTML: (element) => sizeOf(element, "data-bb-width"),
         renderHTML: () => ({}),
       },
       height: {
         default: null,
-        parseHTML: (element) => {
-          const h = element.getAttribute("data-bb-height");
-          return h ? parseInt(h, 10) : null;
-        },
+        parseHTML: (element) => sizeOf(element, "data-bb-height"),
         renderHTML: () => ({}),
       },
     };
@@ -96,20 +108,18 @@ export const BbImage = Node.create<BbImageOptions>({
     return [
       // Wrapped form: <span class="bb-image-frame"><img class="bb-image"></span>
       // Tiptap passes the wrapper span to getAttrs; width/height come from
-      // the span's data-bb-* attributes, src/alt come from the inner <img>.
+      // the span's data-bb-* attributes, the rest from the inner <img>.
       {
         tag: 'span[class~="bb-image-frame"]',
         getAttrs: (element) => {
           const span = element as HTMLElement;
           const img = span.querySelector("img");
           if (!img) return false;
-          const w = span.getAttribute("data-bb-width");
-          const h = span.getAttribute("data-bb-height");
           return {
             src: img.getAttribute("src"),
-            alt: img.getAttribute("alt") || "",
-            width: w ? parseInt(w, 10) : null,
-            height: h ? parseInt(h, 10) : null,
+            source: img.getAttribute("data-bb-source"),
+            width: sizeOf(span, "data-bb-width"),
+            height: sizeOf(span, "data-bb-height"),
           };
         },
       },
@@ -120,20 +130,20 @@ export const BbImage = Node.create<BbImageOptions>({
           const el = element as HTMLElement;
           return {
             src: el.getAttribute("src"),
-            alt: el.getAttribute("alt") || "",
+            source: el.getAttribute("data-bb-source"),
             width: null,
             height: null,
           };
         },
       },
-      // Legacy fallback — any other <img src="..."> is accepted without size
+      // Any other <img src="..."> is taken as a plain image
       {
         tag: "img[src]",
         getAttrs: (element) => {
           const el = element as HTMLElement;
           return {
             src: el.getAttribute("src"),
-            alt: el.getAttribute("alt") || "",
+            source: null,
             width: null,
             height: null,
           };
@@ -143,13 +153,12 @@ export const BbImage = Node.create<BbImageOptions>({
   },
 
   renderHTML({ HTMLAttributes, node }) {
-    const rest = { ...(HTMLAttributes as Record<string, unknown>) };
-    delete rest.width;
-    delete rest.height;
-    const imgAttrs = mergeAttributes(this.options.HTMLAttributes, rest);
+    const imgAttrs = mergeAttributes(
+      this.options.HTMLAttributes,
+      HTMLAttributes,
+      { alt: "" },
+    );
 
-    // Use the node's own attributes for width/height rather than the merged
-    // HTMLAttributes (which strip unknown keys).
     const w = node.attrs.width as number | null;
     const h = node.attrs.height as number | null;
 
@@ -178,16 +187,20 @@ export const BbImage = Node.create<BbImageOptions>({
       setBbImage:
         (attributes) =>
         ({ commands }) => {
-          // Sanitize URL to prevent javascript: and other dangerous protocols
+          // Only an address the server draws: http and https, and nothing on
+          // the reader's own machine or network.
           const safeSrc = sanitizeImageUrl(attributes.src);
           if (safeSrc === "#") {
-            // Reject dangerous URLs
             return false;
           }
 
           return commands.insertContent({
             type: this.name,
-            attrs: { ...attributes, src: safeSrc },
+            attrs: {
+              src: safeSrc,
+              width: attributes.width ?? null,
+              height: attributes.height ?? null,
+            },
           });
         },
     };

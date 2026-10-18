@@ -88,8 +88,8 @@ public class RecoveryServiceShould : UnitTestBase
 
         result.Should().Be(RecoveryResult.PasswordReset);
         await _passwordResetRepository.Received(1).ReplacePasswordResetToken(userId, token);
-        await _passwordResetEmailSender.Received(1).Send(email, user.Username, secret);
-        await _passwordResetEmailSender.DidNotReceive().Send(email, user.Username, tokenId);
+        await _passwordResetEmailSender.Received(1).Send(email, secret);
+        await _passwordResetEmailSender.DidNotReceive().Send(email, tokenId);
     }
 
     [Fact]
@@ -131,5 +131,33 @@ public class RecoveryServiceShould : UnitTestBase
         var result = await _service.Recover(email);
 
         result.Should().Be(RecoveryResult.NotFound);
+    }
+
+    /// <summary>
+    /// A removed account earns the same result as a live one, and nothing else:
+    /// no reset it cannot use, and no letter naming its state.
+    /// </summary>
+    /// <remarks>
+    /// "Not found" here plus "taken" on registration equalled "removed" for a
+    /// guest with two requests and no password (SECURITY.md).
+    /// </remarks>
+    [Fact]
+    public async Task AnswerARemovedAccountAsALiveOneAndSendNothing()
+    {
+        var email = "gone@example.com";
+        _emailLookupRepository.GetUserByEmail(email, Arg.Any<CancellationToken>()).Returns(new EmailLookupInfo
+        {
+            UserId = Guid.NewGuid(),
+            Username = "gone",
+            Email = email,
+            IsRemoved = true
+        });
+
+        var result = await _service.Recover(email);
+
+        result.Should().Be(RecoveryResult.PasswordReset);
+        await _passwordResetEmailSender.DidNotReceiveWithAnyArgs().Send(default!, default);
+        await _passwordResetRepository.DidNotReceiveWithAnyArgs().ReplacePasswordResetToken(default, default!);
+        await _auditService.DidNotReceiveWithAnyArgs().LogAsync(default, default);
     }
 }

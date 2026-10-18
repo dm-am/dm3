@@ -72,8 +72,9 @@ const answer = (...hits: ReturnType<typeof hit>[]) => ({
   error: null,
 });
 
-const mountBar = () =>
+const mountBar = (props: Record<string, unknown> = {}) =>
   mount(MessageSearchBar, {
+    props,
     slots: { default: '<button class="date-stub">Перейти к дате</button>' },
     global: {
       components: { SecondaryText: SecondaryTextStub },
@@ -178,5 +179,36 @@ describe("MessageSearchBar", () => {
     const wrapper = mountBar();
     expect(wrapper.find("input").exists()).toBe(false);
     expect(wrapper.find(".date-stub").exists()).toBe(true);
+  });
+
+  it("names the global chat as what it searches", () => {
+    const input = mountBar().find("input");
+    expect(input.attributes("placeholder")).toBe("Поиск по чату");
+    expect(input.attributes("aria-label")).toBe("Поиск по глобальному чату");
+  });
+
+  it("names the correspondence over a correspondence, and searches it", async () => {
+    const wrapper = mountBar({ scope: "dm:c7" });
+    const input = wrapper.find("input");
+    expect(input.attributes("placeholder")).toBe("Поиск по переписке");
+    expect(input.attributes("aria-label")).toBe("Поиск по переписке");
+
+    await search(wrapper, "привет");
+
+    expect(mockSearchMessages.mock.calls[0][0]).toMatchObject({
+      in: ["dm:c7"],
+    });
+  });
+
+  it("starts the next correspondence with an empty field and no hits", async () => {
+    const wrapper = mountBar({ scope: "dm:c7" });
+    mockSearchMessages.mockResolvedValue(answer(hit("m1", "первое")));
+    await search(wrapper, "привет");
+    expect(wrapper.find(".search-dropdown").exists()).toBe(true);
+
+    await wrapper.setProps({ scope: "dm:c8" });
+
+    expect((wrapper.find("input").element as HTMLInputElement).value).toBe("");
+    expect(wrapper.find(".search-dropdown").exists()).toBe(false);
   });
 });

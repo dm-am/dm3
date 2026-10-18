@@ -12,7 +12,7 @@ namespace DM.Infrastructure.Persistence.Tests;
 /// Every entity that owns a unit of storage carries [Table]; a nested value that
 /// owns none — a jsonb payload, an owned column shape — carries nothing, and
 /// that absence is the second, deliberate state. Since W1.1 the one store is
-/// PostgreSQL (INV-1): the Mongo collection marker does not exist any more, so
+/// PostgreSQL: the Mongo collection marker does not exist any more, so
 /// carrying it is a compile error rather than a rule.
 /// See docs/conventions/DATA_STORAGE.md.
 /// </summary>

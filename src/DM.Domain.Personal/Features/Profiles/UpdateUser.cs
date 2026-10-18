@@ -45,9 +45,11 @@ public class UpdateUser
     public string Info { get; set; } = null!;
 
     /// <summary>
-    /// User contacts (replaces entire contact list when provided)
+    /// User contacts: a list replaces the entire contact list, null leaves it
+    /// as it is. Null by default like the fields above, so that an update
+    /// which does not speak of contacts (the preferences) keeps them.
     /// </summary>
-    public IReadOnlyCollection<UserContact> Contacts { get; set; } = [];
+    public IReadOnlyCollection<UserContact> Contacts { get; set; } = null!;
 
     /// <summary>
     /// User settings

@@ -35,7 +35,7 @@ public class BlogIntentionResolverShould
 
     private BlogDto CreateBlog(
         DraftVisibility draftVisibility = DraftVisibility.Public,
-        bool commentsEnabled = true,
+        ModuleStatus status = ModuleStatus.Draft,
         IEnumerable<BlogAssistantInfo>? assistants = null,
         bool viewerIsSubscriber = false,
         GeneralUser? mentor = null,
@@ -47,7 +47,7 @@ public class BlogIntentionResolverShould
             Author = new GeneralUser { UserId = _ownerId },
             Mentor = mentor,
             DraftVisibility = draftVisibility,
-            CommentsEnabled = commentsEnabled,
+            Status = status,
             Assistants = assistants ?? Array.Empty<BlogAssistantInfo>(),
             IsViewerSubscriber = viewerIsSubscriber,
             PendingInvitedUserIds = Array.Empty<Guid>(),
@@ -425,7 +425,23 @@ public class BlogIntentionResolverShould
     public void AllowAuthenticatedUserToCommentOnPublicBlog()
     {
         var user = CreateUser(_otherUserId);
-        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public);
+
+        var result = _resolver.IsAllowed(user, BlogIntention.CreateComment, blog);
+
+        result.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The draft visibility closes a blog while it is a draft and nothing after:
+    /// a blog started from a private draft takes comments from anybody, as it is
+    /// read by anybody.
+    /// </summary>
+    [Fact]
+    public void AllowCommentingABlogStartedFromAPrivateDraft()
+    {
+        var user = CreateUser(_otherUserId);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Private, status: ModuleStatus.Active);
 
         var result = _resolver.IsAllowed(user, BlogIntention.CreateComment, blog);
 
@@ -433,10 +449,10 @@ public class BlogIntentionResolverShould
     }
 
     [Fact]
-    public void DenyCommentWhenCommentsDisabled()
+    public void DenyAStrangerCommentingAPrivateDraft()
     {
         var user = CreateUser(_otherUserId);
-        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: false);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Private, status: ModuleStatus.Draft);
 
         var result = _resolver.IsAllowed(user, BlogIntention.CreateComment, blog);
 
@@ -447,7 +463,7 @@ public class BlogIntentionResolverShould
     public void DenyGuestToComment()
     {
         var user = CreateUser(Guid.Empty, UserRole.Guest);
-        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public);
 
         var result = _resolver.IsAllowed(user, BlogIntention.CreateComment, blog);
 
@@ -458,7 +474,7 @@ public class BlogIntentionResolverShould
     public void DenyCommentingSomebodyElsesBlogUnderTheOrdinaryBan()
     {
         var user = CreateUser(_otherUserId, accessPolicy: AccessPolicy.DemocraticBan);
-        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public);
 
         _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
     }
@@ -467,7 +483,7 @@ public class BlogIntentionResolverShould
     public void AllowCommentingOwnBlogUnderTheOrdinaryBan()
     {
         var user = CreateUser(_ownerId, accessPolicy: AccessPolicy.DemocraticBan);
-        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public);
 
         _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeTrue();
     }
@@ -478,7 +494,6 @@ public class BlogIntentionResolverShould
         var user = CreateUser(_assistantId, accessPolicy: AccessPolicy.DemocraticBan);
         var blog = CreateBlog(
             draftVisibility: DraftVisibility.Public,
-            commentsEnabled: true,
             assistants: new[] { new BlogAssistantInfo { UserId = _assistantId } });
 
         _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeTrue();
@@ -490,7 +505,6 @@ public class BlogIntentionResolverShould
         var user = CreateUser(_mentorId, accessPolicy: AccessPolicy.DemocraticBan);
         var blog = CreateBlog(
             draftVisibility: DraftVisibility.Public,
-            commentsEnabled: true,
             mentor: new GeneralUser { UserId = _mentorId });
 
         // Curating is a job in the blog, the same as in a game
@@ -503,7 +517,6 @@ public class BlogIntentionResolverShould
         var user = CreateUser(_otherUserId, accessPolicy: AccessPolicy.DemocraticBan);
         var blog = CreateBlog(
             draftVisibility: DraftVisibility.Public,
-            commentsEnabled: true,
             viewerIsSubscriber: true);
 
         // Reading somebody else's blog is not the same as belonging to it
@@ -514,7 +527,7 @@ public class BlogIntentionResolverShould
     public void DenyCommentingOwnBlogUnderAFullBan()
     {
         var user = CreateUser(_ownerId, accessPolicy: AccessPolicy.FullBan);
-        var blog = CreateBlog(draftVisibility: DraftVisibility.Public, commentsEnabled: true);
+        var blog = CreateBlog(draftVisibility: DraftVisibility.Public);
 
         _resolver.IsAllowed(user, BlogIntention.CreateComment, blog).Should().BeFalse();
     }

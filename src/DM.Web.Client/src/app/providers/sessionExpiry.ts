@@ -10,6 +10,7 @@
  */
 import { setSessionExpiredHandler } from "@/shared/api";
 import { loginLocation } from "@/shared/lib/auth";
+import { closeOpenWindows } from "@/shared/lib/composables/useOpenWindows";
 import { useAuthStore } from "@/shared/stores";
 import router from "./router";
 
@@ -20,6 +21,12 @@ import router from "./router";
  * signed-in interface until the next full reload.
  */
 export function endExpiredSession(): void {
+  // Every window goes with the session: it was opened over a page for the
+  // signed-in reader, and its press would only meet the same refusal. The
+  // owner's word. The login window stays (useOpenWindows): it is how the
+  // reader comes back, and the navigation below may be what opens it.
+  closeOpenWindows();
+
   // updateUser is the only writer of the persisted copy, so this drops both at
   // once — and the resulting `storage` event still logs the other tabs out.
   useAuthStore().updateUser(null);

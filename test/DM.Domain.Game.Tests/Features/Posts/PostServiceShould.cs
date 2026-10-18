@@ -40,6 +40,7 @@ public class PostServiceShould : UnitTestBase
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IEventProducer _producer;
     private readonly IIdentityProvider _identityProvider;
+    private readonly IBbTagNameCase _tagNames;
     private readonly Guid _currentUserId = Guid.NewGuid();
 
     /// <summary>
@@ -91,6 +92,10 @@ public class PostServiceShould : UnitTestBase
         var identity = Identities.User(_currentUserId, "testuser");
         _identityProvider.Current.Returns(identity);
 
+        // The text as it came, unless a test says otherwise.
+        _tagNames = Mock<IBbTagNameCase>();
+        _tagNames.ToLowerCase(Arg.Any<string?>(), Arg.Any<BbTagSet>()).Returns(ci => ci.ArgAt<string?>(0));
+
         _service = new PostService(
             createValidator,
             updateValidator,
@@ -104,7 +109,71 @@ public class PostServiceShould : UnitTestBase
             _diceRoller,
             _unreadCountersRepository,
             _producer,
-            _identityProvider);
+            _identityProvider,
+            _tagNames);
+    }
+
+    /// <summary>
+    /// The save path writes the names of the tags in lower case: the game text
+    /// with the tags every surface reads, the out-of-character text with [mod]
+    /// as well, since it renders where [mod] is a tag.
+    /// </summary>
+    [Fact]
+    public async Task WriteTheTagNamesOfBothTextsInLowerCase_OnCreate()
+    {
+        var roomId = Guid.NewGuid();
+        _tagNames.ToLowerCase("[B]игра[/B]", BbTagSet.Common).Returns("[b]игра[/b]");
+        _tagNames.ToLowerCase("[I]вне игры[/I]", BbTagSet.WithModBlock).Returns("[i]вне игры[/i]");
+
+        CreatePostEntity? written = null;
+        _roomRepository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(RoomWith(roomId));
+        _repository.Create(Arg.Any<CreatePostEntity>())
+            .Returns(new Post { Id = Guid.NewGuid(), RoomId = roomId })
+            .AndDoes(ci => written = ci.ArgAt<CreatePostEntity>(0));
+
+        await _service.CreateAsync(new CreatePost
+        {
+            RoomId = roomId,
+            GameText = "[B]игра[/B]",
+            MetagameText = "[I]вне игры[/I]"
+        });
+
+        written!.GameText.Should().Be("[b]игра[/b]");
+        written.MetagameText.Should().Be("[i]вне игры[/i]");
+    }
+
+    [Fact]
+    public async Task WriteTheTagNamesOfBothTextsInLowerCase_OnEdit()
+    {
+        var roomId = Guid.NewGuid();
+        var postId = Guid.NewGuid();
+        var post = new Post
+        {
+            Id = postId,
+            RoomId = roomId,
+            Author = new GeneralUser { UserId = _currentUserId },
+            GameText = "было",
+            PrivateAddresseeSnapshotJson = PrivateAddresseeSnapshot.Empty
+        };
+        _tagNames.ToLowerCase("[B]игра[/B]", BbTagSet.Common).Returns("[b]игра[/b]");
+        _tagNames.ToLowerCase("[I]вне игры[/I]", BbTagSet.WithModBlock).Returns("[i]вне игры[/i]");
+
+        UpdatePostEntity? written = null;
+        _repository.Get(postId, Arg.Any<Guid>()).Returns(post);
+        _roomRepository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(RoomWith(roomId));
+        _repository.Update(Arg.Any<UpdatePostEntity>())
+            .Returns(post)
+            .AndDoes(ci => written = ci.ArgAt<UpdatePostEntity>(0));
+
+        await _service.UpdateAsync(new UpdatePost
+        {
+            PostId = postId,
+            GameText = "[B]игра[/B]",
+            MetagameText = "[I]вне игры[/I]"
+        });
+
+        written!.GameText.Should().Be("[b]игра[/b]");
+        written.MetagameText.Should().Be("[i]вне игры[/i]");
     }
 
     [Fact]
@@ -197,7 +266,7 @@ public class PostServiceShould : UnitTestBase
         _diceRoller.Received(1).Roll(postId, Arg.Any<DateTimeOffset>(),
             Arg.Is<IEnumerable<CreatePostDiceRoll>>(s => s.Count() == 1));
         // The rolls travel inside the entity: the repository writes them in the
-        // post's own transaction, so both land or neither does (INV-6).
+        // post's own transaction, so both land or neither does.
         written.Should().NotBeNull();
         written!.DiceRolls.Should().BeSameAs(rolledDice);
         result.DiceRolls.Should().BeSameAs(rolledDice);
@@ -254,7 +323,7 @@ public class PostServiceShould : UnitTestBase
         var createPost = new CreatePost
         {
             RoomId = roomId,
-            GameText = "всем [private=Анна]только Анне[/private]"
+            GameText = "всем [private=\"Анна\"]только Анне[/private]"
         };
 
         CreatePostEntity? written = null;
@@ -283,7 +352,7 @@ public class PostServiceShould : UnitTestBase
         var createPost = new CreatePost
         {
             RoomId = roomId,
-            GameText = "[private=Виктор]секрет[/private]"
+            GameText = "[private=\"Виктор\"]секрет[/private]"
         };
 
         CreatePostEntity? written = null;
@@ -318,10 +387,10 @@ public class PostServiceShould : UnitTestBase
             Id = postId,
             RoomId = roomId,
             Author = new GeneralUser { UserId = Guid.NewGuid() },
-            GameText = "[private=Анна]только Анне[/private]",
+            GameText = "[private=\"Анна\"]только Анне[/private]",
             PrivateAddresseeSnapshotJson =
                 PrivateAddresseeSnapshot.Build(
-                    "[private=Анна]только Анне[/private]",
+                    "[private=\"Анна\"]только Анне[/private]",
                     new[] { new PrivateAddressee(Guid.NewGuid(), "Анна", annaOwner) })
         };
         // Anna has left the room by the time the post is edited; Boris has not.
@@ -341,7 +410,7 @@ public class PostServiceShould : UnitTestBase
         await _service.UpdateAsync(new UpdatePost
         {
             PostId = postId,
-            GameText = "[private=Анна]только Анне[/private] и [private=Борис]Борису[/private]"
+            GameText = "[private=\"Анна\"]только Анне[/private] и [private=\"Борис\"]Борису[/private]"
         });
 
         var snapshot = PrivateAddresseeSnapshot.Parse(written!.PrivateAddresseeSnapshotJson);
@@ -363,7 +432,7 @@ public class PostServiceShould : UnitTestBase
         var chuck = Guid.NewGuid();
         var annaOwner = Guid.NewGuid();
         var borisOwner = Guid.NewGuid();
-        const string text = "[private=Чак]секрет[/private]";
+        const string text = "[private=\"Чак\"]секрет[/private]";
         var post = new Post
         {
             Id = postId,
@@ -432,7 +501,7 @@ public class PostServiceShould : UnitTestBase
         var post = new Post { Id = postId, RoomId = Guid.NewGuid(), Author = new GeneralUser { UserId = Guid.NewGuid() }, CreatedUtc = DateTimeOffset.UtcNow };
 
         _repository.Get(postId, Arg.Any<Guid>()).Returns(post);
-        _repository.Delete(postId, _currentUserId).Returns(Task.CompletedTask);
+        _repository.Delete(postId, _currentUserId).Returns(true);
 
         await _service.DeleteAsync(postId);
 
@@ -449,7 +518,7 @@ public class PostServiceShould : UnitTestBase
         var post = new Post { Id = postId, RoomId = roomId, Author = new GeneralUser { UserId = authorId }, CreatedUtc = createdUtc };
 
         _repository.Get(postId, Arg.Any<Guid>()).Returns(post);
-        _repository.Delete(postId, _currentUserId).Returns(Task.CompletedTask);
+        _repository.Delete(postId, _currentUserId).Returns(true);
 
         await _service.DeleteAsync(postId);
 
@@ -457,6 +526,39 @@ public class PostServiceShould : UnitTestBase
         // row, and the column stays empty unless the service hands the identity over.
         await _repository.Received(1).Delete(postId, _currentUserId);
         await _unreadCountersRepository.Received(1).DecrementAsync(roomId, UnreadEntryType.Message, createdUtc);
+    }
+
+    /// <summary>
+    /// A removal that found the post already gone leaves the counter and the
+    /// event to the removal that took it.
+    /// </summary>
+    /// <remarks>
+    /// The write reports whether it is the one that removed the post, and the
+    /// unread counter of the room is a stored number that nothing recomputes:
+    /// lowered once per request rather than once per post, two removals arriving
+    /// together leave every member of the room one unread message short for good.
+    /// </remarks>
+    [Fact]
+    public async Task LeaveTheUnreadCountersToTheRemovalThatTookThePost()
+    {
+        var postId = Guid.NewGuid();
+        var roomId = Guid.NewGuid();
+        var post = new Post
+        {
+            Id = postId,
+            RoomId = roomId,
+            Author = new GeneralUser { UserId = Guid.NewGuid() },
+            CreatedUtc = DateTimeOffset.UtcNow
+        };
+
+        _repository.Get(postId, Arg.Any<Guid>()).Returns(post);
+        _repository.Delete(postId, _currentUserId).Returns(false);
+
+        await _service.DeleteAsync(postId);
+
+        await _unreadCountersRepository.DidNotReceive()
+            .DecrementAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<DateTimeOffset>());
+        await _producer.DidNotReceive().SendAsync(EventType.DeletedPost, postId);
     }
 
     /// <summary>

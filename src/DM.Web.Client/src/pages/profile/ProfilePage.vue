@@ -1,32 +1,34 @@
 <script setup lang="ts">
-import { DATE_TIME_FORMAT, formatDate } from "@/shared/lib/utils/datetime";
-import { computed, onMounted, reactive, ref, toRef, watch } from "vue";
+import {
+  DATE_TIME_FORMAT,
+  formatDate,
+  formatSiteTime,
+} from "@/shared/lib/utils/datetime";
+import { computed, onMounted, ref, toRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { LocationQueryRaw } from "vue-router";
 import { storeToRefs } from "pinia";
-import { useModal } from "vue-final-modal";
 import dayjs from "dayjs";
 
 import {
   useCommunityStore,
   useAuthStore,
   UserRole,
+  userIsModerator,
   useProfileEdit,
   userApi,
   blacklistApi,
   accountApi,
+  isRemovedAccountName,
   type Username,
   type UsernameHistoryEntry,
 } from "@/entities/user";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { useModeratedProfile } from "@/entities/moderation";
 import { Gender } from "@/shared/api/models/community";
-import type { BlacklistEntry } from "@/shared/api/models/personal";
-import type { UserProfileNote } from "@/shared/api/models/community";
+import type { PersonalNote } from "@/shared/api/models/common";
 import { useSubscriptionsStore } from "@/entities/subscription";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { useExpandableSection } from "@/shared/lib/composables/useExpandableSection";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
@@ -37,14 +39,15 @@ import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { UserSubscribeButton } from "@/features/user-subscribe";
 import { Tabs, type TabItem } from "@/shared/ui/Tabs";
 import { StatLine } from "@/shared/ui/StatLine";
+import { FormField } from "@/shared/ui/Form";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { ProfileSkeleton } from "@/shared/ui/Skeleton";
-import { SvgIcon } from "@/shared/ui/Icon";
 import { BlockTitle, PageTitle } from "@/shared/ui/Layout";
 
 import { useEndorsementEligibility } from "./useEndorsementEligibility";
 import ProfilePictureUpload from "./ProfilePictureUpload.vue";
 import ProfileAbout from "./ProfileAbout.vue";
+import ProfileRemovedAccountAbout from "./ProfileRemovedAccountAbout.vue";
 import ProfilePersonalInfo from "./ProfilePersonalInfo.vue";
 import ProfileGamesTable from "./ProfileGamesTable.vue";
 import ProfileBlogsTable from "./ProfileBlogsTable.vue";
@@ -55,38 +58,57 @@ import ProfileSubscribersSection from "./ProfileSubscribersSection.vue";
 import ProfileAchievements from "./ProfileAchievements.vue";
 import { SubscriptionSettings } from "@/shared/api/models/subscriptions";
 import ProfileViolations from "./ProfileViolations.vue";
-import ModerationIpInfo from "./moderation/ModerationIpInfo.vue";
-import ModerationLinkedProfiles from "./moderation/ModerationLinkedProfiles.vue";
-import ModerationNotes from "./moderation/ModerationNotes.vue";
-import ModerationViolations from "./moderation/ModerationViolations.vue";
-import ModerationTwoFactor from "./moderation/ModerationTwoFactor.vue";
-import ModerationWatch from "./moderation/ModerationWatch.vue";
-import { BlockUserDialog } from "@/features/block-user";
+import ProfileModerationTab from "./moderation/ProfileModerationTab.vue";
 import {
   ErrorPage,
   errorCodeForStatus,
   getErrorConfig,
 } from "@/shared/ui/ErrorPage";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { notifyFailure } from "@/shared/lib/errors";
+import { CaptionAction, CaptionLine } from "@/shared/ui/CaptionLine";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { ActionResult } from "@/shared/ui/ActionResult";
+import { ButtonRow } from "@/shared/ui/ButtonRow";
 
 // Tab vocabulary. Each content tab (games / blogs / topics) is the
 // home for THREE pieces: the canonical listing, the user's best-of for
 // the category, and the subset of subscribers who opted into that
 // category's notifications. The free-standing "best-post" and
 // "subscribers" tabs from the previous layout are gone — they're now
-// inlined into the relevant content tab.
-type ProfileTab = "about" | "games" | "blogs" | "topics" | "achievements";
+// inlined into the relevant content tab. "moderation" is the moderated
+// profile, for the viewer the server serves it to.
+type ProfileTab =
+  | "about"
+  | "games"
+  | "blogs"
+  | "topics"
+  | "achievements"
+  | "moderation";
 
 const route = useRoute();
 const router = useRouter();
-const toast = useToast();
 const communityStore = useCommunityStore();
 const subscriptionsStore = useSubscriptionsStore();
 const { user: currentUser } = storeToRefs(useAuthStore());
 const { selectedUser: user, loadingProfile } = storeToRefs(communityStore);
 
 const usernameParam = computed(() => route.params.username as string);
+
+/**
+ * The profile of "Аккаунт удален": the same page over the sum of every removed
+ * account, and nothing that was any one of theirs.
+ *
+ * Decided by the name in the address, not by the answer, so the page asks
+ * nothing it would have to throw away: the server answers this name only at
+ * the profile and in the lists its tabs are made of, and every other endpoint
+ * that takes a name (recommendations, notes, the blacklist, violations,
+ * moderation, awards) treats it as a name nobody holds. So those are not
+ * asked, and what they would fill is not drawn: the dates, the actions, the
+ * recommendations and reviews, the violations, the contacts, "Зал славы".
+ */
+const isRemovedAccount = computed(() =>
+  isRemovedAccountName(usernameParam.value),
+);
 
 // HTTP status of the last profile load failure, mapped to an ErrorPage code.
 // A true 404 (no such user) and a server error must look different — "не
@@ -97,11 +119,13 @@ const errorCode = ref<number | null>(null);
 async function loadProfile(name: Username) {
   errorCode.value = null;
   const error = await communityStore.trySelectProfile(name);
-  // The profile endpoint answers an unknown username with 404, and the shared
-  // map turns anything without a page of its own into the same "не найдено",
-  // so this page reads the same as it did with its own copy.
+  // The profile endpoint answers an unknown username with 404, which the
+  // shared map reads as "не найдено", and the rate limit with its own page.
   if (error) errorCode.value = errorCodeForStatus(error.status);
-  else await loadEndorsementEligibility(name);
+  else {
+    seedNote();
+    await loadEndorsementEligibility(name);
+  }
 }
 
 /**
@@ -120,8 +144,12 @@ async function loadEndorsementEligibility(name: Username) {
   // The two conditions the page can answer by itself, so a guest browsing
   // profiles and an owner reading their own cost no extra request. Both are
   // refusals on the server too, so skipping the question never widens what is
-  // offered.
-  if (!currentUser.value || currentUser.value.username === name) {
+  // offered. Nobody writes a recommendation to "Аккаунт удален" either.
+  if (
+    !currentUser.value ||
+    currentUser.value.username === name ||
+    isRemovedAccountName(name)
+  ) {
     clearEndorsementEligibility();
     return;
   }
@@ -142,6 +170,25 @@ useFetchData(
     },
   ],
 );
+
+/**
+ * Whether the viewer may write to this user in private — the server's answer,
+ * read with the profile and asked by the code that refuses the message. A
+ * reader kept on this user's blacklist with private messages closed used to be
+ * offered the button and told after the message that it could not be sent.
+ */
+const canMessage = computed(() => user.value?.viewer?.canMessage === true);
+
+// The answers the profile carries about the viewer (the message, the
+// blacklist button) are for whoever held the session when it was read, and
+// the recommendation is asked for him too. Signing in or out on the page does
+// not move it, so the page reads the profile again for the new viewer: a guest
+// who signs in here is offered the message the way a reload would offer it.
+watch(
+  () => currentUser.value?.username ?? null,
+  () => loadProfile(usernameParam.value as Username),
+);
+
 const isSystemUser = computed(() => user.value?.role === UserRole.System);
 
 // Tab title reflects the loaded profile, falling back to the URL param while
@@ -178,7 +225,8 @@ const isCurrentUserAdmin = computed(
   () => currentUser.value?.role === UserRole.Admin,
 );
 const showExtraLinks = computed(
-  () => isOwnProfile.value || isCurrentUserAdmin.value,
+  () =>
+    !isRemovedAccount.value && (isOwnProfile.value || isCurrentUserAdmin.value),
 );
 const uploadsLink = computed(() => ({
   name: "profile-uploads" as const,
@@ -270,22 +318,25 @@ async function checkPendingUsernameChange() {
   hasPendingUsernameChange.value = data?.status === "Pending";
 }
 
+/** A refused request, under the buttons of its form; the reason stays typed. */
+const changeResult = useActionResult();
+
 async function submitUsernameChangeRequest() {
   if (!canSubmitChangeForm.value) return;
   isChangeFormSubmitting.value = true;
+  changeResult.clear();
   const { data, error } = await accountApi.createUsernameChangeRequest({
     reason: changeFormReason.value.trim(),
   });
   isChangeFormSubmitting.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось отправить заявку");
+    changeResult.refuse(error, "Не удалось отправить заявку на смену имени");
     return;
   }
   if (data) {
     hasPendingUsernameChange.value = data.status === "Pending";
     changeFormReason.value = "";
     showChangeForm.value = false;
-    toast.success("Заявка отправлена на рассмотрение");
   }
 }
 
@@ -297,7 +348,7 @@ const isOnline = computed(() => {
 
 const lastActivityFormatted = computed(() =>
   user.value?.lastActivityUtc
-    ? dayjs(user.value.lastActivityUtc).format(DATE_TIME_FORMAT)
+    ? formatSiteTime(user.value.lastActivityUtc, DATE_TIME_FORMAT)
     : "",
 );
 
@@ -388,62 +439,72 @@ const subscriberCounts = computed(
 // Subscribe / unsubscribe / settings are owned by <UserSubscribeButton>
 // — it reads/writes through the subscriptions store directly.
 
+// Whether the viewer's own blacklist holds this user. The profile answers it
+// (blockedByViewer). It used to be looked up in the first page of the
+// viewer's list, so to somebody with a longer list the button offered to
+// block a person already blocked. A press answers it on the spot, until the
+// profile is read again. `user` is replaced on every load, navigation from one
+// profile to another included, so following it follows the page.
 const isBlocked = ref(false);
 const isBlockLoading = ref(false);
+watch(
+  user,
+  (loaded) => {
+    isBlocked.value = loaded?.blockedByViewer === true;
+  },
+  { immediate: true },
+);
 
-const { open: openBlockModal, close: closeBlockModal } = useModal({
-  component: BlockUserDialog,
-  attrs: reactive({
-    initialUsername: usernameParam,
-    onSuccess: (entry: BlacklistEntry) => {
-      isBlocked.value = true;
-      closeBlockModal();
-      toast.success(`${entry.username} заблокирован`);
-    },
-    onCancel: () => closeBlockModal(),
-  }),
-});
+/**
+ * Puts this user on the viewer's blacklist, or takes them off it, at once.
+ *
+ * No window asks first: either step is taken back by the same button, which
+ * turns into its opposite, and that turn is the whole answer - no toast.
+ * Owner's call, 22 September 2026. A refusal is the button's, so it is said
+ * under the row of buttons, the way a refused press is said anywhere on the
+ * site.
+ */
+const blockResult = useActionResult();
 
-async function checkIfBlocked() {
-  if (!currentUser.value || isOwnProfile.value || !user.value) return;
-  const { data } = await blacklistApi.getBlacklist();
-  if (data?.resources) {
-    isBlocked.value = data.resources.some(
-      (e) => e.username === user.value!.username,
-    );
-  }
-}
-
-// Unblock is ConfirmDialog-gated; `confirmingUnblock` doubles as the dialog
-// open flag.
-const confirmingUnblock = ref(false);
-
-async function unblockUser() {
+async function toggleBlock() {
   if (!user.value || isBlockLoading.value) return;
+  const name = user.value.username;
+  const blocking = !isBlocked.value;
   isBlockLoading.value = true;
-  const { error } = await blacklistApi.unblockUser(user.value.username);
+  blockResult.clear();
+  const { error } = blocking
+    ? await blacklistApi.blockUser({ username: name })
+    : await blacklistApi.unblockUser(name);
   isBlockLoading.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось разблокировать пользователя");
-  } else {
-    isBlocked.value = false;
-    confirmingUnblock.value = false;
-    toast.success(`${user.value.username} разблокирован`);
+    blockResult.refuse(
+      error,
+      blocking
+        ? "Пользователь не добавлен в черный список"
+        : "Пользователь не убран из черного списка",
+    );
+    return;
   }
+  // The reader may have moved on to another profile while this was on the
+  // wire, and the answer is about the one they left.
+  if (user.value?.username === name) isBlocked.value = blocking;
 }
 
-const note = ref<UserProfileNote | null>(null);
+const note = ref<PersonalNote | null>(null);
 const noteEditText = ref("");
 const isEditingNote = ref(false);
 const isNoteSaving = ref(false);
-const noteVisible = computed(() => !!currentUser.value && !isOwnProfile.value);
+const noteVisible = computed(
+  () => !!currentUser.value && !isOwnProfile.value && !isRemovedAccount.value,
+);
 
-async function fetchNote() {
-  if (!noteVisible.value) return;
-  const { data } = await userApi.getUserProfileNote(
-    usernameParam.value as Username,
-  );
-  note.value = data ?? null;
+// The note comes with the profile, read for whoever holds the session (the
+// page reads the profile again when that changes). It used to be asked of the
+// notes endpoint as well, which answers 404 when there is no note: the
+// commonest case, so nearly every profile put an error in the console for a
+// note the profile already said was not there.
+function seedNote() {
+  note.value = user.value?.personalNote ?? null;
   noteEditText.value = note.value?.text ?? "";
 }
 
@@ -456,65 +517,115 @@ function startEditNote() {
 function cancelEditNote() {
   noteEditText.value = note.value?.text ?? "";
   isEditingNote.value = false;
+  noteResult.clear();
 }
 
+// A deletion is always asked about (the owner's rule), and saving the note
+// emptied is one: the server has no empty note, so that save is a delete in
+// other words.
+const confirmingNoteDelete = ref(false);
+
 async function saveNote() {
-  if (!noteEditText.value.trim()) return deleteNote();
+  if (!noteEditText.value.trim()) {
+    // With nothing stored there is nothing to lose, and nothing to ask about.
+    if (note.value?.text) confirmingNoteDelete.value = true;
+    else cancelEditNote();
+    return;
+  }
   isNoteSaving.value = true;
-  const { data } = await userApi.upsertUserProfileNote(
+  noteResult.clear();
+  const { data, error } = await userApi.upsertUserProfileNote(
     usernameParam.value as Username,
     noteEditText.value,
   );
-  if (data) note.value = data;
   isNoteSaving.value = false;
+  // A refusal keeps the editor open with the text in it, and says why under
+  // its buttons. The editor used to close on any answer, so a refused note
+  // read as a saved one.
+  if (error) {
+    noteResult.refuse(error, "Не удалось сохранить заметку");
+    return;
+  }
+  if (data) note.value = data;
   isEditingNote.value = false;
 }
 
+/** A refused note, under the buttons of the editor. */
+const noteResult = useActionResult();
+
+// The request of the confirmation. The window waits for it, prints a refusal in
+// itself and closes on success alone, so the interceptor keeps quiet about it.
 async function deleteNote() {
-  isNoteSaving.value = true;
-  await userApi.deleteUserProfileNote(usernameParam.value as Username);
+  const result = await userApi.deleteUserProfileNote(
+    usernameParam.value as Username,
+    { ownsRefusal: true, ownsRateLimit: true },
+  );
+  if (result.error) return result;
   note.value = null;
   noteEditText.value = "";
-  isNoteSaving.value = false;
   isEditingNote.value = false;
+  return result;
 }
 
-const { moderatedProfile, refresh: refreshModeration } = useModeratedProfile(
-  () => usernameParam.value,
+// An empty name asks nothing: "Аккаунт удален" has no account to moderate.
+// The moderated profile is served to moderators alone, and its answer is what
+// draws the "Модерация" tab: no answer, no tab.
+const {
+  moderatedProfile,
+  loading: moderationLoading,
+  refresh: refreshModeration,
+} = useModeratedProfile(() =>
+  isRemovedAccount.value ? "" : usernameParam.value,
 );
-// The moderation panel is a content expandable section: unified reveal
-// animation + the page-wide "Развернуть/Свернуть все" toggle, active only
-// while the viewer can actually moderate this profile.
-const showModPanel = ref(false);
-const modZoneRef = ref<HTMLElement | null>(null);
-const { toggle: toggleModPanel, zoneBindings: modZoneBindings } =
-  useExpandableSection({
-    el: modZoneRef,
-    model: showModPanel,
-    registryEnabled: () => !!moderatedProfile.value,
-    label: "ProfileModerationPanel",
-  });
-
-const modSummary = computed(() => {
-  const p = moderatedProfile.value;
-  if (!p) return null;
-  const ips = p.ipAddresses?.length ?? 0;
-  const linked = p.linkedProfiles?.length ?? 0;
-  const notes = p.moderatorNotes?.length ?? 0;
-  const v = (p.violations?.totalWarnings ?? 0) + (p.violations?.totalBans ?? 0);
-  const counts = `IP: ${ips}, Связанные: ${linked}, Заметки: ${notes}, Нарушений: ${v}`;
-  // The watch is a state, not a count, and it changes what happens to
-  // everything this user creates next — so it is said in the collapsed line
-  // rather than only inside the panel, and only when it is on.
-  return p.isUnderModerationWatch ? `${counts}, под наблюдением` : counts;
-});
 
 const DEFAULT_TAB: ProfileTab = "about";
 
-// Pure client state: the tab is NOT reflected in the URL. F5 or a shared
-// link always lands on the default tab; legacy /users/X/games URLs are
-// redirected to the plain profile by the router.
-const activeTab = ref<ProfileTab>(DEFAULT_TAB);
+/** Every tab, so a name arriving from outside can be checked against them. */
+const TABS: readonly ProfileTab[] = [
+  "about",
+  "games",
+  "blogs",
+  "topics",
+  "achievements",
+  "moderation",
+];
+
+/**
+ * The tab the profile opens on.
+ *
+ * Switching tabs still writes nothing to the URL, and F5 on a profile a
+ * reader has been clicking around lands on "О себе" as before. What `?tab=`
+ * adds is the other direction only: a page that sends a reader here because
+ * the answer to what they just did lives in one of these lists can name that
+ * list. Deleting a blog is that case - the author leaves the settings of a
+ * blog that no longer exists, and the only screen that shows the deletion is
+ * their own list of blogs. The key is dropped by the first tab switch
+ * (onTabChange keeps only the keys of the tab being opened), so it never
+ * becomes a second, stale answer to "which tab is open".
+ *
+ * Legacy /users/X/games URLs stay redirected to the plain profile: those are
+ * old links to a scheme this page no longer has, not requests from the site.
+ */
+function openOn(): ProfileTab {
+  const asked = route.query.tab;
+  const tab =
+    typeof asked === "string" && TABS.includes(asked as ProfileTab)
+      ? (asked as ProfileTab)
+      : DEFAULT_TAB;
+  // "Аккаунт удален" has no "Зал славы" to open on.
+  if (tab === "achievements" && isRemovedAccount.value) return DEFAULT_TAB;
+  // Nor has anybody but a moderator a "Модерация"; for a moderator the tab
+  // waits for the moderated profile (the watch on the tabs below).
+  if (
+    tab === "moderation" &&
+    (isRemovedAccount.value || !userIsModerator(currentUser.value))
+  ) {
+    return DEFAULT_TAB;
+  }
+  return tab;
+}
+
+const activeTab = ref<ProfileTab>(openOn());
 // Loosely typed: <Tabs> is a generic SFC (`generic="V extends string"`), and
 // `InstanceType<typeof Tabs>` doesn't carry that type parameter through a
 // template ref without extra tooling. The exposed shape is small and stable
@@ -531,7 +642,7 @@ const tabsRef = ref<{
 // over from whichever tab was active before is never valid for the tab
 // being switched to (games' "?number=3" is meaningless once "Топики" —
 // or even a freshly reset "Игры" — renders its own page-1 list).
-// "about"/"achievements" keep no query state at all.
+// "about"/"achievements"/"moderation" keep no query state at all.
 const TAB_QUERY_KEYS: Record<ProfileTab, readonly string[]> = {
   about: [],
   games: [],
@@ -545,7 +656,11 @@ const TAB_QUERY_KEYS: Record<ProfileTab, readonly string[]> = {
     "sortOrder",
   ],
   achievements: [],
+  moderation: [],
 };
+
+/** A refused one-press subscribe, under the row of actions. */
+const subscribeResult = useActionResult();
 
 function onTabChange(value: ProfileTab) {
   activeTab.value = value;
@@ -582,33 +697,39 @@ const tabs = computed<TabItem<ProfileTab>[]>(() => [
   { value: "blogs", label: "Блоги", hidden: !hasBlogs.value },
   { value: "topics", label: "Топики" },
   // Tab label. The tab value stays "achievements"; the two sections inside
-  // are titled "Награды" / "Достижения".
-  { value: "achievements", label: "Зал славы" },
+  // are titled "Награды" / "Достижения". Awards and achievements are a
+  // person's, and "Аккаунт удален" is nobody.
+  {
+    value: "achievements",
+    label: "Зал славы",
+    hidden: isRemovedAccount.value,
+  },
+  // Last, and only for the viewer the server serves the moderated profile to.
+  { value: "moderation", label: "Модерация", hidden: !moderatedProfile.value },
 ]);
 
-watch(tabs, (next) => {
+// A profile opened on "Модерация" (?tab=moderation) waits for the answer that
+// decides whether the tab exists at all, and leaves it when the answer is
+// none: the end of the wait is watched too, since an answer of nothing
+// changes no tab.
+watch([tabs, moderationLoading], ([next]) => {
+  if (activeTab.value === "moderation" && moderationLoading.value) return;
   const current = next.find((t) => t.value === activeTab.value);
   if (current?.hidden) onTabChange(DEFAULT_TAB);
 });
 
-// The profile itself loads asynchronously, so at mount `user` is still null
-// and the check would return having done nothing — the block state has to
-// follow the loaded profile, not the mount. Watching the username also covers
-// navigation from one profile to another.
-watch(() => user.value?.username, checkIfBlocked, { immediate: true });
-
 onMounted(async () => {
-  await fetchNote();
   await checkPendingUsernameChange();
-  if (currentUser.value && !isOwnProfile.value) {
+  // The viewer's own subscriptions, read for the subscribe button, which the
+  // profile of "Аккаунт удален" does not have.
+  if (currentUser.value && !isOwnProfile.value && !isRemovedAccount.value) {
     subscriptionsStore.fetchSubscriptions();
   }
 });
 
-watch(usernameParam, async () => {
+watch(usernameParam, () => {
   // Another profile is a fresh page — the tab choice does not carry over.
   activeTab.value = DEFAULT_TAB;
-  await fetchNote();
 });
 </script>
 
@@ -676,19 +797,21 @@ watch(usernameParam, async () => {
         />
         <div class="change-form-actions">
           <Button
-            :disabled="isChangeFormSubmitting"
-            @click="showChangeForm = false"
-          >
-            Отмена
-          </Button>
-          <Button
+            variant="primary"
             :loading="isChangeFormSubmitting"
             :disabled="!canSubmitChangeForm"
             @click="submitUsernameChangeRequest"
           >
             Отправить
           </Button>
+          <Button
+            :disabled="isChangeFormSubmitting"
+            @click="showChangeForm = false"
+          >
+            Отмена
+          </Button>
         </div>
+        <ActionResult :result="changeResult" class="change-refusal" />
       </div>
     </template>
 
@@ -716,31 +839,51 @@ watch(usernameParam, async () => {
           {{ userRoles.join(", ") }}
         </div>
 
-        <div class="status-row">
-          <span class="status-label">Статус:</span>{{ " "
-          }}<input
-            v-if="isEditMode && canEdit"
+        <!-- In edit mode the status is a field of the page, captioned the
+             way every field of a page is (FormField), as the fields of the
+             contacts below it. -->
+        <FormField
+          v-if="isEditMode && canEdit"
+          label="Статус"
+          name="profile-status"
+        >
+          <input
+            id="profile-status"
             type="text"
             class="status-input"
             :value="user.status ?? ''"
             placeholder="Введите статус"
-            aria-label="Статус"
             @input="
               onFieldUpdate('status', ($event.target as HTMLInputElement).value)
             "
-          /><span v-else-if="user.status" class="status-value">{{
+          />
+        </FormField>
+        <div v-else class="status-row">
+          <span class="status-label">Статус:</span>{{ " "
+          }}<span v-if="user.status" class="status-value">{{
             user.status
           }}</span
           ><span v-else class="status-value">не указан</span>
         </div>
 
         <div class="stats-group">
-          <StatLine label="Дата регистрации" :value="registrationDate" />
+          <StatLine
+            v-if="!isRemovedAccount"
+            label="Дата регистрации"
+            :value="registrationDate"
+          />
+          <!-- The counters of "Аккаунт удален" are sums over every removed
+               account, and the lists behind the links are asked by a name
+               the server does not answer there: plain numbers. -->
           <StatLine
             label="Рейтинг"
             :value="ratingSumDisplay"
             :variant="ratingSumVariant"
-            :to="ratingSum !== null ? receivedReviewsLink : undefined"
+            :to="
+              ratingSum !== null && !isRemovedAccount
+                ? receivedReviewsLink
+                : undefined
+            "
           />
           <!--
             The stat-rating subgroup: "Рейтинг" (received reviews)
@@ -753,7 +896,7 @@ watch(usernameParam, async () => {
           <StatLine
             label="Оценено чужих постов"
             :value="reviewsGiven"
-            :to="reviewsGivenLink"
+            :to="isRemovedAccount ? undefined : reviewsGivenLink"
           />
           <label v-if="isEditMode && canEdit" class="rating-opt-in">
             <input
@@ -771,6 +914,7 @@ watch(usernameParam, async () => {
           </label>
           <StatLine label="Написано постов" :value="gamePostsCount" />
           <StatLine
+            v-if="!isRemovedAccount"
             label="Последняя активность"
             :value="isOnline ? 'online' : lastActivityFormatted"
             :variant="isOnline ? 'positive' : 'default'"
@@ -780,7 +924,7 @@ watch(usernameParam, async () => {
                the other stat lines by visual spacing, but use the
                same StatLine idiom (number = link) as the
                "Рейтинг/Оценено чужих постов" pair. -->
-          <div class="endorsement-stats">
+          <div v-if="!isRemovedAccount" class="endorsement-stats">
             <StatLine
               label="Получено рекомендаций"
               :value="endorsementsReceived"
@@ -799,7 +943,7 @@ watch(usernameParam, async () => {
                apart from the post pair above on purpose, because "Рейтинг" and
                "Оценено чужих постов" count ratings of single posts and these
                two count reviews of games. -->
-          <div class="game-review-stats">
+          <div v-if="!isRemovedAccount" class="game-review-stats">
             <StatLine
               label="Получено рецензий на игры"
               :value="gameReviewsReceived"
@@ -815,13 +959,19 @@ watch(usernameParam, async () => {
           </div>
         </div>
 
-        <ProfileViolations :username="usernameParam as Username" />
+        <ProfileViolations
+          v-if="!isRemovedAccount"
+          :username="usernameParam as Username"
+        />
 
-        <div class="actions">
+        <!-- A row of buttons (ButtonRow): one line at every width, each at its
+             own width. Every action stands at every width, none put away. -->
+        <ButtonRow class="actions">
           <template v-if="canEdit">
             <template v-if="isEditMode">
               <Button
                 v-if="hasChanges"
+                variant="primary"
                 :loading="isSaving"
                 @click="saveChanges"
               >
@@ -831,41 +981,69 @@ watch(usernameParam, async () => {
             </template>
             <Button v-else @click="toggleEditMode">Редактировать</Button>
           </template>
-          <template v-else-if="currentUser && !isOwnProfile">
+          <!-- A navigation, so a link, drawn as the button beside it: a
+               <button> inside an <a> is two controls in one, and the keyboard
+               stopped on both. -->
+          <template
+            v-else-if="currentUser && !isOwnProfile && !isRemovedAccount"
+          >
+            <!-- The subscription stands right after the message: the
+                 recommendation after it comes and goes with the server's
+                 answer, and in front of it that moved the subscription
+                 between the second and the third place from one profile to
+                 the next. The message is offered only where the server says
+                 it would be taken (canMessage, read with the profile); without
+                 it the subscription is the first action. -->
             <router-link
+              v-if="canMessage"
               :to="{
                 name: 'direct-message',
                 params: { username: user.username },
               }"
               class="action-link"
+              >Написать сообщение</router-link
             >
-              <Button>Написать сообщение</Button>
-            </router-link>
+            <UserSubscribeButton
+              :user-id="user.id"
+              :username="user.username"
+              :result="subscribeResult"
+            />
             <!-- Offered only where the server says the POST would be
                  accepted: canEndorse is its answer, asked on load. -->
             <router-link
               v-if="canEndorse"
               :to="writeEndorsementLink"
               class="action-link"
+              >Написать рекомендацию</router-link
             >
-              <Button>Написать рекомендацию</Button>
-            </router-link>
-            <UserSubscribeButton :user-id="user.id" :username="user.username" />
-            <Button
-              v-if="isBlocked"
-              :disabled="isBlockLoading"
-              @click="confirmingUnblock = true"
-            >
-              {{ isBlockLoading ? "..." : "Разблокировать" }}
+            <Button :loading="isBlockLoading" @click="toggleBlock">
+              {{ isBlocked ? "Убрать из черного списка" : "В черный список" }}
             </Button>
-            <Button v-else @click="() => openBlockModal()"
-              >Заблокировать</Button
-            >
           </template>
-        </div>
+          <!-- The account settings, reached from the owner's own page and
+               from nowhere else: the header no longer carries them. They stand
+               where a visitor finds the actions of somebody else's page, in
+               the same dress. -->
+          <router-link
+            v-if="isOwnProfile && !isEditMode"
+            :to="{ name: 'account' }"
+            class="action-link"
+            >Настройки</router-link
+          >
+        </ButtonRow>
+        <ActionResult :result="blockResult" />
+        <ActionResult :result="subscribeResult" />
 
         <div v-if="showExtraLinks" class="extra-links">
           <span class="extra-links-title">Дополнительные ссылки:</span>
+          <!-- The reader's own subscriptions, which no other link of the
+               site leads to. -->
+          <router-link
+            v-if="isOwnProfile"
+            :to="{ name: 'subscriptions' }"
+            class="extra-link"
+            >Подписки</router-link
+          >
           <router-link
             v-if="isOwnProfile"
             :to="{ name: 'my-tickets' }"
@@ -879,63 +1057,8 @@ watch(usernameParam, async () => {
       </div>
     </section>
 
-    <section v-if="moderatedProfile" class="mod-bar">
-      <!-- One line, one copy: inline flow with a real (zero-width) space
-           between the title and the summary. As a flex row it copied as
-           three lines — a browser serializes flex items one per line. -->
-      <button
-        type="button"
-        class="mod-header"
-        :aria-expanded="showModPanel"
-        @click="toggleModPanel()"
-      >
-        <SvgIcon
-          :name="showModPanel ? 'chevronDown' : 'chevronRight'"
-          class="mod-chevron"
-        /><span class="mod-title">ПАНЕЛЬ МОДЕРАЦИИ</span
-        ><span class="copy-space">{{ " " }}</span
-        ><span class="mod-summary">{{ modSummary }}</span>
-      </button>
-      <div ref="modZoneRef" class="expand-zone" v-bind="modZoneBindings">
-        <div v-if="showModPanel" class="mod-body">
-          <ModerationIpInfo
-            v-if="moderatedProfile.permissions.canViewIpAddresses"
-            :email="moderatedProfile.email"
-            :ip-addresses="moderatedProfile.ipAddresses"
-            :login-history="moderatedProfile.loginHistory"
-          />
-          <ModerationLinkedProfiles
-            v-if="moderatedProfile.permissions.canViewLinkedProfiles"
-            :profiles="moderatedProfile.linkedProfiles"
-          />
-          <ModerationNotes
-            v-if="moderatedProfile.permissions.canViewModNotes"
-            :notes="moderatedProfile.moderatorNotes"
-            :can-create="moderatedProfile.permissions.canCreateModNote"
-            :target-username="usernameParam"
-            @updated="refreshModeration"
-          />
-          <ModerationViolations
-            :violations="moderatedProfile.violations"
-            :permissions="moderatedProfile.permissions"
-            :target-username="usernameParam"
-            @updated="refreshModeration"
-          />
-          <ModerationWatch
-            :under-watch="moderatedProfile.isUnderModerationWatch"
-            :permissions="moderatedProfile.permissions"
-            :target-username="usernameParam"
-            @updated="refreshModeration"
-          />
-          <ModerationTwoFactor
-            :target-username="usernameParam"
-            @updated="refreshModeration"
-          />
-        </div>
-      </div>
-    </section>
-
     <ProfilePersonalInfo
+      v-if="!isRemovedAccount"
       :user="user"
       :is-edit-mode="isEditMode"
       @update-field="onFieldUpdate"
@@ -944,16 +1067,18 @@ watch(usernameParam, async () => {
     <!-- Section navigation. No separate heading — the tabs themselves are
          the section header (large, active shown in brown), so an
          "Информация" title above them would just be redundant chrome. -->
-    <section class="info-section">
-      <Tabs
-        ref="tabsRef"
-        :model-value="activeTab"
-        :tabs="tabs"
-        variant="headings"
-        aria-label="Разделы профиля"
-        @update:model-value="onTabChange"
-      />
-    </section>
+    <!-- Every tab at every width: where the column is narrow the strip takes
+         the lines it needs, breaking after a bar (Tabs). The open tab goes
+         first. -->
+    <Tabs
+      ref="tabsRef"
+      class="info-section"
+      :model-value="activeTab"
+      :tabs="tabs"
+      variant="headings"
+      aria-label="Разделы профиля"
+      @update:model-value="onTabChange"
+    />
 
     <div
       class="tab-content"
@@ -967,20 +1092,18 @@ watch(usernameParam, async () => {
           <template v-if="!isEditingNote">
             <p v-if="note?.text" class="note-text">{{ note.text }}</p>
             <p v-else class="note-empty">Заметки об этом пользователе нет</p>
-            <div class="note-actions">
-              <button type="button" class="note-toggle" @click="startEditNote">
-                {{ note?.text ? "Редактировать" : "Добавить" }}
-              </button>
-              <button
+            <!-- A caption line of actions alone: the note is the viewer's
+                 own and signs nothing, so there is no author or date. -->
+            <CaptionLine class="note-caption">
+              <CaptionAction @click="startEditNote">{{
+                note?.text ? "Редактировать" : "Добавить"
+              }}</CaptionAction>
+              <CaptionAction
                 v-if="note?.text"
-                type="button"
-                class="note-toggle note-delete"
-                :disabled="isNoteSaving"
-                @click="deleteNote"
+                @click="confirmingNoteDelete = true"
+                >Удалить</CaptionAction
               >
-                Удалить
-              </button>
-            </div>
+            </CaptionLine>
           </template>
           <div v-else class="note-expanded">
             <BBCodeEditor
@@ -991,17 +1114,24 @@ watch(usernameParam, async () => {
               :max-height="300"
             />
             <div class="note-actions">
-              <Button :loading="isNoteSaving" @click="saveNote">
+              <Button
+                variant="primary"
+                :loading="isNoteSaving"
+                @click="saveNote"
+              >
                 Сохранить
               </Button>
               <Button :disabled="isNoteSaving" @click="cancelEditNote">
                 Отмена
               </Button>
             </div>
+            <ActionResult :result="noteResult" class="note-refusal" />
           </div>
         </section>
 
+        <ProfileRemovedAccountAbout v-if="isRemovedAccount" />
         <ProfileAbout
+          v-else
           :user="user"
           :is-edit-mode="isEditMode"
           @update-field="onFieldUpdate"
@@ -1014,6 +1144,7 @@ watch(usernameParam, async () => {
           <ProfileBestPostSection :username="usernameParam as Username" />
         </section>
         <ProfileSubscribersSection
+          v-if="!isRemovedAccount"
           :subscribers="subscribers"
           label="Подписаны на игры"
           :flag="SubscriptionSettings.AuthorGameEvents"
@@ -1028,6 +1159,7 @@ watch(usernameParam, async () => {
           <ProfileBestPublicationSection :username="usernameParam" />
         </section>
         <ProfileSubscribersSection
+          v-if="!isRemovedAccount"
           :subscribers="subscribers"
           label="Подписаны на блоги"
           :flag="SubscriptionSettings.AuthorBlogEvents"
@@ -1038,6 +1170,7 @@ watch(usernameParam, async () => {
       <template v-else-if="activeTab === 'topics'">
         <ProfileTopicsList :username="usernameParam" />
         <ProfileSubscribersSection
+          v-if="!isRemovedAccount"
           :subscribers="subscribers"
           label="Подписаны на топики"
           :flag="SubscriptionSettings.AuthorTopicEvents"
@@ -1050,6 +1183,13 @@ watch(usernameParam, async () => {
         :username="usernameParam"
         :user="user"
       />
+
+      <ProfileModerationTab
+        v-else-if="activeTab === 'moderation' && moderatedProfile"
+        :profile="moderatedProfile"
+        :target-username="usernameParam"
+        @updated="refreshModeration"
+      />
     </div>
 
     <Transition name="save-bar">
@@ -1057,22 +1197,29 @@ watch(usernameParam, async () => {
         <span class="save-bar-status">
           {{ hasChanges ? "Несохраненные изменения" : "Режим редактирования" }}
         </span>
-        <Button v-if="hasChanges" :loading="isSaving" @click="saveChanges">
-          Сохранить
-        </Button>
-        <Button :disabled="isSaving" @click="cancelEdit">
-          {{ hasChanges ? "Отмена" : "Завершить" }}
-        </Button>
+        <div class="save-bar-actions">
+          <Button
+            v-if="hasChanges"
+            variant="primary"
+            :loading="isSaving"
+            @click="saveChanges"
+          >
+            Сохранить
+          </Button>
+          <Button :disabled="isSaving" @click="cancelEdit">
+            {{ hasChanges ? "Отмена" : "Завершить" }}
+          </Button>
+        </div>
       </div>
     </Transition>
 
     <ConfirmDialog
-      v-model:show="confirmingUnblock"
-      title="Разблокировка пользователя"
-      :message="`Разблокировать ${user?.username ?? ''}?`"
-      confirm-label="Разблокировать"
-      :loading="isBlockLoading"
-      @confirm="unblockUser"
+      v-model:show="confirmingNoteDelete"
+      title="Удалить заметку?"
+      message="Заметка будет удалена без возможности восстановления"
+      confirm-label="Удалить"
+      failure="Не удалось удалить заметку"
+      :action="deleteNote"
     />
   </div>
 </template>
@@ -1107,12 +1254,14 @@ watch(usernameParam, async () => {
   // ($small=8), leaving an 8px visual gap (page-gap) instead of 16px.
   margin: -$small 0 0
 
+// As wide as the column: the row of actions stretches across it, its buttons
+// in one line (ButtonRow). Everything else in it stands at its own width at
+// the left.
 .col-identity
-  display: inline-flex
+  display: flex
   flex-direction: column
   align-items: flex-start
   gap: $small
-  max-width: 100%
 
 // The within-group row-gap is unified across all profile stat groups
 // (.stats-group, .endorsement-stats, .game-review-stats in ProfilePage;
@@ -1172,8 +1321,7 @@ watch(usernameParam, async () => {
 :deep(.profile-personal-info),
 :deep(.profile-about),
 :deep(.profile-best-post),
-.profile-note,
-.mod-bar
+.profile-note
   padding: 0
   border: none
   background: none
@@ -1194,8 +1342,9 @@ watch(usernameParam, async () => {
 // sides here, so margin-top $medium on top of the $small page gap gives exactly
 // the same 24px from the last contacts line to "Информация".
 .info-section
-  margin: $medium 0 0
-  padding: 0
+  // Every tab at every width, the strip wrapping after a bar (Tabs): $medium
+  // under the block above, flush with the column.
+  margin-top: $medium
 
   // The "Информация → tabs strip" pair is measured against the reference pair
   // "Контакты → first contacts line": with the heading's stock margin-bottom
@@ -1253,22 +1402,13 @@ watch(usernameParam, async () => {
   word-break: break-word
 
 .status-input
-  font-family: inherit
-  font-size: $font-size
   min-width: 0
 
 .change-name-link
   align-self: flex-start
-  padding: 0
-  background: none
-  border: none
-  font-family: inherit
-  font-size: $font-size
-  color: $link
-  cursor: pointer
-
-  &:hover
-    color: $link-hover
+  +inline-link-button
+  &
+    font-size: $font-size
 
 .change-name-pending
   margin: 0
@@ -1290,14 +1430,21 @@ watch(usernameParam, async () => {
   display: flex
   gap: $small
 
+// Spaced by the gap of the column, as the note editor below.
+.change-refusal,
+.note-refusal
+  --action-result-margin: 0
+
+// A row of buttons as wide as the column, in one line (ButtonRow).
 .actions
-  display: flex
-  flex-wrap: wrap
-  gap: $small
+  align-self: stretch
   margin-top: $small
 
+// A navigation of the actions row, drawn as the buttons beside it: the
+// secondary button, the underline of a link left off.
 .action-link
   text-decoration: none
+  +button
 
 // Owner-facing link subgroup: same $medium separation from the previous
 // block as .endorsement-stats, same $minor within-group rhythm.
@@ -1312,11 +1459,7 @@ watch(usernameParam, async () => {
   color: $text-muted
 
 .extra-link
-  color: $link
-  text-decoration: none
-  &:hover
-    color: $link-hover
-    text-decoration: underline
+  +link-tone($link)
 
 .rating-opt-in
   display: inline-flex
@@ -1344,47 +1487,6 @@ watch(usernameParam, async () => {
   justify-content: space-between
   gap: $medium
 
-// Inline flow, not flex: the gap is a margin on the parts and the space
-// between the words is a real text node, so the whole header is one line
-// in a copy as well as on screen.
-.mod-header
-  display: block
-  width: 100%
-  padding: 0
-  background: none
-  border: none
-  text-align: left
-  cursor: pointer
-  font-family: inherit
-  transition: background-color $transition-fast
-
-  &:hover
-    background-color: $hover-overlay
-
-.mod-chevron
-  width: 14px
-  height: 14px
-  vertical-align: middle
-  color: $accent-red
-
-.mod-title
-  margin-left: $small
-  font-weight: 600
-  letter-spacing: 0.5px
-  text-transform: uppercase
-  color: $accent-red
-
-.mod-summary
-  margin-left: $small
-  font-size: $secondary-font-size
-  color: $text-muted
-
-.mod-body
-  display: flex
-  flex-direction: column
-  gap: $medium
-  padding: $medium 0 0
-
 .note-text
   margin: 0 0 $small
   color: $text
@@ -1396,23 +1498,9 @@ watch(usernameParam, async () => {
   color: $text-muted
   font-style: italic
 
-.note-toggle
-  padding: 0
-  background: none
-  border: none
-  font-family: inherit
-  font-size: $font-size
-  color: $link
-  cursor: pointer
-
-  &:hover
-    color: $link-hover
-
-  &.note-delete
-    color: $text-muted
-
-    &:hover
-      color: $accent-red
+.note-caption
+  display: block
+  margin-top: $minor
 
 .note-expanded
   display: flex
@@ -1478,6 +1566,10 @@ watch(usernameParam, async () => {
     max-width: 500px
     margin: 0 auto
 
+// The state in words, then the buttons at the right, in one line. Where the
+// column is narrower than the words and the buttons together (the middle
+// column of a window of 1024), the two buttons go down a line together, still
+// at the right, rather than standing past the edge of the bar.
 .save-bar
   position: sticky
   bottom: 0
@@ -1485,8 +1577,9 @@ watch(usernameParam, async () => {
   right: 0
   z-index: $z-sticky
   display: flex
+  flex-wrap: wrap
   align-items: center
-  gap: $medium
+  gap: $small $medium
   padding: $small $medium
   margin-top: $big
   background-color: $bg-element
@@ -1498,6 +1591,11 @@ watch(usernameParam, async () => {
   font-size: $secondary-font-size
   color: $text-muted
 
+.save-bar-actions
+  display: flex
+  gap: $medium
+  margin-left: auto
+
 .save-bar-enter-active,
 .save-bar-leave-active
   transition: transform $transition-normal, opacity $transition-normal
@@ -1506,9 +1604,4 @@ watch(usernameParam, async () => {
 .save-bar-leave-to
   transform: translateY(100%)
   opacity: 0
-
-@media (max-width: $bp-tablet)
-  .avatar-wrapper
-    width: 100%
-    max-width: 280px
 </style>

@@ -9,7 +9,7 @@ const { user } = storeToRefs(useAuthStore());
 </script>
 
 <template>
-  <page-title>Создать игру</page-title>
+  <page-title>Создание новой игры</page-title>
 
   <LoginPrompt v-if="!user" action="создать игру" />
 

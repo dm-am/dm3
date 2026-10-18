@@ -82,6 +82,12 @@ const showClear = computed(
 );
 
 function handleApply() {
+  // The guard belongs here and not only on the button. The button is locked by
+  // `:disabled="!canApply"`, but Enter in a field does not travel through the
+  // button, so an inverted range applied from the keyboard while the control
+  // said it could not be applied. Every path into the emit now answers to the
+  // one condition, this one included.
+  if (!canApply.value) return;
   emit("apply", parsedMin.value, parsedMax.value);
 }
 
@@ -245,18 +251,25 @@ function canDecrement(target: "min" | "max"): boolean {
   color: $text-muted
   white-space: nowrap
 
+// A field of the page (owner's standard, 28 September 2026): $control-height
+// high, frame included, level with "Применить" under it, on the ground of
+// every field. It kept a measure of the panel's own, a height from the
+// padding, on the solid $bg-element of the panel, into which it vanished.
 .stepper
   display: flex
   flex: 1
   min-width: 0
   align-items: stretch
+  box-sizing: border-box
+  height: $control-height
   border: 1px solid $border
   border-radius: $border-radius
-  background-color: $bg-element
+  background-color: $input-bg-overlay
   overflow: hidden
 
   &:focus-within
-    border-color: $border-focus
+    border-color: $link
+    box-shadow: 0 0 0 1px $link
 
 .stepper-btn
   flex-shrink: 0
@@ -284,18 +297,26 @@ function canDecrement(target: "min" | "max"): boolean {
   &:last-child
     border-left: 1px solid $border
 
+// The text of the field: the 14 of a field of the page, as high as the frame
+// leaves it.
 .stepper-input
   flex: 1
   min-width: 0
   width: 100%
-  padding: $small 0
-  font-size: $secondary-font-size
+  height: 100%
+  padding: 0
+  font-size: $control-font-size
   font-family: inherit
   text-align: center
   border: none
   background: transparent
   color: $text
   outline: none
+
+  // The frame is drawn by the wrapper, which takes the ring on :focus-within;
+  // a second ring here would sit inside the first.
+  &:focus
+    box-shadow: none
 
 .range-actions
   display: flex

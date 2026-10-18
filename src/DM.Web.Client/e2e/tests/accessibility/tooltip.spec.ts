@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { phoneContext } from "../../fixtures/phone";
 
 test.describe("Tooltip Accessibility", () => {
   test.beforeEach(async ({ page }) => {
@@ -83,7 +84,16 @@ test.describe("Tooltip Accessibility", () => {
     test("trigger has aria-describedby when tooltip is visible", async ({
       page,
     }) => {
-      const scrollNavBtn = page.locator(".scroll-nav-btn").first();
+      // The button is named, not taken as `.scroll-nav-btn` first. The rail
+      // grows an "expand all" button above the others once the page has
+      // something collapsible, and on the home page that happens when the news
+      // arrive and turn out long enough to be clamped. A locator is resolved
+      // on every use, so "first" was the button that got hovered and a
+      // different one by the time its wrapper was read: the tooltip on screen
+      // belonged to the first, the attribute was read off the second.
+      const scrollNavBtn = page.getByRole("button", {
+        name: "Прокрутить наверх",
+      });
       const trigger = scrollNavBtn.locator("xpath=..");
 
       // Before hover - no aria-describedby
@@ -96,7 +106,7 @@ test.describe("Tooltip Accessibility", () => {
       // bound to the tooltip being visible, so reading it after an arbitrary
       // 300ms asked the question before the answer existed and the assertion
       // compared an empty string against a real id.
-      const tooltip = page.locator('[role="tooltip"]');
+      const tooltip = page.locator('[role="tooltip"]', { hasText: "Наверх" });
       await expect(tooltip).toBeVisible();
 
       // After hover - has aria-describedby matching tooltip id
@@ -183,21 +193,27 @@ test.describe("Tooltip Accessibility", () => {
   });
 
   test.describe("Touch Device Support", () => {
-    test("tooltip works on touch devices", async ({ browser }) => {
-      // Create context with touch support
-      const context = await browser.newContext({
-        hasTouch: true,
-        viewport: { width: 375, height: 667 },
-      });
+    // One rule for a finger (shared/ui/Tooltip/touchRule.ts): a tap opens the
+    // tooltip of text, at once and without the hover delay (touch is the third
+    // way in, WCAG 1.4.13), and an enabled button does what it does, its
+    // tooltip only naming it. The test used to expect a bubble on the page
+    // scroll button, which the rule now keeps shut. Read on a phone, as a
+    // phone lays the page out (fixtures/phone.ts).
+    test("a tap opens the tooltip of text and not of a button", async ({
+      browser,
+    }) => {
+      const context = await phoneContext(browser, { width: 375, height: 667 });
       const page = await context.newPage();
       await page.goto("/");
+      const tooltip = page.locator('[role="tooltip"]');
 
-      const scrollNavBtn = page.locator(".scroll-nav-btn").first();
+      // The role letter of an author: text whose tooltip tells the role.
+      await page.locator(".tooltip-trigger b").first().tap();
+      await expect(tooltip).toBeVisible();
 
-      // Touch is the third way in (WCAG 1.4.13) and it shows without the hover
-      // delay. The body used to end on the tap and assert nothing.
-      await scrollNavBtn.tap();
-      await expect(page.locator('[role="tooltip"]')).toBeVisible();
+      // A tap on the scroll button closes it and opens nothing of its own.
+      await page.locator(".scroll-nav-btn").first().tap();
+      await expect(tooltip).toHaveCount(0);
 
       await context.close();
     });
@@ -245,8 +261,10 @@ test.describe("Tooltip Accessibility", () => {
       // failure was caught, so the guard below never opened.
       // Same race as the sidebar entry above: the table is rendered empty and
       // filled when the listing answers.
+      // The first cell with a tooltip; where the table is wider than the
+      // column, the hover scrolls its frame to the cell first.
       const cell = page
-        .locator("table.data-table tbody .tooltip-trigger")
+        .locator("table.data-table tbody .tooltip-trigger:visible")
         .first();
       await expect(cell).toBeVisible({ timeout: 10000 });
       await cell.hover();

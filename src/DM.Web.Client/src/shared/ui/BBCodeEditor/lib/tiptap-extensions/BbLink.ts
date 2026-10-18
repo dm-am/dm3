@@ -1,8 +1,11 @@
 /**
  * Custom BBCode Link Extension for Tiptap
  *
- * Preserves data-bb-selfref and data-bb-text attributes that the standard
- * Link extension discards during HTML parsing.
+ * [link]address[/link] shows the word "ссылка", as on DM2, and
+ * [link text="Главная"]address[/link] shows its own text. The mark keeps what
+ * the standard Link extension discards: data-bb-selfref for the first,
+ * data-bb-text for the second, and data-bb-source for a spelling the canonical
+ * one would change.
  */
 
 import { Mark, mergeAttributes } from "@tiptap/core";
@@ -10,7 +13,7 @@ import { DEFAULT_LINK_TEXT } from "@/shared/lib/utils/bbcodeConstants";
 import { sanitizeUrl } from "@/shared/lib/utils/bbcode";
 
 export interface BbLinkOptions {
-  HTMLAttributes: Record<string, any>;
+  HTMLAttributes: Record<string, unknown>;
 }
 
 declare module "@tiptap/core" {
@@ -43,17 +46,23 @@ export const BbLink = Mark.create<BbLinkOptions>({
       href: {
         default: null,
       },
-      // Custom text for [link=text]URL[/link] format
-      // If null, displays DEFAULT_LINK_TEXT (selfref link)
+      // The text parameter: null when the link has none and shows the default
+      // word, a string (empty included) when [link text="..."] gives one.
       text: {
         default: null,
         parseHTML: (element) => element.getAttribute("data-bb-text"),
-        renderHTML: (attributes) => {
-          if (!attributes.text) {
-            return { "data-bb-selfref": "true" };
-          }
-          return { "data-bb-text": attributes.text };
-        },
+        renderHTML: (attributes) =>
+          attributes.text === null
+            ? { "data-bb-selfref": "true" }
+            : { "data-bb-text": attributes.text },
+      },
+      source: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-bb-source"),
+        renderHTML: (attributes) =>
+          attributes.source === null
+            ? {}
+            : { "data-bb-source": attributes.source },
       },
       target: {
         default: "_blank",
@@ -70,11 +79,17 @@ export const BbLink = Mark.create<BbLinkOptions>({
         tag: 'a[href][data-bb-tag="link"]',
         getAttrs: (element) => {
           const el = element as HTMLElement;
-          const selfref = el.getAttribute("data-bb-selfref");
-          const text = el.getAttribute("data-bb-text");
+          let text: string | null;
+          if (el.getAttribute("data-bb-selfref") === "true") text = null;
+          else if (el.hasAttribute("data-bb-text")) {
+            text = el.getAttribute("data-bb-text");
+          } else {
+            text = el.textContent === DEFAULT_LINK_TEXT ? null : el.textContent;
+          }
           return {
             href: el.getAttribute("href"),
-            text: selfref === "true" ? null : text || el.textContent,
+            text,
+            source: el.getAttribute("data-bb-source"),
           };
         },
       },
@@ -96,11 +111,9 @@ export const BbLink = Mark.create<BbLinkOptions>({
   },
 
   renderHTML({ HTMLAttributes }) {
-    // Extract text to exclude it from HTML attributes (it's stored in data-bb-text)
-    const { text: _text, ...rest } = HTMLAttributes;
     return [
       "a",
-      mergeAttributes(this.options.HTMLAttributes, rest, {
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
         "data-bb-tag": "link",
       }),
       0,
@@ -112,35 +125,29 @@ export const BbLink = Mark.create<BbLinkOptions>({
       setBbLink:
         (attributes) =>
         ({ commands, state }) => {
-          // Sanitize URL to prevent javascript: and other dangerous protocols
+          // Only an address the server shows: http and https, and nothing on
+          // the reader's own machine or network.
           const safeHref = sanitizeUrl(attributes.href);
           if (safeHref === "#") {
-            // Reject dangerous URLs
             return false;
           }
+          const text = attributes.text || null;
 
           const { from, to } = state.selection;
           const hasSelection = from !== to;
 
           if (hasSelection) {
             // If there's selected text, apply mark to it
-            return commands.setMark(this.name, {
-              ...attributes,
-              href: safeHref,
-            });
+            return commands.setMark(this.name, { href: safeHref, text });
           } else {
-            // No selection - insert default link text with the link mark
-            const displayText = attributes.text || DEFAULT_LINK_TEXT;
+            // No selection - insert the text the link shows, with the mark
             return commands.insertContent({
               type: "text",
-              text: displayText,
+              text: text ?? DEFAULT_LINK_TEXT,
               marks: [
                 {
                   type: this.name,
-                  attrs: {
-                    href: safeHref,
-                    text: attributes.text || null,
-                  },
+                  attrs: { href: safeHref, text },
                 },
               ],
             });

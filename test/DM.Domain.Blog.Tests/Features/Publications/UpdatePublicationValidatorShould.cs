@@ -25,8 +25,7 @@ public class UpdatePublicationValidatorShould : UnitTestBase
             Title = "Updated Publication",
             Content = "Updated content",
             Preview = "Updated preview",
-            IsPublished = true,
-            CommentsEnabled = false
+            IsPublished = true
         };
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();

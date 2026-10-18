@@ -46,7 +46,7 @@ internal class NotificationService : INotificationService
         _repository.CountUnread(_identityProvider.Current.User.UserId);
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<UserNotification> Notifications, PagingResult Paging)> GetAsync(PagingQuery query)
+    public async Task<(IEnumerable<ListedNotification> Notifications, PagingResult Paging)> GetAsync(PagingQuery query)
     {
         var userId = _identityProvider.Current.User.UserId;
         var totalCount = await _repository.Count(userId);

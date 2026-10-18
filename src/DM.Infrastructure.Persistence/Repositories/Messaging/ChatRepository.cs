@@ -66,7 +66,7 @@ internal class ChatRepository : IChatRepository
             .Where(Started(userId))
             .OrderByDescending(c => c.LastMessage!.CreatedUtc)
             .Page(paging)
-            .ProjectToChat()
+            .ProjectToChat(userId)
             .ToArrayAsync();
 
     /// <inheritdoc />
@@ -74,7 +74,7 @@ internal class ChatRepository : IChatRepository
         .Where(c => c.ChatId == chatId)
         // Global chats are accessible to everyone, others require participation
         .Where(c => c.Type == ChatType.Global || c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId))
-        .ProjectToChat()
+        .ProjectToChat(userId)
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -83,7 +83,7 @@ internal class ChatRepository : IChatRepository
         .Where(c => c.PublicId == publicId)
         // Global chats are accessible to everyone, others require participation
         .Where(c => c.Type == ChatType.Global || c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId))
-        .ProjectToChat()
+        .ProjectToChat(userId)
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
@@ -104,11 +104,21 @@ internal class ChatRepository : IChatRepository
         .FirstOrDefaultAsync())?.UserId;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Ordered, and not for presentation: nothing in the schema stops a pair from
+    /// owning two direct chats, and two openings at once each read no chat and
+    /// each created one. Without an order the two correspondents can settle on
+    /// different rows of that pair - each writing into a conversation the other
+    /// never opens - and which row a reader gets is the planner's to choose. The
+    /// oldest is the one every reader reaches, which also collapses the pairs that
+    /// have already accumulated.
+    /// </remarks>
     public Task<DtoChat?> FindDirectChat(Guid userId, Guid otherUserId) => _dbContext.Chats
         .Where(c => c.Type == ChatType.Direct)
         .Where(UserParticipates(userId))
         .Where(UserParticipates(otherUserId))
-        .ProjectToChat()
+        .OrderBy(c => c.SerialNumber)
+        .ProjectToChat(userId)
         .FirstOrDefaultAsync();
 
     // ═══ WRITE ═══
@@ -148,7 +158,7 @@ internal class ChatRepository : IChatRepository
     }
 
     /// <inheritdoc />
-    public async Task<DtoChat> Update(UpdateChatEntity update)
+    public async Task<DtoChat> Update(UpdateChatEntity update, Guid viewerId)
     {
         var dbChat = await _dbContext.Chats.FindAsync(update.ChatId);
         if (dbChat == null)
@@ -193,9 +203,28 @@ internal class ChatRepository : IChatRepository
         return await _dbContext.Chats
             .TagWith("DM.Community.UpdatedChat")
             .Where(c => c.ChatId == update.ChatId)
-            .ProjectToChat()
+            .ProjectToChat(viewerId)
             .FirstAsync();
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The link is stamped with who ended it and when: the leaver himself, at the
+    /// moment he left.
+    /// </remarks>
+    public Task Leave(Guid chatId, Guid userId, DateTimeOffset leftUtc) =>
+        _dbContext.UserChatLinks
+            .Where(l => l.ChatId == chatId && l.UserId == userId && !l.IsRemoved)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(l => l.IsRemoved, true)
+                .SetProperty(l => l.DeletedByUserId, userId)
+                .SetProperty(l => l.DeletedUtc, leftUtc));
+
+    /// <inheritdoc />
+    public Task ClearHistory(Guid chatId, Guid userId, DateTimeOffset clearedUtc) =>
+        _dbContext.UserChatLinks
+            .Where(l => l.ChatId == chatId && l.UserId == userId && !l.IsRemoved)
+            .ExecuteUpdateAsync(s => s.SetProperty(l => l.HistoryClearedUtc, clearedUtc));
 
     /// <inheritdoc />
     public async Task<DtoChat> CreateGameRoomChat(CreateChatEntity chat)

@@ -1,0 +1,36 @@
+@*
+    Письмо на прежний адрес после того, как аккаунт переехал на новый.
+
+    Отменить отсюда уже нечего, поэтому единственное действие письма ведет в
+    поддержку, и она же единственная дорога назад, если смену запрашивал не
+    владелец.
+
+    Порядок тот же, что в предупреждении. Сначала короб с адресами, под ним
+    строка о том, что делать, и уже под ней кнопка, которая это делает.
+*@
+<EmailLayout Title="Почта изменена">
+    <div style="@EmailConstants.BoxStyles">
+    <table style="@EmailConstants.FactTableStyles">
+        <tr>
+            <td style="@EmailConstants.FactLabelStyles">Прежний адрес</td>
+            <td style="@EmailConstants.FactValueStyles">@Model.PreviousEmail</td>
+        </tr>
+        <tr>
+            <td style="@EmailConstants.FactLabelStyles">Новый адрес</td>
+            <td style="@EmailConstants.FactValueStyles">@Model.NewEmail</td>
+        </tr>
+    </table>
+    </div>
+    <p style="@EmailConstants.ParagraphStyles">
+        Если это были не вы, срочно обратитесь в поддержку для восстановления доступа
+    </p>
+    <ActionButton Url="@Model.SupportUrl">Написать в поддержку</ActionButton>
+</EmailLayout>
+
+@code {
+
+    /// <summary>Данные письма</summary>
+    [Parameter]
+    public EmailChangeCompletedViewModel Model { get; set; } = null!;
+
+}

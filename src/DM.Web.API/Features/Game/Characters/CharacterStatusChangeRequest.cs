@@ -8,7 +8,7 @@ namespace DM.Web.API.Features.Game.Characters;
 public class CharacterStatusChangeRequest
 {
     /// <summary>
-    /// Requested transition (Accept / Decline / Kill / Exile / Leave / Resurrect / Return)
+    /// Requested transition (Accept / Decline / Kill / Exile / Leave / Resurrect / Readmit)
     /// </summary>
     public CharacterStatusTransition Transition { get; set; }
 }

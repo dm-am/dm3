@@ -8,7 +8,6 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Users;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Core.Events;
@@ -25,7 +24,6 @@ internal class PostPendencyService : IPostPendencyService
     private readonly IRoomService _roomService;
     private readonly IIntentionManager _intentionManager;
     private readonly IPostPendencyFactory _factory;
-    private readonly IUserLookupService _userLookupService;
     private readonly IPostPendencyRepository _repository;
     private readonly IEventProducer _producer;
     private readonly IIdentityProvider _identityProvider;
@@ -35,7 +33,6 @@ internal class PostPendencyService : IPostPendencyService
         IRoomService roomService,
         IIntentionManager intentionManager,
         IPostPendencyFactory factory,
-        IUserLookupService userLookupService,
         IPostPendencyRepository repository,
         IEventProducer producer,
         IIdentityProvider identityProvider)
@@ -44,7 +41,6 @@ internal class PostPendencyService : IPostPendencyService
         _roomService = roomService;
         _intentionManager = intentionManager;
         _factory = factory;
-        _userLookupService = userLookupService;
         _repository = repository;
         _producer = producer;
         _identityProvider = identityProvider;
@@ -61,25 +57,30 @@ internal class PostPendencyService : IPostPendencyService
         var room = await _roomService.GetWithGameAsync(createPostPendency.RoomId);
         _intentionManager.ThrowIfForbidden(RoomIntention.CreatePostPendency, room);
 
-        var (_, waitingForUserId) = await _userLookupService.FindUserIdAsync(createPostPendency.WaitingForUsername);
-        var currentUserId = _identityProvider.Current.User.UserId;
-
-        if (room.Pendencies.Any(e =>
-                e.CreatedBy.UserId == currentUserId &&
-                e.WaitingForUser.UserId == waitingForUserId))
-        {
-            throw new HttpException(HttpStatusCode.Conflict,
-                $"Ожидание хода для {createPostPendency.WaitingForUsername} уже есть");
-        }
-
-        // An NPC access carries no author, and nobody can be waited on through
-        // one: a missing author simply never matches the named user.
-        if (room.Accesses.All(a => a.Character?.Author?.UserId != waitingForUserId))
+        // The one waited for is the player of the character, read from the room:
+        // the character has to be let into it, and an NPC, which has no player,
+        // cannot be waited on.
+        var player = room.Accesses
+            .Select(access => access.Character)
+            .FirstOrDefault(character => character?.Id == createPostPendency.CharacterId)?
+            .Author;
+        if (player == null)
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
             {
-                [nameof(PostPendency.WaitingForUser)] = ValidationError.Invalid
+                [nameof(CreatePostPendency.CharacterId)] = ValidationError.Invalid
             });
+        }
+
+        var waitingForUserId = player.UserId;
+        var currentUserId = _identityProvider.Current.User.UserId;
+
+        if (room.Pendencies.Any(e =>
+                e.CreatedBy?.UserId == currentUserId &&
+                e.WaitingForUser.UserId == waitingForUserId))
+        {
+            throw new HttpException(HttpStatusCode.Conflict,
+                $"Ожидание хода для {player.Username} уже есть");
         }
 
         var pendencyToCreate = _factory.Create(createPostPendency, currentUserId, waitingForUserId);

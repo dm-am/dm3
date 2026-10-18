@@ -460,8 +460,10 @@ onBeforeUnmount(() => unregisterExpand?.());
 //     that carries the vars via inline style.
 //   - In the collapsed state we override the same CSS vars ON the <img>
 //     element via a class selector. Class rule beats inherited value from
-//     the wrapper span, and there is no inline style on the <img> itself
-//     to fight. No !important required.
+//     the wrapper span. An attachment sets --bb-image-max-width inline on the
+//     <img> for its window cap; the collapsed rule sets max-width itself and
+//     not the variable, so the inline value does not reach it. No !important
+//     required.
 //   - Non-BBCode <img>/<video>/<iframe> inside the slot (rare — e.g. raw
 //     embeds) get the same override through the generic element targets.
 //

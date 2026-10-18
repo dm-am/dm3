@@ -312,6 +312,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
             :from-value="filterState.startsFromUtc || null"
             :to-value="filterState.startsToUtc || null"
             :show-clear-button="hasStartsFilter"
+            allow-future
             @apply="handleStartsApply"
             @clear="handleStartsClear"
           />
@@ -322,6 +323,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
             :from-value="filterState.endsFromUtc || null"
             :to-value="filterState.endsToUtc || null"
             :show-clear-button="hasEndsFilter"
+            allow-future
             @apply="handleEndsApply"
             @clear="handleEndsClear"
           />

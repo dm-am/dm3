@@ -128,4 +128,11 @@ public class GamesQuery : PagingQuery
     /// premoderated games this filter targets.
     /// </summary>
     public IReadOnlyCollection<PremoderationStatus>? PremoderationStatuses { get; set; }
+
+    /// <summary>
+    /// Masters whose games are left out of the list. Not a filter the caller
+    /// chooses: the service fills it from the viewer's personal blacklist when
+    /// the viewer switched on "Скрывать игры" (UserBlacklistSettings.HideGames).
+    /// </summary>
+    public IReadOnlyCollection<Guid>? ExcludedMasterIds { get; set; }
 }

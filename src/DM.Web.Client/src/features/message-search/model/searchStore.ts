@@ -1,20 +1,10 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
-import type { MessageSearchResult } from "./types";
+import type { MessageSearchResult, MessageSearchScope } from "./types";
 import messageSearchApi from "../api/messageSearchApi";
 
 const PAGE_SIZE = 50;
-
-/**
- * The only scope this search ever asks for.
- *
- * The endpoint can search every source the reader may read, but the one entry
- * point into it is the field above the global chat, and a field above the
- * global chat searches the global chat. Anything wider needs a page of its own
- * before it needs a control.
- */
-const GLOBAL_SCOPE = ["global"];
 
 /**
  * Dedicated search store. Deliberately NOT part of the live global-chat store:
@@ -28,6 +18,8 @@ const GLOBAL_SCOPE = ["global"];
 export const useMessageSearchStore = defineStore("messageSearch", () => {
   // Query
   const query = ref("");
+  /** The feed the field stands over; the hits of one are no answer in another. */
+  const scope = ref<MessageSearchScope>("global");
 
   // Results + cursor
   const results = ref<MessageSearchResult[]>([]);
@@ -72,6 +64,19 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     loadingMore.value = false;
   }
 
+  /**
+   * Points the search at another feed. The store is one for the site, and the
+   * query and the hits it holds are about the feed they were typed over: kept,
+   * they would stand over the next feed as its own, and a hit picked there
+   * would jump to a message the feed does not hold.
+   */
+  function setScope(next: MessageSearchScope) {
+    if (next === scope.value) return;
+    scope.value = next;
+    query.value = "";
+    reset();
+  }
+
   /** Run a fresh search from the top (replaces results). */
   async function search() {
     if (!canSearch.value) {
@@ -85,7 +90,7 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     try {
       const { data, error: apiError } = await messageSearchApi.searchMessages({
         search: trimmedQuery.value,
-        in: GLOBAL_SCOPE,
+        in: [scope.value],
         limit: PAGE_SIZE,
       });
       // A newer search owns the visible list.
@@ -116,7 +121,7 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     try {
       const { data, error: apiError } = await messageSearchApi.searchMessages({
         search: trimmedQuery.value,
-        in: GLOBAL_SCOPE,
+        in: [scope.value],
         cursor: nextCursor.value,
         limit: PAGE_SIZE,
       });
@@ -143,6 +148,7 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
 
   return {
     query,
+    scope,
     results,
     nextCursor,
     hasMore,
@@ -152,6 +158,7 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     hasSearched,
     canSearch,
     reset,
+    setScope,
     search,
     loadMore,
   };

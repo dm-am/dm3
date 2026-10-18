@@ -28,5 +28,12 @@ public enum WarningEntityType
     /// <summary>
     /// Forum topic
     /// </summary>
-    Topic = 4
+    Topic = 4,
+
+    /// <summary>
+    /// The profile of the warned user: the avatar, the status and "О себе" as
+    /// they stood when the warning was issued. The entity is the warned user
+    /// himself, so a warning of this kind names no place on the site.
+    /// </summary>
+    Profile = 5
 }

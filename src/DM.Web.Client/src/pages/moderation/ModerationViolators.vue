@@ -5,6 +5,12 @@
  * descending (GET v1/moderation/violators). Filter: all / with active
  * ban / points without a ban. Row: name, points "N/6", last warning
  * date, active ban details.
+ *
+ * The filter is three short values, so it is the segments of the site and
+ * not a list under a caption: "Все | С баном | Только баллы", one press each,
+ * in one line at every width. The segments make the switch quick, so two
+ * answers can be on the wire at once; the guard keeps the one the moderator
+ * asked for last.
  */
 import { computed, onMounted, ref } from "vue";
 import {
@@ -14,9 +20,13 @@ import {
 } from "@/entities/moderation";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import { Select, type SelectOption } from "@/shared/ui/Select";
+import {
+  SegmentedControl,
+  type SegmentedOption,
+} from "@/shared/ui/SegmentedControl";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 import { UserLink } from "@/entities/user";
 import { useRoleGate } from "./lib/useRoleGate";
 import { banTermLabel } from "./lib/labels";
@@ -25,38 +35,42 @@ import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 const { hasAccess, deniedText } = useRoleGate("Moderator");
 
 const violators = ref<Violator[]>([]);
-const loading = ref(false);
-const loadError = ref<string | null>(null);
+
+const {
+  loading,
+  error: loadError,
+  run,
+} = useGuardedRequest({ message: "Не удалось загрузить нарушителей" });
 
 const filter = ref<ViolatorsFilter>("all");
 
-const filterOptions: SelectOption[] = [
+const filterOptions: SegmentedOption<ViolatorsFilter>[] = [
   { value: "all", label: "Все" },
-  { value: "banned", label: "С активным баном" },
-  { value: "points-only", label: "С баллами без бана" },
+  { value: "banned", label: "С баном" },
+  { value: "points-only", label: "Только баллы" },
 ];
 
+// "Пользователь" takes what the other columns leave; their shares are of the
+// whole table, the padding of each cell included.
 const columns: Column[] = [
   { key: "user", label: "Пользователь" },
-  { key: "points", label: "Баллы", width: "15%", align: "center" },
-  { key: "lastWarning", label: "Последнее предупреждение", width: "25%" },
-  { key: "ban", label: "Активный бан", width: "25%" },
+  { key: "points", label: "Баллы", width: "17%", align: "center" },
+  { key: "lastWarning", label: "Последнее предупреждение", width: "27%" },
+  { key: "ban", label: "Активный бан", width: "27%" },
 ];
 
-async function fetch() {
-  loading.value = true;
-  const { data, error } = await moderationApi.getViolators(filter.value);
-  loading.value = false;
-  if (error) {
-    loadError.value = "Не удалось загрузить нарушителей";
-    return;
-  }
-  loadError.value = null;
-  violators.value = data?.resources ?? [];
+function fetch() {
+  return run(
+    () => moderationApi.getViolators(filter.value),
+    (data) => {
+      violators.value = data?.resources ?? [];
+    },
+  );
 }
 
-function onFilterChange(value: string) {
-  filter.value = value as ViolatorsFilter;
+function onFilterChange(value: ViolatorsFilter) {
+  if (value === filter.value) return;
+  filter.value = value;
   fetch();
 }
 
@@ -65,6 +79,13 @@ onMounted(fetch);
 // DataTable rows keyed by the violator's user id
 const rows = computed(() =>
   violators.value.map((v) => ({ ...v, id: v.user.id })),
+);
+
+// Nobody under a segment is not an empty list of violators.
+const emptyText = computed(() =>
+  filter.value === "all"
+    ? "Нарушителей пока нет"
+    : "Нарушителей по заданным фильтрам не найдено",
 );
 </script>
 
@@ -75,15 +96,13 @@ const rows = computed(() =>
     <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
     <template v-else>
-      <div class="filters">
-        <FormField label="Фильтр" name="violators-filter">
-          <Select
-            id="violators-filter"
-            :model-value="filter"
-            :options="filterOptions"
-            @update:model-value="onFilterChange"
-          />
-        </FormField>
+      <div class="filter-line">
+        <SegmentedControl
+          :model-value="filter"
+          :options="filterOptions"
+          ariaLabel="Фильтр нарушителей"
+          @update:model-value="onFilterChange"
+        />
       </div>
 
       <ErrorState v-if="loadError" :message="loadError" :retry="fetch" />
@@ -93,7 +112,7 @@ const rows = computed(() =>
         :columns="columns"
         :data="rows"
         :loading="loading"
-        empty-text="Нарушителей пока нет"
+        :empty-text="emptyText"
         aria-label="Нарушители"
       >
         <template #cell-user="{ row }">
@@ -128,9 +147,8 @@ const rows = computed(() =>
 </template>
 
 <style scoped lang="sass">
-.filters
-  max-width: 320px
-  margin-bottom: $small
+.filter-line
+  margin-bottom: $medium
 
 .points-critical
   color: $accent-red

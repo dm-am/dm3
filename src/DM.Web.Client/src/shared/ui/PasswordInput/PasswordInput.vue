@@ -69,27 +69,34 @@ defineExpose({
 
   input
     width: 100%
-    padding-right: 36px
+    // The eye stands over the right edge of the field, so the text has to stop
+    // before it — and how far before depends on how far in the eye is. The two
+    // numbers are one pair, and they are variables because the control comes in
+    // two sizes: the site's own field, and the taller guest field of
+    // AuthSurface.sass, which sets both on the wrapper around this component.
+    // Written as literals here, the guest field could only move the eye by
+    // outweighing this rule, and the padding would silently stay behind it.
+    padding-right: var(--password-toggle-space, 36px)
     box-sizing: border-box
 
 .password-toggle
   position: absolute
-  right: 4px
+  right: var(--password-toggle-inset, 4px)
   top: 50%
   transform: translateY(-50%)
   background: none
   border: none
   cursor: pointer
   padding: 4px
-  color: $text-muted
+  // Full-strength ink, and not the muted one it used to rest in: the eye is the
+  // only control on a password field, the field it stands in shows nothing, and
+  // a control dimmed until the pointer finds it reads as unavailable.
+  color: $text
   display: flex
   align-items: center
   justify-content: center
 
   svg
-    width: 18px
-    height: 18px
-
-  &:hover
-    color: $text
+    width: 19px
+    height: 19px
 </style>

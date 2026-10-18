@@ -156,6 +156,46 @@ public class FirstUnreadRepositoryShould : IntegrationTestBase
         (await repository.GetLastPostInRooms(none)).Should().BeNull();
     }
 
+    /// <summary>
+    /// The rooms are walked in the order the menu lists them: by their place,
+    /// and of two rooms that share one, the room created first. Sorted by the
+    /// place alone, the tie fell to the order the rows lie in, and the jump
+    /// could skip unread posts in the room the menu shows above.
+    /// </summary>
+    [Fact]
+    public async Task WalkTheRoomsInTheOrderTheMenuListsThem()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IFirstUnreadRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var game = await AddGameAsync(dbContext, rooms: 0);
+        // Written last first, one row at a time, so the order the rows lie in
+        // is not the answer.
+        var third = await AddRoomAsync(dbContext, game.GameId, number: 3, place: 1);
+        var second = await AddRoomAsync(dbContext, game.GameId, number: 2, place: 1);
+        var last = await AddRoomAsync(dbContext, game.GameId, number: 1, place: 2);
+
+        (await repository.GetAccessibleRoomIds(game.GameId, game.UserId))
+            .Should().Equal(second, third, last);
+    }
+
+    private static async Task<Guid> AddRoomAsync(DmDbContext dbContext, Guid gameId, int number, double place)
+    {
+        var roomId = Guid.NewGuid();
+        dbContext.Rooms.Add(new DbRoom
+        {
+            RoomId = roomId,
+            GameId = gameId,
+            RoomNumber = number,
+            Title = "Room " + number,
+            AccessType = RoomAccessType.Open,
+            OrderNumber = place,
+        });
+        await dbContext.SaveChangesAsync();
+        return roomId;
+    }
+
     private sealed record GameRooms(Guid UserId, Guid GameId, IReadOnlyList<Guid> Rooms);
 
     private static async Task<GameRooms> AddGameAsync(DmDbContext dbContext, int rooms)

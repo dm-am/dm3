@@ -5,6 +5,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
 using DM.Domain.Forum.Features.Comments;
+using DM.Domain.Forum.Features.Topics;
 using DM.Web.API.Shared.Comments;
 using DM.Web.API.Shared.Dto;
 
@@ -14,6 +15,7 @@ namespace DM.Web.API.Features.Forum.Comments;
 internal class ForumCommentApiService : IForumCommentApiService
 {
     private readonly ITopicCommentService _commentService;
+    private readonly ITopicService _topicService;
     private readonly IIdentityProvider _identityProvider;
     private readonly IUserBlacklistChecker _blacklistChecker;
     private readonly DiscussionMapper _mapper;
@@ -22,12 +24,14 @@ internal class ForumCommentApiService : IForumCommentApiService
     /// <inheritdoc />
     public ForumCommentApiService(
         ITopicCommentService commentService,
+        ITopicService topicService,
         IIdentityProvider identityProvider,
         IUserBlacklistChecker blacklistChecker,
         DiscussionMapper mapper,
         ForumCommentMapper forumCommentMapper)
     {
         _commentService = commentService;
+        _topicService = topicService;
         _identityProvider = identityProvider;
         _blacklistChecker = blacklistChecker;
         _mapper = mapper;
@@ -43,8 +47,9 @@ internal class ForumCommentApiService : IForumCommentApiService
         // Convert PagingQuery to CommentsQuery
         var commentsQuery = new CommentsQuery { Skip = query.Skip, Take = query.Take };
         var (comments, paging) = await _commentService.GetAsync(topicId, commentsQuery, excludeUserIds);
+        var topic = await _topicService.GetAsync(topicId);
 
-        return CommentReading.ToDiscussion(comments, paging, identity, _mapper);
+        return CommentReading.ToDiscussion(comments, paging, identity, _mapper, _commentService.MayCreate(topic));
     }
 
     /// <inheritdoc />

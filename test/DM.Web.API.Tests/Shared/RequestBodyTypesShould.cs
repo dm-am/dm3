@@ -44,10 +44,8 @@ public class RequestBodyTypesShould
     /// </remarks>
     private static readonly string[] Legacy =
     [
-        "AttributeSchemaController.PostSchema",
         "CharacterController.PostCharacter",
         "GameBlacklistController.PostBlacklist",
-        "RoomController.CreatePostPendency",
         "RoomController.PostAccess",
     ];
 

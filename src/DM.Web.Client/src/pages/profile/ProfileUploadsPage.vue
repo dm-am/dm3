@@ -12,14 +12,19 @@
  * Deletion server-side is owner-or-admin (DELETE /v1/uploads/{id}); the
  * doc also grants moderators delete rights — backend gap, flagged in the
  * integration notes.
+ *
+ * Anybody else, a guest included, gets the site's own "not found" at this
+ * address, as on the settings of a game, and not a page with a refusal on it:
+ * the link here is drawn only for the owner and the administrators.
  */
 import { computed, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import uploadApi from "@/shared/api/uploadApi";
 import type { Upload } from "@/shared/api/models/common/upload";
 import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
 import { UserRole } from "@/shared/api/models/common";
 import { useAuthStore } from "@/shared/stores/auth";
+import { restoreSession } from "@/entities/user";
 import {
   uploadPreviewColumn,
   uploadFileColumn,
@@ -29,7 +34,6 @@ import { UploadsTable } from "@/shared/ui/UploadsTable";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { SecondaryText } from "@/shared/ui/Layout";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
 import { useProfileSubpage } from "./useProfileSubpage";
@@ -39,6 +43,7 @@ import { parsePageNumber } from "@/shared/lib/filters";
 const PAGE_SIZE = 20;
 
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 
 const { username, canonicalUsername, notFound, profileLink } =
@@ -52,6 +57,27 @@ const isOwner = computed(
 );
 const isAdmin = computed(() => authStore.user?.role === UserRole.Admin);
 const canView = computed(() => isOwner.value || isAdmin.value);
+
+// Who the viewer is, settled: the start of the page asks the server once
+// (restoreSession), and a session the browser kept no copy of is named by that
+// answer alone. Deciding before it would send the owner away from his files.
+const sessionSettled = ref(false);
+const settle = () => (sessionSettled.value = true);
+restoreSession().then(settle, settle);
+
+watch(
+  () => sessionSettled.value && !canView.value,
+  (refused) => {
+    if (!refused) return;
+    void router.replace({
+      name: "not-found",
+      params: { pathMatch: route.path.slice(1).split("/") },
+      query: route.query,
+      hash: route.hash,
+    });
+  },
+  { immediate: true, flush: "post" },
+);
 
 // --- Data ---
 const uploads = ref<Upload[]>([]);
@@ -86,18 +112,18 @@ watch([pageNumber, username, canView], fetch, { immediate: true });
 const columns: Column[] = [
   uploadPreviewColumn,
   uploadFileColumn,
-  { key: "date", label: "Дата", width: "16%" },
-  { key: "size", label: "Размер", width: "14%", align: "right" },
-  { key: "actions", label: "", width: "14%", align: "center" },
+  { key: "date", label: "Дата", width: "18%" },
+  { key: "size", label: "Размер", width: "16%", align: "right" },
+  { key: "actions", label: "", width: "16%", align: "center" },
 ];
 
 // --- Delete upload (ConfirmDialog-gated) ---
-const { deleteTarget, deleting, confirmDelete } = useUploadDelete(fetch);
+const { deleteTarget, deleteFile } = useUploadDelete(fetch);
 </script>
 
 <template>
   <ErrorPage v-if="notFound" :code="404" />
-  <div v-else class="profile-uploads-page">
+  <div v-else-if="canView" class="profile-uploads-page">
     <ProfileSubpageHeader
       label="Загруженные файлы"
       :username="canonicalUsername"
@@ -107,43 +133,36 @@ const { deleteTarget, deleting, confirmDelete } = useUploadDelete(fetch);
       >: аватары и изображения из постов
     </ProfileSubpageHeader>
 
-    <SecondaryText v-if="!canView">
-      Страница доступна только владельцу файлов
-    </SecondaryText>
+    <ErrorState
+      v-if="loadError"
+      class="error-banner"
+      :message="loadError"
+      :retry="fetch"
+    />
 
-    <template v-else>
-      <ErrorState
-        v-if="loadError"
-        class="error-banner"
-        :message="loadError"
-        :retry="fetch"
-      />
+    <UploadsTable
+      :columns="columns"
+      :uploads="uploads"
+      :loading="loading"
+      @remove="(row) => (deleteTarget = row)"
+    />
 
-      <UploadsTable
-        :columns="columns"
-        :uploads="uploads"
-        :loading="loading"
-        @remove="(row) => (deleteTarget = row)"
-      />
-
-      <Paging
-        v-if="paging"
-        class="pager"
-        :paging="paging"
-        :to="{ name: 'profile-uploads', params: { username } }"
-        use-query
-      />
-    </template>
+    <Paging
+      v-if="paging"
+      class="pager"
+      :paging="paging"
+      :to="{ name: 'profile-uploads', params: { username } }"
+      use-query
+    />
 
     <ConfirmDialog
       :show="deleteTarget !== null"
-      title="Удаление файла"
-      :message="`Удалить файл ${deleteTarget?.originalFileName ?? ''}?`"
+      title="Удалить файл?"
+      :message="`Файл &quot;${deleteTarget?.originalFileName ?? ''}&quot; исчезнет из постов, куда он вставлен`"
       confirm-label="Удалить"
-      danger
-      :loading="deleting"
+      failure="Не удалось удалить файл"
+      :action="deleteFile"
       @update:show="(v) => !v && (deleteTarget = null)"
-      @confirm="confirmDelete"
     />
   </div>
 </template>

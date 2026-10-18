@@ -11,7 +11,7 @@ import {
   BlogStatusBadge,
   type Rubric,
 } from "@/entities/blog";
-import { UserLink } from "@/entities/user";
+import { RemovedAccountLink, UserLink } from "@/entities/user";
 import { ContentText } from "@/shared/ui/Content";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
@@ -28,7 +28,7 @@ const assistants = computed(() => blog.value?.assistants ?? []);
 
 const rubricColumns: Column[] = [
   { key: "title", label: "Рубрика", align: "left" },
-  { key: "publications", label: "Публикаций", align: "center" },
+  { key: "publications", label: "Публикаций", width: "50%", align: "center" },
 ];
 
 function rubricTo(r: Rubric) {
@@ -51,7 +51,10 @@ function rubricTo(r: Rubric) {
         </tr>
         <tr>
           <th>Автор</th>
-          <td><UserLink :user="blog.author" hide-badge /></td>
+          <td>
+            <UserLink v-if="blog.author" :user="blog.author" hide-badge />
+            <RemovedAccountLink v-else />
+          </td>
         </tr>
         <tr>
           <th>{{ assistants.length > 1 ? "Ассистенты" : "Ассистент" }}</th>

@@ -76,7 +76,7 @@ internal class BoardService : IBoardService
         }).ToArray();
 
         // Sequential on purpose: both fills query the one DmDbContext of this
-        // scope, and a context refuses parallel operations (INV-7).
+        // scope, and a context refuses parallel operations.
         await _unreadCountersRepository.FillParentCounters(boardsCopy, identity.User.UserId,
             b => b.Id, b => b.UnreadTopicsCount);
         await _unreadCountersRepository.FillTotalUnreadCounters(boardsCopy, identity.User.UserId,
@@ -93,7 +93,7 @@ internal class BoardService : IBoardService
         if (identity.User.IsAuthenticated)
         {
             // Sequential on purpose: both selects query the one DmDbContext of
-            // this scope, and a context refuses parallel operations (INV-7).
+            // this scope, and a context refuses parallel operations.
             var topics = await _unreadCountersRepository.SelectByParentsAsync(
                 identity.User.UserId, UnreadEntryType.Message, board.Id);
             var comments = await _unreadCountersRepository.SelectTotalUnreadByParentsAsync(

@@ -110,4 +110,9 @@ public class CreateUser
     /// Access policy
     /// </summary>
     public AccessPolicy AccessPolicy { get; set; } = AccessPolicy.NotSpecified;
+
+    /// <summary>
+    /// IANA zone the account starts with, or null for UTC
+    /// </summary>
+    public string? TimeZoneId { get; set; }
 }

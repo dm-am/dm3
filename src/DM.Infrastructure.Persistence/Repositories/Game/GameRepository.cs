@@ -49,15 +49,17 @@ internal class GameRepository : IGameRepository
 
     #region Read Operations
 
-    public Task<int> Count(GamesQuery query, Guid userId, CancellationToken ct = default)
+    public async Task<int> Count(GamesQuery query, Guid userId, CancellationToken ct = default)
     {
-        return ApplyFilters(_dbContext.Games.AsQueryable(), query, userId)
+        var asked = await AskedAccountsOf(query, ct);
+        return await ApplyFilters(_dbContext.Games.AsQueryable(), query, userId, asked)
             .CountAsync(ct);
     }
 
     public async Task<IEnumerable<GameDto>> GetGames(PagingData pagingData, GamesQuery query, Guid userId, CancellationToken ct = default)
     {
-        var gamesQuery = ApplyFilters(_dbContext.Games.AsQueryable(), query, userId);
+        var asked = await AskedAccountsOf(query, ct);
+        var gamesQuery = ApplyFilters(_dbContext.Games.AsQueryable(), query, userId, asked);
         // The GameId tiebreaker makes the ordering unique so split-query
         // pagination stays deterministic: each collection subquery re-runs the
         // same ORDER BY + OFFSET/FETCH and must select the identical page.
@@ -89,9 +91,22 @@ internal class GameRepository : IGameRepository
             .ToArrayAsync(ct);
 
         await EnrichGamesAsync(games, userId, ct);
-        await EnrichWithFilteredPlayerCharactersAsync(games, query.PlayerUsername, ct);
+        await EnrichWithFilteredPlayerCharactersAsync(games, query.PlayerUsername, asked.Players, ct);
         return games;
     }
+
+    /// <summary>
+    /// The accounts the host and player filters mean when they name "Аккаунт удален":
+    /// the removed accounts, with the live hosts named alongside. Null where the name
+    /// is not asked for - that filter keeps reading the name.
+    /// </summary>
+    private sealed record AskedAccounts(IReadOnlyCollection<Guid>? Hosts, IReadOnlyCollection<Guid>? Players);
+
+    private async Task<AskedAccounts> AskedAccountsOf(GamesQuery query, CancellationToken ct) => new(
+        await RemovedAccountScope.IdsIfAsked(_dbContext.Users, query.OwnerUsernames, ct),
+        string.IsNullOrEmpty(query.PlayerUsername)
+            ? null
+            : await RemovedAccountScope.IdsIfAsked(_dbContext.Users, [query.PlayerUsername], ct));
 
     /// <summary>
     /// Populate <see cref="GameDto.FilteredPlayerCharacters"/> for the
@@ -109,6 +124,7 @@ internal class GameRepository : IGameRepository
     private async Task EnrichWithFilteredPlayerCharactersAsync(
         IReadOnlyList<GameDto> games,
         string? playerUsername,
+        IReadOnlyCollection<Guid>? playerIds,
         CancellationToken ct)
     {
         if (games.Count == 0 || string.IsNullOrEmpty(playerUsername)) return;
@@ -117,12 +133,18 @@ internal class GameRepository : IGameRepository
         // Case-insensitive per USERNAME_POLICY.md, same as the filter itself.
         var usernameLower = playerUsername.ToLower();
 
-        var characterData = await _dbContext.Characters
+        // "Аккаунт удален" plays through every removed account's characters, read
+        // by the author column (RemovedAccountScope); any other name, by the name.
+        var characters = _dbContext.Characters
             .Where(c => gameIds.Contains(c.GameId) &&
                         !c.IsRemoved &&
                         !c.IsNpc &&
-                        c.Status != CharacterStatus.Declined &&
-                        c.Author!.Username.ToLower() == usernameLower)
+                        c.Status != CharacterStatus.Declined);
+        characters = playerIds is null
+            ? characters.Where(c => c.Author!.Username.ToLower() == usernameLower)
+            : characters.Where(c => c.AuthorId.HasValue && playerIds.Contains(c.AuthorId.Value));
+
+        var characterData = await characters
             .OrderBy(c => c.CreatedUtc)
             .Select(c => new { c.GameId, c.Name, c.Status, c.IsDead, c.IsPlayerLeft, c.IsPlayerExiled })
             .ToListAsync(ct);
@@ -409,7 +431,12 @@ internal class GameRepository : IGameRepository
     /// </summary>
     private async Task EnrichGameDetailsAsync(GameDetails game, CancellationToken ct)
     {
-        var masterId = game.Master.UserId;
+        // A removed master is nested as nobody (RemovedAuthors), and his posts
+        // still count as the master's: the identifier comes off the row then.
+        var masterId = game.Master?.UserId ?? await _dbContext.Games
+            .Where(g => g.GameId == game.Id)
+            .Select(g => g.MasterId)
+            .FirstAsync(ct);
 
         // Posts across all live rooms of the game.
         var gamePosts = _dbContext.Posts
@@ -426,7 +453,8 @@ internal class GameRepository : IGameRepository
             .AnyAsync(r => !r.IsRemoved && r.GameId == game.Id && r.DiceEnabled, ct);
     }
 
-    private IQueryable<DbGame> ApplyFilters(IQueryable<DbGame> games, GamesQuery query, Guid userId)
+    private IQueryable<DbGame> ApplyFilters(
+        IQueryable<DbGame> games, GamesQuery query, Guid userId, AskedAccounts asked)
     {
         // Premoderation filter (service-gated, Mentor+ only): the moderation
         // worklist must show ALL games in the requested premoderation states,
@@ -506,8 +534,16 @@ internal class GameRepository : IGameRepository
                 !g.GameTags.Any(t => excluded.Contains(t.Tag.ShortId)));
         }
 
-        // Owner filter - master OR assistant (case-insensitive per USERNAME_POLICY.md, OR logic)
-        if (query.OwnerUsernames is { Count: > 0 })
+        // Owner filter - master OR assistant (case-insensitive per USERNAME_POLICY.md, OR logic).
+        // Asked for "Аккаунт удален", by the identifiers of the removed accounts and of
+        // the live hosts named with it, joining no account.
+        var hostIds = asked.Hosts;
+        if (hostIds is not null)
+        {
+            games = games.Where(g =>
+                hostIds.Contains(g.MasterId) || g.Assistants.Any(a => hostIds.Contains(a.UserId)));
+        }
+        else if (query.OwnerUsernames is { Count: > 0 })
         {
             var usernamesLower = query.OwnerUsernames
                 .Where(u => !string.IsNullOrWhiteSpace(u))
@@ -515,9 +551,12 @@ internal class GameRepository : IGameRepository
                 .ToArray();
             if (usernamesLower.Length > 0)
             {
+                // The list lifts the account filter to keep the games of removed
+                // masters (RemovedAuthors), so a removed login is refused in the
+                // open: the old name must not find what the removal took off it.
                 games = games.Where(g =>
-                    usernamesLower.Contains(g.Master.Username.ToLower()) ||
-                    g.Assistants.Any(a => usernamesLower.Contains(a.User.Username.ToLower())));
+                    (!g.Master.IsRemoved && usernamesLower.Contains(g.Master.Username.ToLower())) ||
+                    g.Assistants.Any(a => !a.User.IsRemoved && usernamesLower.Contains(a.User.Username.ToLower())));
             }
         }
 
@@ -569,22 +608,42 @@ internal class GameRepository : IGameRepository
         // Any - any non-NPC character except declined applications, i.e.
         // retired characters and applications under review also match
         // (profile dossier semantics).
-        if (!string.IsNullOrEmpty(query.PlayerUsername))
+        var playerIds = asked.Players;
+        if (playerIds is not null)
         {
+            games = query.PlayerParticipation == PlayerParticipation.Any
+                ? games.Where(g => g.Characters.Any(c =>
+                    !c.IsRemoved && !c.IsNpc && c.Status != CharacterStatus.Declined &&
+                    c.AuthorId.HasValue && playerIds.Contains(c.AuthorId.Value)))
+                : games.Where(g => g.Characters.Any(c =>
+                    !c.IsRemoved && c.Status == CharacterStatus.Active &&
+                    c.AuthorId.HasValue && playerIds.Contains(c.AuthorId.Value)));
+        }
+        else if (!string.IsNullOrEmpty(query.PlayerUsername))
+        {
+            // A removed login matches nothing, for the reason the owner filter
+            // above spells out.
             var usernameLower = query.PlayerUsername.ToLower();
             games = query.PlayerParticipation == PlayerParticipation.Any
                 ? games.Where(g => g.Characters.Any(c =>
                     !c.IsRemoved && !c.IsNpc && c.Status != CharacterStatus.Declined &&
-                    c.Author!.Username.ToLower() == usernameLower))
+                    !c.Author!.IsRemoved && c.Author.Username.ToLower() == usernameLower))
                 : games.Where(g => g.Characters.Any(c =>
                     !c.IsRemoved && c.Status == CharacterStatus.Active &&
-                    c.Author!.Username.ToLower() == usernameLower));
+                    !c.Author!.IsRemoved && c.Author.Username.ToLower() == usernameLower));
         }
 
         // Participating filter - current user is master, mentor, assistant, player, or reader
         if (query.Participating == true)
         {
             games = games.Where(GameParticipationFilters.Participating(_dbContext, userId));
+        }
+
+        // The viewer's "Скрывать игры": the service decides which lists it cleans.
+        if (query.ExcludedMasterIds is { Count: > 0 })
+        {
+            var excludedMasters = query.ExcludedMasterIds.ToArray();
+            games = games.Where(g => !excludedMasters.Contains(g.MasterId));
         }
 
         return games;
@@ -997,7 +1056,6 @@ internal class GameRepository : IGameRepository
             ShowPrivateMessages = game.ShowPrivateMessages,
             HidePostStats = game.HidePostStats,
             CommentsAccessMode = game.CommentsAccessMode,
-            AttributeSchemaId = game.AttributeSchemaId,
             IsRemoved = false,
             IsRecruitmentOpen = game.IsRecruitmentOpen,
             RecruitmentStartedUtc = game.RecruitmentStartedUtc,
@@ -1009,17 +1067,17 @@ internal class GameRepository : IGameRepository
             RoomId = room.RoomId,
             GameId = room.GameId,
             // The game itself is inserted by this call, so nobody else can hold
-            // a room in it yet and its first room is number 1 by construction.
-            // Every later room takes MAX+1 under the game row lock, in
-            // RoomRepository.Create.
+            // a room in it yet and its first room is number 1 and first in the
+            // list by construction. Every later room takes MAX+1 of both under
+            // the game row lock, in RoomRepository.Create.
             RoomNumber = 1,
+            OrderNumber = 1,
             Title = room.Title.Trim(),
             Type = room.Type,
             AccessType = room.AccessType,
             ViewPrivateText = room.ViewPrivateText,
             ViewDiceResults = room.ViewDiceResults,
             DiceEnabled = room.DiceEnabled,
-            OrderNumber = room.OrderNumber,
             IsRemoved = false
         };
 
@@ -1032,6 +1090,20 @@ internal class GameRepository : IGameRepository
             TagId = tagId
         });
 
+        // The character sheet goes in with the game, in the same save: a
+        // creation that failed after the game row would otherwise leave a game
+        // whose characters cannot be described, and every read of a game asks
+        // for its sheet. The identifiers are the server's, all of them - a
+        // caller has nothing yet to keep.
+        var dbSchema = new Entities.Game.GameAttributeSchema
+        {
+            GameId = game.GameId,
+            Specifications = AttributeSpecificationDocument.ToDocument(
+                game.AttributeSpecifications, _ => _guidFactory.Create()),
+            Version = 0,
+            UpdatedUtc = game.CreatedUtc
+        };
+
         // The readable address is taken before the insert instead of being stamped by
         // a second SaveChanges — see SerialNumberAllocator for what that pair cost.
         dbGame.SerialNumber = await SerialNumberAllocator.NextAsync<DbGame>(_dbContext, ct);
@@ -1040,6 +1112,7 @@ internal class GameRepository : IGameRepository
         await _dbContext.Games.AddAsync(dbGame, ct);
         await _dbContext.Rooms.AddAsync(dbRoom, ct);
         await _dbContext.GameTags.AddRangeAsync(dbTags, ct);
+        await _dbContext.GameAttributeSchemas.AddAsync(dbSchema, ct);
         await _dbContext.SaveChangesAsync(ct);
 
         return await _dbContext.Games
@@ -1176,6 +1249,11 @@ internal class GameRepository : IGameRepository
     /// Both writes in one transaction, because the second is what turns a hidden
     /// game into files that will actually be destroyed, and a failure between them
     /// leaves the promise half kept with nothing to notice it.
+    ///
+    /// The subscriptions to the game go in the same transaction. Nothing brings a
+    /// deleted game back, so a subscription that outlived it could never deliver
+    /// anything: it only stood in the reader's list as a nameless row ("Игра n/a")
+    /// that was theirs to clean up.
     /// </remarks>
     public async Task Delete(Guid gameId, Guid deletedByUserId, CancellationToken ct = default)
     {
@@ -1218,6 +1296,10 @@ internal class GameRepository : IGameRepository
                     .SetProperty(x => x.IsRemoved, true)
                     .SetProperty(x => x.DeletedByUserId, (Guid?)deletedByUserId)
                     .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)now), ct);
+
+            await _dbContext.Subscriptions
+                .Where(s => s.TargetType == SubscriptionTargetType.Game && s.TargetId == gameId)
+                .ExecuteDeleteAsync(ct);
 
             await transaction.CommitAsync(ct);
         });

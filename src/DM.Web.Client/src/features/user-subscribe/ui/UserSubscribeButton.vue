@@ -1,263 +1,129 @@
 <script setup lang="ts">
 /**
- * UserSubscribeButton — anchored subscribe control for a user profile.
+ * UserSubscribeButton — the subscription to a person, in the row of actions of
+ * their profile.
  *
- * Click on the button opens a popover with three category toggles
- * ("Игры" / "Блоги" / "Топики") bound to the bits of
- * `SubscriptionSettings.Author{Game,Blog,Topic}Events`. Confirming the
- * popover either creates a new subscription with the chosen settings,
- * or updates an existing one's settings — depending on whether the
- * viewer is already subscribed. The popover also provides an explicit
- * "Отписаться" action when the user is subscribed.
+ * "Подписаться" subscribes in one press to all three kinds of news, as the
+ * subscription to a game does, and the button turns into "Подписан" with the
+ * arrow of a dropdown: the answer is the word the reader pressed. It used to
+ * open a form with a second "Подписаться" in it, which made the one thing a
+ * reader came for take two presses and a decision they had not asked for.
  *
- * The component is self-contained: it owns its open/close state, draft
- * settings, focus-trap, click-outside dismissal and ESC dismissal.
- * Callers wire it into a profile with `:userId` + `:username` props.
+ * "Подписан" opens UserSubscriptionPanel, where the kinds are changed one box
+ * at a time and the subscription is ended. Pressed again, it closes the panel,
+ * whatever the word on it has become meanwhile: clearing every box in the
+ * panel ends the subscription and the button reads "Подписаться" over the
+ * still open panel, and a press there is taken as leaving, not as a second
+ * subscribe.
+ *
+ * A refused one-press subscribe is said in `result`, the refusal line the row
+ * of actions keeps under itself: the button is one item of a row of buttons
+ * (shared/ui/ButtonRow), and a line under it inside that row would stand
+ * between the buttons.
+ * The panel hangs from the button's own box at every width: the row never
+ * puts the button away, so there is nothing else to hang from.
  */
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useSubscriptionsStore } from "@/entities/subscription";
 import {
   SubscriptionSettings,
   SubscriptionTargetType,
 } from "@/shared/api/models/subscriptions";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { notifyFailure } from "@/shared/lib/errors";
-import { vClickOutside } from "@/shared/directives/clickOutside";
+import type { ActionResult } from "@/shared/lib/composables/useActionResult";
 import Button from "@/shared/ui/Button/Button.vue";
+import { SvgIcon } from "@/shared/ui/Icon";
+import UserSubscriptionPanel from "./UserSubscriptionPanel.vue";
 
 const props = defineProps<{
   userId: string;
   username: string;
+  /** Where a refused press is said: the line under the row of actions. */
+  result: ActionResult;
 }>();
 
 const store = useSubscriptionsStore();
 const { userSubscriptions } = storeToRefs(store);
-const toast = useToast();
 
-// SSOT: the popover form lives in a single object keyed by the three
-// author-category bits. Bit-level enum stays the single source for the
-// flag identity — never duplicated as separate booleans elsewhere.
-type Draft = {
-  games: boolean;
-  blogs: boolean;
-  topics: boolean;
-};
+const isSubscribed = computed(() =>
+  userSubscriptions.value.some((s) => s.targetId === props.userId),
+);
 
-const FLAG_BIT: Record<keyof Draft, SubscriptionSettings> = {
-  games: SubscriptionSettings.AuthorGameEvents,
-  blogs: SubscriptionSettings.AuthorBlogEvents,
-  topics: SubscriptionSettings.AuthorTopicEvents,
-};
-
-const DEFAULT_DRAFT: Draft = { games: true, blogs: true, topics: true };
-
+const root = ref<HTMLElement | null>(null);
+const panel = ref<InstanceType<typeof UserSubscriptionPanel> | null>(null);
 const open = ref(false);
-const submitting = ref(false);
-const draft = ref<Draft>({ ...DEFAULT_DRAFT });
-const popoverRef = ref<HTMLElement | null>(null);
+const subscribing = ref(false);
 
-const existing = computed(() =>
-  userSubscriptions.value.find((s) => s.targetId === props.userId),
-);
-const isSubscribed = computed(() => !!existing.value);
+/** The control opens a panel whenever it is "Подписан" or the panel is up. */
+const opensPanel = computed(() => isSubscribed.value || open.value);
 
-function settingsToDraft(settings: number): Draft {
-  return {
-    games: (settings & FLAG_BIT.games) !== 0,
-    blogs: (settings & FLAG_BIT.blogs) !== 0,
-    topics: (settings & FLAG_BIT.topics) !== 0,
-  };
+async function press() {
+  if (open.value) {
+    // Not while the panel's request is out: its refusal is said in it.
+    if (!panel.value?.busy) open.value = false;
+    return;
+  }
+  if (isSubscribed.value) {
+    open.value = true;
+    return;
+  }
+  subscribing.value = true;
+  props.result.clear();
+  const error = await store.subscribe(
+    SubscriptionTargetType.User,
+    props.userId,
+    SubscriptionSettings.UserSubscriptionDefault,
+  );
+  subscribing.value = false;
+  if (error) {
+    props.result.refuse(error, "Не удалось подписаться на пользователя");
+  }
 }
 
-function draftToSettings(d: Draft): SubscriptionSettings {
-  // Always keep the InApp channel — users opt in/out of categories,
-  // not delivery channel. Email channel is managed separately on the
-  // /subscriptions page.
-  let s = SubscriptionSettings.InApp;
-  if (d.games) s |= FLAG_BIT.games;
-  if (d.blogs) s |= FLAG_BIT.blogs;
-  if (d.topics) s |= FLAG_BIT.topics;
-  return s;
-}
-
-// Reset the draft whenever the popover opens — show the current state
-// for existing subscriptions, the default ("all on") for new ones.
-function openPopover() {
-  draft.value = existing.value
-    ? settingsToDraft(existing.value.settings)
-    : { ...DEFAULT_DRAFT };
-  open.value = true;
-  nextTick(() => popoverRef.value?.focus());
-}
-
-function closePopover() {
+function close(returnFocus: boolean) {
   open.value = false;
-}
-
-function onEscape(event: KeyboardEvent) {
-  if (event.key === "Escape" && open.value) {
-    closePopover();
-  }
-}
-
-// Keep ESC scoped to the popover lifecycle — attach when opened,
-// detach when closed. Avoids global key handlers leaking when the
-// component is unmounted mid-flight.
-watch(open, (isOpen) => {
-  if (isOpen) {
-    document.addEventListener("keydown", onEscape);
-  } else {
-    document.removeEventListener("keydown", onEscape);
-  }
-});
-
-const atLeastOneSelected = computed(
-  () => draft.value.games || draft.value.blogs || draft.value.topics,
-);
-
-async function confirm() {
-  if (!atLeastOneSelected.value) return;
-  submitting.value = true;
-  try {
-    const settings = draftToSettings(draft.value);
-    const updating = existing.value;
-    const error = updating
-      ? await store.updateSettings(updating.id, settings)
-      : await store.subscribe(
-          SubscriptionTargetType.User,
-          props.userId,
-          settings,
-        );
-    if (error) {
-      notifyFailure(error, "Не удалось сохранить подписку");
-      return;
-    }
-    toast.success(
-      updating
-        ? `Подписка на ${props.username} обновлена`
-        : `Вы подписались на ${props.username}`,
-    );
-    closePopover();
-  } finally {
-    submitting.value = false;
-  }
-}
-
-async function unsubscribe() {
-  if (!existing.value) return;
-  submitting.value = true;
-  try {
-    const error = await store.unsubscribe(existing.value.id);
-    if (error) {
-      notifyFailure(error, "Не удалось отписаться");
-      return;
-    }
-    toast.success(`Вы отписались от ${props.username}`);
-    closePopover();
-  } finally {
-    submitting.value = false;
-  }
+  if (returnFocus) root.value?.querySelector("button")?.focus();
 }
 </script>
 
 <template>
-  <div class="user-subscribe">
+  <span ref="root" class="user-subscribe">
     <Button
-      :disabled="submitting"
-      @click="open ? closePopover() : openPopover()"
+      type="button"
+      :class="{ active: open }"
+      :loading="subscribing"
+      :aria-haspopup="opensPanel ? 'dialog' : undefined"
+      :aria-expanded="opensPanel ? open : undefined"
+      @click="press"
     >
-      {{ isSubscribed ? "Подписан" : "Подписаться" }}
+      {{ isSubscribed ? "Подписан" : "Подписаться"
+      }}<SvgIcon
+        v-if="isSubscribed"
+        name="chevronDown"
+        class="user-subscribe-chevron"
+        aria-hidden="true"
+      />
     </Button>
-
-    <div
+    <UserSubscriptionPanel
       v-if="open"
-      ref="popoverRef"
-      v-click-outside="closePopover"
-      class="popover"
-      role="dialog"
-      aria-label="Настройки подписки"
-      tabindex="-1"
-    >
-      <div class="popover-title">Уведомлять о</div>
-      <label class="row">
-        <input v-model="draft.games" type="checkbox" :disabled="submitting" />
-        <span>Игры</span>
-      </label>
-      <label class="row">
-        <input v-model="draft.blogs" type="checkbox" :disabled="submitting" />
-        <span>Блоги</span>
-      </label>
-      <label class="row">
-        <input v-model="draft.topics" type="checkbox" :disabled="submitting" />
-        <span>Топики</span>
-      </label>
-      <p v-if="!atLeastOneSelected" class="hint">
-        Выберите хотя бы одну категорию
-      </p>
-      <div class="actions">
-        <Button v-if="isSubscribed" :disabled="submitting" @click="unsubscribe">
-          Отписаться
-        </Button>
-        <span v-if="isSubscribed" class="spacer" />
-        <Button :disabled="submitting || !atLeastOneSelected" @click="confirm">
-          {{ isSubscribed ? "Сохранить" : "Подписаться" }}
-        </Button>
-        <Button :disabled="submitting" @click="closePopover"> Отмена </Button>
-      </div>
-    </div>
-  </div>
+      ref="panel"
+      :user-id="userId"
+      :anchor="root"
+      @close="close"
+    />
+  </span>
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/ZIndex" as *
-
 .user-subscribe
-  position: relative
-  display: inline-block
+  display: inline-flex
+  flex-shrink: 0
 
-.popover
-  position: absolute
-  top: calc(100% + #{$tiny})
-  left: 0
-  z-index: $z-popover
-  min-width: 220px
-  padding: $small $medium
-  background-color: $bg-element
-  border: 1px solid $border
-  border-radius: $border-radius
-  box-shadow: 0 4px 16px $shadow-color
-  outline: none
-
-.popover-title
-  font-size: $secondary-font-size
+// The arrow of the site's dropdowns (the field of a list, the calendar's
+// month): it says a panel is behind the word.
+.user-subscribe-chevron
+  width: 14px
+  height: 14px
+  margin-left: $small
   color: $text-muted
-  margin-bottom: $tiny
-
-.row
-  display: flex
-  align-items: center
-  gap: $small
-  padding: $tiny 0
-  cursor: pointer
-  font-size: $font-size
-  color: $text
-
-  input
-    cursor: pointer
-
-.hint
-  margin: $tiny 0
-  font-size: $secondary-font-size
-  color: $accent-red
-
-.actions
-  display: flex
-  flex-wrap: wrap
-  align-items: center
-  gap: $small
-  margin-top: $small
-
-  .spacer
-    flex: 1 1 auto
 </style>

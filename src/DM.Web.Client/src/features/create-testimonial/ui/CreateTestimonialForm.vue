@@ -78,7 +78,11 @@ const {
             />
           </form-field>
           <div class="form-actions">
-            <Button :loading="isSubmitting" @click="submitTestimonial">
+            <Button
+              variant="primary"
+              :loading="isSubmitting"
+              @click="submitTestimonial"
+            >
               Добавить отзыв
             </Button>
           </div>
@@ -104,7 +108,6 @@ const {
   padding: $medium
   background-color: $bg-element-overlay
   border: 1px solid $border
-  border-radius: $border-radius
 
 .form-actions
   display: flex

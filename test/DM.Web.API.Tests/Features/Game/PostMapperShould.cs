@@ -53,7 +53,7 @@ public class PostMapperShould : UnitTestBase
         AuthorUserId = AuthorId,
         GameId = GameId,
         CreatedUtc = DateTimeOffset.UtcNow,
-        GameText = "Он наклонился к ней. [private=Горим]Беги.[/private]",
+        GameText = "Он наклонился к ней. [private=\"Горим\"]Беги.[/private]",
         MetagameText = "ooc",
         PrivateAddresseeSnapshotJson = $"{{\"Горим\":[\"{AddresseeId}\"]}}",
         GameMasterUserId = MasterId,

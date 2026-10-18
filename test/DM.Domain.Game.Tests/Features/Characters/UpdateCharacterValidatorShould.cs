@@ -4,6 +4,7 @@ using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Characters;
+using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
 using FluentValidation.TestHelper;
@@ -83,21 +84,15 @@ public class UpdateCharacterValidatorShould : UnitTestBase
     }
 
     /// <summary>
-    /// A game with no attribute schema is answered the same way on update as on
-    /// create: the schema rules are skipped rather than run against a schema that
-    /// does not exist. The repository is set up to throw exactly as it does for
-    /// such a game, so a rule that asks it anyway fails this test instead of
-    /// answering a request with 500.
+    /// A sheet with no specifications in it accepts no value: the identifier
+    /// submitted answers to nothing, which is the same refusal an unknown one
+    /// earns in a game whose sheet is full.
     /// </summary>
     [Fact]
-    public async Task SkipTheSchemaRulesWhenTheGameHasNoSchema()
+    public async Task RefuseAValueWhenTheSheetHoldsNoSpecifications()
     {
         characterRepository
-            .CharacterRequiresAttributes(
-                Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(false);
-        characterRepository
-            .GetCharacterSchema(Arg.Any<Guid>())
-            .ThrowsAsync(new InvalidOperationException("Nullable object must have a value."));
+            .GetCharacterSchema(Arg.Any<Guid>()).Returns(new GameAttributeSchema());
 
         var input = new UpdateCharacter
         {
@@ -110,7 +105,8 @@ public class UpdateCharacterValidatorShould : UnitTestBase
         };
 
         var result = await validator.TestValidateAsync(input);
-        result.ShouldNotHaveAnyValidationErrors();
+        result.ShouldHaveValidationErrorFor("Attributes[0]")
+            .WithErrorMessage(AttributeValidationError.InvalidSpecification);
     }
 
     /// <summary>
@@ -123,12 +119,8 @@ public class UpdateCharacterValidatorShould : UnitTestBase
     {
         var specificationId = Guid.NewGuid();
         characterRepository
-            .CharacterRequiresAttributes(
-                Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(true);
-        characterRepository
-            .GetCharacterSchema(Arg.Any<Guid>()).Returns(new AttributeSchema
+            .GetCharacterSchema(Arg.Any<Guid>()).Returns(new GameAttributeSchema
             {
-                Id = Guid.NewGuid(),
                 Specifications =
                 [
                     new AttributeSpecification

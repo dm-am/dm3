@@ -1,15 +1,20 @@
 <script setup lang="ts">
 // Sidebar row for a single game room, used by both the active and the
-// archived room lists in GamePanel. Layout:
+// archived room lists in GamePanel. Layout, as the old site writes its rooms:
 //
-//   - {lock?} {title} ({unread>0}) {star?}
+//   - {lock?} {title} ({unread}) {star?}     a room the viewer may open
+//   - {lock} {title} - {writers}             a closed room he may not
 //
-// Affordances (all computed strictly from the CURRENT viewer's own data —
-// the row must never reveal which OTHER members have access):
-//   - lock: shown only for Private rooms. Grey by default, green when the
-//     current user has a matching room.accesses entry (character owner or
-//     explicit reader).
-//   - unread: "(N)" muted counter, only when unreadPostsCount > 0.
+// Affordances:
+//   - lock: shown only for closed rooms, in the colour of the viewer's access:
+//     green where he may open the room, a pale grey where he may not.
+//   - writers: after the title of a room the viewer may not open, " - " and
+//     the characters who write in it, as the old site writes "[Лес] - Густав,
+//     Эодор". The server names them for such a room and nothing else of it;
+//     a room nobody writes in is its title alone.
+//   - unread: "(N)" muted counter, zero included, on a room the viewer may
+//     open. A room he may not open counts nothing for him, and the server
+//     sends it nothing to count.
 //   - star: red, only when a pendency in this room awaits the current user.
 //     Rooms carry no tooltip, the star's aria-label is the whole affordance.
 import { computed } from "vue";
@@ -46,6 +51,10 @@ const canView = computed(() => props.room.canView !== false);
 
 const unread = computed(() => props.room.unreadPostsCount ?? 0);
 
+const writers = computed(() =>
+  canView.value ? "" : (props.room.characterNames ?? []).join(", "),
+);
+
 // Only unfulfilled expectations count: a pendency stays in the payload after
 // the post that answered it has landed.
 const myPendencies = computed(() =>
@@ -77,7 +86,8 @@ const STAR = "*";
       room.title
     }}</router-link>
     <span v-else class="title no-access">{{ room.title }}</span>
-    <SidebarCounter :value="unread" />
+    <span v-if="writers" class="writers">{{ ` - ${writers}` }}</span>
+    <SidebarCounter v-if="canView" :value="unread" />
     <span v-if="awaitsMe" class="star" :aria-label="starLabel">{{ STAR }}</span>
   </li>
 </template>
@@ -89,14 +99,16 @@ const STAR = "*";
 .muted
   color: $text-muted
 
-// The glyph is rendered for every room and hidden on the public ones, the way
+// The glyph is rendered for every room and hidden on the open ones, the way
 // the old site does it, so the titles of a list start at one x whatever the
-// access of each room. Dropping the element instead (v-if) pulled the public
+// access of each room. Dropping the element instead (v-if) pulled the open
 // rooms left and left the column ragged.
 // The gap is a space: the original writes one between the glyph and the link,
 // and a space at the sidebar's size measures 4.28 pixels, which $grid-step is.
+// Closed to the viewer, the glyph is the pale grey of the old site's
+// (gainsboro there), the lightest grey of the theme: the frame of a field.
 .lock
-  color: $text-muted
+  color: $border
   vertical-align: -0.1em
   margin-right: $grid-step
 
@@ -106,9 +118,12 @@ const STAR = "*";
   &.public
     visibility: hidden
 
-// A room the viewer may not open is not a link and must not look like one.
-.no-access
-  color: $text-muted
+// A room the viewer may not open is not a link and must not look like one:
+// the plain text of the column, as the old site writes it, and so are the
+// names after it. The lock beside it already says it is closed.
+.no-access,
+.writers
+  color: $text
 
 .star
   color: $accent-red

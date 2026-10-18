@@ -6,9 +6,10 @@ using SubscriptionEntity = DM.Infrastructure.Persistence.Entities.Subscriptions.
 namespace DM.Infrastructure.Persistence.Shared.Subscriptions;
 
 /// <summary>
-/// Compile-time mapper for subscriptions. The name of the target is not on
-/// the subscription row: it lives in one of four tables the target type
-/// chooses between. The two reads that render it resolve it in their own
+/// Compile-time mapper for subscriptions. The name of the target (and the
+/// status of a game or a blog) is not on the subscription row: it lives in one
+/// of four tables the target type chooses between. The two reads that render
+/// it resolve it in their own
 /// projection (SubscriptionRepository.WithTargetNames); notification fan-out
 /// never shows a name, and joining four tables per published event to fill a
 /// field nobody reads is what the ignores refuse.
@@ -29,6 +30,8 @@ public static partial class SubscriptionMapper
     [MapProperty(nameof(SubscriptionEntity.SubscriptionId), nameof(Subscription.Id))]
     [MapperIgnoreTarget(nameof(Subscription.TargetTitle))]
     [MapperIgnoreTarget(nameof(Subscription.TargetUsername))]
+    [MapperIgnoreTarget(nameof(Subscription.TargetStatus))]
+    [MapperIgnoreTarget(nameof(Subscription.TargetActivatedUtc))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     public static partial Subscription ToSubscription(this SubscriptionEntity subscription);
 }

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Users;
 
 namespace DM.Web.API.Features.Moderation.Profiles;
@@ -259,12 +261,14 @@ public class ModerationPermissions
     public bool CanCreateModNote { get; set; }
 
     /// <summary>
-    /// Can issue warnings (Moderator+)
+    /// Can issue warnings: Moderator+, to a user whose role is below the caller's
+    /// and who is not an administrator (ModerationRank)
     /// </summary>
     public bool CanIssueWarning { get; set; }
 
     /// <summary>
-    /// Can issue bans (SeniorModerator+)
+    /// Can issue bans: SeniorModerator+, to a user whose role is below the
+    /// caller's and who is not an administrator (ModerationRank)
     /// </summary>
     public bool CanIssueBan { get; set; }
 
@@ -299,6 +303,87 @@ public class ModerationWatchRequest
     /// Whether the user is under moderation watch from now on
     /// </summary>
     public bool UnderWatch { get; set; }
+}
+
+/// <summary>
+/// Request to remove a user's account on a moderator's decision
+/// </summary>
+/// <remarks>
+/// The reason is required. An account removed with nothing written down leaves
+/// the next moderator - and the reader who asks what happened - with a missing
+/// person and no record of who took the decision or why.
+/// </remarks>
+public class RemoveAccountRequest
+{
+    /// <summary>
+    /// Why the account is being removed
+    /// </summary>
+    public string Reason { get; set; } = "";
+}
+
+/// <summary>
+/// An account moderation has removed, as the one list that can see one carries it
+/// </summary>
+/// <remarks>
+/// Not one of the user references the rest of the API answers with: those are
+/// drawn as a card, with a rating, a picture and a newbie mark, and none of that
+/// exists for a row every other read in the product hides. What is left is what a
+/// moderator holding a support letter recognises the account by.
+/// </remarks>
+public class RemovedAccount
+{
+    /// <summary>
+    /// Account identifier
+    /// </summary>
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Name the account keeps while it is gone
+    /// </summary>
+    public string Username { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Address the account keeps. Absent unless the caller is an administrator.
+    /// </summary>
+    /// <remarks>
+    /// Withheld below an administrator by the domain, and not a second time here:
+    /// the rule is the same one the moderated profile obeys, and a copy of it in
+    /// this layer would be a second answer to the question of who may read an
+    /// address.
+    /// </remarks>
+    public string? Email { get; set; }
+
+    /// <summary>
+    /// Role the account had
+    /// </summary>
+    public UserRole Role { get; set; }
+
+    /// <summary>
+    /// Registration moment (UTC)
+    /// </summary>
+    public DateTimeOffset RegisteredUtc { get; set; }
+
+    /// <summary>
+    /// Last activity moment (UTC), if the account was ever active
+    /// </summary>
+    public DateTimeOffset? LastActivityUtc { get; set; }
+}
+
+/// <summary>
+/// Which removed accounts to list
+/// </summary>
+/// <remarks>
+/// One term for both columns: a moderator answering a support letter has a name
+/// or an address and nothing else, and whoever wrote the letter is the one who
+/// decided which of the two he quoted.
+/// </remarks>
+public class RemovedAccountsQuery : PagingQuery
+{
+    /// <summary>
+    /// Part of a name or of an address; empty lists every removed account
+    /// </summary>
+    /// <example>ivan</example>
+    public string? Search { get; set; }
 }
 
 /// <summary>

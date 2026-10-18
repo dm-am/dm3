@@ -147,9 +147,9 @@ internal class WebAuthenticationService : IWebAuthenticationService
                     {
                         await _suspiciousLoginNotificationSender.SendAsync(
                             identity.User.Email,
-                            identity.User.Username,
                             sessionContext?.IpAddress,
-                            sessionContext?.UserAgent);
+                            sessionContext?.UserAgent,
+                            identity.Settings?.TimeZoneId);
                     }
                     catch (Exception ex)
                     {

@@ -39,17 +39,12 @@ public interface IRoomRepository
     /// </summary>
     Task<RoomToUpdate?> GetForUpdate(Guid roomId, Guid userId);
 
-    /// <summary>
-    /// Get last room info for a game
-    /// </summary>
-    Task<RoomOrderInfo?> GetLastRoomInfo(Guid gameId);
-
     #endregion
 
     #region Write
 
     /// <summary>
-    /// Create new room
+    /// Create new room, numbered and placed last in its game by the repository
     /// </summary>
     Task<Room> Create(CreateRoomEntity createRoom);
 

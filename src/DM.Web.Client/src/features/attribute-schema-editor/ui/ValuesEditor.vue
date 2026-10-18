@@ -139,7 +139,7 @@ function removeRow(key: number) {
   font-size: 1.2em
 
   &:hover
-    color: $accent-red
+    color: $text
 
 .add-btn
   align-self: flex-start

@@ -90,15 +90,30 @@ function callsIn(file: string): { calls: Call[]; skipped: number } {
   const calls: Call[] = [];
   let skipped = 0;
 
-  // `${this.basePath}` is not a path parameter, it is the prefix spelled once
-  // at the top of the class. Substituted rather than blanked: read as a
-  // parameter it turns six real addresses into /v1/{param}/unread and friends,
-  // which match nothing and would have to be excused by hand.
+  // `${this.basePath}` is not a path parameter but a prefix kept as a field,
+  // which a named class (as GameApi is) may declare. Substituted rather than
+  // blanked: read as a parameter it turns every address of the class into
+  // /v1/{param}/..., which matches nothing on the server and would have to be
+  // excused by hand. A reserve: the prefixes there are now are constants of
+  // their modules, read below.
   const fields = new Map<string, string>();
   for (const field of source.matchAll(
     /(?:private|public|readonly)\s+(\w+)\s*=\s*["']([^"']+)["']/g,
   )) {
     fields.set(field[1], field[2]);
+  }
+
+  // The same prefix spelled as a constant of the module (`${BASE_PATH}`), the
+  // shape an exported class expression needs: it may not declare a private
+  // field. Only a constant at the top level of the file counts, and only at
+  // the head of the address: further along a constant is the value of a path
+  // parameter (`boards/${NEWS_BOARD_ALIAS}/topics`), which the snapshot spells
+  // {param} like any other.
+  const constants = new Map<string, string>();
+  for (const constant of source.matchAll(
+    /^(?:export\s+)?const\s+(\w+)\s*=\s*["']([^"']+)["']\s*;?\s*$/gm,
+  )) {
+    constants.set(constant[1], constant[2]);
   }
 
   // The type argument nests — Api.get<ListEnvelope<SecurityEvent>> is the
@@ -132,6 +147,10 @@ function callsIn(file: string): { calls: Call[]; skipped: number } {
       .replace(
         /\$\{\s*this\.(\w+)\s*\}/g,
         (whole, name) => fields.get(name) ?? whole,
+      )
+      .replace(
+        /^\$\{\s*(\w+)\s*\}/,
+        (whole, name) => constants.get(name) ?? whole,
       )
       .replace(/\$\{[^}]*\}/g, "{param}")
       .split("?")[0];

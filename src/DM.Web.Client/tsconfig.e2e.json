@@ -1,6 +1,11 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": ["e2e/**/*"],
+  // A test may import a leaf module of the app instead of copying a number
+  // the app tunes (chat-room-live-tail.spec.ts reads the threshold of the
+  // tail). A composite project compiles only the files it lists, so each such
+  // module is listed here by name; a module that pulls in the alias graph
+  // stays out of the tests.
+  "include": ["e2e/**/*", "src/shared/lib/utils/liveTail.ts"],
   "compilerOptions": {
     "composite": true,
     "types": ["node"],

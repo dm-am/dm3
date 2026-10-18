@@ -44,6 +44,11 @@ export interface DateRangePickerProps {
   toLabel?: string;
   /** Show clear button when values exist */
   showClearButton?: boolean;
+  /**
+   * Days after today can be picked. Off everywhere but the dates of a poll,
+   * which starts and ends ahead: nothing else a filter finds happens tomorrow.
+   */
+  allowFuture?: boolean;
 }
 
 // =============================================================================

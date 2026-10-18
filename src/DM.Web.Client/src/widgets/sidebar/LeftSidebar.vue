@@ -71,8 +71,8 @@ const routeBlogId = computed(() =>
 
 // Moderation zone (/moderation/*) — pure navigation panel, no params. Hidden
 // below Moderator: the zone's addresses admit any authenticated viewer (the
-// pages refuse in-page), and a panel of staff links none of which would open
-// is not navigation.
+// zone's shell answers him with the 403 page), and a panel of staff links none
+// of which would open is not navigation.
 const isModerationRoute = computed(() => route.meta.moderationZone === true);
 const showModerationPanel = computed(
   () => isModerationRoute.value && userIsModerator(userStore.user),

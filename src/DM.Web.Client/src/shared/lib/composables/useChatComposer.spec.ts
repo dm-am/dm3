@@ -1,11 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ref } from "vue";
 import { useChatComposer, type ChatActionResult } from "./useChatComposer";
 import type { GeneralError } from "@/shared/api/models/common";
 
 /**
- * A 404: the interceptor stays quiet about those, so notifyFailure reaches the
- * toast layer and nothing here has to stub it out.
+ * A 404 the server worded: the line at the place says it as it came.
  */
 const refusal: GeneralError = {
   type: "about:blank",
@@ -56,6 +58,8 @@ describe("useChatComposer", () => {
     expect(composer.newMessage.value).toBe("текст");
     expect(editor.clear).not.toHaveBeenCalled();
     expect(options.scrollToBottom).not.toHaveBeenCalled();
+    // The reason stands under "Отправить", not in a plate.
+    expect(composer.sendResult.refusal.value).toBe("Сообщение не найдено");
   });
 
   it("sends nothing while a send is in flight, or with blank text", async () => {
@@ -114,7 +118,83 @@ describe("useChatComposer", () => {
     await composer.confirmDelete();
 
     // The row must not keep showing "точно удалить?" over a message that is
-    // still there; the toast is what says the delete did not happen.
+    // still there; the line under the message says the delete did not happen.
     expect(options.confirmingDeleteId.value).toBeNull();
+    expect(composer.messageRefusal.value).toEqual({
+      id: "m1",
+      text: "Сообщение не найдено",
+    });
+  });
+
+  it("says a refused press on a message under that message, and forgets it on the next delete", async () => {
+    const { composer } = setup({
+      remove: vi.fn(async (): Promise<ChatActionResult> => ({ error: null })),
+    });
+
+    composer.refuseMessage("m3", refusal, "Не удалось поставить лайк");
+    expect(composer.messageRefusal.value).toEqual({
+      id: "m3",
+      text: "Сообщение не найдено",
+    });
+
+    composer.requestDelete("m4");
+    await composer.confirmDelete();
+
+    expect(composer.messageRefusal.value).toBeNull();
+  });
+
+  // An expired session is about the reader: the plate says it, the line not.
+  it("leaves an expired session to its plate", () => {
+    const { composer } = setup();
+
+    composer.refuseMessage(
+      "m5",
+      { ...refusal, status: 401, title: "" },
+      "Не удалось сохранить сообщение",
+    );
+
+    expect(composer.messageRefusal.value).toBeNull();
+  });
+});
+
+/**
+ * A line under a message says the last press on it was refused. A retry that
+ * goes through fills the heart or saves the edit, and a line still standing
+ * under it would say the opposite of the message above it. So each press on a
+ * message takes its line down before it asks the server, in both chats: the
+ * presses live in the one feed both chats are drawn with (chatParity.spec.ts
+ * holds that they are).
+ */
+describe("the line under a message on the next press", () => {
+  it("is taken down for that message and no other", () => {
+    const { composer } = setup();
+    composer.refuseMessage("m3", refusal, "Не удалось поставить лайк");
+
+    composer.clearMessageRefusal("m4");
+    expect(composer.messageRefusal.value?.id).toBe("m3");
+
+    composer.clearMessageRefusal("m3");
+    expect(composer.messageRefusal.value).toBeNull();
+  });
+
+  const SRC = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+  /** The body of one function of a component, up to the next top-level one. */
+  const body = (file: string, name: string): string => {
+    const source = readFileSync(join(SRC, file), "utf8");
+    const start = source.indexOf(`async function ${name}(`);
+    expect(start, `${file} has ${name}`).toBeGreaterThan(-1);
+    const end = source.indexOf("\n}\n", start);
+    return source.slice(start, end);
+  };
+
+  it.each([
+    ["widgets/chat-feed/ChatFeed.vue", "toggleLike"],
+    ["widgets/chat-feed/ChatFeed.vue", "saveEdit"],
+  ])("%s %s clears it before the request", (file, name) => {
+    const text = body(file, name);
+    const cleared = text.indexOf("clearMessageRefusal(");
+    expect(cleared, "clears the line").toBeGreaterThan(-1);
+    expect(cleared).toBeLessThan(text.indexOf("await "));
   });
 });

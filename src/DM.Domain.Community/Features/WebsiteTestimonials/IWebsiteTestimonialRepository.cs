@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Domain.Community.Features.WebsiteTestimonials;
 
@@ -46,6 +47,13 @@ public interface IWebsiteTestimonialRepository
     /// <summary>
     /// Create new website testimonial
     /// </summary>
+    /// <remarks>
+    /// Throws <see cref="DuplicateEntityException" /> when the author already has
+    /// a live testimonial: the caller checks first, and this is the race where two
+    /// requests both pass that check. The partial unique index over the author is
+    /// what actually holds "one testimonial apiece", and a second row would leave
+    /// the author with two entries and the form still offering to write one.
+    /// </remarks>
     /// <param name="testimonial">Testimonial data</param>
     /// <returns>Created testimonial</returns>
     Task<WebsiteTestimonial> Create(CreateWebsiteTestimonialEntity testimonial);

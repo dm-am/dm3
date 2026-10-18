@@ -19,6 +19,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Testing;
+using DM.Testing.Markup;
 using DM.Domain.Account.Features.Authentication;
 using AwesomeAssertions;
 using FluentValidation;
@@ -75,7 +76,8 @@ public class PublicationCommentServiceShould : UnitTestBase
             _dateTimeProvider,
             _repository,
             _countersRepository,
-            _eventProducer);
+            _eventProducer,
+            new TagNamesAsTyped());
     }
 
     [Fact]
@@ -93,7 +95,7 @@ public class PublicationCommentServiceShould : UnitTestBase
         _identityProvider.Current.Returns(identity);
         _publicationService.GetPublication(publicationId, default).Returns(publication);
         _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.Create(Arg.Any<CreateComment>(), userId, publicationId, Arg.Any<int>(), default)
+        _repository.Create(Arg.Any<CreateComment>(), userId, publicationId, default)
             .Returns((new Comment { Id = commentId }, commentId));
 
         await _service.CreateAsync(createComment);
@@ -119,7 +121,42 @@ public class PublicationCommentServiceShould : UnitTestBase
         var act = async () => await _service.CreateAsync(createComment);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("черном списке"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromBlog);
+    }
+
+    /// <summary>
+    /// Rewriting one's comment under a publication is writing in the blog again.
+    /// </summary>
+    [Fact]
+    public async Task RefuseABlacklistedAuthorTheEditOfHisComment()
+    {
+        var publicationId = Guid.NewGuid();
+        var blogId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var comment = new Comment
+        {
+            Id = Guid.NewGuid(),
+            EntityId = publicationId,
+            Text = "Original text",
+            Author = new GeneralUser { UserId = userId }
+        };
+        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(userId));
+        _repository.Get(comment.Id, default).Returns(comment);
+        _publicationService.GetPublication(publicationId, default)
+            .Returns(new Publication { Id = publicationId, BlogId = blogId });
+        _blogService.GetBlogAsync(blogId, default).Returns(new BlogDto
+        {
+            Id = blogId,
+            Author = new GeneralUser { UserId = Guid.NewGuid() },
+            Assistants = Array.Empty<BlogAssistantInfo>(),
+            BlacklistedUserIds = new HashSet<Guid> { userId }
+        });
+
+        var act = async () => await _service.UpdateAsync(new UpdateComment { CommentId = comment.Id, Text = "Updated" });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromBlog);
+        await _repository.DidNotReceive().Update(Arg.Any<UpdatePublicationCommentEntity>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -137,7 +174,7 @@ public class PublicationCommentServiceShould : UnitTestBase
         _identityProvider.Current.Returns(identity);
         _publicationService.GetPublication(publicationId, default).Returns(publication);
         _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.Create(Arg.Any<CreateComment>(), userId, publicationId, Arg.Any<int>(), default)
+        _repository.Create(Arg.Any<CreateComment>(), userId, publicationId, default)
             .Returns((new Comment { Id = commentId }, commentId));
 
         await _service.CreateAsync(createComment);
@@ -193,65 +230,64 @@ public class PublicationCommentServiceShould : UnitTestBase
     }
 
     /// <summary>
-    /// Deleting the last comment moves the pointer to the one before it.
+    /// The removal that went through pays the unread counters and announces itself.
     /// </summary>
     /// <remarks>
-    /// Two things were uncovered here, and this is both of them. Deletion in this
-    /// service had no test at all, alone among the four that carry comments; and
-    /// the branch that moves the "last comment" pointer has none in any of the
-    /// four, because every one of them deletes a comment that is not the last.
+    /// Deletion in this service had no test at all, alone among the four that
+    /// carry comments.
     ///
-    /// What that branch costs when it is wrong: the publication keeps pointing at
-    /// a comment that no longer exists, so the list shows a last activity nobody
-    /// can open, and the count beside it is one too many.
+    /// Neither the count nor the last-comment pointer is asserted here, because
+    /// the service no longer decides either: both are written by the transaction
+    /// that marks the comment removed, and what a second removal of the same
+    /// comment does to them is a question for the database. DiscussionCountersShould
+    /// and LastCommentPointerShould answer it against PostgreSQL.
     /// </remarks>
     [Fact]
-    public async Task PointAtTheCommentBeforeTheLastOneWhenTheLastIsDeleted()
+    public async Task PayTheCountersForTheRemovalThatWentThrough()
     {
         var commentId = Guid.NewGuid();
         var publicationId = Guid.NewGuid();
-        var successorId = Guid.NewGuid();
         var userId = Guid.NewGuid();
+        var createdUtc = DateTimeOffset.UtcNow.AddHours(-2);
 
         var comment = new PublicationCommentToDelete
         {
             Id = commentId,
             EntityId = publicationId,
-            IsLastComment = true,
-            PublicationCommentCount = 5,
-            CreatedUtc = DateTimeOffset.UtcNow
+            CreatedUtc = createdUtc
         };
 
         _identityProvider.Current.Returns(AuthenticatedIdentities.Of(userId));
         _repository.GetForDelete(commentId, default).Returns(comment);
-        _repository
-            .GetNewestCommentIdExcept(publicationId, commentId, default).Returns(successorId);
 
         DeletePublicationCommentEntity? deleted = null;
         _repository
-            .When(r => r.Delete(Arg.Any<DeletePublicationCommentEntity>(), default))
-            .Do(ci =>
-                {
-                    var entity = ci.ArgAt<DeletePublicationCommentEntity>(0);
-                    deleted = entity;
-                });
+            .Delete(Arg.Do<DeletePublicationCommentEntity>(entity => deleted = entity), default)
+            .Returns(true);
 
         await _service.DeleteAsync(commentId);
 
         _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Delete, Arg.Any<Comment>());
 
         deleted.Should().NotBeNull("the deletion is what the repository is handed");
-        deleted!.NewLastCommentId.Should().Be(successorId,
-            "the pointer has to move off the comment being removed, or the publication " +
-            "keeps advertising an activity nobody can open");
-        deleted.NewCommentCount.Should().Be(4,
-            "the count beside it is one less than it was");
-        deleted.DeletedByUserId.Should().Be(userId,
+        deleted!.DeletedByUserId.Should().Be(userId,
             "who removed it is the one thing the row cannot recover afterwards");
+        await _countersRepository.Received(1).DecrementAsync(
+            publicationId, UnreadEntryType.Message, createdUtc);
+        await _eventProducer.Received(1).SendAsync(EventType.DeletedPublicationComment, commentId);
     }
 
+    /// <summary>
+    /// A removal that found the comment already gone pays nothing.
+    /// </summary>
+    /// <remarks>
+    /// The author and a moderator can both press delete, and the author can press
+    /// it twice on a slow answer. The unread counter and the event belong to the
+    /// removal that happened: repeating them here takes the counter down twice for
+    /// one comment, and nothing recomputes it.
+    /// </remarks>
     [Fact]
-    public async Task LeaveThePointerAloneWhenTheDeletedCommentIsNotTheLast()
+    public async Task LeaveTheCountersToTheRemovalThatTookTheComment()
     {
         var commentId = Guid.NewGuid();
         var publicationId = Guid.NewGuid();
@@ -260,30 +296,19 @@ public class PublicationCommentServiceShould : UnitTestBase
         {
             Id = commentId,
             EntityId = publicationId,
-            IsLastComment = false,
-            PublicationCommentCount = 5,
             CreatedUtc = DateTimeOffset.UtcNow
         };
 
         _identityProvider.Current.Returns(AuthenticatedIdentities.Of(Guid.NewGuid()));
         _repository.GetForDelete(commentId, default).Returns(comment);
-
-        DeletePublicationCommentEntity? deleted = null;
-        _repository
-            .When(r => r.Delete(Arg.Any<DeletePublicationCommentEntity>(), default))
-            .Do(ci =>
-                {
-                    var entity = ci.ArgAt<DeletePublicationCommentEntity>(0);
-                    deleted = entity;
-                });
+        _repository.Delete(Arg.Any<DeletePublicationCommentEntity>(), default).Returns(false);
 
         await _service.DeleteAsync(commentId);
 
-        deleted!.NewLastCommentId.Should().BeNull(
-            "the last comment is somebody else's and stays where it is");
-        // A search for a successor that is not needed is a query per deletion.
-        await _repository.DidNotReceive().GetNewestCommentIdExcept(
-            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _countersRepository.DidNotReceive().DecrementAsync(
+            Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<DateTimeOffset>());
+        await _eventProducer.DidNotReceive().SendAsync(
+            Arg.Any<EventType>(), Arg.Any<Guid>());
     }
 
 }

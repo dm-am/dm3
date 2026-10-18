@@ -15,6 +15,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { DateInput } from "@/shared/ui/DatePicker";
+import { siteTime } from "@/shared/lib/utils/datetime";
 import dayjs from "dayjs";
 
 const props = defineProps<{
@@ -87,7 +88,33 @@ function onGenderChange(value: string) {
   emit("updateField", "gender", value);
 }
 
+// The date the field shows while editing: the one last picked or typed, else
+// the saved one. The change itself goes to the page's edit draft, and the
+// profile handed down here stays the saved one until "Завершить", so bound to
+// the saved date alone the field snapped back to it the moment it lost focus.
+const pickedBirthday = ref<string | null | undefined>(undefined);
+/** What the field says is wrong with the date typed, shown under it. */
+const birthdayReason = ref<string | null>(null);
+const birthdayModel = computed(() =>
+  pickedBirthday.value !== undefined
+    ? pickedBirthday.value
+    : birthdayInputValue.value || null,
+);
+watch(
+  () => props.isEditMode,
+  () => {
+    pickedBirthday.value = undefined;
+    birthdayReason.value = null;
+  },
+);
+
+// An empty birthday opens on the block of years round the current year less
+// twelve (2003-2014 in 2026), and not on the last twelve, where nobody's
+// birthday is: nearly every reader is spared a press.
+const birthdayOpensOn = siteTime().subtract(12, "year").format("YYYY-MM-DD");
+
 function onBirthdayChange(value: string | null) {
+  pickedBirthday.value = value;
   emit("updateField", "birthday", value ?? "");
 }
 
@@ -228,11 +255,20 @@ function onContactChange(
       />
 
       <template v-if="isEditMode">
-        <FormField label="День рождения" name="birthday">
+        <FormField
+          label="День рождения"
+          name="birthday"
+          :errors="birthdayReason ? [birthdayReason] : []"
+        >
           <DateInput
-            :model-value="birthdayInputValue || null"
+            :model-value="birthdayModel"
+            :max="siteTime().format('YYYY-MM-DD')"
+            narrow
+            empty-level="years"
+            :open-on="birthdayOpensOn"
             aria-label="День рождения"
             @update:model-value="onBirthdayChange"
+            @reason="birthdayReason = $event"
           />
         </FormField>
         <label class="checkbox-row">
@@ -371,9 +407,10 @@ function onContactChange(
   input
     cursor: pointer
 
+// The contact fields are fields of the page and take its type (+input): the
+// 14 of every field of one line.
 .input
   font-family: inherit
-  font-size: $font-size
 
 .contacts-edit-list
   display: flex

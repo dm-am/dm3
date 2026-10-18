@@ -137,8 +137,9 @@ public class CharacterController : ControllerBase
     /// The caller names the transition, not the target status: Retired is reached
     /// by dying, by leaving and by being exiled, and each is a different right.
     /// `Accept` and `Decline` answer an application, `Kill` and `Exile` belong to
-    /// the game lead, `Leave` and `Return` to the player, `Resurrect` undoes a
-    /// death. A transition illegal from the current status is rejected with 400.
+    /// the game lead, `Leave` to the player. `Resurrect` undoes a death and
+    /// `Readmit` an exile, both the lead's; what the player left stays left. A
+    /// transition illegal from the current status is rejected with 400.
     ///
     /// Content edits go through PATCH; it does not change status.
     /// </remarks>

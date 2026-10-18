@@ -10,7 +10,7 @@
  */
 import { computed, provide, ref } from "vue";
 import { useRoute } from "vue-router";
-import { useBoardsStore } from "@/entities/forum";
+import { BOARD_PAGE_OWNS_REFUSAL, useBoardsStore } from "@/entities/forum";
 import { storeToRefs } from "pinia";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import {
@@ -71,9 +71,14 @@ async function fetchData() {
   // The /forum index has no board to resolve — its leaf (ForumIndexPage)
   // loads the boards table itself.
   if (!alias) return;
-  // Load boards for navigation and select current board
+  // Load boards for navigation and select current board. The read takes its
+  // refusal over: a failure stands below as the error page of the status, a
+  // 429 included, and the interceptor's plate over it said the same twice.
   await fetchBoards();
-  const { ok, status } = await trySelectBoardByAlias(alias);
+  const { ok, status } = await trySelectBoardByAlias(
+    alias,
+    BOARD_PAGE_OWNS_REFUSAL,
+  );
   // Stale continuation: the user navigated to another board while this one
   // was resolving — that navigation's own fetchData owns all state now.
   if ((route.params.alias as string | undefined) !== alias) return;

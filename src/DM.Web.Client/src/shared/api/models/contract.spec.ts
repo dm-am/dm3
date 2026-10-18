@@ -68,6 +68,10 @@ const MIRRORS: Record<string, string[]> = {
     "DM.Web.API.Features.Account.Credentials.UsernameChangeResponse",
   ],
 
+  // A row of the list of notifications. The client named it after its reader,
+  // the server after the one DTO the list and the hub both send.
+  UserNotification: ["DM.Web.API.Features.Personal.Notifications.Notification"],
+
   // One interface over three server shapes, every extra field optional and
   // commented as such. Held to the union of the three: a field that none of
   // them sends is still a field that reads undefined.

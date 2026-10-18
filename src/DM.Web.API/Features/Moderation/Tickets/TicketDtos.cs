@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Enums;
-using DM.Web.API.Shared.Dto;
+using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.BbRendering;
 
 namespace DM.Web.API.Features.Moderation.Tickets;
 
@@ -16,17 +17,21 @@ public class Ticket
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Reporter username (null for guest submissions)
+    /// The reporter: null for a guest submission, and for an account removed since
+    /// (<see cref="IsGuest" /> tells the two apart, the signature reads
+    /// "гость" for the first and "Аккаунт удален" for the second)
     /// </summary>
-    public string? ReporterUsername { get; set; }
+    public User? Reporter { get; set; }
 
     /// <summary>
-    /// Target user username (null for tickets without a target)
+    /// Whether the ticket was filed without an account
     /// </summary>
-    public string? TargetUsername { get; set; }
+    public bool IsGuest { get; set; }
 
     /// <summary>
-    /// Contact email left by a guest author (null for authenticated submissions)
+    /// Contact email left by a guest author (null for authenticated submissions).
+    /// For moderation to work with, an access recovery is checked against it; it
+    /// is not a part of the text, which is the author's words alone
     /// </summary>
     public string? GuestEmail { get; set; }
 
@@ -56,9 +61,18 @@ public class Ticket
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Reported content snapshot
+    /// Ticket body as it was stored, in the site markup: the text of a support
+    /// or complaint form, or the reported content snapshot. The fields of the
+    /// form that are not the text (the violator, the link, the contact of an
+    /// author with an account) are lines of it, written there at filing
     /// </summary>
     public string Description { get; set; } = "";
+
+    /// <summary>
+    /// Ticket body rendered for display, with the tag set of profile texts:
+    /// neither [mod] nor [private] draws anything
+    /// </summary>
+    public InfoBbText DescriptionHtml { get; set; } = null!;
 
     /// <summary>
     /// Reporter's comment
@@ -66,69 +80,115 @@ public class Ticket
     public string Comment { get; set; } = "";
 
     /// <summary>
-    /// Assigned moderator
+    /// How many comments the conversation of the ticket holds
     /// </summary>
-    public string? AssignedModeratorUsername { get; set; }
+    public int CommentsCount { get; set; }
 
     /// <summary>
     /// Resolution time
     /// </summary>
     public DateTimeOffset? ResolvedUtc { get; set; }
-
-    /// <summary>
-    /// Moderator's response
-    /// </summary>
-    public string? Answer { get; set; }
-
-    /// <summary>
-    /// Warning was issued
-    /// </summary>
-    public bool HasWarning { get; set; }
-
-    /// <summary>
-    /// Ban was issued
-    /// </summary>
-    public bool HasBan { get; set; }
 }
 
 /// <summary>
-/// Moderation ticket detail DTO: the base ticket plus the conversation
-/// thread. Returned by the detail endpoint only — list endpoints keep the
-/// lighter Ticket payload. Answer stays for backward compatibility as the
-/// single resolution response
+/// A ticket with its conversation: the page of the ticket, for its author and for
+/// moderation
 /// </summary>
 public class TicketDetails : Ticket
 {
     /// <summary>
-    /// Responses in the ticket conversation, oldest first
+    /// The conversation, from the oldest comment to the newest. Whole: it holds a
+    /// hundred comments at most
     /// </summary>
-    public IEnumerable<TicketResponse> Responses { get; set; } = [];
+    public IEnumerable<TicketComment> Comments { get; set; } = [];
+
+    /// <summary>
+    /// Whether the caller may write in the conversation: the ticket is open and
+    /// has room for another comment
+    /// </summary>
+    public bool CanComment { get; set; }
+
+    /// <summary>
+    /// Whether the caller answers as moderation and chooses with his answer the
+    /// status the ticket moves to (AnswerTicketRequest.Status): it is open, and he
+    /// moderates it without being its author
+    /// </summary>
+    public bool CanResolve { get; set; }
+
+    /// <summary>
+    /// The moderator who closed the ticket (null while it is open, and for an
+    /// account removed since)
+    /// </summary>
+    public string? ResolvedByUsername { get; set; }
 }
 
 /// <summary>
-/// A single response in a ticket conversation
+/// One comment of the conversation of a ticket. Not edited, not deleted, not
+/// liked: the conversation is the record of how the ticket was settled
 /// </summary>
-public class TicketResponse
+public class TicketComment
 {
     /// <summary>
-    /// Response author (lightweight reference)
+    /// Comment identifier
     /// </summary>
-    public UserRef Author { get; set; } = null!;
+    public Guid Id { get; set; }
 
     /// <summary>
-    /// Response text
+    /// The author: null for the guest who filed the ticket, and for an account
+    /// removed since (<see cref="IsGuest" /> tells the two apart)
     /// </summary>
-    public string Text { get; set; } = "";
+    public User? Author { get; set; }
 
     /// <summary>
-    /// When the response was created
+    /// Whether the comment was written by the guest who filed the ticket
+    /// </summary>
+    public bool IsGuest { get; set; }
+
+    /// <summary>
+    /// Creation moment
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Whether this response is from a moderator (vs the user)
+    /// Text rendered for display, with the tag set of comments, [mod] included
     /// </summary>
-    public bool IsFromModerator { get; set; }
+    public CommonBbText Text { get; set; } = null!;
+}
+
+/// <summary>
+/// Request of the guest who filed a ticket to write in its conversation
+/// </summary>
+public class CreateTicketCommentRequest
+{
+    /// <summary>
+    /// Text in the site markup, the tag set of comments; as long as the text of a
+    /// ticket at most
+    /// </summary>
+    /// <example>Please send a link to the message</example>
+    public string Text { get; set; } = "";
+}
+
+/// <summary>
+/// Request to answer in the conversation of a ticket, as its author or as
+/// moderation
+/// </summary>
+public class AnswerTicketRequest
+{
+    /// <summary>
+    /// Text in the site markup, the tag set of comments; as long as the text of a
+    /// ticket at most. Required, except for moderation closing the ticket or
+    /// marking it as spam: an empty text then only changes the status
+    /// </summary>
+    /// <example>Please send a link to the message</example>
+    public string Text { get; set; } = "";
+
+    /// <summary>
+    /// The status moderation moves the ticket to with the answer: WaitingForUser
+    /// when left out, Closed or Spam. The author of a ticket sends none (403): his
+    /// answer always leaves it waiting for moderation
+    /// </summary>
+    /// <example>WaitingForUser</example>
+    public TicketStatus? Status { get; set; }
 }
 
 /// <summary>
@@ -164,53 +224,6 @@ public class CreateTicketRequest
     /// </summary>
     /// <example>This comment violates the rules because...</example>
     public string Comment { get; set; } = "";
-}
-
-/// <summary>
-/// Request to resolve a ticket
-/// </summary>
-public class ResolveTicketRequest
-{
-    /// <summary>
-    /// Resolution status
-    /// </summary>
-    public TicketStatus Status { get; set; }
-
-    /// <summary>
-    /// Moderator's response
-    /// </summary>
-    /// <example>Action taken: warning issued for rule violation</example>
-    public string Answer { get; set; } = "";
-
-    /// <summary>
-    /// Issue a warning
-    /// </summary>
-    public bool IssueWarning { get; set; }
-
-    /// <summary>
-    /// Warning message
-    /// </summary>
-    public string? WarningText { get; set; }
-
-    /// <summary>
-    /// Warning points
-    /// </summary>
-    public int WarningPoints { get; set; }
-
-    /// <summary>
-    /// Issue a ban
-    /// </summary>
-    public bool IssueBan { get; set; }
-
-    /// <summary>
-    /// Ban duration in hours
-    /// </summary>
-    public int? BanDurationHours { get; set; }
-
-    /// <summary>
-    /// Ban comment
-    /// </summary>
-    public string? BanComment { get; set; }
 }
 
 /// <summary>

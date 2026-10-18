@@ -1,42 +1,45 @@
 ﻿<script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import {
+  ref,
+  computed,
+  watch,
+  onMounted,
+  onUnmounted,
+  nextTick,
+  getCurrentInstance,
+} from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import { pluralize } from "@/shared/lib/utils/pluralize";
 import { useEditor, EditorContent } from "@tiptap/vue-3";
-import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
-import Placeholder from "@tiptap/extension-placeholder";
-// The insertion of a ready-made block is one undo step, and this is what keeps
-// it from merging with the typing that came before it. See insertBlock.
-import { closeHistory } from "@tiptap/pm/history";
 import {
   bbcodeToHtml,
   htmlToBbcode,
   validateBBCode,
   cleanPastedHtml,
+  isSafeAddress,
+  isWritableValue,
+  isWritablePrivateValue,
   type BBCodeContext,
+  type BBCodeIssue,
   CONTEXT_TAGS,
 } from "@/shared/lib/utils/bbcode";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import InputDialog, { type InputField } from "./InputDialog.vue";
-
-// BBCode custom extensions (aligned with DM2 server supported tags)
-import {
-  Spoiler,
-  Nsfw,
-  BbTab,
-  BbQuote,
-  Private,
-  Noparse,
-  BbLink,
-  BbImage,
-  ModBlock,
-} from "./lib/tiptap-extensions";
+import InsertPanel, { type InputField } from "./InsertPanel.vue";
+import MarkupHelpDialog from "./MarkupHelpDialog.vue";
+import { createEditorExtensions, EDITOR_PARSE_OPTIONS } from "./lib";
 
 const props = withDefaults(
   defineProps<{
     modelValue: string;
     context?: BBCodeContext;
+    /**
+     * The surface the save path reads the text on, when it is not the one the
+     * editor draws for. Only the markup check reads it. The buttons, the help
+     * and the preview stay with context. The metagame half of a game post is
+     * written with the post's editor and saved on the comment surface, which
+     * refuses a hidden block, and the check has to say so before the send.
+     */
+    checkContext?: BBCodeContext;
     placeholder?: string;
     draftKey?: string;
     disabled?: boolean;
@@ -49,6 +52,7 @@ const props = withDefaults(
   }>(),
   {
     context: "common",
+    checkContext: undefined,
     placeholder: "Введите текст...",
     draftKey: "",
     disabled: false,
@@ -76,62 +80,178 @@ const bbcodeTextarea = ref<HTMLTextAreaElement | null>(null);
 const modeTabsRef = ref<HTMLElement | null>(null);
 
 // Indicator position for smooth animation
-const indicatorStyle = ref({ left: "0px", width: "50%" });
+const indicatorStyle = ref<Record<string, string>>({
+  left: "0px",
+  width: "50%",
+});
 
-function updateIndicator() {
+/**
+ * Lays the line under the active tab. It slides there when the mode changes,
+ * and is put there at once when a tab changes size under it: the tabs are
+ * first measured before the site's font has arrived, and "wysiwyg" in the
+ * fallback font was 3px wider, so the line stood past the editor's right edge
+ * until the mode was switched. The box is read in fractions of a pixel, since
+ * offsetLeft and offsetWidth round and left the line a third of one past the tab.
+ */
+function updateIndicator(slide = true) {
   if (!modeTabsRef.value) return;
-  const tabs = modeTabsRef.value.querySelectorAll(".mode-tab");
-  const activeIndex = mode.value === "bbcode" ? 0 : 1;
-  const activeTab = tabs[activeIndex] as HTMLElement;
+  const tabs = modeTabsRef.value.querySelectorAll<HTMLElement>(".mode-tab");
+  const activeTab = tabs[mode.value === "bbcode" ? 0 : 1];
   if (!activeTab) return;
+  const strip = modeTabsRef.value.getBoundingClientRect();
+  const tab = activeTab.getBoundingClientRect();
   indicatorStyle.value = {
-    left: `${activeTab.offsetLeft}px`,
-    width: `${activeTab.offsetWidth}px`,
+    left: `${tab.left - strip.left}px`,
+    width: `${tab.width}px`,
+    ...(slide ? {} : { transition: "none" }),
   };
 }
 
 watch(mode, () => {
-  nextTick(updateIndicator);
+  nextTick(() => updateIndicator());
 });
+
+// Watches the two tabs for a change of size, the arrival of the font among them.
+let modeTabsObserver: ResizeObserver | null = null;
+
+function observeModeTabs() {
+  if (!modeTabsRef.value || typeof ResizeObserver === "undefined") return;
+  modeTabsObserver = new ResizeObserver(() => updateIndicator(false));
+  for (const tab of modeTabsRef.value.querySelectorAll(".mode-tab")) {
+    modeTabsObserver.observe(tab);
+  }
+}
+
+// The row of tag buttons beside the mode switch. It wraps at every width:
+// every tag is in sight and nothing is cut away into "…", on a phone too,
+// which shows the row of the full version. At 1366
+// it takes two lines under the comment of a topic and one in the window of
+// 920. It breaks between groups alone, so "ul ol" never parts and no line
+// opens with a rule.
 
 // Draft recovery
 const hasDraft = ref(false);
+
+// The help window. It is built the first time it is asked for and kept after:
+// most editors on a page never open it, and a page carries one editor per post
+// being edited.
 const showHelp = ref(false);
+const helpBuilt = ref(false);
+
+function openHelp() {
+  helpBuilt.value = true;
+  showHelp.value = true;
+}
+
+/**
+ * Whether Ctrl+Enter sends here: the editor emits "submit" on it everywhere,
+ * and it sends only where the parent listens. Half of the forms do not, and a
+ * help that promised the chord in all of them would be wrong in half.
+ */
+const sendsOnChord = Boolean(getCurrentInstance()?.vnode.props?.onSubmit);
 
 // Draft status indicator
 const draftStatus = ref<"idle" | "saving" | "saved">("idle");
 const draftSavedAt = ref<number | null>(null);
 
-// Input dialogs (replacing browser prompt())
-const showLinkDialog = ref(false);
-const showImageDialog = ref(false);
-const showPrivateDialog = ref(false);
+/** The insertions that ask for something first, each in a panel under its button. */
+type InsertKind = "link" | "image" | "private" | "spoiler";
 
-// Dialog field configurations
-const linkDialogFields: InputField[] = [
+/** The panel on screen and the button it hangs under, or null. */
+const insertion = ref<{ kind: InsertKind; anchor: HTMLElement } | null>(null);
+
+/**
+ * The button of an insertion opens its panel, which hangs from the button,
+ * and, pressed again, closes it. The panel of another button closes on the
+ * press that opens this one.
+ */
+function toggleInsertion(kind: InsertKind, event: Event) {
+  if (insertion.value?.kind === kind) {
+    insertion.value = null;
+    return;
+  }
+  insertion.value = { kind, anchor: event.currentTarget as HTMLElement };
+}
+
+function closeInsertion() {
+  insertion.value = null;
+}
+
+/**
+ * Why a parameter value cannot be written, or null when it can. Markup has no
+ * escaping, so the value would end sooner than it was meant to.
+ */
+function valueRefusal(value: string): string | null {
+  if (isWritableValue(value)) return null;
+  if (value.includes("[")) return "Нельзя использовать символ [";
+  if (/" *\]/.test(value)) return "Нельзя ставить кавычку перед ]";
+  return "Нельзя ставить кавычку перед словом со знаком =";
+}
+
+/**
+ * An address the server would not show although its scheme is right: one
+ * that is not an address at all (a space or a control character in it, no
+ * host), or one that points at the reader's own machine or network. The
+ * scheme itself is the panel's own check.
+ */
+function addressRefusal(value: string): string | null {
+  const address = value.trim();
+  if (!/^https?:\/\//i.test(address) || isSafeAddress(address)) return null;
+  return isWellFormedAddress(address)
+    ? "Адрес ведет в локальную сеть, такой сайт не покажет"
+    : "Введите корректный URL";
+}
+
+/** An address with a host and nothing in it that no address carries. */
+function isWellFormedAddress(address: string): boolean {
+  for (let index = 0; index < address.length; index++) {
+    const code = address.charCodeAt(index);
+    if (code <= 0x20 || (code >= 0x7f && code <= 0x9f)) return false;
+  }
+  if (/\s/.test(address)) return false;
+  try {
+    return new URL(address).hostname !== "";
+  } catch {
+    return false;
+  }
+}
+
+/** A size in pixels, as the grammar takes it. */
+function sizeRefusal(value: string): string | null {
+  if (!value.trim() || /^[1-9]\d{0,3}$/.test(value.trim())) return null;
+  return "Только целое число от 1 до 9999";
+}
+
+// The fields of the insertion panels. The text of a link comes first, as it
+// reads in the post, and the caret starts in it (owner's call, 28 September
+// 2026); the address is the one field a link cannot do without.
+const linkFields: InputField[] = [
+  {
+    name: "text",
+    label: "Текст ссылки",
+    type: "text",
+    placeholder: "Отображаемый текст",
+    required: false,
+    validator: valueRefusal,
+  },
   {
     name: "url",
     label: "URL ссылки",
     type: "url",
     placeholder: "https://example.com",
     required: true,
-  },
-  {
-    name: "text",
-    label: "Текст ссылки (опционально)",
-    type: "text",
-    placeholder: "Отображаемый текст",
-    required: false,
+    validator: addressRefusal,
   },
 ];
 
-const imageDialogFields: InputField[] = [
+const imageFields: InputField[] = [
   {
     name: "url",
     label: "URL изображения",
     type: "url",
     placeholder: "https://example.com/image.jpg",
     required: true,
+    validator: addressRefusal,
   },
   {
     name: "width",
@@ -139,10 +259,7 @@ const imageDialogFields: InputField[] = [
     type: "text",
     placeholder: "600",
     required: false,
-    validator: (value: string) => {
-      if (value && !/^\d+$/.test(value)) return "Только цифры";
-      return null;
-    },
+    validator: sizeRefusal,
   },
   {
     name: "height",
@@ -150,36 +267,39 @@ const imageDialogFields: InputField[] = [
     type: "text",
     placeholder: "400",
     required: false,
-    validator: (value: string) => {
-      if (value && !/^\d+$/.test(value)) return "Только цифры";
-      return null;
-    },
-  },
-  {
-    name: "alt",
-    label: "Описание (alt)",
-    type: "text",
-    placeholder: "Описание изображения",
-    required: false,
+    validator: sizeRefusal,
   },
 ];
 
-const privateDialogFields: InputField[] = [
+// Empty names make the bare [private], which the game leads alone read.
+const privateFields: InputField[] = [
   {
     name: "character",
-    label: "Имя персонажа",
+    label: "Имена персонажей через запятую",
     type: "text",
-    placeholder: "Имя персонажа",
-    required: true,
+    placeholder: "Вася, Петя",
+    required: false,
     validator: (value: string) => {
-      if (!value.trim()) return "Введите имя персонажа";
-      return null;
+      if (isWritablePrivateValue(value)) return null;
+      if (value.includes("[")) return "Нельзя использовать символ [";
+      return "Нельзя ставить кавычку перед ]";
     },
+  },
+];
+
+const spoilerFields: InputField[] = [
+  {
+    name: "text",
+    label: "Подпись кнопки",
+    type: "text",
+    placeholder: "Показать содержимое",
+    required: false,
+    validator: valueRefusal,
   },
 ];
 
 // BBCode validation
-const validationErrors = ref<string[]>([]);
+const validationErrors = ref<BBCodeIssue[]>([]);
 let validationTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // Character and word count
@@ -240,7 +360,10 @@ function validateBbcode() {
     validationErrors.value = [];
     return;
   }
-  validationErrors.value = validateBBCode(bbcodeText.value);
+  validationErrors.value = validateBBCode(
+    bbcodeText.value,
+    props.checkContext ?? props.context,
+  );
 }
 
 // Debounced validation to avoid running on every keystroke
@@ -262,6 +385,11 @@ watch([bbcodeText, mode], () => {
 
 // Available tags for current context
 const availableTags = computed(() => CONTEXT_TAGS[props.context]);
+
+/** The tags the toolbar offers here: [mod] to a moderator alone. */
+const offeredTags = computed(() =>
+  availableTags.value.filter((tag) => tag !== "mod" || props.isModerator),
+);
 
 // Custom clipboard text serializer - single newlines between paragraphs
 // By default, browsers add double newlines between <p> tags when copying
@@ -295,49 +423,65 @@ function serializeNodeToText(node: any, isFirst: boolean = true): string {
   return text;
 }
 
+/**
+ * The letter of a key as the Latin layout has it. event.key is the letter the
+ * active layout types, so on a Russian one Ctrl+B arrived as "и" and matched
+ * nothing; event.code names the physical key.
+ */
+function letterOf(event: KeyboardEvent): string {
+  const code = /^Key([A-Z])$/.exec(event.code ?? "");
+  return code ? code[1].toLowerCase() : event.key.toLowerCase();
+}
+
+/** Ctrl (Cmd on a Mac) and Shift with a letter, and nothing else. */
+function isChord(
+  event: KeyboardEvent,
+  letter: string,
+  shift: boolean,
+): boolean {
+  return (
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    event.shiftKey === shift &&
+    letterOf(event) === letter
+  );
+}
+
+/** Text into the editor, in the visual mode's reading of it. */
+function showInVisualMode(bbcode: string) {
+  editor.value?.commands.setContent(
+    bbcodeToHtml(bbcode, { context: props.context }),
+    { emitUpdate: false, parseOptions: EDITOR_PARSE_OPTIONS },
+  );
+}
+
 // Tiptap editor
 const editor = useEditor({
-  extensions: [
-    StarterKit.configure({
-      heading: false, // BBCode doesn't support headings
-      horizontalRule: false, // [cut] marker was removed — truncation is now height-based
-      blockquote: false, // We use custom BbQuote instead
-      codeBlock: false, // We use inline code only, no code blocks
-      // The kit ships `underline` and `link` of its own, and both collide with
-      // what this editor registers below.
-      //
-      // `underline` is the same extension twice under one name: tiptap answers
-      // with "Duplicate extension names found: ['underline']" and keeps the
-      // later registration. Turning the kit's copy off leaves exactly one.
-      //
-      // `link` is worse because the names differ, so nothing warns. Its parse
-      // rule is a bare `a[href]` and it is registered ahead of BbLink, so every
-      // anchor — including the `a[data-bb-tag="link"]` our own converter emits —
-      // was claimed by it, and `data-bb-text` / `data-bb-selfref` were dropped
-      // on the way in. That is the loss BbLink was written to prevent. Its
-      // autolink and paste handlers were live too, quietly turning a typed URL
-      // into a link the author never asked for.
-      underline: false,
-      link: false,
-    }),
-    Underline,
-    Placeholder.configure({
-      placeholder: props.placeholder,
-    }),
-    // BBCode custom extensions (aligned with DM2 server)
-    Spoiler,
-    Nsfw,
-    BbTab,
-    BbQuote,
-    Private,
-    Noparse,
-    BbLink,
-    BbImage,
-    ModBlock,
-  ],
+  extensions: createEditorExtensions(props.placeholder),
   content: "",
   editable: !props.disabled,
   editorProps: {
+    // The editor's own keys come before every extension's. Ctrl+Enter sends,
+    // as it does in the BBCode mode; the kit bound it to a line break.
+    // Ctrl+Shift+S is the spoiler of the toolbar: bound by the extension it
+    // matched the typed letter, and on a Russian layout that fell through to
+    // the kit's strike, bound to the same key.
+    handleKeyDown: (_view, event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        emit("submit");
+        return true;
+      }
+      if (
+        isChord(event, "s", true) &&
+        availableTags.value.includes("spoiler")
+      ) {
+        event.preventDefault();
+        editor.value?.chain().focus().toggleSpoiler().run();
+        return true;
+      }
+      return false;
+    },
     // Clean pasted content from Word, Google Docs, etc.
     transformPastedHTML: (html: string) => {
       return cleanPastedHtml(html);
@@ -370,8 +514,7 @@ watch(
     if (mode.value === "wysiwyg" && editor.value) {
       const currentBbcode = htmlToBbcode(editor.value.getHTML());
       if (currentBbcode !== newValue) {
-        const html = bbcodeToHtml(newValue);
-        editor.value.commands.setContent(html, { emitUpdate: false });
+        showInVisualMode(newValue);
       }
     } else if (mode.value === "bbcode") {
       if (bbcodeText.value !== newValue) {
@@ -388,6 +531,9 @@ watch(
   () => props.disabled,
   (disabled) => {
     editor.value?.setEditable(!disabled);
+    // A shut editor takes nothing in: its buttons are off, and so is a panel
+    // that was open when the form went to send.
+    if (disabled) closeInsertion();
   },
 );
 
@@ -403,8 +549,7 @@ function switchMode(newMode: "wysiwyg" | "bbcode") {
   } else {
     // BBCode -> WYSIWYG
     if (editor.value) {
-      const html = bbcodeToHtml(bbcodeText.value);
-      editor.value.commands.setContent(html, { emitUpdate: false });
+      showInVisualMode(bbcodeText.value);
     }
   }
 
@@ -460,7 +605,7 @@ function autoResizeTextarea() {
 // but are NOT abstracted into a configuration-driven helper. Reasons:
 //
 // 1. EXCEPTIONS: 4 functions (link, image, private, tab) have significantly
-//    different behavior (dialogs, self-closing tags, parameters) that would
+//    different behavior (panels, self-closing tags, parameters) that would
 //    create a leaky abstraction if forced into a common pattern.
 //
 // 2. READABILITY: Each function is immediately understandable - you can see
@@ -537,10 +682,31 @@ function toggleBlockquote() {
   }
 }
 
-function insertLink() {
-  showLinkDialog.value = true;
+function insertLink(event: Event) {
+  toggleInsertion("link", event);
 }
 
+/** Put a piece of BBCode at the caret of the BBCode mode. */
+function insertAtCaret(piece: string) {
+  const textarea = bbcodeTextarea.value;
+  if (!textarea) return;
+  const pos = textarea.selectionStart;
+  bbcodeText.value =
+    bbcodeText.value.substring(0, pos) +
+    piece +
+    bbcodeText.value.substring(pos);
+  emit("update:modelValue", bbcodeText.value);
+  saveDraft(bbcodeText.value);
+  nextTick(() => {
+    textarea.focus();
+    textarea.setSelectionRange(pos + piece.length, pos + piece.length);
+  });
+}
+
+/**
+ * [link]address[/link] shows the word "ссылка", as on DM2;
+ * [link text="..."]address[/link] shows its own text.
+ */
 function handleLinkSubmit(values: Record<string, string>) {
   const url = values.url?.trim();
   const text = values.text?.trim();
@@ -548,29 +714,10 @@ function handleLinkSubmit(values: Record<string, string>) {
   if (!url) return;
 
   if (mode.value === "bbcode") {
-    const textarea = bbcodeTextarea.value;
-    if (!textarea) return;
-
-    const pos = textarea.selectionStart;
-    // DM3 format: [link=text]URL[/link] or [link]URL[/link]
-    let linkTag: string;
-    if (text) {
-      linkTag = `[link=${text}]${url}[/link]`;
-    } else {
-      linkTag = `[link]${url}[/link]`;
-    }
-    bbcodeText.value =
-      bbcodeText.value.substring(0, pos) +
-      linkTag +
-      bbcodeText.value.substring(pos);
-    emit("update:modelValue", bbcodeText.value);
-    saveDraft(bbcodeText.value);
-    nextTick(() => {
-      textarea.focus();
-      textarea.setSelectionRange(pos + linkTag.length, pos + linkTag.length);
-    });
+    insertAtCaret(
+      text ? `[link text="${text}"]${url}[/link]` : `[link]${url}[/link]`,
+    );
   } else {
-    // Use setBbLink with optional text - it handles both cases now
     editor.value
       ?.chain()
       .focus()
@@ -579,91 +726,132 @@ function handleLinkSubmit(values: Record<string, string>) {
   }
 }
 
-function insertImage() {
-  showImageDialog.value = true;
+function insertImage(event: Event) {
+  toggleInsertion("image", event);
 }
 
+/**
+ * [img width="..." height="..."]address[/img], with only the parameters that
+ * were filled in, in that order. An image has no alt: a reader never sees it,
+ * and text nobody sees on the page is where an insult goes unnoticed.
+ */
 function handleImageSubmit(values: Record<string, string>) {
   const url = values.url?.trim();
   if (!url) return;
 
-  const width = values.width?.trim();
-  const height = values.height?.trim();
-  const alt = values.alt?.trim();
-
-  // Build image tag with optional size and alt
-  let imgTag: string;
-  const sizeParam = width && height ? `${width}x${height}` : width || "";
-  const altParam = alt ? ` alt="${alt}"` : "";
-
-  if (sizeParam && altParam) {
-    imgTag = `[img=${sizeParam}${altParam}]${url}[/img]`;
-  } else if (sizeParam) {
-    imgTag = `[img=${sizeParam}]${url}[/img]`;
-  } else if (altParam) {
-    imgTag = `[img${altParam}]${url}[/img]`;
-  } else {
-    imgTag = `[img]${url}[/img]`;
-  }
+  const width = values.width?.trim() || null;
+  const height = values.height?.trim() || null;
 
   if (mode.value === "bbcode") {
-    const textarea = bbcodeTextarea.value;
-    if (!textarea) return;
-    const pos = textarea.selectionStart;
-    bbcodeText.value =
-      bbcodeText.value.substring(0, pos) +
-      imgTag +
-      bbcodeText.value.substring(pos);
-    emit("update:modelValue", bbcodeText.value);
-    saveDraft(bbcodeText.value);
-    nextTick(() => {
-      textarea.focus();
-      textarea.setSelectionRange(pos + imgTag.length, pos + imgTag.length);
-    });
+    let opening = "[img";
+    if (width) opening += ` width="${width}"`;
+    if (height) opening += ` height="${height}"`;
+    insertAtCaret(`${opening}]${url}[/img]`);
   } else {
-    // For Tiptap mode, just insert BBCode - it will be converted
-    editor.value?.chain().focus().setBbImage({ src: url }).run();
+    editor.value
+      ?.chain()
+      .focus()
+      .setBbImage({
+        src: url,
+        width: width ? parseInt(width, 10) : null,
+        height: height ? parseInt(height, 10) : null,
+      })
+      .run();
   }
 }
 
-function insertSpoiler() {
+/**
+ * A spoiler asks for its caption, which is optional. Inside a spoiler of the
+ * visual mode the button takes the spoiler off instead.
+ */
+function insertSpoiler(event: Event) {
+  if (mode.value === "wysiwyg" && editor.value?.isActive("spoiler")) {
+    closeInsertion();
+    editor.value.chain().focus().toggleSpoiler().run();
+    return;
+  }
+  toggleInsertion("spoiler", event);
+}
+
+function handleSpoilerSubmit(values: Record<string, string>) {
+  const text = values.text?.trim();
   if (mode.value === "bbcode") {
-    wrapSelection("[spoiler]", "[/spoiler]");
+    wrapSelection(
+      text ? `[spoiler text="${text}"]` : "[spoiler]",
+      "[/spoiler]",
+    );
   } else {
-    editor.value?.chain().focus().toggleSpoiler().run();
+    editor.value
+      ?.chain()
+      .focus()
+      .setSpoiler({ text: text || null })
+      .run();
   }
 }
 
-function insertPrivate() {
-  showPrivateDialog.value = true;
+function insertPrivate(event: Event) {
+  toggleInsertion("private", event);
 }
 
+/**
+ * [private="Вася, Петя"] for the characters named, and the bare [private],
+ * which only the game leads read, when no name is given.
+ */
 function handlePrivateSubmit(values: Record<string, string>) {
-  const character = values.character?.trim();
-  if (!character) return;
+  const character = values.character?.trim() || null;
 
   if (mode.value === "bbcode") {
-    wrapSelection(`[private=${character}]`, "[/private]");
+    wrapSelection(
+      character === null ? "[private]" : `[private="${character}"]`,
+      "[/private]",
+    );
   } else {
     editor.value?.chain().focus().togglePrivate({ character }).run();
   }
 }
 
+/** Each panel: its name, which is its button's, its fields and what it writes. */
+const INSERTIONS: Record<
+  InsertKind,
+  {
+    label: string;
+    fields: InputField[];
+    write: (values: Record<string, string>) => void;
+  }
+> = {
+  link: {
+    label: "Вставить ссылку",
+    fields: linkFields,
+    write: handleLinkSubmit,
+  },
+  image: {
+    label: "Вставить изображение",
+    fields: imageFields,
+    write: handleImageSubmit,
+  },
+  private: {
+    label: "Приватный текст",
+    fields: privateFields,
+    write: handlePrivateSubmit,
+  },
+  spoiler: {
+    label: "Спойлер",
+    fields: spoilerFields,
+    write: handleSpoilerSubmit,
+  },
+};
+
+/** The panel's values into the text; the panel goes, the caret is in the text. */
+function submitInsertion(values: Record<string, string>) {
+  const kind = insertion.value?.kind;
+  if (!kind) return;
+  closeInsertion();
+  INSERTIONS[kind].write(values);
+}
+
 function insertTab() {
   if (mode.value === "bbcode") {
-    const textarea = bbcodeTextarea.value;
-    if (!textarea) return;
-    const pos = textarea.selectionStart;
-    bbcodeText.value =
-      bbcodeText.value.substring(0, pos) +
-      "[tab]" +
-      bbcodeText.value.substring(pos);
-    emit("update:modelValue", bbcodeText.value);
-    saveDraft(bbcodeText.value);
-    nextTick(() => {
-      textarea.focus();
-      textarea.setSelectionRange(pos + 5, pos + 5);
-    });
+    insertAtCaret("[tab]");
   } else {
     editor.value?.chain().focus().insertTab().run();
   }
@@ -698,6 +886,246 @@ function loadDraftManual() {
   if (draft) {
     restoreDraft();
   }
+}
+
+/** A button of the toolbar: a tag of the markup, or one of the editor's own. */
+interface ToolbarButton {
+  /** Its caption: the tag it writes, as DM2's toolbar spells it. */
+  name: string;
+  /** The element the caption is set in, so it reads as what the tag does. */
+  look?: "b" | "i" | "u" | "s";
+  /** Its colour, the colour of what it writes. */
+  tone?: "nsfw" | "private" | "mod";
+  /** Its tooltip. */
+  hint: string;
+  /** Its name for a screen reader. */
+  label: string;
+  /**
+   * The group it stands in. A rule closes a group in the row, and the row
+   * breaks between groups alone.
+   */
+  group: string;
+  /** The mark or node of the visual mode it stands pressed in. */
+  mark?: string;
+  /** The panel it opens. */
+  panel?: InsertKind;
+  /** The editor's own button, not a tag: on every surface. */
+  own?: boolean;
+  /** Opens the help window: it reads, so it works in a shut editor too. */
+  help?: boolean;
+  act: (event: Event) => void;
+}
+
+const TOOLBAR: readonly ToolbarButton[] = [
+  {
+    name: "b",
+    look: "b",
+    hint: "Жирный (Ctrl+B)",
+    label: "Жирный",
+    group: "text",
+    mark: "bold",
+    act: toggleBold,
+  },
+  {
+    name: "i",
+    look: "i",
+    hint: "Курсив (Ctrl+I)",
+    label: "Курсив",
+    group: "text",
+    mark: "italic",
+    act: toggleItalic,
+  },
+  {
+    name: "u",
+    look: "u",
+    hint: "Подчеркнутый (Ctrl+U)",
+    label: "Подчеркнутый",
+    group: "text",
+    mark: "underline",
+    act: toggleUnderline,
+  },
+  {
+    name: "strike",
+    look: "s",
+    hint: "Зачеркнутый",
+    label: "Зачеркнутый",
+    group: "text",
+    mark: "strike",
+    act: toggleStrike,
+  },
+  {
+    name: "spoiler",
+    hint: "Спойлер",
+    label: "Спойлер",
+    group: "hidden",
+    mark: "spoiler",
+    panel: "spoiler",
+    act: insertSpoiler,
+  },
+  {
+    name: "nsfw",
+    tone: "nsfw",
+    hint: "18+ контент",
+    label: "NSFW контент",
+    group: "hidden",
+    mark: "nsfw",
+    act: insertNsfw,
+  },
+  {
+    name: "private",
+    tone: "private",
+    hint: "Приватный текст (видно только указанному персонажу)",
+    label: "Приватный текст",
+    group: "hidden",
+    mark: "private",
+    panel: "private",
+    act: insertPrivate,
+  },
+  {
+    name: "ul",
+    hint: "Маркированный список",
+    label: "Маркированный список",
+    group: "lists",
+    mark: "bulletList",
+    act: toggleBulletList,
+  },
+  {
+    name: "ol",
+    hint: "Нумерованный список",
+    label: "Нумерованный список",
+    group: "lists",
+    mark: "orderedList",
+    act: toggleOrderedList,
+  },
+  {
+    name: "img",
+    hint: "Вставить изображение",
+    label: "Вставить изображение",
+    group: "media",
+    panel: "image",
+    act: insertImage,
+  },
+  {
+    name: "link",
+    hint: "Вставить ссылку",
+    label: "Вставить ссылку",
+    group: "media",
+    mark: "bbLink",
+    panel: "link",
+    act: insertLink,
+  },
+  {
+    name: "quote",
+    hint: "Цитата",
+    label: "Цитата",
+    group: "blocks",
+    mark: "bbQuote",
+    act: toggleBlockquote,
+  },
+  {
+    name: "mod",
+    tone: "mod",
+    hint: "Модераторский блок",
+    label: "Модераторский блок",
+    group: "blocks",
+    mark: "modBlock",
+    act: insertMod,
+  },
+  {
+    name: "tab",
+    hint: "Отступ",
+    label: "Вставить отступ",
+    group: "layout",
+    act: insertTab,
+  },
+  {
+    name: "code",
+    hint: "Моноширинный код",
+    label: "Код",
+    group: "code",
+    mark: "code",
+    act: toggleCode,
+  },
+  {
+    name: "noparse",
+    hint: "Без обработки BBCode",
+    label: "Без форматирования",
+    group: "code",
+    mark: "noparse",
+    act: insertNoparse,
+  },
+  {
+    name: "load",
+    hint: "Загрузить черновик",
+    label: "Загрузить черновик",
+    group: "utils",
+    own: true,
+    act: loadDraftManual,
+  },
+  {
+    name: "help",
+    hint: "Справка",
+    label: "Показать справку",
+    group: "utils",
+    own: true,
+    help: true,
+    act: openHelp,
+  },
+];
+
+/**
+ * The buttons of this surface, in the order of the row: the tags it reads
+ * ([mod] to a moderator alone) and the editor's own two. The last button of a
+ * group carries the rule after it, and the last group carries none.
+ */
+const toolbar = computed(() => {
+  const shown = TOOLBAR.filter(
+    (button) => button.own || offeredTags.value.includes(button.name),
+  );
+  return shown.map((button, at) => ({
+    ...button,
+    closesGroup: at < shown.length - 1 && shown[at + 1].group !== button.group,
+  }));
+});
+
+/** A piece of the row: buttons that stand on one line together. */
+interface ToolbarPiece {
+  key: string;
+  /** The group of its buttons. */
+  group: string;
+  buttons: (typeof toolbar.value)[number][];
+  /** Whether a rule ends it: it ends a group, and one more follows. */
+  closesGroup: boolean;
+}
+
+/**
+ * The pieces the row is laid in, each one a group never parted, so the row
+ * wraps between groups alone. The rule after a group stands at the end of the
+ * piece that closes it.
+ */
+const pieces = computed<ToolbarPiece[]>(() => {
+  const groups: ToolbarPiece[] = [];
+  for (const button of toolbar.value) {
+    let last: ToolbarPiece | undefined = groups[groups.length - 1];
+    if (last?.group !== button.group) {
+      last = {
+        key: button.group,
+        group: button.group,
+        buttons: [],
+        closesGroup: false,
+      };
+      groups.push(last);
+    }
+    last.buttons.push(button);
+    last.closesGroup = button.closesGroup;
+  }
+  return groups;
+});
+
+/** Whether a tag stands pressed: the caret is in what it wrote. */
+function isPressed(button: ToolbarButton): boolean | undefined {
+  if (!button.mark) return undefined;
+  return mode.value === "wysiwyg" && editor.value?.isActive(button.mark);
 }
 
 // Draft management with expiration
@@ -798,8 +1226,7 @@ function clearDraft() {
 function applyContent(content: string) {
   emit("update:modelValue", content);
   if (mode.value === "wysiwyg" && editor.value) {
-    const html = bbcodeToHtml(content);
-    editor.value.commands.setContent(html, { emitUpdate: false });
+    showInVisualMode(content);
   } else {
     bbcodeText.value = content;
     nextTick(() => autoResizeTextarea());
@@ -847,8 +1274,7 @@ onMounted(() => {
 
   // Set initial content
   if (props.modelValue && editor.value) {
-    const html = bbcodeToHtml(props.modelValue);
-    editor.value.commands.setContent(html, { emitUpdate: false });
+    showInVisualMode(props.modelValue);
   }
 
   // Auto-resize textarea if in BBCode mode with content
@@ -858,37 +1284,35 @@ onMounted(() => {
   }
 
   // Initialize mode indicator position
-  nextTick(updateIndicator);
+  nextTick(() => updateIndicator());
+  observeModeTabs();
 });
 
 onUnmounted(() => {
+  modeTabsObserver?.disconnect();
   editor.value?.destroy();
 });
 
 // Keyboard shortcuts for BBCode mode
 function handleBbcodeKeydown(event: KeyboardEvent) {
-  if (event.ctrlKey || event.metaKey) {
-    switch (event.key.toLowerCase()) {
-      case "b":
-        event.preventDefault();
-        wrapSelection("[b]", "[/b]");
-        break;
-      case "i":
-        event.preventDefault();
-        wrapSelection("[i]", "[/i]");
-        break;
-      case "u":
-        event.preventDefault();
-        wrapSelection("[u]", "[/u]");
-        break;
-      case "enter":
-        event.preventDefault();
-        emit("submit");
-        break;
-    }
+  if (!(event.ctrlKey || event.metaKey)) return;
+  if (event.key === "Enter") {
+    event.preventDefault();
+    emit("submit");
+    return;
   }
-  if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey) {
-    // Allow shift+enter for newlines
+  const chords: Array<[string, boolean, string, string]> = [
+    ["b", false, "[b]", "[/b]"],
+    ["i", false, "[i]", "[/i]"],
+    ["u", false, "[u]", "[/u]"],
+    ["s", true, "[spoiler]", "[/spoiler]"],
+  ];
+  for (const [letter, shift, before, after] of chords) {
+    if (isChord(event, letter, shift)) {
+      event.preventDefault();
+      wrapSelection(before, after);
+      return;
+    }
   }
 }
 
@@ -915,105 +1339,6 @@ function wrapSelection(before: string, after: string) {
       start + before.length + selected.length,
     );
   });
-}
-
-/**
- * Append a ready-made block of BBCode and leave the caret on the line after it.
- *
- * Written for the Quote action, and shaped by what that action needs: the block
- * arrives whole from the server, it goes to the end rather than to the caret,
- * and pressing the button twice appends a second one instead of replacing the
- * first. The caret does not stay inside the quoted text — the reader pressed
- * the button in order to answer, so they start typing their answer and not
- * inside somebody else's line.
- *
- * One undo step in both modes, which is the whole of the action's undo: there
- * is no separate control for taking the insertion back, the editor's own undo
- * is it. In the source mode that means going through execCommand, which keeps
- * the textarea's native undo stack; assigning to the value would empty it and
- * the reader's own typing before the insertion would stop being undoable too.
- * In the visual mode one chain is one transaction, and the history group is
- * closed first so the step does not merge with whatever was typed a moment ago.
- */
-function insertBlock(block: string) {
-  if (!block) return;
-  if (mode.value === "bbcode") {
-    insertBlockIntoSource(block);
-  } else {
-    insertBlockIntoVisual(block);
-  }
-  nextTick(() => {
-    // "nearest" and not "start": a composer already on screen must not move,
-    // which is what the chats need — their feed manages its own scrolling and
-    // the box is under it either way. The guard is for the environments that
-    // have no layout at all (tests), where the method is simply absent.
-    const container = editorContainer.value;
-    if (typeof container?.scrollIntoView === "function") {
-      container.scrollIntoView({ block: "nearest" });
-    }
-  });
-}
-
-/** Blank line between what is already written and what is appended. */
-function separatorBefore(existing: string): string {
-  if (existing.length === 0) return "";
-  if (existing.endsWith("\n\n")) return "";
-  return existing.endsWith("\n") ? "\n" : "\n\n";
-}
-
-function insertBlockIntoSource(block: string) {
-  const textarea = bbcodeTextarea.value;
-  if (!textarea) return;
-
-  const existing = bbcodeText.value;
-  const payload = `${separatorBefore(existing)}${block}\n\n`;
-
-  textarea.focus();
-  textarea.setSelectionRange(existing.length, existing.length);
-
-  let insertedNatively: boolean;
-  try {
-    insertedNatively = document.execCommand("insertText", false, payload);
-  } catch {
-    // No execCommand here (an older embedding, a test environment): fall
-    // through to writing the value, which costs the native undo stack and is
-    // still better than a button that does nothing.
-    insertedNatively = false;
-  }
-
-  if (insertedNatively) {
-    nextTick(() => autoResizeTextarea());
-    return;
-  }
-
-  const next = existing + payload;
-  bbcodeText.value = next;
-  emit("update:modelValue", next);
-  saveDraft(next);
-  nextTick(() => {
-    autoResizeTextarea();
-    textarea.setSelectionRange(next.length, next.length);
-  });
-}
-
-function insertBlockIntoVisual(block: string) {
-  const instance = editor.value;
-  if (!instance) return;
-
-  // The empty paragraph after the block is where the caret ends up, and it has
-  // to be inserted with the block: appended afterwards it would be a second
-  // transaction and a second undo step.
-  const html = `${bbcodeToHtml(block)}<p></p>`;
-
-  instance
-    .chain()
-    .command(({ tr }) => {
-      closeHistory(tr);
-      return true;
-    })
-    .insertContentAt(instance.state.doc.content.size, html)
-    .focus("end")
-    .run();
 }
 
 // Reset editor height to default
@@ -1046,7 +1371,6 @@ defineExpose({
     resetEditorHeight();
   },
   clearDraft,
-  insertBlock,
 });
 </script>
 
@@ -1060,297 +1384,48 @@ defineExpose({
       role="toolbar"
       aria-label="Панель форматирования"
     >
-      <!-- Text formatting -->
-      <Tooltip v-if="availableTags.includes('b')" text="Жирный (Ctrl+B)">
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('bold') }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bold')"
-          :disabled="disabled"
-          @click="toggleBold"
-          aria-label="Жирный"
-        >
-          <b>b</b>
-        </button>
-      </Tooltip>
-      <Tooltip v-if="availableTags.includes('i')" text="Курсив (Ctrl+I)">
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('italic') }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('italic')"
-          :disabled="disabled"
-          @click="toggleItalic"
-          aria-label="Курсив"
-        >
-          <i>i</i>
-        </button>
-      </Tooltip>
-      <Tooltip v-if="availableTags.includes('u')" text="Подчеркнутый (Ctrl+U)">
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{
-            active: mode === 'wysiwyg' && editor?.isActive('underline'),
-          }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('underline')"
-          :disabled="disabled"
-          @click="toggleUnderline"
-          aria-label="Подчеркнутый"
-        >
-          <u>u</u>
-        </button>
-      </Tooltip>
-      <Tooltip v-if="availableTags.includes('strike')" text="Зачеркнутый">
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('strike') }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('strike')"
-          :disabled="disabled"
-          @click="toggleStrike"
-          aria-label="Зачеркнутый"
-        >
-          <s>strike</s>
-        </button>
-      </Tooltip>
-      <span
-        class="toolbar-separator"
-        role="separator"
-        aria-orientation="vertical"
-      ></span>
-      <!-- Hidden/conditional visibility -->
-      <Tooltip v-if="availableTags.includes('spoiler')" text="Спойлер">
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('spoiler') }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('spoiler')"
-          :disabled="disabled"
-          @click="insertSpoiler"
-          aria-label="Спойлер"
-        >
-          spoiler
-        </button>
-      </Tooltip>
-      <Tooltip v-if="availableTags.includes('nsfw')" text="18+ контент">
-        <button
-          type="button"
-          class="tag-btn tag-btn-nsfw"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('nsfw') }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('nsfw')"
-          :disabled="disabled"
-          @click="insertNsfw"
-          aria-label="NSFW контент"
-        >
-          nsfw
-        </button>
-      </Tooltip>
-      <Tooltip
-        v-if="availableTags.includes('private')"
-        text="Приватный текст (видно только указанному персонажу)"
-      >
-        <button
-          type="button"
-          class="tag-btn tag-btn-private"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('private') }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('private')"
-          :disabled="disabled"
-          @click="insertPrivate"
-          aria-label="Приватный текст"
-        >
-          private
-        </button>
-      </Tooltip>
-      <span
-        class="toolbar-separator"
-        role="separator"
-        aria-orientation="vertical"
-      ></span>
-      <!-- Lists -->
-      <Tooltip v-if="availableTags.includes('ul')" text="Маркированный список">
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{
-            active: mode === 'wysiwyg' && editor?.isActive('bulletList'),
-          }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bulletList')"
-          :disabled="disabled"
-          @click="toggleBulletList"
-          aria-label="Маркированный список"
-        >
-          ul
-        </button>
-      </Tooltip>
-      <Tooltip v-if="availableTags.includes('ol')" text="Нумерованный список">
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{
-            active: mode === 'wysiwyg' && editor?.isActive('orderedList'),
-          }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('orderedList')"
-          :disabled="disabled"
-          @click="toggleOrderedList"
-          aria-label="Нумерованный список"
-        >
-          ol
-        </button>
-      </Tooltip>
-      <span
-        class="toolbar-separator"
-        role="separator"
-        aria-orientation="vertical"
-      ></span>
-      <!-- Media -->
-      <Tooltip v-if="availableTags.includes('img')" text="Вставить изображение">
-        <button
-          type="button"
-          class="tag-btn"
-          :disabled="disabled"
-          @click="insertImage"
-          aria-label="Вставить изображение"
-        >
-          img
-        </button>
-      </Tooltip>
-      <Tooltip v-if="availableTags.includes('link')" text="Вставить ссылку">
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('bbLink') }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bbLink')"
-          :disabled="disabled"
-          @click="insertLink"
-          aria-label="Вставить ссылку"
-        >
-          link
-        </button>
-      </Tooltip>
-      <span
-        class="toolbar-separator"
-        role="separator"
-        aria-orientation="vertical"
-      ></span>
-      <!-- Blocks -->
-      <Tooltip v-if="availableTags.includes('quote')" text="Цитата">
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('bbQuote') }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('bbQuote')"
-          :disabled="disabled"
-          @click="toggleBlockquote"
-          aria-label="Цитата"
-        >
-          quote
-        </button>
-      </Tooltip>
-      <Tooltip
-        v-if="availableTags.includes('mod') && isModerator"
-        text="Модераторский блок"
-      >
-        <button
-          type="button"
-          class="tag-btn tag-btn-mod"
-          :class="{
-            active: mode === 'wysiwyg' && editor?.isActive('modBlock'),
-          }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('modBlock')"
-          :disabled="disabled"
-          @click="insertMod"
-          aria-label="Модераторский блок"
-        >
-          mod
-        </button>
-      </Tooltip>
-      <span
-        class="toolbar-separator"
-        role="separator"
-        aria-orientation="vertical"
-      ></span>
-      <!-- Layout -->
-      <Tooltip v-if="availableTags.includes('tab')" text="Отступ">
-        <button
-          type="button"
-          class="tag-btn"
-          :disabled="disabled"
-          @click="insertTab"
-          aria-label="Вставить отступ"
-        >
-          tab
-        </button>
-      </Tooltip>
-      <span
-        class="toolbar-separator"
-        role="separator"
-        aria-orientation="vertical"
-      ></span>
-      <!-- Code/Raw -->
-      <Tooltip v-if="availableTags.includes('code')" text="Моноширинный код">
-        <button
-          type="button"
-          class="tag-btn tag-btn-code"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('code') }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('code')"
-          :disabled="disabled"
-          @click="toggleCode"
-          aria-label="Код"
-        >
-          code
-        </button>
-      </Tooltip>
-      <Tooltip
-        v-if="availableTags.includes('noparse')"
-        text="Без обработки BBCode"
-      >
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{ active: mode === 'wysiwyg' && editor?.isActive('noparse') }"
-          :aria-pressed="mode === 'wysiwyg' && editor?.isActive('noparse')"
-          :disabled="disabled"
-          @click="insertNoparse"
-          aria-label="Без форматирования"
-        >
-          noparse
-        </button>
-      </Tooltip>
-      <span
-        class="toolbar-separator"
-        role="separator"
-        aria-orientation="vertical"
-      ></span>
-      <!-- Utils -->
-      <Tooltip text="Загрузить черновик">
-        <button
-          type="button"
-          class="tag-btn"
-          :disabled="disabled"
-          @click="loadDraftManual"
-          aria-label="Загрузить черновик"
-        >
-          load
-        </button>
-      </Tooltip>
-      <Tooltip text="Справка">
-        <button
-          type="button"
-          class="tag-btn"
-          :class="{ active: showHelp }"
-          :aria-pressed="showHelp"
-          :aria-expanded="showHelp"
-          @click="showHelp = !showHelp"
-          aria-label="Показать справку"
-        >
-          help
-        </button>
-      </Tooltip>
-      <!-- Spacer to push mode toggle to the right -->
-      <span class="toolbar-spacer"></span>
-      <!-- Mode toggle -->
+      <!-- The tag buttons, wrapping between groups, every tag in sight. The
+           switch stands outside the row. -->
+      <div class="toolbar-tags">
+        <span v-for="piece in pieces" :key="piece.key" class="tag-group"
+          ><template v-for="button in piece.buttons" :key="button.name"
+            ><Tooltip :text="button.hint"
+              ><button
+                type="button"
+                class="tag-btn"
+                :class="[
+                  button.tone && `tag-btn-${button.tone}`,
+                  { active: isPressed(button) },
+                ]"
+                :aria-pressed="isPressed(button)"
+                :disabled="button.help ? undefined : disabled"
+                :aria-haspopup="
+                  button.panel || button.help ? 'dialog' : undefined
+                "
+                :aria-expanded="
+                  button.panel ? insertion?.kind === button.panel : undefined
+                "
+                :aria-label="button.label"
+                @click="button.act"
+              >
+                <component :is="button.look" v-if="button.look">{{
+                  button.name
+                }}</component
+                ><template v-else>{{ button.name }}</template>
+              </button></Tooltip
+            ></template
+          ><span
+            v-if="piece.closesGroup"
+            class="toolbar-separator"
+            role="separator"
+            aria-orientation="vertical"
+          ></span
+        ></span>
+      </div>
+      <!-- Mode toggle, at the right end of the line. In a column too narrow
+           for it and the widest group of tags side by side, at the right end
+           of a line of its own under the tags. -->
+
       <div ref="modeTabsRef" class="mode-tabs">
         <Tooltip text="Режим BBCode">
           <button
@@ -1381,129 +1456,17 @@ defineExpose({
       </div>
     </div>
 
-    <!-- Help dialog (non-modal) -->
-    <Teleport to="body">
-      <Transition name="help-dialog">
-        <div
-          v-if="showHelp"
-          class="help-dialog"
-          role="dialog"
-          aria-label="Справка по BBCode"
-        >
-          <div class="help-dialog-header">
-            <span class="help-dialog-title">Справка по BBCode</span>
-            <button
-              type="button"
-              class="help-dialog-close"
-              @click="showHelp = false"
-              aria-label="Закрыть"
-            >
-              {{ symbols.close }}
-            </button>
-          </div>
-          <div class="help-dialog-body">
-            <div class="help-grid">
-              <!-- Formatting -->
-              <section class="help-section">
-                <h4 class="help-section-title">Форматирование</h4>
-                <div class="help-item">
-                  <code>[b]</code>текст<code>[/b]</code> — <b>жирный</b>
-                  <kbd>Ctrl+B</kbd>
-                </div>
-                <div class="help-item">
-                  <code>[i]</code>текст<code>[/i]</code> — <i>курсив</i>
-                  <kbd>Ctrl+I</kbd>
-                </div>
-                <div class="help-item">
-                  <code>[u]</code>текст<code>[/u]</code> — <u>подчеркнутый</u>
-                  <kbd>Ctrl+U</kbd>
-                </div>
-                <div class="help-item">
-                  <code>[strike]</code>текст<code>[/strike]</code> —
-                  <s>зачеркнутый</s>
-                </div>
-              </section>
-
-              <!-- Hidden content -->
-              <section class="help-section">
-                <h4 class="help-section-title">Скрытый контент</h4>
-                <div class="help-item">
-                  <code>[spoiler]</code>текст<code>[/spoiler]</code> — скрыть
-                  под спойлер
-                </div>
-                <div class="help-item help-item-nsfw">
-                  <code>[nsfw]</code>текст<code>[/nsfw]</code> — контент 18+
-                </div>
-                <div class="help-item help-item-private">
-                  <code>[private=Имя]</code>текст<code>[/private]</code> —
-                  только для персонажа
-                </div>
-              </section>
-
-              <!-- Lists -->
-              <section class="help-section">
-                <h4 class="help-section-title">Списки</h4>
-                <div class="help-item">
-                  <code>[ul][li]</code>пункт<code>[/li][/ul]</code> —
-                  маркированный
-                </div>
-                <div class="help-item">
-                  <code>[ol][li]</code>пункт<code>[/li][/ol]</code> —
-                  нумерованный
-                </div>
-              </section>
-
-              <!-- Media -->
-              <section class="help-section">
-                <h4 class="help-section-title">Медиа</h4>
-                <div class="help-item">
-                  <code>[img]</code>url<code>[/img]</code> — изображение
-                </div>
-                <div class="help-item">
-                  <code>[link]</code>url<code>[/link]</code> — ссылка
-                </div>
-                <div class="help-item">
-                  <code>[link=текст]</code>url<code>[/link]</code> — ссылка с
-                  текстом
-                </div>
-              </section>
-
-              <!-- Blocks -->
-              <section class="help-section">
-                <h4 class="help-section-title">Блоки</h4>
-                <div class="help-item">
-                  <code>[quote]</code>текст<code>[/quote]</code> — цитата
-                </div>
-                <div class="help-item help-item-code">
-                  <code>[code]</code>текст<code>[/code]</code> — моноширинный
-                  код
-                </div>
-                <div v-if="isModerator" class="help-item help-item-mod">
-                  <code>[mod]</code>текст<code>[/mod]</code> — модераторский
-                  блок
-                </div>
-              </section>
-
-              <!-- Misc -->
-              <section class="help-section">
-                <h4 class="help-section-title">Разное</h4>
-                <div class="help-item">
-                  <code>[tab]</code> — отступ (красная строка)
-                </div>
-                <div class="help-item">
-                  <code>[noparse]</code>текст<code>[/noparse]</code> — без
-                  обработки
-                </div>
-              </section>
-            </div>
-
-            <div class="help-footer">
-              <kbd>Ctrl+Enter</kbd> — отправить сообщение
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- The panel of an insertion, under its button. It stands in the
+         wrapper and not in the bordered box, which clips what overflows it. -->
+    <InsertPanel
+      v-if="insertion"
+      :key="insertion.kind"
+      :label="INSERTIONS[insertion.kind].label"
+      :fields="INSERTIONS[insertion.kind].fields"
+      :anchor="insertion.anchor"
+      @submit="submitInsertion"
+      @close="closeInsertion"
+    />
 
     <div
       class="bbcode-editor"
@@ -1543,29 +1506,12 @@ defineExpose({
         ></textarea>
       </div>
 
-      <!-- Input dialogs (use Teleport internally, can stay here) -->
-      <InputDialog
-        v-model:show="showLinkDialog"
-        title="Вставить ссылку"
-        :fields="linkDialogFields"
-        submit-label="Вставить"
-        @submit="handleLinkSubmit"
-      />
-
-      <InputDialog
-        v-model:show="showImageDialog"
-        title="Вставить изображение"
-        :fields="imageDialogFields"
-        submit-label="Вставить"
-        @submit="handleImageSubmit"
-      />
-
-      <InputDialog
-        v-model:show="showPrivateDialog"
-        title="Приватный текст"
-        :fields="privateDialogFields"
-        submit-label="Вставить"
-        @submit="handlePrivateSubmit"
+      <MarkupHelpDialog
+        v-if="helpBuilt"
+        v-model="showHelp"
+        :tags="offeredTags"
+        :drafts="Boolean(draftKey)"
+        :sends="sendsOnChord"
       />
     </div>
 
@@ -1598,7 +1544,8 @@ defineExpose({
       >
     </div>
 
-    <!-- BBCode validation errors - outside resizable area -->
+    <!-- The markup check - outside resizable area. One finding to a line,
+         read as "Строка 3: [b] не закрыт, добавьте [/b]". -->
     <div
       v-if="mode === 'bbcode' && validationErrors.length > 0"
       id="bbcode-validation-errors"
@@ -1608,12 +1555,12 @@ defineExpose({
       aria-atomic="true"
     >
       <div
+        v-for="(issue, index) in validationErrors"
+        :key="`${index}:${issue.message}`"
         class="validation-error"
-        v-for="error in validationErrors"
-        :key="error"
       >
         <span class="error-icon" aria-hidden="true">{{ symbols.warning }}</span>
-        <span class="error-text">{{ error }}</span>
+        <span class="error-text">{{ issue.message }}</span>
       </div>
     </div>
   </div>
@@ -1621,7 +1568,6 @@ defineExpose({
 
 <style scoped lang="sass">
 @use "@/assets/styles/BbcodeContent" as *
-@use "@/assets/styles/ZIndex" as *
 
 .bbcode-editor-wrapper
   position: relative
@@ -1636,7 +1582,8 @@ defineExpose({
 
   &:focus-within
     outline: none
-    border-color: $border-focus
+    border-color: $link
+    box-shadow: 0 0 0 1px $link
 
   &.disabled
     opacity: $disabled-opacity
@@ -1650,16 +1597,42 @@ defineExpose({
     .editor-content
       overflow: auto
 
+// A finger does not drag the grip in the corner of the field, and the browser
+// of a phone drew it as a dot just outside the rounded corner. A touch screen
+// has none; under a mouse it stays as it was. The field grows with its text
+// either way.
+@media (pointer: coarse)
+  .bbcode-editor.resizable
+    resize: none
+
+// The row of tag buttons takes what the mode switch leaves, and the switch
+// keeps its own width at the right end, in the middle of the row's lines. The
+// toolbar wraps as well. A column of it can be narrower than the widest group
+// of tags and the switch side by side (243 in the form of a post at 1001: 154
+// for "spoiler nsfw private |", 114 for the switch); the switch goes down to a
+// line of its own there, at the right end, and never stands out of the
+// editor. Where both fit, as at 1366 and in the window of 920, they stay on
+// one line.
 .editor-toolbar
   display: flex
-  align-items: center
   flex-wrap: wrap
-  gap: 4px
+  align-items: center
+  gap: $small
   padding: $small 0
   flex-shrink: 0
 
-.toolbar-spacer
-  flex: 1
+  .mode-tabs
+    margin-left: auto
+
+// The row of tag buttons is given what the switch leaves and asks for the
+// width of its widest group, which never parts. It wraps between its groups,
+// and the switch stands in the middle of its lines.
+.toolbar-tags
+  flex: 1 1 0
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  gap: $minor
 
 // Inline flow, not flex, for the same reason as the status bar: flex items
 // copy one per line, and this pair copied as "[bbcode]\nwysiwyg". font-size: 0
@@ -1667,6 +1640,7 @@ defineExpose({
 // height the flex row gave them (each button restates its own font size).
 .mode-tabs
   display: block
+  flex-shrink: 0
   white-space: nowrap
   font-size: 0
   border-bottom: 2px solid $border
@@ -1699,6 +1673,14 @@ defineExpose({
   transition: left 0.25s ease, width 0.25s ease
   pointer-events: none
 
+// A group of tags and the rule after it, a piece of the row: the row breaks
+// between groups alone, and the rule hangs at the end of the line its group
+// ends, as a bar of a caption line does.
+.tag-group
+  display: inline-flex
+  align-items: center
+  gap: $minor
+
 .toolbar-separator
   width: 1px
   height: 18px
@@ -1712,6 +1694,9 @@ defineExpose({
   padding: $tiny 6px
   border: 1px solid
   border-color: $border
+  // DM2's 2, as the toolbar stood before 28 September: the site's 8 is the
+  // mark of a control of the page, and it drew the row as a row of pills
+  // (owner, 5 October 2026). RADIUS_REGISTER in styleSystem.spec.ts.
   border-radius: 2px
   background: transparent
   cursor: pointer
@@ -1726,18 +1711,15 @@ defineExpose({
     opacity: $disabled-opacity
     cursor: default
 
+  // The bold of the face: PT Sans ships 400 and 700 alone, and a 600 was a
+  // 700 drawn under another name.
   &.active
     background-color: $bg-element-accent
-    font-weight: 600
+    font-weight: 700
 
-  &.tag-btn-code
-    // The same 4px of vertical padding as .tag-btn (2px + 2px), shifted one
-    // pixel down so the Courier New face is centred in a button that keeps the
-    // height of its neighbours in the row. Neither half is a step of the scale,
-    // and rounding them to one would change that height.
-    font-family: $code-font
-    padding-top: 3px
-    padding-bottom: 1px
+  // "code" is set in the face of the row, as every tag of the DM2 toolbar is.
+  // In Courier New at 12px its hairline strokes read as grey beside the other
+  // captions, as if the button were shut.
 
 .tag-btn-private
   color: $accent-green
@@ -1764,26 +1746,37 @@ defineExpose({
     outline: none
     width: 100%
     min-height: 100%
-    // Line-height and paragraph spacing come from +bbcode-content-editor
+    // Holds the float of the hint of an empty field (below), so all of the
+    // hint is the field to tap: its second line on a phone too. The text
+    // holds no floats of its own, and a block of it stands where it stood.
+    display: flow-root
+    // Line-height and paragraph spacing come from +bbcode-content
     // (SSOT): p margin 0, blank line = one full empty line box — the
     // WYSIWYG view previews exactly what the display render shows.
-    +bbcode-content-editor
+    +bbcode-content
 
-    // Tiptap-specific: horizontal rule (rare in BBCode, kept for any
-    // legacy <hr> rendering inside the editor)
-    hr
-      border: none
-      border-top: 2px dashed
-      border-color: $border
-      margin: $medium 0
+    // A hidden block written around blocks stands on the blocks, and its mark
+    // is a span that holds them. Drawn in the line, its colour showed only in
+    // the gaps between them, and the blocks looked like open text.
+    .bb-private:has(> :is(p, div, blockquote, ul, ol))
+      display: block
 
     // Tiptap placeholder. The extension only marks the empty node and hands the
     // text over in data-placeholder — drawing it is on us, so the hint the
     // BBCode textarea gets for free has to be written out here.
+    //
+    // A float as wide as the line whose right margin takes that width back:
+    // it stands no line aside, so the caret of the empty line is at its start,
+    // on the hint's first letter, and it keeps the height of its own lines.
+    // Of no height, as Tiptap draws it, a hint of two lines on a phone ran out
+    // of .wysiwyg-content, a box one line high that cuts what overflows it,
+    // and its second line showed as a strip of the tops of its letters. The
+    // field holds its float now (flow-root above) and grows under the hint.
     p.is-editor-empty:first-child::before
       content: attr(data-placeholder)
       float: left
-      height: 0
+      width: 100%
+      margin-right: -100%
       pointer-events: none
       color: $text-muted
       opacity: 0.6
@@ -1849,7 +1842,7 @@ defineExpose({
 .status-item
   &.over-limit
     color: $accent-red
-    font-weight: 600
+    font-weight: 700
 
 // The -muted accent variants do not clear AA as a text colour (2.82 and 3.00
 // on the card in the light theme). The draft status is ordinary small text.
@@ -1862,9 +1855,16 @@ defineExpose({
   &.saving
     color: $text-muted
 
+// The markup check, under the status line: a band of the editor's own, one
+// finding to a line, each after the warning sign and in the colour of a
+// refusal. For a while it was plain lines in the colour of the text, flush
+// with the editor's edge; they read worse than this band, and it came back.
+// The band is the page a shade darker, the overlay the site's controls sit on,
+// and not a colour: the owner found the blue fill it had too loud for a note
+// under the field.
 .validation-errors
   padding: $small $medium
-  background-color: $bg-highlight-blue
+  background-color: $control-bg-overlay
   border-top: 1px solid
   border-color: $border
 
@@ -1881,188 +1881,4 @@ defineExpose({
 
   .error-text
     flex: 1
-
-// Help dialog (non-modal, teleported to body - use :global)
-:global(.help-dialog)
-  position: fixed
-  top: 50%
-  left: 50%
-  transform: translate(-50%, -50%)
-  z-index: $z-dialog
-  width: 520px
-  max-width: calc(100vw - 32px)
-  max-height: calc(100vh - 64px)
-  display: flex
-  flex-direction: column
-  background-color: $bg-element
-  border: 1px solid $border
-  box-shadow: 0 8px 32px $shadow-color
-
-:global(.help-dialog-header)
-  display: flex
-  align-items: center
-  justify-content: space-between
-  padding: $small $medium
-  background-color: $bg-element-accent
-  border-bottom: 1px solid $border
-  flex-shrink: 0
-
-:global(.help-dialog-title)
-  font-weight: 600
-  font-size: $font-size
-
-:global(.help-dialog-close)
-  background: none
-  border: none
-  font-size: 20px
-  line-height: 1
-  color: $text-muted
-  cursor: pointer
-  padding: 4px 8px
-
-  &:hover
-    color: $text
-
-:global(.help-dialog-body)
-  overflow-y: auto
-  flex: 1
-  padding: $medium
-
-:global(.help-grid)
-  display: grid
-  grid-template-columns: 1fr 1fr
-  gap: $medium
-
-:global(.help-section)
-  margin-bottom: 0
-
-:global(.help-section-title)
-  margin: 0 0 $small 0
-  font-size: 11px
-  font-weight: 600
-  text-transform: uppercase
-  letter-spacing: 0.5px
-  color: $text-muted
-  border-bottom: 1px solid $border
-  padding-bottom: $tiny
-
-:global(.help-item)
-  font-size: $secondary-font-size
-  line-height: 1.6
-  color: $text
-
-  code
-    font-family: $code-font
-    font-size: 12px
-    color: $link
-
-  kbd
-    // A key cap, not a control: it is floated into the 22.4px line box of
-    // .help-item (14px x 1.6), and its own box is 17.6px of text (11px x 1.6)
-    // plus this padding and 1px of border, i.e. 21.6px. One step up the scale
-    // ($tiny) makes it 23.6px and spills it onto the item below. The horizontal
-    // half is the cap's inset around a one- or two-character key.
-    float: right
-    padding: 1px 5px
-    font-size: 11px
-    font-family: inherit
-    color: $text-muted
-    background-color: $bg-element-accent
-    border: 1px solid $border
-    border-radius: 2px
-
-:global(.help-item-nsfw)
-  code
-    color: $accent-red
-
-:global(.help-item-private)
-  code
-    color: $accent-green
-
-:global(.help-item-mod)
-  code
-    color: $accent-green
-
-:global(.help-item-code)
-  code
-    font-family: $code-font
-
-:global(.help-footer)
-  margin-top: $medium
-  padding-top: $small
-  border-top: 1px solid $border
-  text-align: center
-  font-size: $secondary-font-size
-  color: $text-muted
-
-  kbd
-    // The same pair as .tag-btn: $tiny vertically, the fitted 6px horizontally.
-    padding: $tiny 6px
-    font-family: inherit
-    background-color: $bg-element-accent
-    border: 1px solid $border
-    border-radius: 2px
-
-// Help dialog transitions
-:global(.help-dialog-enter-active),
-:global(.help-dialog-leave-active)
-  transition: opacity 0.2s ease, transform 0.2s ease
-
-:global(.help-dialog-enter-from),
-:global(.help-dialog-leave-to)
-  opacity: 0
-  transform: translate(-50%, -50%) scale(0.95)
-
-// Help dialog mobile
-@media (max-width: $bp-mobile)
-  :global(.help-grid)
-    grid-template-columns: 1fr
-
-// Mobile responsive
-@media (max-width: $bp-tablet)
-  .editor-toolbar
-    padding: $small
-    gap: 2px
-
-  .tag-btn
-    // Touch target minimum 44x44px for accessibility
-    min-width: 36px
-    min-height: 36px
-    padding: 6px 8px
-    font-size: 13px
-
-  .toolbar-separator
-    display: none
-
-  .toolbar-spacer
-    display: none
-
-  .mode-tabs
-    margin-left: auto
-
-  .status-bar
-    text-align: center
-    padding: 6px $small
-
-  .help-table
-    font-size: 12px
-
-    .help-col-key
-      display: none
-
-    th:last-child
-      display: none
-
-@media (max-width: $bp-narrow)
-  .editor-toolbar
-    justify-content: center
-
-  .tag-btn
-    // Inside a 40x40 tap target the padding is an inset, not spacing: the
-    // vertical half is $small, and the horizontal one stays 10px because at
-    // this value the 40px floor still sets the width of a short label, while
-    // the next step up ($medium) would set it instead and widen the row.
-    min-width: 40px
-    min-height: 40px
-    padding: $small 10px
 </style>

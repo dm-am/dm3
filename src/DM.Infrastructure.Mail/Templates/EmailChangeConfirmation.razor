@@ -1,26 +1,21 @@
 @*
     Письмо подтверждения новой почты. Уходит на новый адрес; на старый уходит
     предупреждение, это отдельное письмо.
+
+    Объяснять нечего: заголовок и кнопка говорят все, а фраза про то, что адрес
+    станет почтой аккаунта, повторяла их обоих.
+
+    Строка над кнопкой не про шаг, а про того, кто его не просил. Письмо уходит
+    на адрес, который владелец аккаунта мог набрать с опечаткой, так что читать
+    его может посторонний, и ему надо сказать, что делать нечего. На прежний
+    адрес в это же время уходит предупреждение, и там ответ другой: сменить
+    пароль.
 *@
-<EmailLayout Title="Подтвердите новую почту">
+<EmailLayout Title="Смена почты">
     <p style="@EmailConstants.ParagraphStyles">
-        Здравствуйте, @Model.Username!
+        Если это были не вы, просто проигнорируйте это письмо
     </p>
-
-    <p style="@EmailConstants.ParagraphStyles">
-        Вы попросили привязать этот адрес к учетной записи на Dungeon Master.
-    </p>
-
-    <a href="@Model.ConfirmationLinkUrl" style="@EmailConstants.ButtonStyles">Подтвердить адрес</a>
-
-    <p style="@EmailConstants.ParagraphStyles">
-        Если кнопка не работает, откройте ссылку вручную:<br/>
-        <a href="@Model.ConfirmationLinkUrl">@Model.ConfirmationLinkUrl</a>
-    </p>
-
-    <p style="@EmailConstants.ParagraphStyles">
-        Пока адрес не подтвержден, почтой учетной записи остается прежний.
-    </p>
+    <ActionButton Url="@Model.ConfirmationLinkUrl">Подтвердить новую почту</ActionButton>
 </EmailLayout>
 
 @code {

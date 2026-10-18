@@ -1,6 +1,8 @@
 using FluentValidation.Results;
 using FluentValidation;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -149,7 +151,7 @@ public class BanServiceShould : UnitTestBase
     {
         SetCurrentUser(UserRole.RegularUser);
 
-        var act = () => _service.GetBanHistory(0, 20);
+        var act = () => _service.GetBanHistory(null, 0, 20);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
@@ -160,13 +162,105 @@ public class BanServiceShould : UnitTestBase
     public async Task AllowModeratorToViewBanHistory()
     {
         SetCurrentUser(UserRole.Moderator);
-        _banRepository.GetBanHistory(0, 20, Arg.Any<CancellationToken>()).Returns(([], 0));
+        _banRepository.GetBanHistory(null, 0, 20, Arg.Any<CancellationToken>()).Returns(([], 0));
 
-        var (bans, totalCount) = await _service.GetBanHistory(0, 20);
+        var (entries, totalCount, _) = await _service.GetBanHistory(null, 0, 20);
 
-        bans.Should().BeEmpty();
+        entries.Should().BeEmpty();
         totalCount.Should().Be(0);
-        await _banRepository.Received(1).GetBanHistory(0, 20, Arg.Any<CancellationToken>());
+        await _banRepository.Received(1).GetBanHistory(null, 0, 20, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// A name narrows the list to the bans of that person, read by his id.
+    /// </summary>
+    [Fact]
+    public async Task NarrowTheBanHistoryToTheNamedPerson()
+    {
+        SetCurrentUser(UserRole.Moderator);
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _banRepository.GetBanHistory(_targetUserId, 0, 20, Arg.Any<CancellationToken>()).Returns(([], 0));
+
+        await _service.GetBanHistory("Target", 0, 20);
+
+        await _banRepository.Received(1).GetBanHistory(_targetUserId, 0, 20, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// A name nobody carries is an empty page, as the warning log answers it: the
+    /// list is not read at all, and certainly not read whole.
+    /// </summary>
+    [Fact]
+    public async Task AnswerANameNobodyCarriesWithAnEmptyBanHistory()
+    {
+        SetCurrentUser(UserRole.Moderator);
+        _userLookupService.GetAsync("Unknown")
+            .ThrowsAsync(new HttpException(HttpStatusCode.NotFound, "Пользователь не найден"));
+
+        var (entries, totalCount, _) = await _service.GetBanHistory("Unknown", 0, 20);
+
+        entries.Should().BeEmpty();
+        totalCount.Should().Be(0);
+        await _banRepository.DidNotReceive().GetBanHistory(
+            Arg.Any<Guid?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// Each ban of the list says whether the reader may lift it, by the rule the
+    /// lift is refused by: the list offers the lift by that flag.
+    /// </summary>
+    [Fact]
+    public async Task MarkEachBanOfTheHistoryWithWhetherTheReaderMayLiftIt()
+    {
+        var others = BanOfKind("running");
+        var own = BanOfKind("own");
+        IReadOnlyList<BanLogEntry> page =
+        [
+            new() { Kind = BanLogEntryKind.Issued, OccurredUtc = others.StartedUtc, Ban = others },
+            new() { Kind = BanLogEntryKind.Issued, OccurredUtc = own.StartedUtc, Ban = own }
+        ];
+        _banRepository.GetBanHistory(null, 0, 20, Arg.Any<CancellationToken>()).Returns((page, 2));
+
+        var (entries, _, _) = await _service.GetBanHistory(null, 0, 20);
+
+        entries.Select(e => e.Ban.CanLift).Should().Equal(true, false);
+    }
+
+    /// <summary>
+    /// The page of an entry is the page of this list its position falls on, and
+    /// the answer says which page it is; the page asked for by the offset gives
+    /// way to it.
+    /// </summary>
+    [Fact]
+    public async Task OpenThePageThatHoldsTheEntryOfTheGivenNumber()
+    {
+        SetCurrentUser(UserRole.Moderator);
+        _userLookupService.GetAsync("Target").Returns(new GeneralUser { UserId = _targetUserId, Username = "Target" });
+        _banRepository.GetBanHistoryPosition(_targetUserId, 2077, Arg.Any<CancellationToken>()).Returns(45);
+        _banRepository.GetBanHistory(_targetUserId, 40, 20, Arg.Any<CancellationToken>()).Returns(([], 50));
+
+        var (_, totalCount, skip) = await _service.GetBanHistory("Target", 0, 20, 2077);
+
+        skip.Should().Be(40, "the 46th entry of the list stands on its third page of twenty");
+        totalCount.Should().Be(50);
+        await _banRepository.Received(1).GetBanHistory(_targetUserId, 40, 20, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// An entry the list does not have, gone or of somebody else, leaves the
+    /// page to the offset that was asked for.
+    /// </summary>
+    [Fact]
+    public async Task KeepThePageAskedForWhenTheListHasNoSuchEntry()
+    {
+        SetCurrentUser(UserRole.Moderator);
+        _banRepository.GetBanHistoryPosition(null, 9999, Arg.Any<CancellationToken>()).Returns((int?)null);
+        _banRepository.GetBanHistory(null, 20, 20, Arg.Any<CancellationToken>()).Returns(([], 30));
+
+        var (_, _, skip) = await _service.GetBanHistory(null, 20, 20, 9999);
+
+        skip.Should().Be(20);
+        await _banRepository.Received(1).GetBanHistory(null, 20, 20, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -467,7 +561,7 @@ public class BanServiceShould : UnitTestBase
     {
         SetCurrentUser(UserRole.Moderator);
 
-        var act = () => _service.LiftBan(_banId);
+        var act = () => _service.LiftBan(_banId, "Разобрались");
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden)
@@ -479,7 +573,7 @@ public class BanServiceShould : UnitTestBase
     {
         _banRepository.Get(_banId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
 
-        var act = () => _service.LiftBan(_banId);
+        var act = () => _service.LiftBan(_banId, "Разобрались");
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -491,7 +585,7 @@ public class BanServiceShould : UnitTestBase
         _banRepository.Get(_banId, Arg.Any<CancellationToken>())
             .Returns(new Ban { BanId = _banId, EndedUtc = _now.AddDays(7) });
 
-        await _service.LiftBan(_banId);
+        await _service.LiftBan(_banId, "Разобрались");
 
         await _banRepository.Received(1).Lift(_banId, Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
@@ -503,7 +597,7 @@ public class BanServiceShould : UnitTestBase
         _banRepository.Get(_banId, Arg.Any<CancellationToken>())
             .Returns(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100) });
 
-        var act = () => _service.LiftBan(_banId);
+        var act = () => _service.LiftBan(_banId, "Разобрались");
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
@@ -517,7 +611,7 @@ public class BanServiceShould : UnitTestBase
         _banRepository.Get(_banId, Arg.Any<CancellationToken>())
             .Returns(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100) });
 
-        await _service.LiftBan(_banId);
+        await _service.LiftBan(_banId, "Разобрались");
 
         await _banRepository.Received(1).Lift(_banId, Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
@@ -528,10 +622,129 @@ public class BanServiceShould : UnitTestBase
         _banRepository.Get(_banId, Arg.Any<CancellationToken>())
             .Returns(new Ban { BanId = _banId, EndedUtc = _now.AddYears(100), IsVoluntary = true });
 
-        await _service.LiftBan(_banId);
+        await _service.LiftBan(_banId, "Разобрались");
 
         await _banRepository.Received(1).Lift(_banId, Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
+    // --- Who may lift a ban: the flag and the lift answer by one rule ---
+
+    /// <summary>
+    /// A ban of the kind a case of the table names, for the reader of
+    /// <see cref="SetCurrentUser" />.
+    /// </summary>
+    private Ban BanOfKind(string kind) => kind switch
+    {
+        "running" => new Ban
+        {
+            BanId = _banId,
+            TargetUserId = _targetUserId,
+            StartedUtc = _now.AddDays(-1),
+            EndedUtc = _now.AddDays(6)
+        },
+        "own" => new Ban
+        {
+            BanId = _banId,
+            TargetUserId = _moderatorUserId,
+            StartedUtc = _now.AddDays(-1),
+            EndedUtc = _now.AddDays(6)
+        },
+        "permanent" => new Ban
+        {
+            BanId = _banId,
+            TargetUserId = _targetUserId,
+            StartedUtc = _now.AddDays(-1),
+            EndedUtc = _now.AddDays(-1).AddYears(Ban.PermanentYears)
+        },
+        "voluntary" => new Ban
+        {
+            BanId = _banId,
+            TargetUserId = _targetUserId,
+            IsVoluntary = true,
+            StartedUtc = _now.AddDays(-1),
+            EndedUtc = _now.AddDays(-1).AddYears(Ban.PermanentYears)
+        },
+        "lifted" => new Ban
+        {
+            BanId = _banId,
+            TargetUserId = _targetUserId,
+            StartedUtc = _now.AddDays(-1),
+            EndedUtc = _now.AddDays(6),
+            LiftedUtc = _now.AddHours(-1)
+        },
+        "expired" => new Ban
+        {
+            BanId = _banId,
+            TargetUserId = _targetUserId,
+            StartedUtc = _now.AddDays(-9),
+            EndedUtc = _now.AddDays(-2)
+        },
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+    };
+
+    /// <summary>
+    /// The list offers the lift exactly where the lift goes through.
+    /// </summary>
+    /// <remarks>
+    /// The flag and the refusal are asked of the same ban by the same reader, and
+    /// the expected answer is written out per case, so the table holds the rule
+    /// itself as well as the agreement of its two readings. The page used to draw
+    /// "Снять бан" by the rank alone, and the server then refused a senior
+    /// moderator his own ban and every permanent one.
+    /// </remarks>
+    [Theory]
+    [InlineData(UserRole.SeniorModerator, "running", true)]
+    [InlineData(UserRole.Admin, "running", true)]
+    [InlineData(UserRole.Moderator, "running", false)]
+    [InlineData(UserRole.RegularUser, "running", false)]
+    [InlineData(UserRole.Guest, "running", false)]
+    [InlineData(UserRole.SeniorModerator, "own", false)]
+    [InlineData(UserRole.Admin, "own", false)]
+    [InlineData(UserRole.SeniorModerator, "permanent", false)]
+    [InlineData(UserRole.Admin, "permanent", true)]
+    [InlineData(UserRole.SeniorModerator, "voluntary", true)]
+    [InlineData(UserRole.SeniorModerator, "lifted", false)]
+    [InlineData(UserRole.Admin, "lifted", false)]
+    [InlineData(UserRole.SeniorModerator, "expired", false)]
+    [InlineData(UserRole.Admin, "expired", false)]
+    public async Task OfferTheLiftExactlyWhereTheLiftGoesThrough(UserRole reader, string kind, bool mayLift)
+    {
+        SetCurrentUser(reader);
+        var ban = BanOfKind(kind);
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>()).Returns(ban);
+
+        var flag = _service.MayLift(ban);
+        var lift = () => _service.LiftBan(_banId, "Разобрались");
+
+        flag.Should().Be(mayLift);
+        if (mayLift)
+        {
+            await lift.Should().NotThrowAsync();
+            await _banRepository.Received(1).Lift(_banId, _moderatorUserId, _now, "Разобрались",
+                Arg.Any<CancellationToken>());
+        }
+        else
+        {
+            await lift.Should().ThrowAsync<HttpException>();
+            await _banRepository.DidNotReceive().Lift(Arg.Any<Guid>(), Arg.Any<Guid>(),
+                Arg.Any<DateTimeOffset>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        }
+    }
+
+    /// <summary>
+    /// A ban that has run out is refused as a conflict, not as a missing ban: it
+    /// is there, there is only nothing left of it to end.
+    /// </summary>
+    [Fact]
+    public async Task RefuseToLiftABanThatHasRunOut()
+    {
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>()).Returns(BanOfKind("expired"));
+
+        var act = () => _service.LiftBan(_banId, "Разобрались");
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Conflict);
+    }
+
     // --- Who may ban whom (BE-18, BE-19) ---
 
     private void ArrangeTarget(UserRole targetRole)
@@ -642,10 +855,42 @@ public class BanServiceShould : UnitTestBase
         _banRepository.Get(_banId, Arg.Any<CancellationToken>())
             .Returns(new Ban { BanId = _banId, TargetUserId = _moderatorUserId, EndedUtc = _now.AddDays(7) });
 
-        var act = () => _service.LiftBan(_banId);
+        var act = () => _service.LiftBan(_banId, "Разобрались");
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>
+    /// A lift without words is refused before anything is read or written.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task RefuseToLiftABanWithoutAReason(string reason)
+    {
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId, TargetUserId = _targetUserId, EndedUtc = _now.AddDays(7) });
+
+        var act = () => _service.LiftBan(_banId, reason);
+
+        var refusal = await act.Should().ThrowAsync<HttpBadRequestException>();
+        refusal.Which.ValidationErrors.Should().ContainKey("reason")
+            .WhoseValue.Should().Be(ValidationError.Empty);
+        await _banRepository.DidNotReceive().Lift(Arg.Any<Guid>(), Arg.Any<Guid>(),
+            Arg.Any<DateTimeOffset>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RefuseALiftReasonLongerThanAPointsExplanation()
+    {
+        _banRepository.Get(_banId, Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId, TargetUserId = _targetUserId, EndedUtc = _now.AddDays(7) });
+
+        var act = () => _service.LiftBan(_banId, new string('а', 2001));
+
+        var refusal = await act.Should().ThrowAsync<HttpBadRequestException>();
+        refusal.Which.ValidationErrors["reason"].Should().Be(ValidationError.Long);
     }
 
     [Fact]
@@ -658,5 +903,132 @@ public class BanServiceShould : UnitTestBase
 
         await _banRepository.Received(1).Lift(_banId, _moderatorUserId, _now, "Разобрались",
             Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// What the automatic ban is made of: two days, the ordinary scope, the
+    /// system account.
+    /// </summary>
+    /// <remarks>
+    /// Every part of it is a decision the owner stated. The scope is never the
+    /// full one - the ban is issued by arithmetic, before a human has read the
+    /// case, and a full ban would take the site away from the reader on it. Two
+    /// days is the window a senior moderator has to arrive. The author is the
+    /// system account, which is the only thing that says the ban was nobody's
+    /// decision.
+    /// </remarks>
+    [Fact]
+    public async Task IssueTheAutomaticBanForTwoDaysUnderTheSystemAccount()
+    {
+        ArrangeAutomaticTarget(UserRole.RegularUser);
+
+        CreateBanEntity? captured = null;
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId })
+            .AndDoes(ci => captured = ci.ArgAt<CreateBanEntity>(0));
+
+        var ban = await _service.IssueAutomaticBan(_targetUserId);
+
+        ban.Should().NotBeNull();
+        captured.Should().NotBeNull();
+        captured!.TargetUserId.Should().Be(_targetUserId);
+        captured.AuthorId.Should().Be(SystemUser.Id);
+        captured.StartedUtc.Should().Be(_now);
+        // Two days spelled out rather than read off the constant: the length is
+        // the owner's decision, and a test that follows the constant agrees with
+        // whatever the constant is changed to.
+        captured.EndedUtc.Should().Be(_now.AddDays(2));
+        captured.AccessRestrictionPolicy.Should().Be(AccessPolicy.DemocraticBan);
+        captured.IsVoluntary.Should().BeFalse();
+        captured.Comment.Should().Be(WarningPolicy.AutoBanComment);
+    }
+
+    /// <summary>
+    /// The banned reader is told, by the same event a moderator's ban sends.
+    /// </summary>
+    [Fact]
+    public async Task AnnounceTheAutomaticBan()
+    {
+        ArrangeAutomaticTarget(UserRole.RegularUser);
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId });
+
+        await _service.IssueAutomaticBan(_targetUserId);
+
+        await _eventProducer.Received(1).SendAsync(EventType.BanIssued, _banId);
+    }
+
+    /// <summary>
+    /// It is never stacked on a ban already running.
+    /// </summary>
+    /// <remarks>
+    /// A second window on top would move the end date a moderator is looking at
+    /// without anybody having decided anything, and the reader is already out of
+    /// public speech.
+    /// </remarks>
+    [Fact]
+    public async Task NotIssueTheAutomaticBanOverABanAlreadyRunning()
+    {
+        ArrangeAutomaticTarget(UserRole.RegularUser);
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = Guid.NewGuid(), TargetUserId = _targetUserId, EndedUtc = _now.AddDays(3) });
+
+        var ban = await _service.IssueAutomaticBan(_targetUserId);
+
+        ban.Should().BeNull();
+        await _banRepository.DidNotReceive().Create(
+            Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// An administrator is a site owner, and arithmetic does not ban one.
+    /// </summary>
+    /// <remarks>
+    /// The same account CreateBan refuses by hand. There is deliberately no
+    /// in-app authority over an owner, and a threshold is no exception to it.
+    /// </remarks>
+    [Fact]
+    public async Task NotIssueTheAutomaticBanToAnAdministrator()
+    {
+        ArrangeAutomaticTarget(UserRole.Admin);
+
+        var ban = await _service.IssueAutomaticBan(_targetUserId);
+
+        ban.Should().BeNull();
+        await _banRepository.DidNotReceive().Create(
+            Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// The rank of whoever happens to be signed in has no say in it.
+    /// </summary>
+    /// <remarks>
+    /// The path runs inside the write of a warning, and an ordinary moderator
+    /// issues warnings and may not ban. If the automatic ban asked about his
+    /// rank, the site would refuse to protect itself from the very seat that
+    /// noticed the violation.
+    /// </remarks>
+    [Fact]
+    public async Task IssueTheAutomaticBanWhateverTheCallersRank()
+    {
+        SetCurrentUser(UserRole.Moderator);
+        ArrangeAutomaticTarget(UserRole.RegularUser);
+        _banRepository.Create(Arg.Any<CreateBanEntity>(), Arg.Any<CancellationToken>())
+            .Returns(new Ban { BanId = _banId });
+
+        var ban = await _service.IssueAutomaticBan(_targetUserId);
+
+        ban.Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// The arrangement the automatic path needs: the target is looked up by id,
+    /// not by name, and nothing is banned yet.
+    /// </summary>
+    private void ArrangeAutomaticTarget(UserRole targetRole)
+    {
+        _userLookupService.GetAsync(_targetUserId)
+            .Returns(new GeneralUser { UserId = _targetUserId, Username = "Target", Role = targetRole });
+        _banRepository.GetActiveBan(_targetUserId, Arg.Any<CancellationToken>()).Returns((Ban?)null);
     }
 }

@@ -6,7 +6,7 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { CounterPair } from "@/shared/ui/CounterPair";
 import Paging from "@/shared/ui/Paging/Paging.vue";
-import { UserLink } from "@/entities/user";
+import { RemovedAccountLink, UserLink } from "@/entities/user";
 import {
   useBlogsStore,
   useBlogDisplay,
@@ -47,22 +47,22 @@ const {
 // Columns that have direct mapping to sort options
 const sortableColumnKeys = new Set(["title", "status"]);
 
-// Define table columns (unified with GamesDataTable)
+// Define table columns (unified with GamesDataTable): "Название" takes what
+// the others leave, their shares are of the whole table.
 const columns: Column[] = [
   {
     key: "title",
     label: "Название",
-    width: "40%",
     align: "left",
   },
-  { key: "authors", label: "Ведущие", width: "25%", align: "left" },
+  { key: "authors", label: "Ведущие", width: "23.7%", align: "left" },
   {
     key: "status",
     label: "Статус блога",
-    width: "25%",
+    width: "23.7%",
     align: "left",
   },
-  { key: "readers", label: "Читатели", width: "10%", align: "center" },
+  { key: "readers", label: "Читатели", width: "10.6%", align: "center" },
 ];
 
 // Current sort state for DataTable (only when sorting by a column that exists in the table)
@@ -175,7 +175,7 @@ function pagingAnchor(): HTMLElement | null {
           :user="row.author"
           :search-query="filterState.search"
           hide-badge
-        /><template v-if="row.assistants?.length"
+        /><RemovedAccountLink v-else /><template v-if="row.assistants?.length"
           >{{ " "
           }}<Tooltip :text="buildAssistantTooltip(row.assistants)" focusable>
             <span class="assistant-count">[+{{ row.assistants.length }}]</span>
@@ -217,6 +217,8 @@ function pagingAnchor(): HTMLElement | null {
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 .blogs-data-table
   width: 100%
 
@@ -228,18 +230,12 @@ function pagingAnchor(): HTMLElement | null {
 
 .blog-link
   color: $link
-  word-wrap: break-word
-  overflow-wrap: break-word
   &:hover
     color: $link-hover
   &.new-item
-    color: $accent-green
-    &:hover
-      color: $accent-green-hover
+    +link-tone($accent-green, $accent-green-hover)
   &.closed-item
-    color: $text-muted
-    &:hover
-      color: $link-hover
+    +muted-link
 
 .status-wrapper
   cursor: help

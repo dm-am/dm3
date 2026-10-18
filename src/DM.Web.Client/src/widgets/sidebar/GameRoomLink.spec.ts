@@ -5,9 +5,10 @@
 /**
  * The room row is where "the game has this room" and "you may open it" come
  * apart. The menu names every room, closed ones included, so a room the
- * viewer has no access to is a name and a grey lock and nothing else — not a
- * link, because the page behind it answers 404 to exactly the viewers who
- * see it locked.
+ * viewer has no access to is a name, a pale lock and the characters who write
+ * in it, as the old site writes "[Лес] - Густав, Эодор" — not a link, because
+ * the page behind it answers 404 to exactly the viewers who see it locked,
+ * and no counter, because nothing in it is counted for them.
  *
  * Both halves used to be unreachable. The listing dropped closed rooms
  * altogether, so the grey lock had no state to be in and the master saw a
@@ -26,6 +27,9 @@ import {
   type PostPendency,
   type Room,
 } from "@/entities/game";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 
 config.global.stubs = {
   "router-link": {
@@ -94,6 +98,45 @@ describe("GameRoomLink", () => {
     );
     expect(wrapper.find(".router-link").exists()).toBe(false);
     expect(wrapper.find(".title").element.tagName).toBe("SPAN");
+    expect(wrapper.find(".counter").exists()).toBe(false);
+    expect(copied(wrapper)).toBe("- Таверна");
+  });
+
+  it("writes after a room the viewer may not open the characters who write in it", () => {
+    const wrapper = row(
+      room({
+        access: RoomAccessType.Private,
+        canView: false,
+        characterNames: ["Густав", "Эодор"],
+      }),
+    );
+    expect(copied(wrapper)).toBe("- Таверна - Густав, Эодор");
+    expect(wrapper.find(".writers").text()).toBe("- Густав, Эодор");
+    expect(wrapper.find(".router-link").exists()).toBe(false);
+    expect(wrapper.find(".counter").exists()).toBe(false);
+  });
+
+  it("writes a closed room nobody writes in by its title alone", () => {
+    const wrapper = row(
+      room({
+        access: RoomAccessType.Private,
+        canView: false,
+        characterNames: [],
+      }),
+    );
+    expect(copied(wrapper)).toBe("- Таверна");
+    expect(wrapper.find(".writers").exists()).toBe(false);
+  });
+
+  it("names nobody after a room the viewer may open", () => {
+    const wrapper = row(
+      room({
+        access: RoomAccessType.Private,
+        canView: true,
+        characterNames: ["Густав"],
+      }),
+    );
+    expect(wrapper.find(".writers").exists()).toBe(false);
     expect(copied(wrapper)).toBe("- Таверна (0)");
   });
 
@@ -156,5 +199,52 @@ describe("GameRoomLink", () => {
       }),
     );
     expect(someoneElse.text()).not.toContain("*");
+  });
+});
+
+/**
+ * The colours of a closed room, as the old site gives them: the glyph green
+ * where the viewer may open the room and the palest grey of the theme where
+ * he may not, and the name of a room he may not open in the plain ink of the
+ * column, not a muted one. Read off the stylesheet: jsdom applies no scoped
+ * style, so a mount cannot see a colour.
+ */
+describe("GameRoomLink colours", () => {
+  const rules = ruleMap(
+    componentCss(
+      join(dirname(fileURLToPath(import.meta.url)), "GameRoomLink.vue"),
+    ),
+  );
+
+  it("draws the lock pale grey to a viewer without access and green to one with it", () => {
+    expect(rules.get(".lock")).toMatchObject({ color: "var(--border)" });
+    expect(rules.get(".lock.granted")).toMatchObject({
+      color: "var(--accent-green)",
+    });
+  });
+
+  it("writes a room the viewer may not open, and the names after it, in the ink of the text", () => {
+    expect(rules.get(".no-access, .writers")).toEqual({ color: "var(--text)" });
+  });
+});
+
+/**
+ * A row of the room list that wraps, a long title or the writers of a closed
+ * room, goes on under the start of the menu line, as the old site wraps
+ * "[Военно-полевой госпиталь] - Никита, Север": the nesting indents the first
+ * line only. Read off the stylesheet of the menu that nests the rows.
+ */
+describe("the room list of the game menu", () => {
+  const rules = ruleMap(
+    componentCss(
+      join(dirname(fileURLToPath(import.meta.url)), "GamePanel.vue"),
+    ),
+  );
+
+  it("indents the first line of a room and wraps the rest under the menu line", () => {
+    expect(rules.get(".room-list")).toMatchObject({ padding: "0" });
+    const indent = rules.get(".room-list > li")?.["text-indent"];
+    expect(indent).toBeTruthy();
+    expect(indent).not.toBe("0");
   });
 });

@@ -13,7 +13,7 @@ const adapter: NotepadAdapter = {
   list: () => notepadApi.getUserEntries(),
   create: (input) => notepadApi.createUserEntry(input),
   update: (id, input) => notepadApi.updateUserEntry(id, input),
-  remove: (id) => notepadApi.deleteUserEntry(id),
+  remove: (id, options) => notepadApi.deleteUserEntry(id, options),
 };
 </script>
 
@@ -24,7 +24,7 @@ const adapter: NotepadAdapter = {
     :viewer-id="user?.id ?? null"
     title="Блокнот"
     empty-text="Нет записей в блокноте"
-    empty-hint="Создайте первую запись, чтобы хранить личные заметки."
+    empty-hint="Создайте первую запись, чтобы хранить личные заметки"
     load-error-text="Не удалось загрузить записи блокнота"
   />
 </template>

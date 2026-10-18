@@ -23,15 +23,13 @@ public class PublicationIntentionResolverShould
 
     private static Publication PublicationBy(
         Guid authorId,
-        bool isPublished = true,
-        bool commentsEnabled = true) =>
+        bool isPublished = true) =>
         new()
         {
             Id = Guid.NewGuid(),
             BlogId = Guid.NewGuid(),
             Author = new GeneralUser { UserId = authorId },
-            IsPublished = isPublished,
-            CommentsEnabled = commentsEnabled
+            IsPublished = isPublished
         };
 
     #region The draft
@@ -127,25 +125,6 @@ public class PublicationIntentionResolverShould
     }
 
     [Fact]
-    public void HonourCommentsBeingSwitchedOff()
-    {
-        var user = Create.User(StrangerId).WithRole(UserRole.RegularUser).Please();
-        var publication = PublicationBy(AuthorId, commentsEnabled: false);
-
-        resolver.IsAllowed(user, PublicationIntention.CreateComment, publication).Should().BeFalse();
-    }
-
-    [Fact]
-    public void NotLetAnAdminCommentPastASwitchedOffThread()
-    {
-        var user = Create.User(StrangerId).WithRole(UserRole.Admin).Please();
-        var publication = PublicationBy(AuthorId, commentsEnabled: false);
-
-        // The author's switch is not a permission level, so no rank overrides it.
-        resolver.IsAllowed(user, PublicationIntention.CreateComment, publication).Should().BeFalse();
-    }
-
-    [Fact]
     public void LetAnAuthenticatedUserLikeAPublishedPublication()
     {
         var user = Create.User(StrangerId).WithRole(UserRole.RegularUser).Please();
@@ -167,16 +146,6 @@ public class PublicationIntentionResolverShould
     {
         resolver.IsAllowed(AuthenticatedUser.Guest, PublicationIntention.Like, PublicationBy(AuthorId))
             .Should().BeFalse();
-    }
-
-    [Fact]
-    public void IgnoreTheCommentSwitchWhenLiking()
-    {
-        var user = Create.User(StrangerId).WithRole(UserRole.RegularUser).Please();
-        var publication = PublicationBy(AuthorId, commentsEnabled: false);
-
-        // Closing the thread silences replies, not approval.
-        resolver.IsAllowed(user, PublicationIntention.Like, publication).Should().BeTrue();
     }
 
     #endregion

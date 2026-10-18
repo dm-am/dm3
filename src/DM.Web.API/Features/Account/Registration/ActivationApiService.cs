@@ -53,7 +53,7 @@ internal class ActivationApiService : IActivationApiService
         {
             Token = token,
             Username = request.Username,
-            RetryEmail = request.RetryEmail
+            TimeZoneId = request.TimeZoneId
         };
 
         var userId = await _activationService.Activate(serviceRequest);
@@ -63,12 +63,19 @@ internal class ActivationApiService : IActivationApiService
             new UnconditionalCredentials { UserId = userId },
             httpContext);
 
-        return new Envelope<User>(_mapper.ToUser(identity.User));
-    }
+        // The account is activated by the call above, and the session is the only
+        // thing that can still be missing here. A passwordless session is refused
+        // for an account that already carries a second factor, and a name chosen
+        // seconds ago cannot carry one, so a guest at this line is a broken rule
+        // rather than an answer to hand back. Unchecked, it returned a user with
+        // no identity in it under a screen that said the account was ready, and
+        // the reader was left signed out with nothing saying so.
+        if (!identity.User.IsAuthenticated)
+        {
+            throw new InvalidOperationException(
+                $"Activation of {userId} minted no session: {identity.Error}");
+        }
 
-    /// <inheritdoc />
-    public async Task ResendActivation(ResendActivation resendActivation)
-    {
-        await _activationService.ResendActivation(resendActivation.Email);
+        return new Envelope<User>(_mapper.ToUser(identity.User));
     }
 }

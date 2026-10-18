@@ -5,7 +5,9 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 
 namespace DM.Domain.Messaging.Features.Search;
@@ -15,6 +17,7 @@ internal class MessageSearchService : IMessageSearchService
 {
     private readonly IMessageSearchRepository _repository;
     private readonly IIdentityProvider _identityProvider;
+    private readonly IUserBlacklistChecker _userBlacklistChecker;
 
     // Inline operator tokens: from:/before:/after:/during:/in: followed by a
     // non-space value. Everything not matched stays as free-text tsquery input.
@@ -24,19 +27,39 @@ internal class MessageSearchService : IMessageSearchService
 
     public MessageSearchService(
         IMessageSearchRepository repository,
-        IIdentityProvider identityProvider)
+        IIdentityProvider identityProvider,
+        IUserBlacklistChecker userBlacklistChecker)
     {
         _repository = repository;
         _identityProvider = identityProvider;
+        _userBlacklistChecker = userBlacklistChecker;
     }
 
     /// <inheritdoc />
-    public Task<CursorResult<MessageSearchHit>> SearchAsync(
+    public async Task<CursorResult<MessageSearchHit>> SearchAsync(
         MessageSearchRequest request, CancellationToken ct = default)
     {
         var query = Parse(request);
-        var userId = _identityProvider.Current.User.UserId;
-        return _repository.Search(userId, query, ct);
+        var user = _identityProvider.Current.User;
+
+        // "Скрывать сообщения в чате" hides the general chat messages of the
+        // people on the reader's list wherever the reader reads that chat, and a
+        // search over it is one more way of reading it: the chat left them out
+        // and the search handed them back, a click away from the chat itself.
+        // Only the general chat, as in MessageService.GetWithCursorAsync: a
+        // private conversation is closed by BlockDirectMessages instead, and a
+        // game room is the game's, not the reader's. A search scoped away from
+        // the general chat has nobody to hide and asks nothing.
+        var readsGeneralChat = query.Scopes.Count == 0 ||
+                               query.Scopes.Any(s => s.Type == SearchSourceType.Global);
+        if (user.IsAuthenticated && readsGeneralChat)
+        {
+            var hidden = await _userBlacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
+                user.UserId, UserBlacklistSettings.HideMessages, ct);
+            query.HiddenAuthorIds = hidden.Count > 0 ? hidden : null;
+        }
+
+        return await _repository.Search(user.UserId, query, ct);
     }
 
     private static MessageSearchQuery Parse(MessageSearchRequest request)

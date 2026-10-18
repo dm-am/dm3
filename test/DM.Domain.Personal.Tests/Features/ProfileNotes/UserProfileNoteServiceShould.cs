@@ -161,7 +161,6 @@ public class UserProfileNoteServiceShould : UnitTestBase
     public async Task CreateNewNoteWhenNoneExists()
     {
         _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
-        _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns((UserProfileNote?)null);
 
         CreateUserProfileNoteEntity? capturedEntity = null;
         _repository.Create(Arg.Any<CreateUserProfileNoteEntity>(), Arg.Any<CancellationToken>())
@@ -183,30 +182,46 @@ public class UserProfileNoteServiceShould : UnitTestBase
         capturedEntity.CreatedUtc.Should().Be(_now);
     }
 
+    /// <summary>
+    /// A note the pair already has is updated by the same write that creates a
+    /// new one, with no read of the note before it.
+    /// </summary>
+    /// <remarks>
+    /// The update used to follow a read, and a clear of the same note arriving
+    /// together with the save removed the row in between: the update of a note
+    /// that was gone answered 500. The write decides new or existing itself, so
+    /// there is nothing to read first.
+    /// </remarks>
     [Fact]
     public async Task UpdateExistingNote()
     {
-        var existingNote = new UserProfileNote { Id = _noteId };
+        var existingNote = new UserProfileNote { Id = Guid.NewGuid(), Text = "Old text", CreatedUtc = _now.AddDays(-1) };
+        var savedNote = new UserProfileNote
+        {
+            Id = existingNote.Id,
+            Text = "Updated text",
+            CreatedUtc = existingNote.CreatedUtc,
+            ModifiedUtc = _now
+        };
 
         _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
         _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns(existingNote);
 
-        UpdateUserProfileNoteEntity? capturedEntity = null;
-        _repository.Update(Arg.Any<UpdateUserProfileNoteEntity>(), Arg.Any<CancellationToken>())
-            .Returns(existingNote)
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdateUserProfileNoteEntity>(0);
-                capturedEntity = e;
-            });
+        CreateUserProfileNoteEntity? capturedEntity = null;
+        _repository.Create(Arg.Any<CreateUserProfileNoteEntity>(), Arg.Any<CancellationToken>())
+            .Returns(savedNote)
+            .AndDoes(ci => capturedEntity = ci.ArgAt<CreateUserProfileNoteEntity>(0));
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "Updated text" };
-        await _service.UpsertNote(createNote);
+        var result = await _service.UpsertNote(createNote);
 
+        result.Should().Be(savedNote, "the answer is the note as the write left it");
         capturedEntity.Should().NotBeNull();
-        capturedEntity!.Id.Should().Be(_noteId);
+        capturedEntity!.OwnerId.Should().Be(_currentUserId);
+        capturedEntity.SubjectUserId.Should().Be(_subjectUserId);
         capturedEntity.Text.Should().Be("Updated text");
-        capturedEntity.ModifiedUtc.Should().Be(_now);
+        capturedEntity.CreatedUtc.Should().Be(_now, "on a note the pair already has this dates the modification");
+        await _repository.DidNotReceive().Get(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

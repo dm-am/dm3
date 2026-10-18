@@ -95,10 +95,10 @@ describe("pages reached from a letter", () => {
       expect(card).not.toContain(failure);
     }
 
-    // And the card is more than the support line it used to consist of.
-    expect(card.replace(wrapper.find(".help-section").text(), "").trim()).toBe(
-      "Проверяем ссылку...",
-    );
+    // And the card holds one line: help is offered when something has gone
+    // wrong, and while the server is being asked nothing has.
+    expect(wrapper.find(".help-section").exists()).toBe(false);
+    expect(card.trim()).toBe("Проверяем ссылку...");
   });
 
   /**
@@ -130,7 +130,7 @@ describe("pages reached from a letter", () => {
 
     it("is a button, and takes the reader back to the name", async () => {
       const wrapper = await atConfirmStep();
-      const back = wrapper.get(".change-username");
+      const back = wrapper.get(".auth-label-row .auth-action");
 
       expect(back.element.tagName).toBe("BUTTON");
       expect(back.attributes("disabled")).toBeUndefined();
@@ -146,7 +146,9 @@ describe("pages reached from a letter", () => {
 
       await wrapper.get(".submit-button").trigger("click");
 
-      expect(wrapper.get(".change-username").attributes("disabled")).toBe("");
+      expect(
+        wrapper.get(".auth-label-row .auth-action").attributes("disabled"),
+      ).toBe("");
       expect(wrapper.text()).toContain("Подтвердите выбор имени");
     });
   });

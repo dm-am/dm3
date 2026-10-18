@@ -6,14 +6,14 @@
  * What the button owes a request in flight.
  *
  * `loading` is two things at once and both are load-bearing: the control stops
- * answering, and it says on screen that something is happening. The second half
- * was missing, and fifteen pages filled the gap by hand with a caption of their
- * own. The style that draws it now is keyed off `aria-busy`, so the attribute
- * is not decoration for a screen reader here, it is the switch, and the caption
- * is whatever the caller passed and nothing else.
+ * answering, and it says so on screen. Fifteen pages used to fill the second
+ * half by hand with a caption of their own; the caption is now whatever the
+ * caller passed and nothing else.
  *
- * `disabled` is a different state and stays one: a control that cannot be used
- * right now is not a control that is working.
+ * On screen a request in flight IS the disabled state — a control that has
+ * stopped answering, hatched, in the fill it already had. What the two states
+ * do not share is what they announce: `aria-busy` says the control will come
+ * back, and a merely disabled one does not carry it.
  */
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";

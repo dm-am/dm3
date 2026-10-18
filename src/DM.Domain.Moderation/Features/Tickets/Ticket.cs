@@ -23,17 +23,30 @@ public class Ticket
     public Guid? ReporterUserId { get; set; }
 
     /// <summary>
-    /// Reporter username (null for guest submissions)
+    /// The reporter, null for a guest submission and for a removed account alike:
+    /// <see cref="IsGuest" /> tells the two apart
     /// </summary>
-    public string? ReporterUsername { get; set; }
+    public GeneralUser? Reporter { get; set; }
 
     /// <summary>
-    /// Target user username (null for tickets without a target)
+    /// Whether the ticket was filed without an account. Read off the ticket and
+    /// not off <see cref="Reporter" />, which is also missing for the ticket of an
+    /// account removed since
     /// </summary>
-    public string? TargetUsername { get; set; }
+    public bool IsGuest { get; set; }
 
     /// <summary>
-    /// Contact email left by a guest author (null for authenticated submissions)
+    /// Target user identifier (null for tickets without a target).
+    /// Server-side only — what the visibility rule compares with the reader: the
+    /// violator a complaint names does not moderate it (TicketVisibility). The
+    /// name of the violator is a line of the text, written there at filing.
+    /// </summary>
+    public Guid? TargetUserId { get; set; }
+
+    /// <summary>
+    /// Contact email left by a guest author (null for authenticated submissions).
+    /// Kept out of the text: the address is for moderation to work with, an
+    /// access recovery is checked against it.
     /// </summary>
     public string? GuestEmail { get; set; }
 
@@ -79,9 +92,9 @@ public class Ticket
     public string Comment { get; set; } = "";
 
     /// <summary>
-    /// Assigned moderator username
+    /// How many comments the conversation of the ticket holds
     /// </summary>
-    public string? AssignedModeratorUsername { get; set; }
+    public int CommentsCount { get; set; }
 
     /// <summary>
     /// Resolution time
@@ -89,57 +102,117 @@ public class Ticket
     public DateTimeOffset? ResolvedUtc { get; set; }
 
     /// <summary>
-    /// Moderator's answer
+    /// The moderator who closed the ticket (null while it is open, and for an
+    /// account removed since)
     /// </summary>
-    public string? Answer { get; set; }
-
-    /// <summary>
-    /// Warning was issued
-    /// </summary>
-    public bool HasWarning { get; set; }
-
-    /// <summary>
-    /// Ban was issued
-    /// </summary>
-    public bool HasBan { get; set; }
+    public string? ResolvedByUsername { get; set; }
 }
 
 /// <summary>
-/// DTO for ticket detail output: the base ticket plus the conversation
-/// thread. Loaded only on the detail path — list endpoints stay light
+/// A ticket with its conversation, as its page reads it
 /// </summary>
 public class TicketDetails : Ticket
 {
     /// <summary>
-    /// Responses in the ticket conversation, oldest first
+    /// The conversation, from the oldest comment to the newest
     /// </summary>
-    public IEnumerable<TicketResponseItem> Responses { get; set; } = [];
+    public IReadOnlyList<TicketComment> Comments { get; set; } = [];
+
+    /// <summary>
+    /// Whether the caller may write in the conversation: the ticket is open, it has
+    /// room for another comment, and the caller is its author or moderates it.
+    /// Set by the service for the caller.
+    /// </summary>
+    public bool CanComment { get; set; }
+
+    /// <summary>
+    /// Whether the caller answers as moderation and chooses with his answer the
+    /// status the ticket moves to, closing it among them: it is open and the
+    /// caller moderates it without being its author. Set by the service for the
+    /// caller.
+    /// </summary>
+    public bool CanResolve { get; set; }
 }
 
 /// <summary>
-/// DTO for a single response in a ticket conversation
+/// One comment of the conversation of a ticket
 /// </summary>
-public class TicketResponseItem
+public class TicketComment
 {
     /// <summary>
-    /// Response author
+    /// Comment identifier
     /// </summary>
-    public GeneralUser Author { get; set; } = null!;
+    public Guid TicketCommentId { get; set; }
 
     /// <summary>
-    /// Response text
+    /// The ticket the comment is written in
     /// </summary>
-    public string Text { get; set; } = "";
+    public Guid TicketId { get; set; }
 
     /// <summary>
-    /// When the response was created
+    /// The author, null for the guest who filed the ticket and for a removed
+    /// account alike: <see cref="IsGuest" /> tells the two apart
+    /// </summary>
+    public GeneralUser? Author { get; set; }
+
+    /// <summary>
+    /// Whether the comment was written by the guest who filed the ticket, on the
+    /// tracking page
+    /// </summary>
+    public bool IsGuest { get; set; }
+
+    /// <summary>
+    /// Creation moment
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Whether this response is from a moderator (vs the user)
+    /// Text in the site markup, the tag set of comments
     /// </summary>
-    public bool IsFromModerator { get; set; }
+    public string Text { get; set; } = "";
+}
+
+/// <summary>
+/// DTO for an answer in the conversation of a ticket: the text, and for
+/// moderation the status the ticket moves to with it
+/// </summary>
+public class CreateTicketComment
+{
+    /// <summary>
+    /// Text in the site markup, the tag set of comments. May stay empty only when
+    /// moderation closes the ticket or marks it as spam: then the status is all
+    /// the answer changes
+    /// </summary>
+    public string Text { get; set; } = "";
+
+    /// <summary>
+    /// The status moderation moves the ticket to: waiting for the user when left
+    /// out, closed, or spam. The author of a ticket does not choose one: his
+    /// answer always leaves it waiting for moderation
+    /// </summary>
+    public TicketStatus? Status { get; set; }
+}
+
+/// <summary>
+/// What became of a comment the repository was asked to add
+/// </summary>
+public enum TicketCommentOutcome
+{
+    /// <summary>
+    /// The comment is in the conversation, and the status of the ticket is the one
+    /// asked for
+    /// </summary>
+    Added,
+
+    /// <summary>
+    /// The ticket was closed by the time the comment arrived: nothing is written
+    /// </summary>
+    Closed,
+
+    /// <summary>
+    /// The conversation holds as many comments as it takes: nothing is written
+    /// </summary>
+    Full
 }
 
 /// <summary>
@@ -209,42 +282,34 @@ public class CreateTicketEntity
 }
 
 /// <summary>
-/// Entity DTO for updating a ticket (repository level)
+/// Entity DTO for adding a comment to the conversation of a ticket (repository
+/// level)
 /// </summary>
-public class UpdateTicketEntity
+public class CreateTicketCommentEntity
 {
     /// <summary>
-    /// Ticket identifier
+    /// Comment identifier
+    /// </summary>
+    public Guid TicketCommentId { get; set; }
+
+    /// <summary>
+    /// The ticket the comment is written in
     /// </summary>
     public Guid TicketId { get; set; }
 
     /// <summary>
-    /// Assigned moderator identifier
+    /// The author, null for the guest who filed the ticket: the only comment
+    /// written without an account is one written by the tracking token
     /// </summary>
-    public Guid? AssignedModeratorId { get; set; }
+    public Guid? AuthorId { get; set; }
 
     /// <summary>
-    /// Ticket status
+    /// Text in the site markup, as stored
     /// </summary>
-    public TicketStatus? Status { get; set; }
+    public string Text { get; set; } = "";
 
     /// <summary>
-    /// Resolution timestamp
+    /// Creation timestamp
     /// </summary>
-    public DateTimeOffset? ResolvedUtc { get; set; }
-
-    /// <summary>
-    /// Moderator's answer
-    /// </summary>
-    public string? Answer { get; set; }
-
-    /// <summary>
-    /// Warning ID if one was issued
-    /// </summary>
-    public Guid? WarningId { get; set; }
-
-    /// <summary>
-    /// Ban ID if one was issued
-    /// </summary>
-    public Guid? BanId { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 }

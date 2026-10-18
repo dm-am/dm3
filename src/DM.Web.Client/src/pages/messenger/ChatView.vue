@@ -1,951 +1,660 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+/**
+ * ChatView: a private correspondence, drawn as the global chat is: the feed
+ * of widgets/chat-feed with its composer under the frame, the search row and
+ * "Перейти к дате", the history window of useChatHistoryWindow.
+ *
+ * The line at the top of the frame says who the correspondence is with
+ * (ConversationLine): his name and whether he is on the site, "поиск", which
+ * opens the search row under the line, and "…" with the menu of the
+ * correspondence. The clearing of the history and the leaving of a group ask
+ * first, in the site's window of a question.
+ */
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
-import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute, useRouter, type RouteLocationRaw } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useMessagingStore } from "@/entities/message";
-import { useAuthStore, useMessagePermissions } from "@/entities/user";
-import { AvatarImg } from "@/shared/ui/AvatarImg";
-import { useUiStore } from "@/shared/stores/ui";
-import {
-  groupMessagesWithSeparators,
-  isDateSeparator,
-  isUserOnline,
-  toChatVirtualRows,
-  type MessageOrSeparator,
-} from "@/shared/lib/utils/chat";
+import { useAuthStore } from "@/entities/user";
 import {
   joinTitleSegments,
   useDocumentTitle,
 } from "@/shared/lib/composables/useDocumentTitle";
-import { useVirtualScroll } from "@/shared/lib/composables/useVirtualScroll";
-import { ChatMessage } from "@/widgets/chat-message";
-import { Tooltip } from "@/shared/ui/Tooltip";
+import {
+  ChatFeed,
+  ChatSearchRow,
+  useChatHistoryWindow,
+  type ChatFeedActions,
+} from "@/widgets/chat-feed";
 import type { ChatId, Message, MessageId } from "@/entities/message";
-import dayjs from "dayjs";
-import { symbols } from "@/shared/lib/utils/icons";
-import { SvgIcon } from "@/shared/ui/Icon";
-import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
+import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { messagingApi } from "@/entities/message";
 import { unwrapResource } from "@/shared/api";
-import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
-import { notifyFailure } from "@/shared/lib/errors";
-import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
-import { useChatComposer } from "@/shared/lib/composables/useChatComposer";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { formatSiteTime } from "@/shared/lib/utils/datetime";
+import { useGlobalSignalR } from "@/shared/lib/composables/useSignalR";
 import {
-  provideQuoteComposer,
-  useQuoteAction,
-} from "@/shared/lib/composables/useQuoteComposer";
-import { BODY_TEXT_MAX_LENGTH } from "@/shared/lib/constants/content";
-import {
-  useAnchoredInfiniteScroll,
-  LANDING_SCROLL_MS,
-} from "@/shared/lib/composables/useAnchoredInfiniteScroll";
+  NotificationType,
+  type SignalRNotification,
+} from "@/shared/api/models/notifications";
+import { usePaging } from "@/shared/lib/composables/usePaging";
+import ConversationLine from "./ConversationLine.vue";
+import { listPageQuery } from "./listPage";
 
 const route = useRoute();
 const router = useRouter();
 const messagingStore = useMessagingStore();
 const { user: currentUser } = storeToRefs(useAuthStore());
-const { isCompactLayout } = storeToRefs(useUiStore());
 const {
   selectedChat,
+  loadingChat,
+  chatMissing,
+  chatError,
   messagesList,
+  messagesError,
   sending,
   interlocutor,
   hasMoreBefore,
   hasMoreAfter,
   errorBefore,
+  errorAfter,
+  loadingMessages,
+  highlightedMessageId,
+  firstMessageUtc,
 } = storeToRefs(messagingStore);
+const { messagesPerPage } = usePaging();
 
 // The interlocutor first: three messenger routes shared one tab name, and the
 // name of the person is the only thing that tells two correspondences apart.
 useDocumentTitle(() =>
-  joinTitleSegments(interlocutor.value?.username, "Личные сообщения"),
+  joinTitleSegments(
+    selectedChat.value?.type === "Group"
+      ? selectedChat.value.title || undefined
+      : interlocutor.value?.username,
+    "Личные сообщения",
+  ),
 );
 
-const MAX_MESSAGE_HEIGHT = 200;
+/** The feed: the frame, the list, the toolbar and the composer (ChatFeed). */
+const feed = ref<InstanceType<typeof ChatFeed> | null>(null);
 
-// Message permissions (shared composable)
-const {
-  isModerator,
-  canEdit: canEditMsg,
-  canDelete: canDeleteMsg,
-  canLike: canLikeMsg,
-} = useMessagePermissions(currentUser);
+// The field is the server's answer about the viewer, asked by the code that
+// refuses the message: a participant, and not the one whom the other side of a
+// conversation of two keeps on a blacklist with private messages closed. That
+// one used to type a message and be told after it that it could not be sent.
+// The ordinary ban does not reach private correspondence, and the answer says
+// so too. It is the answer about the correspondence on screen, so none is
+// offered while another one is on its way in its place.
+const canWrite = computed(
+  () =>
+    Boolean(currentUser.value) &&
+    !loadingChat.value &&
+    selectedChat.value?.viewer?.canWrite === true,
+);
 
-// Private correspondence is deliberately outside the ordinary ban, so the only
-// condition here is being signed in. The server agrees: the ban check in
-// ChatIntentionResolver applies to the global chat branch alone.
-const canSendMessages = computed(() => !!currentUser.value);
+/**
+ * The feed has nothing to show yet: the correspondence or its first window is
+ * on its way. The skeleton of the global chat stands there, never "Переписка
+ * не найдена" or "Сообщений пока нет", which are answers and not waiting.
+ */
+const feedLoading = computed(
+  () =>
+    loadingChat.value || (loadingMessages.value && !messagesList.value.length),
+);
 
-const messagesContainer = ref<HTMLElement | null>(null);
-const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
-const topSentinel = ref<HTMLElement | null>(null);
-
-// Scroll position tracking
-let isScrolling = false;
-let scrollEndTimeout: ReturnType<typeof setTimeout> | null = null;
-
-// Infinite scroll: shared with the global chat. Only the older direction
-// exists here — this list ends at the newest message, so there is nothing
-// below to page into.
-const {
-  loadOlder,
-  setupInfiniteScroll,
-  suspend: suspendInfiniteScroll,
-  resume: resumeInfiniteScroll,
-} = useAnchoredInfiniteScroll({
-  container: messagesContainer,
-  older: {
-    sentinel: topSentinel,
-    hasMore: () => hasMoreBefore.value,
-    load: () => messagingStore.fetchMoreBefore(),
-    failed: () => Boolean(errorBefore.value),
+// The store's answers to what the reader does in the feed.
+const feedActions: ChatFeedActions = {
+  send: (text) =>
+    selectedChat.value
+      ? messagingStore.sendMessage(selectedChat.value.id, text)
+      : Promise.resolve({ error: null }),
+  remove: (id) => messagingStore.deleteMessage(id),
+  like: (id) => messagingStore.likeMessage(id),
+  unlike: (id) => messagingStore.unlikeMessage(id),
+  // Through the envelope: read off the top level the text was always
+  // undefined, and the editor opened empty over a message that has text.
+  editText: async (id) => {
+    const { data } = await messagingApi.getMessageForEdit(id as MessageId);
+    return htmlToBbcode(unwrapResource<Message>(data)?.text || "");
   },
-});
+  saveEdit: (id, text) => messagingStore.updateMessage(id, text),
+};
 
-// Group messages with date separators (shared utility)
-const messagesWithSeparators = computed((): MessageOrSeparator[] =>
-  groupMessagesWithSeparators(messagesList.value ?? []),
-);
-// isDateSeparator imported from shared/lib/utils/chat
-
-// Virtual scroll
-const itemCount = computed(() => messagesWithSeparators.value.length);
-const { virtualItems, totalSize, measureElement, scrollToIndex } =
-  useVirtualScroll({
-    count: itemCount,
-    container: messagesContainer,
-    estimateSize: 80,
-    overscan: 15,
-  });
-
-// What the template iterates: each visible row already resolved to the item it
-// draws and narrowed to one of the two kinds (shared with the global chat, see
-// toChatVirtualRows).
-const virtualRows = computed(() =>
-  toChatVirtualRows(messagesWithSeparators.value, virtualItems.value),
-);
-
-// Edit state
-const editingId = ref<string | null>(null);
-const editText = ref("");
-
-// Delete confirmation state
-const toolbarEl = ref<HTMLElement | null>(null);
-
-// Hover toolbar state
-// Shared with the global chat. The keyboard path below arrives with it: this
-// view had hover only, so a keyboard user could reach every message action in
-// one chat and none in the other.
-const {
-  hoveredMessageId,
-  toolbarPosition,
-  isToolbarHovered,
-  confirmingDeleteId,
-  handleMessageMouseEnter,
-  handleMessageFocusIn,
-  handleMessageMouseLeave,
-  handleMessageFocusOut,
-  handleToolbarMouseEnter,
-  handleToolbarMouseLeave,
-  handleToolbarFocusIn,
-  handleToolbarFocusOut,
-  handleScrollStart,
-} = useMessageToolbar({
-  toolbar: toolbarEl,
-  isScrolling: () => isScrolling,
-});
-
-// Writing and deleting a message: shared with the global chat, which had the
-// same four functions letter for letter.
-const { newMessage, handleSend, requestDelete, cancelDelete, confirmDelete } =
-  useChatComposer({
-    sending,
-    send: (text) => messagingStore.sendMessage(selectedChat.value!.id, text),
-    remove: (id) => messagingStore.deleteMessage(id),
-    editor: editorRef,
-    confirmingDeleteId,
-    scrollToBottom: () => scrollToBottom(),
-    canSend: () => Boolean(selectedChat.value),
-  });
-
-// Quoting. Both halves are on this page, and they still go through the same
-// provide/inject the other surfaces use, so the rule about when the action
-// exists is written once. The chat is not scrolled to the composer: it is on
-// screen already, and the feed manages its own scrolling.
-provideQuoteComposer({
-  enabled: () => canSendMessages.value && Boolean(selectedChat.value),
-  insert: (source) => editorRef.value?.insertBlock(source.text),
-});
-
-const { canQuote, quote } = useQuoteAction();
-
-function quoteMessage(messageId: string) {
-  return quote(() => messagingApi.getMessageQuote(messageId as MessageId));
+/**
+ * A message of a correspondence opens the correspondence on it, the list
+ * beside it on the page it stands at (listPage.ts).
+ */
+function linkTo(id: string): RouteLocationRaw {
+  return {
+    name: "chat",
+    params: { id: String(route.params.id) },
+    query: { ...listPageQuery(route.query), msg: id },
+  };
 }
 
-const hoveredMessage = computed(() => {
-  if (!hoveredMessageId.value) return null;
-  return (
-    messagesList.value.find((m) => m.id === hoveredMessageId.value) || null
-  );
-});
-
-// Expanded messages
-const expandedDeletedMessages = ref<Set<string>>(new Set());
-
-// Scroll the virtualized list to a message and flash it (jump-to-context).
-function scrollToMessage(msgId: string) {
-  const index = messagesWithSeparators.value.findIndex(
-    (item) => !isDateSeparator(item) && item.id === msgId,
-  );
-  if (index >= 0) {
-    scrollToIndex(index, { align: "center" });
-  }
-  nextTick(() => {
-    setTimeout(() => {
-      const element = document.getElementById(`msg-${msgId}`);
-      if (element) {
-        element.classList.add("highlighted");
-        setTimeout(() => {
-          element.classList.remove("highlighted");
-          messagingStore.clearHighlight();
-        }, 1500);
-      }
-    }, 100);
-  });
-}
-
-async function loadChat() {
-  const id = route.params.id as ChatId;
-  await messagingStore.selectChat(id);
-  if (selectedChat.value) {
-    // ?msg=<id> (from search jump-to-context) loads the window around a
-    // specific message instead of the latest page.
-    const jumpMsgId =
-      typeof route.query.msg === "string" ? route.query.msg : null;
-    if (jumpMsgId) {
-      // Landing in the middle of the history sweeps the list past the top
-      // sentinel; the observers stay off until that scroll has settled, or the
-      // landing itself pages in history the reader never asked for.
-      suspendInfiniteScroll();
-      await messagingStore.navigateToMessage(id, jumpMsgId as MessageId);
-      await messagingStore.markAsRead(id);
-      nextTick(() => {
-        setupInfiniteScroll();
-        scrollToMessage(jumpMsgId);
-        setTimeout(resumeInfiniteScroll, LANDING_SCROLL_MS);
-      });
-      return;
-    }
-    await messagingStore.fetchMessages(id);
-    await messagingStore.markAsRead(id);
-    scrollToBottom();
-    nextTick(() => {
-      setupInfiniteScroll();
-    });
-  }
+/** Where the reader stands, measured by the feed when asked. */
+function isAtTail(): boolean {
+  return feed.value?.atBottom() ?? true;
 }
 
 function scrollToBottom() {
-  nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-    }
-  });
+  nextTick(() => feed.value?.scrollToBottom());
 }
 
-function handleWheel() {
-  isScrolling = true;
-  handleScrollStart();
-  if (scrollEndTimeout) {
-    clearTimeout(scrollEndTimeout);
-  }
-  scrollEndTimeout = setTimeout(() => {
-    isScrolling = false;
-    scrollEndTimeout = null;
-  }, 150);
+/** The correspondence the address names. */
+const chatId = () => String(route.params.id) as ChatId;
+
+// ─────────────────────────────────────────────────────────────
+// Which part of the history the feed shows
+// ─────────────────────────────────────────────────────────────
+// The global chat's logic, the one both feeds share (useChatHistoryWindow):
+// the day in the address (?date), the way back to the latest messages and the
+// catch-up at the bottom of an archive window, the line over a window the
+// reader did not ask for. A message link of a correspondence is ?msg. The
+// page of the list beside the feed rides along with ?date.
+const history = useChatHistoryWindow({
+  feed,
+  location: () => ({
+    name: "chat",
+    params: { id: chatId() },
+    query: listPageQuery(route.query),
+  }),
+  chat: chatId,
+  messages: () => messagesList.value,
+  loading: () => feedLoading.value,
+  failed: () => Boolean(messagesError.value),
+  hasMoreAfter: () => hasMoreAfter.value,
+  landedOnRequestedDate: () => messagingStore.landedOnRequestedDate,
+  load: {
+    latest: () => messagingStore.jumpToLatest(),
+    date: (date) => messagingStore.navigateToDate(chatId(), date),
+    message: (id) =>
+      messagingStore.navigateToMessage(chatId(), id as MessageId),
+  },
+});
+const {
+  selectedDate,
+  notice: feedNotice,
+  today,
+  hasHistory,
+  pickDate,
+  landOnMessage,
+  jumpToLatest,
+  followToLive,
+} = history;
+
+/** The first day of the correspondence, the first the calendar offers. */
+const firstDay = computed(() =>
+  firstMessageUtc.value
+    ? formatSiteTime(firstMessageUtc.value, "YYYY-MM-DD")
+    : "",
+);
+
+// ─────────────────────────────────────────────────────────────
+// The search under the line
+// ─────────────────────────────────────────────────────────────
+// "поиск" of the line opens the row of the global chat under it: the search of
+// this correspondence and "Перейти к дате". The row is there to be typed in,
+// so it opens with the caret in its field. Ctrl+F opens it the same way; once
+// it is open, the row takes the key itself (ChatSearchRow).
+const searchOpen = ref(false);
+const searchRow = ref<InstanceType<typeof ChatSearchRow> | null>(null);
+
+async function openSearch() {
+  searchOpen.value = true;
+  await nextTick();
+  searchRow.value?.focus();
 }
 
-function handleScroll() {
-  isScrolling = true;
-  if (hoveredMessageId.value) {
-    hoveredMessageId.value = null;
-    confirmingDeleteId.value = null;
-    isToolbarHovered.value = false;
-  }
-  if (scrollEndTimeout) {
-    clearTimeout(scrollEndTimeout);
-  }
-  scrollEndTimeout = setTimeout(() => {
-    isScrolling = false;
-    scrollEndTimeout = null;
-  }, 150);
+function toggleSearch() {
+  if (searchOpen.value) searchOpen.value = false;
+  else void openSearch();
 }
 
-// Header formatting (time / tooltips) is fully owned by ChatMessage — the
-// page renders no header markup of its own.
-
-// Track latest activity per username
-const latestActivityByUsername = computed(() => {
-  const map = new Map<string, string>();
-  if (!messagesList.value?.length) return map;
-  for (const msg of messagesList.value) {
-    if (!msg.author?.username || !msg.author?.lastActivityUtc) continue;
-    const existing = map.get(msg.author.username);
-    if (
-      !existing ||
-      dayjs(msg.author.lastActivityUtc).isAfter(dayjs(existing))
-    ) {
-      map.set(msg.author.username, msg.author.lastActivityUtc);
-    }
+function openSearchOnFind(event: KeyboardEvent) {
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "f") {
+    return;
   }
-  return map;
+  if (searchOpen.value || !hasHistory.value || !currentUser.value) return;
+  event.preventDefault();
+  void openSearch();
+}
+
+// A correspondence emptied for the reader has nothing to search.
+watch(hasHistory, (has) => {
+  if (!has) searchOpen.value = false;
 });
 
-function isOnline(author: any) {
-  if (!author?.username) return false;
-  const lastActivityUtc = latestActivityByUsername.value.get(author.username);
-  return isUserOnline(lastActivityUtc);
+/** The correspondence as the line describes it: none while one is on its way. */
+const lineChat = computed(() =>
+  loadingChat.value ? null : selectedChat.value,
+);
+
+// ─────────────────────────────────────────────────────────────
+// The menu's two questions
+// ─────────────────────────────────────────────────────────────
+const isGroup = computed(() => selectedChat.value?.type === "Group");
+const askingClear = ref(false);
+const askingLeave = ref(false);
+
+/** What the clearing does, said before it is done. */
+const clearMessage = computed(() =>
+  isGroup.value
+    ? "Сообщения, написанные до этой минуты, перестанут показываться вам, а у других участников останутся"
+    : "Сообщения, написанные до этой минуты, перестанут показываться вам, а у собеседника останутся",
+);
+
+// The windows run the requests themselves and print a refusal in place, so
+// the requests say they own it.
+const OWN_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
+
+function clearHistory() {
+  return messagingStore.clearHistory(chatId(), OWN_REFUSAL);
 }
 
-// Permissions — delegated to shared composable
-function canEditMessage(msg: Message) {
-  return canEditMsg(msg);
-}
-function canDeleteMessage(msg: Message) {
-  return canDeleteMsg(msg);
-}
-function canLikeMessage(msg: Message) {
-  return canLikeMsg(msg);
+function leaveGroup() {
+  return messagingStore.leaveChat(chatId(), OWN_REFUSAL);
 }
 
-function isLikedByMe(msg: Message) {
-  if (!currentUser.value) return false;
-  return (
-    msg.likes?.some((u: any) => u.username === currentUser.value?.username) ??
-    false
-  );
-}
-
-// Edit
-function isEditing(msgId: string) {
-  return editingId.value === msgId;
-}
-
-async function startEdit(msg: Message) {
-  editingId.value = msg.id;
-  // Fetch the original BBCode from the backend — seeds ChatMessage's editor
-  // once; further keystrokes stay inside ChatMessage's own local state.
-  const { data } = await messagingApi.getMessageForEdit(msg.id);
-  // Through the envelope: read off the top level the text was always
-  // undefined, and the editor opened empty over a message that has text.
-  editText.value = htmlToBbcode(unwrapResource<Message>(data)?.text || "");
-}
-
-function cancelEdit() {
-  editingId.value = null;
-  editText.value = "";
-}
-
-// Receives the edited text straight from ChatMessage's @save-edit payload
-// (its own local editor state) — same contract as GlobalChatPage; the page
-// must not read back its own stale editText seed.
-async function saveEditWithText(msgId: string, text: string) {
-  if (text.trim()) {
-    const { error } = await messagingStore.updateMessage(msgId, text);
-    // The editor stays open with the text still in it: a closed editor over
-    // the unchanged message says the edit went through.
-    if (error) {
-      notifyFailure(error, "Не удалось сохранить сообщение");
-      return;
-    }
-  }
-  cancelEdit();
-}
-
-// Message truncation (long messages, [cut] markers, expand state) is now
-// fully owned by ChatMessage via <TruncatedContent>. The page only forwards
-// MAX_MESSAGE_HEIGHT to ChatMessage as the per-message collapse budget.
-
-// Deleted messages expand
-function isDeletedExpanded(msgId: string) {
-  return expandedDeletedMessages.value.has(msgId);
-}
-
-function toggleDeletedExpand(msgId: string) {
-  if (!isModerator.value) return;
-  if (expandedDeletedMessages.value.has(msgId)) {
-    expandedDeletedMessages.value.delete(msgId);
-  } else {
-    expandedDeletedMessages.value.add(msgId);
-  }
-}
-
-// Likes
-async function toggleLike(msg: Message) {
-  if (!currentUser.value) return;
-  if (isLikedByMe(msg)) {
-    await messagingStore.unlikeMessage(msg.id);
-  } else {
-    await messagingStore.likeMessage(msg.id);
-  }
-}
-
-// Jump to latest
-async function jumpToLatest() {
-  await messagingStore.jumpToLatest();
-  scrollToBottom();
-}
-
-function goBack() {
+/** Out of a group the reader has left: back to the list. */
+function afterLeave() {
   router.push({ name: "messenger" });
 }
 
-// React to chat id changes and to jumping between messages within the same
-// chat (?msg changes but params.id does not).
-watch(() => [route.params.id, route.query.msg], loadChat, { immediate: true });
+/**
+ * Opens the correspondence the address names, on the window the address asks
+ * for: a message (?msg, a link or a search elsewhere), a day (?date), or the
+ * latest messages, which are then read.
+ */
+async function loadChat() {
+  const id = chatId();
+  history.forget();
+  searchOpen.value = false;
+  await messagingStore.selectChat(id);
+  if (!selectedChat.value) return;
+  const jumpMsgId =
+    typeof route.query.msg === "string" ? route.query.msg : null;
+  const date = history.dateInRoute();
+  if (jumpMsgId || date) {
+    if (jumpMsgId) await landOnMessage(jumpMsgId);
+    else if (date) await history.loadDate(date);
+    // The reader opened the correspondence, at whichever place of it.
+    if (!messagesError.value) await messagingStore.markAsRead(id);
+    return;
+  }
+  await messagingStore.fetchMessages(id);
+  // A window that did not come is not a window read.
+  if (messagesError.value) return;
+  await messagingStore.markAsRead(id);
+  scrollToBottom();
+  nextTick(() => feed.value?.setupInfiniteScroll());
+}
 
-// New messages bring new BBCode into the feed. Only the LENGTH is watched, the
-// way the global chat next door already does it: a deep watch walked every
-// message object on every nested mutation — a like, a read flag — and then
-// re-scanned the whole container, while each ChatMessage already initialises
-// its own markup through TruncatedContent's on-content-mounted. In a chat with
-// five hundred loaded messages that ran on every incoming push.
+/** The retry of a window that did not load. */
+async function retryMessages() {
+  const id = selectedChat.value?.id;
+  if (!id) return;
+  const date = history.dateInRoute();
+  if (date) {
+    await history.loadDate(date);
+    return;
+  }
+  await messagingStore.fetchMessages(id);
+  if (messagesError.value) return;
+  await messagingStore.markAsRead(id);
+  scrollToBottom();
+  nextTick(() => feed.value?.setupInfiniteScroll());
+}
+
+/** The feed scrolled: an archive window caught up, a replacement it held up. */
+function onFeedScroll() {
+  followToLive();
+  readDeferredWindow();
+}
+
+// A message the store was asked to land on (?msg=): the feed brings it into
+// view and marks its arrival.
+watch(highlightedMessageId, (id) => {
+  if (!id) return;
+  nextTick(() => {
+    feed.value?.scrollToMessage(id);
+    messagingStore.clearHighlight();
+  });
+});
+
+// Another correspondence: opened whole, on the window its address asks for.
+// Another message of the same one (?msg moved, a link followed): landed on.
+// ?msg leaving the address, when a day is picked or the archive is left,
+// moves nothing; the day is the history window's to follow.
 watch(
-  () => messagesList.value?.length,
-  () => {
-    nextTick(() => {
-      initBbcodeInteractive(messagesContainer.value);
-    });
+  () => [route.params.id, route.query.msg] as const,
+  ([id, msg], previous) => {
+    if (!previous || id !== previous[0]) {
+      loadChat();
+      return;
+    }
+    if (typeof msg === "string" && msg && msg !== previous[1]) {
+      landOnMessage(msg);
+    }
   },
+  { immediate: true },
 );
 
+// ─────────────────────────────────────────────────────────────
+// Live tail of the open correspondence
+// ─────────────────────────────────────────────────────────────
+// A push is a hint and the truth is in REST (API_DESIGN.md, "Realtime"): the
+// hub queues nothing, its payload carries no text, and the same event may
+// arrive twice or out of order. So every trigger below ends in one and the
+// same tail read, deduplicated by id: a repeated push then costs a request
+// and changes nothing on screen.
+//
+// No lease is taken on the shared socket: a private correspondence exists only
+// for a signed-in reader, and App.vue holds the connection for as long as they
+// are signed in. This page only listens on it.
+const { onNotification: onGlobalNotification, isConnected: isSocketConnected } =
+  useGlobalSignalR();
+
+let unsubscribeSignalR: (() => void) | null = null;
+let readingTail = false;
+// A trigger that arrived while the reader's own message was on its way out.
+// The send ends in a tail of its own, so the read waits for it instead of
+// racing it, and is spent once when it lands.
+let missedTailRead = false;
+// New messages sit in the feed, and the server has not been told they were
+// read. Kept when the tab is hidden: nobody has looked at them yet, so the
+// receipt travels with the reader and is sent when the tab comes back.
+let pendingReadReceipt = false;
+// More than a page went by while the reader was up in the history, so the
+// window has to be re-read whole — and it is not, while he is reading it.
+// Spent when he comes back down to the tail.
+let deferredWindowRead = false;
+
+// The unread badge in the header and the open correspondence answer the same
+// push: App.vue re-reads the counter while this page appends the message, and
+// a badge over a message the reader is looking at contradicts the screen. A
+// message on screen in a visible tab is read, so the page says so.
+//
+// `atTail` is measured by the caller, before the list grew: appending to a list
+// moves its bottom away from a reader standing at it, so a measurement taken
+// afterwards answers "no" for everybody. A reader parked higher up has the new
+// message on the page and below the fold, and a receipt sent for him takes away
+// the one sign that anything arrived, here and in the header count both.
+async function markTailRead(atTail: boolean) {
+  const chatId = selectedChat.value?.id;
+  if (!pendingReadReceipt || !chatId) return;
+  if (document.visibilityState !== "visible") return;
+  if (!atTail) return;
+  await messagingStore.markAsRead(chatId);
+  pendingReadReceipt = false;
+}
+
+async function readTail() {
+  const chatId = selectedChat.value?.id;
+  if (!chatId) return;
+  // A reader parked in the middle of the history, landed there from search or
+  // paged up far enough for the window to be trimmed, is not at the tail.
+  // Appending the newest page under an older window would leave a hole between
+  // the two, and nobody asked to be taken to the end of the correspondence.
+  if (hasMoreAfter.value) return;
+  // A send in flight brings the newest message with it: the store appends what
+  // the POST answered with. A read racing that append can carry the same
+  // message in ahead of it and put it on screen twice, so the trigger is
+  // remembered and spent when the send has landed.
+  if (sending.value) {
+    missedTailRead = true;
+    return;
+  }
+  // The window is being replaced right now (chat switch, jump to a message):
+  // that load brings the newest page with it.
+  if (loadingMessages.value || readingTail) return;
+  readingTail = true;
+  try {
+    const { data } = await messagingApi.getMessages(chatId, {
+      limit: messagesPerPage.value,
+    });
+    const tail = data?.resources ?? [];
+    // The window may have been switched, re-read or left behind while the
+    // answer was in flight, and this tail was deduplicated against the
+    // previous one. hasMoreAfter is asked again for the same reason as before
+    // the request: a jump to a message or a trimmed window puts the reader off
+    // the tail, and this page would take away what they are reading.
+    if (
+      !tail.length ||
+      selectedChat.value?.id !== chatId ||
+      loadingMessages.value ||
+      hasMoreAfter.value
+    ) {
+      return;
+    }
+    const shown = new Set(messagesList.value.map((message) => message.id));
+    const fresh = tail.filter((message) => !shown.has(message.id));
+    // Measured before the list grows, and one measurement serves both of the
+    // things that follow from it: the feed goes down to the new message for a
+    // reader who was at the end of it, and the receipt goes out only for a
+    // reader the message has actually reached. Split, the two disagreed: the
+    // message was appended below the fold and reported read all the same.
+    const wasAtTail = isAtTail();
+    if (messagesList.value.length > 0 && fresh.length === tail.length) {
+      // Not one message of the newest page is on screen: more went by than a
+      // page holds, so appending it would leave a gap between what is shown
+      // and what arrived. The window is re-read whole instead.
+      if (!wasAtTail) {
+        // Except under a reader who has paged up: the window he is reading is
+        // the page he is reading, and replacing it takes that page away and
+        // leaves him at the end of a correspondence he has not read. The
+        // replacement waits for his return to the tail: readDeferredWindow
+        // reads again when he gets there, and that read makes it.
+        deferredWindowRead = true;
+        return;
+      }
+      await messagingStore.fetchMessages(chatId);
+      pendingReadReceipt = true;
+      scrollToBottom();
+      await markTailRead(true);
+      return;
+    }
+    // The part both sides hold is taken in the server's order rather than left
+    // as it stands. A message of the reader's own goes to the end of the list
+    // the moment the POST answers, so a message written before it by the other
+    // side sat above it here and below it there. Rewriting that part also
+    // picks up edits made to the messages it covers; the older prefix, which
+    // the tail does not reach, stays where it is.
+    const tailIds = new Set(tail.map((message) => message.id));
+    messagesList.value = [
+      ...messagesList.value.filter((message) => !tailIds.has(message.id)),
+      ...tail,
+    ];
+    if (fresh.length > 0) {
+      pendingReadReceipt = true;
+      if (wasAtTail) scrollToBottom();
+      await markTailRead(wasAtTail);
+    }
+  } catch {
+    // Silent: the next push, reconnect or return to the tab reads again.
+  } finally {
+    readingTail = false;
+  }
+}
+
+/**
+ * The reader coming back down to the end of the correspondence: the feed
+ * scrolled. A window replacement his position stood in the way of is made
+ * here, and the tail is read again rather than the answer kept from then:
+ * what the earlier read found is as old as the moment he started scrolling
+ * back.
+ */
+function readDeferredWindow() {
+  if (!deferredWindowRead || !isAtTail()) return;
+  deferredWindowRead = false;
+  readTail();
+}
+
+function handleMessagingNotification(notification: SignalRNotification) {
+  if (notification.eventType !== NotificationType.NewMessage) return;
+  const chatId = selectedChat.value?.id;
+  // Every correspondence of the reader pushes this same event, and the chat in
+  // the payload is the only thing that tells one from another.
+  const pushedChatId = notification.payload?.chatId as string | undefined;
+  if (!chatId || pushedChatId !== chatId) return;
+  readTail();
+}
+
+async function handleVisibilityChange() {
+  // Events that happened while the tab was in the background are not replayed
+  // to it, so coming back to the tab starts with a read.
+  if (document.visibilityState !== "visible") return;
+  await readTail();
+  // Whatever was appended while the tab was hidden is read now: the reader is
+  // looking at it, and this read may well have found nothing left to append.
+  // Where he is looking still decides it, measured here because nothing has
+  // been appended since: a reader who left the tab parked in the middle of the
+  // history comes back to the same place, not to a cleared unread mark.
+  await markTailRead(isAtTail());
+}
+
+// Nothing is delivered while the socket is down and nothing is repeated once
+// it is back up, so a fresh connection starts by reading what it missed.
+watch(isSocketConnected, (connected) => {
+  if (connected) readTail();
+});
+
+// The read a send stood in the way of, spent once the created message is in
+// the list. Waiting for that is what keeps the same message off the screen
+// twice; dropping the trigger instead would lose the other side's message
+// that arrived while the reader was writing.
+watch(sending, (isSending) => {
+  if (isSending || !missedTailRead) return;
+  missedTailRead = false;
+  readTail();
+});
+
 onMounted(() => {
-  messagesContainer.value?.addEventListener("wheel", handleWheel, {
-    passive: true,
-  });
-  messagesContainer.value?.addEventListener("scroll", handleScroll);
-  nextTick(() => {
-    initBbcodeInteractive(messagesContainer.value);
-  });
+  unsubscribeSignalR = onGlobalNotification(handleMessagingNotification);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  document.addEventListener("keydown", openSearchOnFind);
 });
 
 onUnmounted(() => {
   messagingStore.clearSelection();
-  messagesContainer.value?.removeEventListener("wheel", handleWheel);
-  messagesContainer.value?.removeEventListener("scroll", handleScroll);
-  if (scrollEndTimeout) clearTimeout(scrollEndTimeout);
+  unsubscribeSignalR?.();
+  unsubscribeSignalR = null;
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  document.removeEventListener("keydown", openSearchOnFind);
 });
 </script>
 
 <template>
   <div class="chat-view">
-    <template v-if="selectedChat">
-      <page-title v-if="interlocutor"
-        >Переписка с {{ interlocutor.username }}</page-title
+    <!-- The server's answer, and only that: a correspondence on its way or
+         one the network failed to bring is not a missing one. -->
+    <div v-if="chatMissing" class="chat-view__missing">
+      <secondary-text>Переписка не найдена</secondary-text>
+      <router-link
+        :to="{ name: 'messenger', query: listPageQuery(route.query) }"
+        >Все переписки</router-link
       >
-      <page-title v-else>Переписка</page-title>
+    </div>
+    <ErrorState v-else-if="chatError" :message="chatError" :retry="loadChat" />
 
-      <div class="chat-header">
-        <button class="back-button" @click="goBack">
-          {{ symbols.arrowLeft }} Назад
-        </button>
-        <router-link
-          v-if="interlocutor"
-          :to="{ name: 'profile', params: { username: interlocutor.username } }"
-          class="interlocutor"
-        >
-          <AvatarImg
-            :picture="interlocutor.picture"
-            :alt="interlocutor.username"
-            :size="40"
-            img-class="header-avatar"
-            eager
+    <template v-else>
+      <ChatFeed
+        ref="feed"
+        :messages="messagesList"
+        :loading="feedLoading"
+        :error="messagesError"
+        :retry="retryMessages"
+        empty-text="Сообщений пока нет"
+        :notice="feedNotice"
+        label="Сообщения переписки"
+        context="direct"
+        :has-more-before="hasMoreBefore"
+        :has-more-after="hasMoreAfter"
+        :error-before="errorBefore"
+        :error-after="errorAfter"
+        :load-older="() => messagingStore.fetchMoreBefore()"
+        :load-newer="() => messagingStore.fetchMoreAfter()"
+        :actions="feedActions"
+        :sending="sending"
+        :can-write="canWrite"
+        :composer-disabled="!selectedChat"
+        :draft-key="composerDraftKey('chat', 'message', selectedChat?.id)"
+        :link-to="linkTo"
+        @jump-to-latest="jumpToLatest"
+        @scroll="onFeedScroll"
+      >
+        <!-- The top of the frame, where the global chat has its events: who
+             the correspondence is with, "поиск" and "…"; the search row
+             under it while it is open. -->
+        <template #strip>
+          <ConversationLine
+            :chat="lineChat"
+            :interlocutor="interlocutor"
+            :search-open="searchOpen"
+            :can-search="hasHistory"
+            @toggle-search="toggleSearch"
+            @clear-history="askingClear = true"
+            @leave="askingLeave = true"
           />
-          <span class="username">{{ interlocutor.username }}</span>
-        </router-link>
-        <span v-else class="username">Загрузка...</span>
-      </div>
-
-      <div
-        class="messages-wrapper"
-        :class="{ 'layout-compact': isCompactLayout }"
-      >
-        <div ref="messagesContainer" class="messages-container">
-          <template v-if="!messagesList?.length">
-            <secondary-text class="empty-messages">
-              Начните переписку, отправив первое сообщение
-            </secondary-text>
-          </template>
-
-          <template v-else>
-            <!-- Top sentinel for loading older messages -->
-            <div
-              v-if="hasMoreBefore"
-              ref="topSentinel"
-              class="scroll-sentinel top-sentinel"
-            >
-              <secondary-text v-if="errorBefore" class="sentinel-error">
-                {{ errorBefore }}
-                <button
-                  type="button"
-                  class="sentinel-retry"
-                  @click="loadOlder()"
-                >
-                  Повторить
-                </button>
-              </secondary-text>
-            </div>
-
-            <!-- Virtual scroll container -->
-            <div
-              :style="{
-                height: `${totalSize}px`,
-                width: '100%',
-                position: 'relative',
-              }"
-            >
-              <div
-                v-for="row in virtualRows"
-                :key="row.key"
-                :ref="
-                  (el) => {
-                    if (el) measureElement(el as HTMLElement);
-                  }
-                "
-                :data-index="row.index"
-                :style="{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  transform: `translateY(${row.start}px)`,
-                }"
-              >
-                <div v-if="row.kind === 'separator'" class="date-separator">
-                  <div class="separator-line"></div>
-                  <span class="separator-text">{{
-                    row.separator.formattedDate
-                  }}</span>
-                  <div class="separator-line"></div>
-                </div>
-                <div
-                  v-else
-                  :id="`msg-${row.message.id}`"
-                  class="pm-message"
-                  tabindex="0"
-                  :class="{
-                    removed: row.message.isRemoved,
-                    hovered: hoveredMessageId === row.message.id,
-                    continuation: row.message.isContinuation,
-                  }"
-                  @mouseenter="handleMessageMouseEnter($event, row.message.id)"
-                  @mouseleave="handleMessageMouseLeave"
-                  @focusin="handleMessageFocusIn($event, row.message.id)"
-                  @focusout="handleMessageFocusOut"
-                >
-                  <ChatMessage
-                    :message="row.message"
-                    :compact="isCompactLayout"
-                    :hovered="hoveredMessageId === row.message.id"
-                    :is-online="isOnline(row.message.author)"
-                    :is-liked-by-me="isLikedByMe(row.message)"
-                    :can-edit="canEditMessage(row.message)"
-                    :can-delete="canDeleteMessage(row.message)"
-                    :can-like="canLikeMessage(row.message)"
-                    :is-moderator="isModerator"
-                    :is-editing="isEditing(row.message.id)"
-                    :edit-text="editText"
-                    :is-deleted-expanded="isDeletedExpanded(row.message.id)"
-                    :max-height="MAX_MESSAGE_HEIGHT"
-                    @like="toggleLike(row.message)"
-                    @toggle-deleted="toggleDeletedExpand(row.message.id)"
-                    @start-edit="startEdit(row.message)"
-                    @save-edit="
-                      (text) => saveEditWithText(row.message.id, text)
-                    "
-                    @cancel-edit="cancelEdit"
-                  />
-                </div>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- Scroll to latest button (centered over messages) -->
-        <button
-          v-if="hasMoreAfter"
-          class="scroll-to-latest"
-          aria-label="К последним сообщениям"
-          @click="jumpToLatest"
-        >
-          <SvgIcon name="chevronDown" />
-        </button>
-      </div>
-
-      <!-- Input area integrated at bottom -->
-      <div class="input-wrapper">
-        <div class="input-container">
-          <template v-if="canSendMessages">
-            <BBCodeEditor
-              ref="editorRef"
-              v-model="newMessage"
-              context="message"
-              placeholder="Написать сообщение..."
-              :draft-key="composerDraftKey('chat', 'message', selectedChat?.id)"
-              :disabled="sending"
-              :min-height="60"
-              :max-height="200"
-              :max-length="BODY_TEXT_MAX_LENGTH"
-              :resizable="true"
-              :is-moderator="isModerator"
-              @submit="handleSend"
+          <div
+            v-if="searchOpen"
+            id="conversation-search"
+            class="conversation-search"
+          >
+            <ChatSearchRow
+              ref="searchRow"
+              :scope="`dm:${chatId()}`"
+              :selected-date="selectedDate"
+              :min-date="firstDay"
+              :max-date="today"
+              @jump="landOnMessage"
+              @date-picked="pickDate"
+              @date-open="messagingStore.fetchFirstMessage(chatId())"
             />
-            <button
-              class="send-button"
-              :disabled="sending || !newMessage.trim()"
-              @click="handleSend"
-            >
-              Отправить
-            </button>
-          </template>
-        </div>
-      </div>
+          </div>
+        </template>
+      </ChatFeed>
 
-      <!-- Fixed toolbar -->
-      <Teleport to="body">
-        <div
-          v-if="
-            hoveredMessage &&
-            !hoveredMessage.isRemoved &&
-            !isEditing(hoveredMessage.id)
-          "
-          ref="toolbarEl"
-          class="msg-toolbar-fixed"
-          :style="{
-            top: toolbarPosition.top + 'px',
-            right: toolbarPosition.right + 'px',
-          }"
-          @mouseenter="handleToolbarMouseEnter"
-          @mouseleave="handleToolbarMouseLeave"
-          @focusin="handleToolbarFocusIn"
-          @focusout="handleToolbarFocusOut"
-        >
-          <!-- Delete confirmation mode -->
-          <template v-if="confirmingDeleteId === hoveredMessage.id">
-            <Tooltip text="Подтвердить удаление">
-              <button
-                class="toolbar-btn toolbar-btn-delete-confirm"
-                aria-label="Подтвердить удаление"
-                @click="confirmDelete"
-              >
-                <SvgIcon name="trash" />
-              </button>
-            </Tooltip>
-            <Tooltip text="Отмена">
-              <button
-                class="toolbar-btn toolbar-btn-cancel"
-                aria-label="Отмена"
-                @click="cancelDelete"
-              >
-                {{ symbols.close }}
-              </button>
-            </Tooltip>
-          </template>
-          <!-- Normal mode -->
-          <template v-else>
-            <Tooltip v-if="canQuote" text="Цитировать сообщение">
-              <button
-                class="toolbar-btn toolbar-btn-quote"
-                aria-label="Цитировать сообщение"
-                @click="quoteMessage(hoveredMessage.id)"
-              >
-                {{ symbols.quote }}
-              </button>
-            </Tooltip>
-            <Tooltip
-              v-if="canLikeMessage(hoveredMessage)"
-              :text="isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Нравится'"
-            >
-              <button
-                class="toolbar-btn"
-                :class="{ active: isLikedByMe(hoveredMessage) }"
-                :aria-label="
-                  isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Нравится'
-                "
-                @click="toggleLike(hoveredMessage)"
-              >
-                <SvgIcon name="heartEmpty" />
-              </button>
-            </Tooltip>
-            <Tooltip v-if="canEditMessage(hoveredMessage)" text="Редактировать">
-              <button
-                class="toolbar-btn"
-                aria-label="Редактировать"
-                @click="startEdit(hoveredMessage)"
-              >
-                <SvgIcon name="pencil" />
-              </button>
-            </Tooltip>
-            <Tooltip v-if="canDeleteMessage(hoveredMessage)" text="Удалить">
-              <button
-                class="toolbar-btn"
-                aria-label="Удалить"
-                @click="requestDelete(hoveredMessage.id)"
-              >
-                <SvgIcon name="trash" />
-              </button>
-            </Tooltip>
-          </template>
-        </div>
-      </Teleport>
+      <ConfirmDialog
+        v-model:show="askingClear"
+        title="Очистить историю?"
+        :message="clearMessage"
+        confirm-label="Очистить"
+        failure="Не удалось очистить историю"
+        :action="clearHistory"
+      />
+      <ConfirmDialog
+        v-model:show="askingLeave"
+        title="Покинуть группу?"
+        message="Переписка уйдет из вашего списка, а у участников останется со всеми сообщениями"
+        confirm-label="Покинуть"
+        failure="Не удалось покинуть группу"
+        :action="leaveGroup"
+        @done="afterLeave"
+      />
     </template>
-
-    <secondary-text v-else class="not-found">
-      Переписка не найдена
-    </secondary-text>
   </div>
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/BbcodeContent" as *
-@use "@/assets/styles/Inputs" as *
-@use "@/assets/styles/ZIndex" as *
-
 .chat-view
   display: flex
   flex-direction: column
-  min-height: 400px
+  min-width: 0
 
-.chat-header
-  display: flex
-  align-items: center
-  gap: $medium
-  padding: $small $medium
-  border: 1px dashed $border
-  margin-bottom: $medium
-
-.back-button
-  padding: $tiny $small
-  +button
-
-.interlocutor
-  display: flex
-  align-items: center
-  gap: $small
-  text-decoration: none
-
-.header-avatar
-  width: 40px
-  height: 40px
-  object-fit: cover
-
-.username
-  font-weight: 500
-  color: $text
-  &:hover
-    color: $link-hover
-
-.messages-wrapper
+.chat-view__missing
   display: flex
   flex-direction: column
-  position: relative
-  border: 1px dashed
-  border-color: $border
-
-.messages-container
-  height: calc(100vh - 400px)
-  min-height: 200px
-  overflow-y: scroll
-  overflow-x: hidden
-  padding: 0 $small
-  position: relative
-  &::after
-    content: ""
-    display: block
-    height: $medium
-  &::-webkit-scrollbar
-    width: 14px
-  &::-webkit-scrollbar-track
-    background-color: transparent
-  &::-webkit-scrollbar-thumb
-    background-color: $bg-element-accent
-    border: 4px solid $bg-page
-    border-radius: 7px
-
-.empty-messages,
-.not-found
-  padding: $big
-
-.scroll-sentinel
-  width: 100%
-
-.top-sentinel
-  display: flex
-  justify-content: center
-  align-items: center
-  min-height: 1px
-  // Grows to fit the retry banner when a history-pagination request fails;
-  // otherwise stays a hairline intersection target. Keyed off the banner's
-  // presence rather than :empty — a v-if that renders nothing still leaves a
-  // comment node behind, so the sentinel is never empty in the CSS sense.
-  &:has(.sentinel-error)
-    min-height: 30px
-    padding: $small 0
-
-.sentinel-error
-  display: flex
-  align-items: center
   gap: $small
-  color: $accent-red
 
-.sentinel-retry
+// The search row under the line, in the line's dress: the surface of the
+// strip and its dashed hand-over to the feed. The row keeps its own margin
+// under it, so the padding is on three sides.
+.conversation-search
   flex-shrink: 0
-  +button
-
-.date-separator
-  display: flex
-  align-items: center
-  gap: $small
-  padding: $small
-  margin: $small 0
-  transform: translateZ(0)
-  backface-visibility: hidden
-
-.separator-line
-  flex: 1
-  height: 0
-  border-top: 1px dashed
-  border-color: $border
-
-.separator-text
-  flex-shrink: 0
-  padding: 0 $small
-  font-size: $secondary-font-size
-  color: $text-muted
-  font-weight: 500
-  white-space: nowrap
-
-.pm-message
-  padding: $small
-  margin-bottom: $medium
-  word-break: break-word
-  overflow-wrap: break-word
-  position: relative
-  overflow: visible
-  background-color: $bg-page
-  // Force GPU compositing to prevent subpixel layout jitter
-  transform: translateZ(0)
-  backface-visibility: hidden
-
-  &.continuation
-    margin-bottom: $tiny
-    margin-top: -$small
-
-  &:hover,
-  &.hovered
-    background-color: $bg-element
-    border-radius: 0 $border-radius $border-radius 0
-
-  &:focus-visible
-    background-color: $bg-element
-    border-radius: 0 $border-radius $border-radius 0
-
-  // tabindex="0" makes the whole row focusable so keyboard users can reach
-  // the hover-only toolbar (focusin -> handleMessageFocusIn); outline only
-  // on :focus-visible so mouse clicks don't leave a visible ring.
-  &:focus:not(:focus-visible)
-    outline: none
-  &:focus-visible
-    outline: 2px solid $border-focus
-    outline-offset: -2px
-
-.pm-message.highlighted
-  animation: highlight-pulse 1.5s ease-out forwards
-
-.pm-message.removed
-  color: $text-muted
-
-@keyframes highlight-pulse
-  0%
-    box-shadow: inset 3px 0 0 0 var(--text-muted)
-  50%
-    box-shadow: inset 3px 0 0 0 var(--text-muted)
-  100%
-    box-shadow: inset 3px 0 0 0 transparent
-
-
-// All msg-* header/content/reaction styles live in ChatMessage.vue (shared
-// widget, scoped there). Rules for them here would be dead: parent scoped
-// CSS does not reach a child component's inner DOM without :deep.
-
-// BBCodeEditor overlay on message hover
-// The overlay is layered ON TOP of the base $input-bg (does not replace it)
-.pm-message:hover :deep(.bbcode-editor),
-.pm-message.hovered :deep(.bbcode-editor)
-  background: linear-gradient($hover-overlay, $hover-overlay), $input-bg
-
-.input-wrapper
-  flex-shrink: 0
-  padding: $small
-  background-color: $bg-page
-  border-top: 1px dashed
-  border-color: $border
-
-// CHAT-10: same control idiom as the global chat's scroll-to-latest and the
-// fixed scroll-nav buttons (24px square, 16px glyph, $border-radius — never
-// a circle). Keeps a soft shadow because it floats over message content.
-.scroll-to-latest
-  position: absolute
-  bottom: $medium
-  left: 50%
-  transform: translateX(-50%)
-  display: flex
-  align-items: center
-  justify-content: center
-  width: 24px
-  height: 24px
-  padding: 0
-  border: 1px solid $border
-  border-radius: $border-radius
+  min-width: 0
+  padding: $small $medium 0
   background-color: $bg-element
-  color: $text-muted
-  cursor: pointer
-  transition: transform 0.15s ease
-  box-shadow: 0 2px 8px $shadow-color
-  z-index: $z-chat-fab
-  svg
-    width: 16px
-    height: 16px
-  &:hover
-    background-color: $bg-element-accent
-    color: $text
-    transform: translateX(-50%) scale(1.05)
-
-.input-container
-  display: flex
-  flex-direction: column
-  gap: $small
-  width: 100%
-
-  :deep(.bbcode-editor-wrapper)
-    width: 100%
-
-.send-button
-  align-self: flex-start
-  +button
-
-
-// Compact display — wrapper overrides only (own elements). The compact
-// header/content layout itself is handled by ChatMessage's `compact` prop.
-.messages-wrapper.layout-compact
-  .pm-message
-    padding: $tiny $small $tiny $small
-    margin-bottom: $small
-
-    &.continuation
-      margin-top: 0
+  border-bottom: 1px dashed $border
 </style>

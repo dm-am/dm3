@@ -21,8 +21,11 @@ namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 /// identity projection, where excluding a lifted ban is an authorization rule and
 /// not tidying.
 ///
-/// The warning is the entity the filter is for, and it is checked beside the ban so
-/// the rule reads as a distinction rather than an exemption.
+/// The warning is checked beside the ban because it went the same way and for the
+/// same reason: it used to be soft-deleted when a moderator undid it, which took
+/// the record out of the open log, out of the moderation list and out of the user's
+/// history at once. A warning is never withdrawn now - only its points move, and
+/// who moved them is written beside them.
 /// </remarks>
 public class BanVisibilityShould
 {
@@ -51,9 +54,18 @@ public class BanVisibilityShould
     }
 
     [Fact]
-    public void LeaveTheWarningSoftDeletable()
+    public void LeaveTheWarningUnfilteredToo()
     {
-        Model().FindEntityType(typeof(DbWarning))!.GetDeclaredQueryFilters().Should().NotBeEmpty(
-            "removing a warning is a removal, and that is what the global filter is for");
+        Model().FindEntityType(typeof(DbWarning))!.GetDeclaredQueryFilters().Should().BeEmpty(
+            "a warning is the record of a decision and stays in the log; a filter over it " +
+            "hides the log the rules page links to");
+    }
+
+    [Fact]
+    public void KeepNoSoftDeleteColumnOnTheWarningEither()
+    {
+        Model().FindEntityType(typeof(DbWarning))!.FindProperty("IsRemoved").Should().BeNull(
+            "the points are what changes, and a removal flag beside them is a second way " +
+            "to undo a warning that no screen offers");
     }
 }

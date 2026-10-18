@@ -5,9 +5,13 @@ import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
 import {
   applySortAction,
+  dateToApiEnd,
+  dateToApiStart,
+  parseDateFromUrl,
   parseSortDirection,
   validateSortField,
   parsePageNumber,
+  toQueryValue,
 } from "@/shared/lib/filters";
 import type {
   PollSortBy,
@@ -153,11 +157,14 @@ function parseQueryToState(query: LocationQuery): PollsFilterState {
     state.search = String(query.search).slice(0, 200);
   }
 
-  // Parse date filters (ISO date strings)
-  if (query.startsFromUtc) state.startsFromUtc = String(query.startsFromUtc);
-  if (query.startsToUtc) state.startsToUtc = String(query.startsToUtc);
-  if (query.endsFromUtc) state.endsFromUtc = String(query.endsFromUtc);
-  if (query.endsToUtc) state.endsToUtc = String(query.endsToUtc);
+  // Parse date filters: a day of the address, YYYY-MM-DD; an ISO moment is
+  // read as its day, and anything else as no date at all.
+  const day = (value: LocationQuery[string]) =>
+    parseDateFromUrl(toQueryValue(value)) ?? "";
+  state.startsFromUtc = day(query.startsFromUtc);
+  state.startsToUtc = day(query.startsToUtc);
+  state.endsFromUtc = day(query.endsFromUtc);
+  state.endsToUtc = day(query.endsToUtc);
 
   // Parse sort
   state.sortBy = validateSortField(
@@ -233,7 +240,10 @@ export function usePollsFilter(): PollsFilterComposable {
   const dispatch = (action: PollsFilterAction) =>
     dispatcher.dispatch(action, reducer, getCurrentState);
 
-  // Convert to API params
+  // Convert to API params. A day of the address is the whole day: from its
+  // start to its end, as every other list of the site asks for it. Sent as the
+  // bare day, the end of a period was its first instant, and a poll that
+  // started on the last day of the period was not found.
   const searchParams = computed<PollsSearchParams>(() => {
     const state = filterState.value;
     const params: PollsSearchParams = {};
@@ -242,10 +252,12 @@ export function usePollsFilter(): PollsFilterComposable {
     if (state.pollType === "anonymous") params.isAnonymous = true;
     else if (state.pollType === "public") params.isAnonymous = false;
     if (state.search) params.search = state.search;
-    if (state.startsFromUtc) params.startsFromUtc = state.startsFromUtc;
-    if (state.startsToUtc) params.startsToUtc = state.startsToUtc;
-    if (state.endsFromUtc) params.endsFromUtc = state.endsFromUtc;
-    if (state.endsToUtc) params.endsToUtc = state.endsToUtc;
+    if (state.startsFromUtc)
+      params.startsFromUtc = dateToApiStart(state.startsFromUtc);
+    if (state.startsToUtc) params.startsToUtc = dateToApiEnd(state.startsToUtc);
+    if (state.endsFromUtc)
+      params.endsFromUtc = dateToApiStart(state.endsFromUtc);
+    if (state.endsToUtc) params.endsToUtc = dateToApiEnd(state.endsToUtc);
     params.sortBy = state.sortBy;
     params.sortOrder = state.sortOrder;
 

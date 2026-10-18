@@ -48,16 +48,21 @@ function handleEdit(id: string, text: string) {
   return boardsStore.updateComment(id, text);
 }
 
-function handleDelete(id: string) {
-  return boardsStore.deleteComment(id);
+// The flags are the item's confirmation's, which prints a refusal in itself:
+// dropped here, the interceptor said the same refusal a second time.
+function handleDelete(
+  id: string,
+  options?: Parameters<typeof boardsStore.deleteComment>[1],
+) {
+  return boardsStore.deleteComment(id, options);
 }
 
-async function handleLike(id: string) {
-  await boardsStore.likeComment(id);
+function handleLike(id: string) {
+  return boardsStore.likeComment(id);
 }
 
-async function handleUnlike(id: string) {
-  await boardsStore.unlikeComment(id);
+function handleUnlike(id: string) {
+  return boardsStore.unlikeComment(id);
 }
 
 // Moderator warning (doc 4.2.4.1) — shared dialog wiring.
@@ -68,11 +73,6 @@ const { warnComment: handleWarn } = useCommentWarnDialog((id) =>
 // Raw BBCode source fetch for the edit form (AuthorEdit audience).
 const fetchEditSource = (id: string) =>
   forumApi.getCommentForUpdate(id as CommentId);
-
-// Markup of a quotation of one comment, for the reply composer that lives on
-// the page above this list.
-const fetchQuoteSource = (id: string) =>
-  forumApi.getCommentQuote(id as CommentId);
 
 function retryLoad() {
   boardsStore.searchComments(searchParams.value);
@@ -149,11 +149,10 @@ function pagingAnchor(): HTMLElement | null {
         :number="getCommentNumber(index)"
         :search-query="filterState.search"
         :fetch-edit-source="fetchEditSource"
-        :fetch-quote-source="fetchQuoteSource"
         :submit-edit="handleEdit"
         :submit-delete="handleDelete"
-        @like="handleLike"
-        @unlike="handleUnlike"
+        :submit-like="handleLike"
+        :submit-unlike="handleUnlike"
         @warn="handleWarn"
       />
     </div>
@@ -187,5 +186,5 @@ function pagingAnchor(): HTMLElement | null {
   gap: $small
 
 .comments-none
-  padding: $medium 0
+  padding-top: $medium
 </style>

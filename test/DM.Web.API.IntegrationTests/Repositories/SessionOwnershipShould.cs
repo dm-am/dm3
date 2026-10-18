@@ -10,7 +10,7 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// A session authenticates only the pair it was issued for (INV-4).
+/// A session authenticates only the pair it was issued for.
 /// </summary>
 /// <remarks>
 /// The row carries its owner and the lookup filters by both halves of the

@@ -50,17 +50,12 @@ const STRIPS: { file: string; strip: string; line: string }[] = [
     line: "‹ {label} ›",
   },
   {
-    // The day calendar's caption. "Июль 2026" became a button when the month
-    // and year grids were put behind it, and a control is exactly the kind of
-    // part that gets laid out as a flex item on the next edit.
+    // The day calendar's caption. "Июль 2026" became two buttons, the month
+    // and the year, each opening its grid, and a control is exactly the kind
+    // of part that gets laid out as a flex item on the next edit.
     file: "shared/ui/DatePicker/CalendarGrid.vue",
     strip: "dp-header",
-    line: "‹ {monthLabel} ›",
-  },
-  {
-    file: "pages/profile/ProfilePage.vue",
-    strip: "mod-header",
-    line: "ПАНЕЛЬ МОДЕРАЦИИ {modSummary}",
+    line: "‹ {monthName} {viewYear} ›",
   },
   {
     // The editor stands on every form of the site, so this one strip was the
@@ -75,11 +70,6 @@ const STRIPS: { file: string; strip: string; line: string }[] = [
     file: "shared/ui/BBCodeEditor/BBCodeEditor.vue",
     strip: "mode-tabs",
     line: "[bbcode] wysiwyg",
-  },
-  {
-    file: "pages/support/SupportPage.vue",
-    strip: "discord-fallback",
-    line: "Если удобнее, напишите нам в Discord",
   },
   {
     // Every accordion of the site in its one-title mode (the rules pages, the
@@ -97,6 +87,21 @@ const STRIPS: { file: string; strip: string; line: string }[] = [
     file: "pages/global-chat/ChatEventsPanel.vue",
     strip: "row-main",
     line: "{stateWord}: {primaryEvent.title}{primaryMeta} | описание | {countLabel} запланировано{nearestText}",
+  },
+  {
+    // The events line when the list was refused: why, and the way to read it
+    // again, in the line's own words and its one line.
+    file: "pages/global-chat/ChatEventsPanel.vue",
+    strip: "row-failed",
+    line: "Эвенты не загрузились | повторить",
+  },
+  {
+    // A line of the upcoming events the count opens: the title whole, then
+    // the date and "закрытый"; on a narrow list it wraps as text. A flex row
+    // would copy the title apart from its date.
+    file: "pages/global-chat/ChatEventsPanel.vue",
+    strip: "rest-item",
+    line: "{ev.title}, {formatSiteTime(ev.startsUtc, DAY_MONTH_TIME_FORMAT)}, закрытый",
   },
 ];
 
@@ -210,11 +215,13 @@ const descendants = (node: Node, out: Node[] = []): Node[] => {
   return out;
 };
 
+/** Every element that carries the class, in the order the template writes them. */
+const elementsOf = (root: Node, cls: string): Node[] =>
+  [root, ...descendants(root)].filter((node) => classesOf(node).includes(cls));
+
 /** The one element that carries the class, or a failure naming the count. */
 const elementOf = (root: Node, cls: string): Node => {
-  const found = [root, ...descendants(root)].filter((node) =>
-    classesOf(node).includes(cls),
-  );
+  const found = elementsOf(root, cls);
   if (found.length !== 1)
     throw new Error(`.${cls}: ${found.length} elements carry it, expected one`);
   return found[0];
@@ -418,19 +425,164 @@ describe("one-line compositions", () => {
  * table row copies its cells tab-separated, the way the site's data tables do;
  * a grid or flex row copies them one per line. Both of these were grids, and
  * the staff table was left with a header moved to a table over rows that were
- * not, so one file copied its header and its rows two different ways.
+ * not, so one file copied its header and its rows two different ways. The
+ * staff table stands on ExpandableList now, and its rows are read as that
+ * list's.
  *
  * Only the row's own display is read. What a cell does inside itself — the
  * staff table breaks a role's joke name onto a second line and gives every
  * player a line — is the row's meaning and not a defect.
  */
 const TABLE_ROWS: { file: string; row: string }[] = [
-  { file: "pages/rules/RulesStaffTable.vue", row: "admin-row" },
+  { file: "widgets/sidebar/SiteAddresses.vue", row: "address-row" },
   {
     file: "shared/ui/ExpandableList/ExpandableList.vue",
     row: "expandable-row--grid",
   },
 ];
+
+/**
+ * The rows of the guest surface — the login, registration, access recovery and
+ * two-factor cards, and the pages their letters lead to.
+ *
+ * They are read apart from the strips above because they are written apart.
+ * Their layout is in a sheet of its own: every guest screen draws the same
+ * shapes, and a mixin would emit them again into each scoped block, so
+ * AuthSurface.sass is imported once from app/main.ts and there is nothing in
+ * the components for the walk above to read. Their text is in each screen that
+ * draws the row, which is where a missing .copy-space shows up. Both halves
+ * were broken and neither shows it on a screen: the label row copied as
+ * "Почта" and then "Изменить" underneath, and the check line copied as an
+ * empty line and then its words, because both were flex.
+ */
+const GUEST_SHEET = "assets/styles/AuthSurface.sass";
+
+/** The blocks of that sheet that paint a row a reader sees as one line. */
+const GUEST_ROWS = [
+  ".auth-surface .auth-label-row",
+  ".auth-surface .auth-checkline",
+  ".auth-surface .auth-checkline--top",
+];
+
+/**
+ * What one part of a row puts in the clipboard: an element by its own text,
+ * the zero-width .copy-space and a plain space of the markup by a single " ".
+ *
+ * The parts are read one at a time and not as one run, because what holds two
+ * of them apart has to be a character somebody wrote. The indentation of a
+ * template reaches the DOM as a space too, so a row that has lost its
+ * .copy-space still reads correctly — right up to the reformat that pulls the
+ * next tag onto one line and takes the space away with it. Read this way, the
+ * space has to be in the markup for the line to come out right.
+ */
+const partsOf = (row: Node): string[] =>
+  children(row, true)
+    .map((child) => {
+      if (child.type === ELEMENT)
+        return classesOf(child).includes("copy-space") ? " " : copyText(child);
+      // A text node of the markup: its own words, or the space it is made of.
+      return copyText(child) || " ";
+    })
+    .filter((text) => text !== "");
+
+/**
+ * Every screen that draws one of those rows, and the text a reader gets from
+ * it. A screen that draws the same row twice names both, in the order the
+ * template writes them; a row whose right-hand half is a v-if reads as its
+ * leading branch, the way the strips above do.
+ *
+ * The check line has no .copy-space in it and needs none: the box puts no
+ * character on the screen, so there is nothing to separate, and a space there
+ * would land at the head of the copy.
+ */
+const GUEST_LINES: { file: string; row: string; lines: string[] }[] = [
+  {
+    file: "features/auth/ui/LoginForm.vue",
+    row: "auth-label-row",
+    // Two rows, in the order the template writes them: the kind of code on the
+    // second step, where the label names what is being typed and the link
+    // beside it offers the other kind; then the password of the first step,
+    // whose link is whichever way out the state calls for. The address above it
+    // wears a lone label: every way out of this card hangs off the strip under
+    // the password, and that is the strip they answer.
+    lines: ["{codeName} {otherCodeAction}", "Пароль Отправить письмо повторно"],
+  },
+  {
+    file: "features/auth/ui/LoginForm.vue",
+    row: "auth-checkline",
+    lines: ["Запомнить меня"],
+  },
+  {
+    file: "features/auth/ui/RegistrationForm.vue",
+    row: "auth-label-row",
+    lines: ["Почта Войти", "Почта Изменить"],
+  },
+  {
+    file: "features/auth/ui/RegistrationForm.vue",
+    row: "auth-checkline",
+    lines: ["Я принимаю правила сайта"],
+  },
+  {
+    file: "features/auth/ui/AccessRecoveryForm.vue",
+    row: "auth-label-row",
+    lines: ["Почта Нет доступа к почте?"],
+  },
+  {
+    file: "pages/account/AccountActivationPage.vue",
+    row: "auth-label-row",
+    lines: ["Имя пользователя Изменить"],
+  },
+];
+
+describe("the one-line rows of the guest surface", () => {
+  const rules = declarations(
+    readFileSync(join(CLIENT_SRC, GUEST_SHEET), "utf8"),
+    1,
+    MIXINS,
+  );
+
+  for (const row of GUEST_ROWS) {
+    it(`${row} lays its parts out as words, not as items`, () => {
+      // The block that opens with this selector, and everything nested in it.
+      // What the sheet says about a part somewhere else is another rule's
+      // business: the label of a row is floated out of the line by design, and
+      // a float is blockified wherever it is written.
+      const inside = rules.filter(
+        (decl) => decl.selector === row || decl.selector.startsWith(`${row} `),
+      );
+      const broken = inside
+        .filter((decl) => {
+          // Pseudo-elements are the one place a selection cannot reach.
+          if (decl.selector.includes("::")) return false;
+          const isPart = decl.selector !== row;
+          return (
+            (decl.prop === "display" && SPLITS_ITEMS.test(decl.value)) ||
+            (isPart &&
+              decl.prop === "display" &&
+              BLOCKIFIED.test(decl.value)) ||
+            (isPart && decl.prop === "position" && OUT_OF_FLOW.test(decl.value))
+          );
+        })
+        .map(
+          (decl) =>
+            `${GUEST_SHEET}:${decl.line} ${decl.selector} — ${decl.prop}: ${decl.value}`,
+        );
+
+      // A selector nobody writes any more would pass every line above without
+      // reading a thing.
+      expect(inside.length).toBeGreaterThan(0);
+      expect(broken).toEqual([]);
+    });
+  }
+
+  for (const { file, row, lines } of GUEST_LINES) {
+    it(`.${row} of ${file} copies as ${lines.map((line) => `"${line}"`).join(" and ")}`, () => {
+      expect(
+        elementsOf(sfcOf(file).ast, row).map((node) => partsOf(node).join("")),
+      ).toEqual(lines);
+    });
+  }
+});
 
 describe("multi-cell rows", () => {
   for (const { file, row } of TABLE_ROWS) {

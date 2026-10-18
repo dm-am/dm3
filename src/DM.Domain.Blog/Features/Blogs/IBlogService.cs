@@ -172,7 +172,7 @@ public interface IBlogService
     Task RemoveAssistant(Guid blogId, string username, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blogs by IDs (for subscribed blogs)
+    /// Get blogs by IDs (for subscribed blogs), the ones the caller may open
     /// </summary>
     Task<IEnumerable<Blog>> GetSubscribedBlogs(IEnumerable<Guid> blogIds, CancellationToken ct = default);
 

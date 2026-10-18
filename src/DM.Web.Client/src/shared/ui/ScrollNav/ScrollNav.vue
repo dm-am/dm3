@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
-import { useUiStore } from "@/shared/stores/ui";
+import { ref, nextTick, onMounted, onBeforeUnmount } from "vue";
 import {
   hasAny as hasAnyExpandable,
   allExpanded as allExpandablesExpanded,
@@ -8,10 +7,19 @@ import {
   collapseAll as collapseAllExpandables,
 } from "@/shared/lib/composables/useExpandableRegistry";
 import { getScrollContainer } from "@/shared/lib/scroll";
-import { Theme } from "@/shared/api/models/personal";
-import { storeToRefs } from "pinia";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import { SiteSettingsPanel } from "@/shared/ui/SiteSettings";
+
+/*
+ * The column stands at every width and at every moment, with the gear in it,
+ * as it stood before the wave of 5 October. That wave made it fade a moment
+ * after every scroll on a narrow screen, took it away while a field held the
+ * caret or a side column was out, and moved the settings into the right
+ * column. The owner, 12 October 2026: the buttons are broken and keep
+ * disappearing. Nothing of its own takes it away now; a side column slid out
+ * lays its scrim over it and holds the caret itself (MobileDrawer).
+ */
 
 function toggleAllExpandables() {
   if (allExpandablesExpanded.value) {
@@ -35,7 +43,8 @@ function scrollToBottom() {
   }
 }
 
-// Settings bubble
+// Settings bubble, at every width: the rows of SiteSettingsPanel in a frame
+// of the bubble's own.
 const isSettingsOpen = ref(false);
 const settingsBtn = ref<HTMLElement | null>(null);
 const settingsBubble = ref<HTMLElement | null>(null);
@@ -76,46 +85,43 @@ function closeSettingsOnEscape(e: KeyboardEvent) {
   settingsBtn.value?.focus();
 }
 
-onMounted(() => {
-  document.addEventListener("click", closeSettings);
-  document.addEventListener("keydown", closeSettingsOnEscape);
-  nextTick(updateLayoutIndicator);
-});
+/*
+ * The width of the scrollbar of the page. Below the shell breakpoint the
+ * column stands in the gutter of the page, four from its edge (the style
+ * below), and the edge of the page is where its scrollbar begins: none on a
+ * phone, where the bar lies over the page, some fifteen pixels on a desktop
+ * window narrowed below the breakpoint. Four from the edge of the window would
+ * lay the column on that bar. The bar is drawn by the scroll container, so it
+ * is measured there, and again on a resize, which a zoom of the page is too.
+ */
+const pageScrollbar = ref(0);
 
-onUnmounted(() => {
-  document.removeEventListener("click", closeSettings);
-  document.removeEventListener("keydown", closeSettingsOnEscape);
-});
-
-// Theme toggle
-const uiStore = useUiStore();
-const { theme, messageLayout, isCompactLayout } = storeToRefs(uiStore);
-const { toggleTheme, setMessageLayout } = uiStore;
-const isDarkTheme = computed(() => theme.value === Theme.Dark);
-
-// Layout toggle indicator
-const layoutToggleRef = ref<HTMLElement | null>(null);
-const layoutIndicatorStyle = ref({ left: "0px", width: "50%" });
-
-function updateLayoutIndicator() {
-  if (!layoutToggleRef.value) return;
-  const btns = layoutToggleRef.value.querySelectorAll(".layout-toggle-btn");
-  const activeIndex = isCompactLayout.value ? 0 : 1;
-  const activeBtn = btns[activeIndex] as HTMLElement;
-  if (!activeBtn) return;
-  layoutIndicatorStyle.value = {
-    left: `${activeBtn.offsetLeft}px`,
-    width: `${activeBtn.offsetWidth}px`,
-  };
+function measurePageScrollbar() {
+  const container = getScrollContainer();
+  pageScrollbar.value = container
+    ? Math.max(0, container.offsetWidth - container.clientWidth)
+    : 0;
 }
 
-watch(messageLayout, () => {
-  nextTick(updateLayoutIndicator);
+onMounted(async () => {
+  document.addEventListener("click", closeSettings);
+  document.addEventListener("keydown", closeSettingsOnEscape);
+  window.addEventListener("resize", measurePageScrollbar);
+  // The shell registers its scroll container in its own mounted hook, which
+  // runs after this one: the container is there once the render has settled.
+  await nextTick();
+  measurePageScrollbar();
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("click", closeSettings);
+  document.removeEventListener("keydown", closeSettingsOnEscape);
+  window.removeEventListener("resize", measurePageScrollbar);
 });
 </script>
 
 <template>
-  <div class="scroll-nav">
+  <div class="scroll-nav" :style="{ '--page-scrollbar': `${pageScrollbar}px` }">
     <!-- Toggle all expandables (accordion rows, TruncatedContent, BBCode spoiler/nsfw) -->
     <Tooltip
       v-if="hasAnyExpandable"
@@ -169,60 +175,7 @@ watch(messageLayout, () => {
     <!-- Settings bubble -->
     <div v-if="isSettingsOpen" ref="settingsBubble" class="settings-bubble">
       <div class="bubble-tail" />
-      <div class="bubble-content">
-        <!-- Message layout toggle -->
-        <div class="settings-row">
-          <span class="settings-label">Верстка</span>
-          <div ref="layoutToggleRef" class="layout-toggle">
-            <Tooltip text="Компактная">
-              <button
-                type="button"
-                class="layout-toggle-btn"
-                :class="{ active: isCompactLayout }"
-                aria-label="Компактная верстка сообщений"
-                @click="setMessageLayout('compact')"
-              >
-                <SvgIcon name="layoutCompact" />
-              </button>
-            </Tooltip>
-            <Tooltip text="Полная">
-              <button
-                type="button"
-                class="layout-toggle-btn"
-                :class="{ active: !isCompactLayout }"
-                aria-label="Полная верстка сообщений"
-                @click="setMessageLayout('full')"
-              >
-                <SvgIcon name="layoutList" />
-              </button>
-            </Tooltip>
-            <span class="layout-indicator" :style="layoutIndicatorStyle"></span>
-          </div>
-        </div>
-
-        <!-- The address of the site is not a setting and is not here. A control
-             in this panel is read only by someone whose page has loaded, which
-             is exactly the visitor for whom the other address changes nothing.
-             The one who needs it cannot open the panel at all, so the address
-             lives where it reaches him: in the footer of the site and in the
-             footer of every letter. -->
-
-        <!-- Theme toggle -->
-        <div class="settings-row">
-          <span class="settings-label">Тема</span>
-          <div class="settings-control">
-            <label class="theme-switch">
-              <input
-                type="checkbox"
-                :checked="isDarkTheme"
-                aria-label="Темная тема"
-                @change="toggleTheme"
-              />
-              <span class="slider" />
-            </label>
-          </div>
-        </div>
-      </div>
+      <SiteSettingsPanel class="bubble-content" />
     </div>
   </div>
 </template>
@@ -239,6 +192,14 @@ watch(messageLayout, () => {
   flex-direction: column
   gap: 0
   z-index: $z-sticky
+
+  // Below the shell breakpoint the page has a gutter of $big at its right
+  // edge and no column beside it. At $medium from the edge the column lay on
+  // the last 8 pixels of every card; at $minor it stands in the gutter, clear
+  // of the text by four, and beside the scrollbar of the page where one is
+  // drawn.
+  @media (max-width: $bp-shell)
+    right: calc($minor + var(--page-scrollbar, 0px))
 
 .toggle-all-btn
   margin-bottom: $small
@@ -291,27 +252,9 @@ watch(messageLayout, () => {
   // it — a number picked to win an argument the scale had already settled.
   z-index: $z-popover
 
-// Width of the column every control sits in, declared once and fixed. The
-// bubble is a two-column grid on .bubble-content, and each .settings-row
-// inherits those tracks through subgrid.
-//
-// It used to be "auto", which meant the widest control decided it. That is a
-// coupling nobody can see: the bubble hangs off the right edge, so a control
-// two pixels wider pushed the whole panel left, moved every label with it and
-// re-centred the controls of the other rows. One segmented switch, added to a
-// row that has since been removed again, shifted every row in the panel.
-//
-// 64 is the intrinsic width of the layout toggle, the widest control the panel
-// has ever had, measured rather than guessed. Anything narrower is centred in
-// it; anything wider is a design decision to take deliberately, by raising
-// this number. e2e/tests/common/settings-panel.spec.ts fails when a control
-// outgrows it, so the coupling cannot come back unnoticed.
-$settings-control-width: 64px
-
+// The frame of the bubble around the rows of SiteSettingsPanel, which draws
+// none of its own.
 .bubble-content
-  display: grid
-  grid-template-columns: auto $settings-control-width
-  column-gap: $medium
   background: $bg-element
   border: 1px solid $border
   border-radius: $border-radius
@@ -320,7 +263,6 @@ $settings-control-width: 64px
   // number and stays equal when a row is added or removed.
   padding: 0 $medium
   box-shadow: 0 2px 8px $shadow-color
-  white-space: nowrap
 
 .bubble-tail
   position: absolute
@@ -332,136 +274,4 @@ $settings-control-width: 64px
   border-right: 1px solid $border
   border-top: 1px solid $border
   transform: rotate(45deg)
-
-.settings-row
-  // Span both parent columns and inherit their track sizing via subgrid.
-  // This is what makes all rows share the same column widths.
-  grid-column: 1 / -1
-  display: grid
-  grid-template-columns: subgrid
-  align-items: center
-  // Equal above and below, so a separator sits midway between the two rows it
-  // divides. It used to be 2 above and 8 below with 2 more of margin, which
-  // pinned every row to the line above it and left twice the air under it.
-  padding: $small 0
-
-  &:not(:last-child)
-    border-bottom: 1px solid $border
-
-.settings-label
-  color: $text-muted
-  font-size: $secondary-font-size
-  white-space: nowrap
-
-// Theme switch: centered within the shared controls column (whose
-// width is defined by the layout toggle in the first row).
-// justify-self + align-self center the element itself in the grid cell
-// without stretching it to fill the cell width.
-.settings-control
-  justify-self: center
-  align-self: center
-
-// Theme switch
-.theme-switch
-  position: relative
-  // block, not inline-block: an inline box sits on the text baseline and
-  // reserves the descender space under itself, which made this row two and a
-  // half pixels taller than the two around it for no visible reason.
-  display: block
-  width: 36px
-  height: 18px
-  cursor: pointer
-  flex-shrink: 0
-
-  input
-    opacity: 0
-    width: 0
-    height: 0
-
-  // Colors snap instantly during theme switch (.no-transitions handles this).
-  // Only transform/opacity use !important to survive .no-transitions —
-  // scoped specificity (0,0,2,1) beats global .no-transitions (0,0,1,2).
-  // cubic-bezier(0.4, 0, 0.2, 1) — Material standard easing (natural deceleration).
-  .slider
-    position: absolute
-    top: 0
-    left: 0
-    right: 0
-    bottom: 0
-    border-radius: 18px
-    background-color: $bg-page
-    border: 1px solid $link-nav
-    transition: background-color 0.3s ease, border-color 0.3s ease
-
-    &:before
-      content: ''
-      position: absolute
-      width: 12px
-      height: 12px
-      left: 2px
-      bottom: 2px
-      border-radius: 50%
-      background: $link-nav
-      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important
-
-    &:after
-      content: ''
-      position: absolute
-      width: 9px
-      height: 9px
-      left: 0
-      bottom: 4px
-      border-radius: 50%
-      background: $bg-page
-      z-index: 1
-      opacity: 0
-      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important
-
-  input:checked + .slider:before,
-  input:checked + .slider:after
-    transform: translateX(18px)
-
-  input:checked + .slider:after
-    opacity: 1
-
-  &:hover .slider
-    border-color: $link-nav-hover
-
-    &:before
-      background: $link-nav-hover
-
-// Layout toggle
-.layout-toggle
-  display: flex
-  border-bottom: 2px solid $border
-  position: relative
-
-.layout-toggle-btn
-  display: flex
-  align-items: center
-  justify-content: center
-  padding: $tiny $small
-  border: none
-  background: none
-  color: $text-muted
-  cursor: pointer
-  transition: filter 0.2s ease
-  svg
-    width: 16px
-    height: 12px
-
-  &:hover:not(.active)
-    filter: brightness($hover-brightness)
-
-  &.active
-    filter: brightness($hover-brightness)
-    cursor: default
-
-.layout-indicator
-  position: absolute
-  bottom: -2px
-  height: 2px
-  background-color: $text-muted
-  transition: left 0.25s ease, width 0.25s ease
-  pointer-events: none
 </style>

@@ -277,4 +277,31 @@ public class GameController : ControllerBase
         var gameId = await _gameApiService.ResolveId(id);
         return Ok(await _gameApiService.Update(gameId, request));
     }
+
+    /// <summary>
+    /// Replace the character sheet of a game
+    /// </summary>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
+    /// <param name="request">The whole new set of specifications and the version it was read at</param>
+    /// <response code="200">Returns the stored sheet and its new version</response>
+    /// <response code="400">The set cannot be stored, or the version is missing</response>
+    /// <response code="401">User must be authenticated</response>
+    /// <response code="403">User is not allowed to edit this game</response>
+    /// <response code="404">Game not found</response>
+    /// <response code="409">The sheet was replaced by somebody else since it was read</response>
+    [HttpPut("{id}/attribute-schema", Name = nameof(PutGameAttributeSchema))]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<GameAttributeSchema>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> PutGameAttributeSchema(
+        string id, [FromBody] ReplaceGameAttributeSchemaRequest request)
+    {
+        var gameId = await _gameApiService.ResolveId(id);
+        return Ok(await _gameApiService.ReplaceAttributeSchema(gameId, request));
+    }
 }

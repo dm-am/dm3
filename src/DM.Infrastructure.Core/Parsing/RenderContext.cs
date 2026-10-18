@@ -66,18 +66,18 @@ public sealed record RenderContext
     } = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal);
 
     /// <summary>Names of the frozen addressees of each [private] block, for the
-    /// recipients line under it. Key = raw tag attribute value, the same key the
+    /// recipients it carries. Key = raw tag attribute value, the same key the
     /// owner ids are held under.</summary>
     /// <remarks>
-    /// The line names who reads the block, and the only record of that is the
-    /// snapshot. Composed from the tag attribute instead - which is what it used
+    /// The recipients name who reads the block, and the only record of that is
+    /// the snapshot. Composed from the tag attribute instead - which is what it used
     /// to be - it names whoever answers to that name today, and after a rename
     /// that is somebody who never saw the block.
     ///
     /// A key is absent when the snapshot cannot name every addressee under it,
     /// which is the whole of an old snapshot and any block that resolved to
     /// nobody. The renderer then falls back to the author's own text, which is
-    /// what it has always printed.
+    /// what it has always named.
     /// </remarks>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> PrivateAddresseeNamesByAttribute
     {

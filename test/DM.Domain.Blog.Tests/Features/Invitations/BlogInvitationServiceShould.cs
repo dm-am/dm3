@@ -92,8 +92,12 @@ public class BlogInvitationServiceShould : UnitTestBase
         _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.InviteAssistant, blog);
     }
 
+    /// <summary>
+    /// The blog's list closes comments only. Inviting somebody it holds is the
+    /// owner's own decision, and the invitation is sent.
+    /// </summary>
     [Fact]
-    public async Task ThrowWhenInvitingBlacklistedUser()
+    public async Task InviteAUserTheBlogBlacklisted()
     {
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
@@ -105,15 +109,24 @@ public class BlogInvitationServiceShould : UnitTestBase
         _blogService.GetBlogAsync(blogId, default).Returns(blog);
         _userLookupService.GetAsync("invitee")
             .Returns(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
+        _repository.FindInvitations(blogId, invitedUserId, TokenType.BlogReaderInvitation, default)
+            .Returns(new List<Guid>());
 
-        var act = async () => await _service.InviteAssistant(blogId, "invitee");
+        await _service.InviteReader(blogId, "invitee");
 
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("черного списка"));
+        await _repository.Received(1).InvalidateAndCreate(
+            Arg.Any<IEnumerable<Guid>>(),
+            Arg.Is<CreateBlogInvitationEntity>(e => e.UserId == invitedUserId),
+            Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// An invitation reaches its addressee signed with the inviter's name, so it
+    /// is not created for somebody who keeps the inviter on their personal list -
+    /// and the refusal names nobody and gives no reason.
+    /// </summary>
     [Fact]
-    public async Task ThrowWhenInvitingBlockedUser()
+    public async Task RefuseToInviteSomebodyWhoBlockedTheInviter()
     {
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
@@ -125,12 +138,38 @@ public class BlogInvitationServiceShould : UnitTestBase
         _blogService.GetBlogAsync(blogId, default).Returns(blog);
         _userLookupService.GetAsync("invitee")
             .Returns(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
-        _userBlacklistChecker.IsBlockedAsync(userId, invitedUserId, default).Returns(true);
+        _userBlacklistChecker.IsBlockedAsync(invitedUserId, userId, default).Returns(true);
 
         var act = async () => await _service.InviteAssistant(blogId, "invitee");
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.UnprocessableEntity && e.Message.Contains("личного черного списка"));
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.CannotInviteThisUser);
+        await _repository.DidNotReceive().InvalidateAndCreate(
+            Arg.Any<IEnumerable<Guid>>(), Arg.Any<CreateBlogInvitationEntity>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// The inviter's own list restricts the people on it, not its owner: inviting
+    /// somebody one blocked is that owner's decision alone.
+    /// </summary>
+    [Fact]
+    public async Task InviteSomebodyTheInviterBlocked()
+    {
+        var blogId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var invitedUserId = Guid.NewGuid();
+        var blog = new BlogDto { Id = blogId, BlacklistedUserIds = new HashSet<Guid>() };
+
+        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(userId));
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _userLookupService.GetAsync("invitee")
+            .Returns(new GeneralUser { UserId = invitedUserId, Username = "invitee" });
+        _userBlacklistChecker.IsBlockedAsync(userId, invitedUserId, default).Returns(true);
+
+        await _service.InviteAssistant(blogId, "invitee");
+
+        await _repository.Received(1).InvalidateAndCreate(
+            Arg.Any<IEnumerable<Guid>>(), Arg.Any<CreateBlogInvitationEntity>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

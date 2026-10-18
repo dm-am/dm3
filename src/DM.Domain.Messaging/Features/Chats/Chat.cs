@@ -58,4 +58,12 @@ public class Chat
     /// Number of unread messages
     /// </summary>
     public int UnreadMessagesCount { get; set; }
+
+    /// <summary>
+    /// Moment the reader cleared the history of this chat for himself: messages
+    /// created at or before it are not given to him, and <see cref="LastMessage"/>
+    /// is null when it is one of them. Null when he never cleared it, and on a
+    /// read made for nobody in particular.
+    /// </summary>
+    public DateTimeOffset? HistoryClearedUtc { get; set; }
 }

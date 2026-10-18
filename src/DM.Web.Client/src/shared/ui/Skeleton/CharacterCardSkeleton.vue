@@ -38,20 +38,19 @@ withDefaults(
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr))
   gap: $medium
 
+// Square, as the character card it stands in for.
 .skeleton-card
   display: flex
   align-items: flex-start
   gap: $small
   padding: $small
   background-color: $bg-element
-  border-radius: $border-radius
 
 .skeleton-portrait
   flex-shrink: 0
   width: $grid-step * 15
   height: $grid-step * 15
-  border-radius: $border-radius
-  +skeleton-shimmer
+  +skeleton-shimmer($square: true)
 
 .skeleton-info
   flex: 1

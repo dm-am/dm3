@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { formatDate } from "@/shared/lib/utils/datetime";
+import {
+  formatDateRangeForDisplay,
+  formatNumberRangeForDisplay,
+} from "@/shared/lib/filters";
 import { computed, ref, watch } from "vue";
 import { vClickOutside } from "@/shared/directives";
 import { gameApi } from "@/entities/game";
@@ -150,14 +153,12 @@ const hasRatingFilter = computed(
     filterState.value.maxRating !== null,
 );
 
-const ratingBubbleLabel = computed(() => {
-  const { minRating, maxRating } = filterState.value;
-  if (minRating !== null && maxRating !== null)
-    return `от ${minRating} до ${maxRating}`;
-  if (minRating !== null) return `от ${minRating}`;
-  if (maxRating !== null) return `до ${maxRating}`;
-  return "";
-});
+const ratingBubbleLabel = computed(() =>
+  formatNumberRangeForDisplay(
+    filterState.value.minRating,
+    filterState.value.maxRating,
+  ),
+);
 
 const hasAuthorFilter = computed(
   () => filterState.value.authorUsernames.size > 0,
@@ -173,15 +174,12 @@ const hasDateFilter = computed(
     filterState.value.createdTo !== null,
 );
 
-const dateBubbleLabel = computed(() => {
-  const { createdFrom, createdTo } = filterState.value;
-  const from = createdFrom ? formatDate(createdFrom) : null;
-  const to = createdTo ? formatDate(createdTo) : null;
-  if (from && to) return `с ${from} по ${to}`;
-  if (from) return `с ${from}`;
-  if (to) return `по ${to}`;
-  return "";
-});
+const dateBubbleLabel = computed(() =>
+  formatDateRangeForDisplay({
+    from: filterState.value.createdFrom,
+    to: filterState.value.createdTo,
+  }),
+);
 
 // Game filter has no dropdown UI — it arrives via the ?game= URL param
 // (deep link). The bubble makes it visible and removable.
@@ -284,11 +282,14 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
           <!-- Level 2: authors guard — even if the URL came with author=X
                manually, in hideAuthor mode the sublevel cannot be opened
-               (the option is absent from filterOptions above). -->
+               (the option is absent from filterOptions above).
+               include-inactive, so the author of an old post who has not
+               been here for 30 days stays findable. -->
           <UserMultiSelect
             v-if="!hideAuthorFilter && navPath?.filter === 'author'"
             :selected-users="filterState.authorUsernames"
             placeholder="Поиск автора"
+            include-inactive
             @add="addAuthor"
             @remove="removeAuthor"
           />

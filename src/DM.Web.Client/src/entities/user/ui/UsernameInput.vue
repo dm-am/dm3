@@ -90,18 +90,37 @@ const statusClass = computed(() => {
   return "";
 });
 
-const unavailableReason = computed(() => {
-  switch (reason.value) {
-    case "taken":
-      return "Имя уже занято";
-    case "reserved":
-      return "Имя зарезервировано";
-    case "invalid_format":
-      return "Недопустимые символы";
-    default:
-      return "Имя недоступно";
-  }
-});
+/**
+ * One sentence for a name that cannot be had.
+ *
+ * The field used to keep three of them - "Имя уже занято" for a name in use,
+ * "Имя зарезервировано" for one a former user left behind, "Имя недоступно"
+ * when the server named no reason - and the activation page printed a fourth,
+ * "Уже занято", when the same refusal came back on submit. The reader does one
+ * and the same thing about every one of them, so he is told it once.
+ *
+ * "Занято" and not "используется": the server answers "Taken" for a name a
+ * former user left behind as well as for one in use, and "используется"
+ * asserts a live owner, which is false for the former. Whether the name is
+ * free is the one bit the reader is given; whose it is, he is not.
+ *
+ * AccountActivationPage and UsernameChangePage keep the same sentence for the
+ * refusal that arrives from the server after the field has already passed.
+ */
+const NAME_UNAVAILABLE = "Это имя занято";
+
+/**
+ * The one refusal that is about the characters and not about the owner.
+ *
+ * The server spells the reason as its own enum member; the lowercase spelling
+ * this switch was written against is read as well, so a mismatch in wire casing
+ * cannot turn a forbidden character into "already used".
+ */
+const unavailableReason = computed(() =>
+  /^invalid_?format$/i.test(reason.value ?? "")
+    ? "Недопустимый символ"
+    : NAME_UNAVAILABLE,
+);
 
 function validateFormat(username: string): string | null {
   if (username.length === 0) return null;

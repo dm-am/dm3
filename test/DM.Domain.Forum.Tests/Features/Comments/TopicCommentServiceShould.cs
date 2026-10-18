@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
@@ -19,6 +20,7 @@ using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Forum.Features.Topics;
 using DM.Testing.Dsl;
 using DM.Testing;
+using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
@@ -36,7 +38,6 @@ public class TopicCommentServiceShould : UnitTestBase
     private readonly ITopicCommentRepository _repository;
     private readonly IUnreadCountersRepository _countersRepository;
     private readonly IEventProducer _eventProducer;
-    private readonly IUserBlacklistChecker _blacklistChecker;
     private readonly IBoardService _boardService;
     private readonly TopicCommentService _service;
 
@@ -71,9 +72,6 @@ public class TopicCommentServiceShould : UnitTestBase
         _eventProducer = Mock<IEventProducer>();
         _eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
-        _blacklistChecker = Mock<IUserBlacklistChecker>();
-        _blacklistChecker.IsBlockedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
-
         _service = new TopicCommentService(
             createValidator,
             updateValidator,
@@ -85,7 +83,7 @@ public class TopicCommentServiceShould : UnitTestBase
             _repository,
             _countersRepository,
             _eventProducer,
-            _blacklistChecker);
+            new TagNamesAsTyped());
     }
 
     /// <summary>The store answers a creation with this comment.</summary>
@@ -139,26 +137,34 @@ public class TopicCommentServiceShould : UnitTestBase
         await _eventProducer.Received(1).SendAsync(EventType.NewTopicComment, commentId);
     }
 
+    /// <summary>
+    /// A topic is a public place: the personal blacklist of whoever opened it
+    /// does not close it to anybody. Keeping somebody out of the forum is a ban,
+    /// which the gate asks.
+    /// </summary>
+    /// <remarks>
+    /// The service used to ask the topic author's personal list and refuse with
+    /// "Вы не можете комментировать этот топик". It no longer holds the list at
+    /// all, which is what this pins; the behaviour end to end, with a real list
+    /// behind it, is in BlacklistRuleShould.
+    /// </remarks>
     [Fact]
-    public async Task ThrowWhenCommentingOnTopicByBlockedUser()
+    public async Task AcceptACommentWithoutAskingTheTopicAuthorsBlacklist()
     {
         var topicId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-        var currentUserId = _identityProvider.Current.User.UserId;
         var topic = new Topic
         {
             Id = topicId,
-            Author = new GeneralUser { UserId = authorId }
+            Author = new GeneralUser { UserId = Guid.NewGuid() }
         };
         _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
-        _blacklistChecker.IsBlockedAsync(authorId, currentUserId, Arg.Any<CancellationToken>()).Returns(true);
+        CreateReturns(new Comment { Id = Guid.NewGuid() });
 
-        var createComment = new CreateComment { EntityId = topicId, Text = "Test comment" };
-        var act = async () => await _service.CreateAsync(createComment);
+        await _service.CreateAsync(new CreateComment { EntityId = topicId, Text = "Test comment" });
 
-        var exception = await act.Should().ThrowAsync<HttpException>();
-        exception.Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        exception.Which.Message.Should().Contain("Вы не можете комментировать этот топик");
+        await _repository.Received(1).Create(Arg.Any<CreateTopicCommentEntity>());
+        typeof(TopicCommentService).GetConstructors().Single().GetParameters()
+            .Should().NotContain(parameter => parameter.ParameterType == typeof(IUserBlacklistChecker));
     }
 
     [Fact]
@@ -184,13 +190,12 @@ public class TopicCommentServiceShould : UnitTestBase
         {
             Id = commentId,
             EntityId = topicId,
-            IsLastComment = false,
             CreatedUtc = DateTimeOffset.UtcNow
         };
         _repository.GetForDelete(commentId).Returns(comment);
         DeleteTopicCommentEntity? deleted = null;
         _repository.Delete(Arg.Any<DeleteTopicCommentEntity>())
-            .Returns(Task.CompletedTask)
+            .Returns(true)
             .AndDoes(ci =>
             {
                 var entity = ci.ArgAt<DeleteTopicCommentEntity>(0);
@@ -325,5 +330,34 @@ public class TopicCommentServiceShould : UnitTestBase
         // The counters that call fills are the ones this method zeroes, so every read
         // behind them is work computed and thrown away.
         await _boardService.DidNotReceive().GetBoardsList();
+    }
+
+    /// <summary>
+    /// The removal that took the comment is the one that owns its consequences.
+    /// </summary>
+    /// <remarks>
+    /// Two removals of one comment - a double click, an author and a moderator at
+    /// once - both used to take the topic's unread counter down and both used to
+    /// announce the removal, and the counter has no way back afterwards. The caller
+    /// is answered the same either way: the comment is gone, which is what they
+    /// asked for.
+    /// </remarks>
+    [Fact]
+    public async Task LeaveTheCountersToTheRemovalThatTookTheComment()
+    {
+        var commentId = Guid.NewGuid();
+        _repository.GetForDelete(commentId).Returns(new TopicCommentToDelete
+        {
+            Id = commentId,
+            EntityId = Guid.NewGuid(),
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+        _repository.Delete(Arg.Any<DeleteTopicCommentEntity>()).Returns(false);
+
+        await _service.DeleteAsync(commentId);
+
+        await _countersRepository.DidNotReceive().DecrementAsync(
+            Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<DateTimeOffset>());
+        await _eventProducer.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
     }
 }

@@ -69,20 +69,20 @@ public interface IPostReviewService
     Task DeleteAsync(Guid id);
 
     /// <summary>
-    /// Check if user already has a review for the post
+    /// Which of these posts the current user may review: exactly those
+    /// <see cref="CreateAsync" /> takes a review of, the sign and the text aside.
+    /// Not his own, not reviewed by him already, and not in a game where he
+    /// reviewed a post during the last three days. The page offers the form by
+    /// this answer instead of refusing what was typed.
     /// </summary>
-    /// <param name="authorId">Review author ID</param>
-    /// <param name="postId">Post ID</param>
-    /// <returns>True if review already exists</returns>
-    Task<bool> ExistsAsync(Guid authorId, Guid postId);
-
-    /// <summary>
-    /// Check if user has created a post review in the specified game within cooldown period (3 days)
-    /// </summary>
-    /// <param name="authorId">Review author ID</param>
-    /// <param name="gameId">Game ID</param>
-    /// <returns>True if user has a recent post review in this game</returns>
-    Task<bool> HasRecentReviewInGameAsync(Guid authorId, Guid gameId);
+    /// <remarks>
+    /// The posts are the ones the current user has just read, so they are posts
+    /// he may see. The probation is not asked: it decides which signs the form
+    /// offers, not whether there is a form.
+    /// </remarks>
+    /// <param name="posts">The posts, as the current user read them</param>
+    /// <returns>Identifiers of the posts he may review</returns>
+    Task<IReadOnlySet<Guid>> ReviewableAsync(IReadOnlyCollection<ReviewCandidate> posts);
 
     /// <summary>
     /// Check if review can still be edited by its author (15-minute window)

@@ -20,12 +20,16 @@ public class PostsQuery : PagingQuery
     public DateTimeOffset? LastReviewedFromUtc { get; set; }
 
     /// <summary>
-    /// Only include posts with at least one review
+    /// true: only posts with at least one review; false: only posts without reviews
     /// </summary>
+    /// <remarks>
+    /// false used to mean no filter at all, while the same name on a room's list
+    /// means "without reviews": one name, one meaning on both lists.
+    /// </remarks>
     public bool? HasReviews { get; set; }
 
     /// <summary>
-    /// Sort field: created, rating, lastreview
+    /// Sort field: rating (default), created, lastreview, reviewcount
     /// </summary>
     public string? SortBy { get; set; }
 

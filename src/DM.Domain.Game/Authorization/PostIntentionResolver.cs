@@ -19,7 +19,7 @@ internal class PostIntentionResolver :
             // Author or global moderator+ (doc 4.2.2.12: "moderator+ anytime").
             // The 15-minute author window is a client-side affordance, matching
             // the Comment / PostReview delete resolvers.
-            PostIntention.Delete => target.Author.UserId == user.UserId ||
+            PostIntention.Delete => target.Author?.UserId == user.UserId ||
                                     user.Role >= UserRole.Moderator,
             _ => false
         };
@@ -35,12 +35,12 @@ internal class PostIntentionResolver :
             // game leads (master/assistant) subject to the character's
             // post-edit access policy. The 15-minute author window is a
             // client-side affordance.
-            PostIntention.EditText => post.Author.UserId == user.UserId ||
+            PostIntention.EditText => post.Author?.UserId == user.UserId ||
                                       user.Role >= UserRole.Moderator ||
                                       room.Game.GetRoles(user.UserId).HasEditAccess() &&
                                       (post.Character == null || post.Character.IsNpc ||
                                        post.Character.AccessPolicy.HasFlag(CharacterAccessPolicy.PostEditAllowed)),
-            PostIntention.EditCharacter => post.Author.UserId == user.UserId ||
+            PostIntention.EditCharacter => post.Author?.UserId == user.UserId ||
                                            room.Game.GetRoles(user.UserId).HasEditAccess() &&
                                            (post.Character == null || post.Character.IsNpc),
             _ => false

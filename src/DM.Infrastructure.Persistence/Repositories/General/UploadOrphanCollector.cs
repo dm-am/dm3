@@ -46,6 +46,14 @@ internal class UploadOrphanCollector : IUploadOrphanCollector
             .IgnoreQueryFilters()
             .TagWith("DM.Uploads.SweepOrphans")
             .Where(u => u.IsRemoved && u.DeletedUtc != null && u.DeletedUtc < cutoff)
+            // An avatar a warning on a profile pinned is the evidence of that
+            // warning, and the owner replacing his avatar marks it deleted with no
+            // author: such a row stays, and so does one the owner deleted himself.
+            // A deletion by anybody else is moderation's decision about the
+            // picture, and the row goes as any other; the key then clears the
+            // warning's column (DATA_STORAGE.md, "Объектное хранилище").
+            .Where(u => (u.DeletedByUserId != null && u.DeletedByUserId != u.UserId) ||
+                        !_dbContext.Warnings.Any(w => w.ProfileAvatarUploadId == u.UploadId))
             .OrderBy(u => u.DeletedUtc)
             .Take(BatchSize)
             .ToListAsync(cancellationToken);

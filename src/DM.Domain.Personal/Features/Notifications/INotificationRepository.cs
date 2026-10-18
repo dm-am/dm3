@@ -28,12 +28,14 @@ public interface INotificationRepository
     Task<long> CountUnread(Guid userId);
 
     /// <summary>
-    /// Gets paged notifications for user
+    /// Gets paged notifications for user, read and unread alike
     /// </summary>
     /// <param name="userId">User identifier</param>
     /// <param name="pagingData">Paging data</param>
-    /// <returns>List of notifications ordered by invocation date</returns>
-    Task<IEnumerable<UserNotification>> GetNotifications(Guid userId, PagingData pagingData);
+    /// <returns>
+    /// List of notifications ordered by invocation date, each with whether this user has read it
+    /// </returns>
+    Task<IEnumerable<ListedNotification>> GetNotifications(Guid userId, PagingData pagingData);
 
     /// <summary>
     /// Event types of the notifications already stored for a bus publication

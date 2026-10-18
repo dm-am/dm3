@@ -18,5 +18,10 @@ public enum TopicIntention
     /// <summary>
     /// Like the topic
     /// </summary>
-    Like = 2
+    Like = 2,
+
+    /// <summary>
+    /// Close or reopen the topic
+    /// </summary>
+    Close = 3
 }

@@ -13,6 +13,7 @@ import type {
   Character,
   Room,
   Post,
+  RoomPostsFilter,
   GameUser,
   CreateRoomInput,
   GameStatusTransition,
@@ -93,7 +94,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   } = createCommentSection({
     getComments: (gameId, query) => gameApi.getGameComments(gameId, query),
     updateComment: (id, comment) => gameApi.updateGameComment(id, comment),
-    deleteComment: (id) => gameApi.deleteGameComment(id),
+    deleteComment: (id, options) => gameApi.deleteGameComment(id, options),
     likeComment: (id) => gameApi.likeGameComment(id),
     unlikeComment: (id) => gameApi.unlikeGameComment(id),
     currentUsername: () => useAuthStore().user?.username,
@@ -196,9 +197,15 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
    * the sidebar panel, which has room for a line and not for a page. The
    * returned object is truthy, so the call sites that only await it are
    * unaffected.
+   *
+   * `keepCurrentOnError` is for a refresh the reader did not ask for, run
+   * behind a page they are standing on and working in. Such a caller reads the
+   * refusal out of the return; dropping the game for it would replace the page
+   * and everything typed into it with an error the reader never provoked.
    */
   async function loadGame(
     id: string,
+    options?: { keepCurrentOnError?: boolean },
   ): Promise<{ ok: boolean; status?: number }> {
     const requestId = gameGuard.next();
     gameLoading.value = true;
@@ -215,9 +222,11 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     if (!gameGuard.isCurrent(requestId)) return { ok: true };
 
     if (error) {
-      gameError.value = "Не удалось загрузить игру";
-      gameErrorStatus.value = error.status ?? null;
-      game.value = null;
+      if (!options?.keepCurrentOnError) {
+        gameError.value = "Не удалось загрузить игру";
+        gameErrorStatus.value = error.status ?? null;
+        game.value = null;
+      }
       gameLoading.value = false;
       return { ok: false, status: error.status };
     }
@@ -282,7 +291,11 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   }
 
   // Load posts for a room by room ID
-  async function loadPosts(roomId: string, page: number = 1): Promise<void> {
+  async function loadPosts(
+    roomId: string,
+    page: number = 1,
+    filter?: RoomPostsFilter,
+  ): Promise<void> {
     const requestId = postsGuard.next();
     postsLoading.value = true;
     postsError.value = null;
@@ -293,10 +306,11 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
       currentRoom.value = room;
     }
 
-    const { data, error } = await gameApi.getPosts(roomId, {
-      number: page,
-      take: postsPerPage.value,
-    });
+    const { data, error } = await gameApi.getPosts(
+      roomId,
+      { number: page, take: postsPerPage.value },
+      filter,
+    );
 
     // Stale continuation. currentRoom is assigned synchronously above, so
     // without this the header names the room the newer call selected while the
@@ -320,6 +334,7 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     gameId: string,
     roomNumber: number,
     page: number = 1,
+    filter?: RoomPostsFilter,
   ): Promise<void> {
     const requestId = postsGuard.next();
 
@@ -364,7 +379,53 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
       return;
     }
 
-    await loadPosts(room.id as string, page);
+    await loadPosts(room.id as string, page, filter);
+  }
+
+  /**
+   * Where a room opens when its address names no page: the first unread post
+   * (the last one when everything is read), and the page holding it at the
+   * reader's own page size. Null when there is nothing to land on or the answer
+   * did not come, and the room then opens on its first page, as it always did.
+   *
+   * Asked before the page is loaded: the page marks the room read, and after
+   * that every post in it reads as read.
+   */
+  async function locateFirstUnreadPost(
+    gameId: string,
+    roomNumber: number,
+  ): Promise<{ page: number; postId: string; hasUnread: boolean } | null> {
+    if (!rooms.value.length) await loadRooms(gameId);
+    const room = rooms.value.find((r) => r.roomNumber === roomNumber);
+    if (!room?.id) return null;
+
+    const { data } = await gameApi.getFirstUnreadRoomPost(
+      room.id as string,
+      postsPerPage.value,
+    );
+    const found = data?.resource;
+    if (!found?.postId) return null;
+    return {
+      page: Math.max(1, found.page),
+      postId: found.postId,
+      hasUnread: found.hasUnread,
+    };
+  }
+
+  /**
+   * The page of its room a post stands on in the ordinary view, or null when
+   * the post cannot be read. The number is the post's place in the room, and
+   * the page follows from it at the reader's own page size.
+   */
+  async function locatePostPage(postId: string): Promise<number | null> {
+    const { data } = await gameApi.getPost(postId, { ownsRefusal: true });
+    const number = data?.resource?.number;
+    return number ? pageOfPostNumber(number) : null;
+  }
+
+  /** The ordinary-view page a post number falls on, at the reader's page size. */
+  function pageOfPostNumber(number: number): number {
+    return Math.max(1, Math.ceil(number / postsPerPage.value));
   }
 
   // Load characters
@@ -436,40 +497,54 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
   // the active/archived split). They return a boolean success flag so callers
   // can surface errors without reaching into the API layer.
 
+  /** @param options The refusal flags of a window that shows the failure itself. */
   async function transitionStatus(
     transition: GameStatusTransition,
+    options?: Parameters<typeof gameApi.transitionStatus>[2],
   ): Promise<GeneralError | null> {
     if (!game.value) return requestNotSent;
     const id = game.value.id;
-    const { error } = await gameApi.transitionStatus(id, transition);
+    const { error } = await gameApi.transitionStatus(id, transition, options);
     if (error) return error;
     await loadGame(id);
     return null;
   }
 
+  /** @param options The refusal flags of a window that shows the failure itself. */
   async function changePremoderation(
     transition: GamePremoderationTransition,
+    options?: Parameters<typeof gameApi.changePremoderation>[2],
   ): Promise<GeneralError | null> {
     if (!game.value) return requestNotSent;
     const id = game.value.id;
-    const { error } = await gameApi.changePremoderation(id, transition);
+    const { error } = await gameApi.changePremoderation(
+      id,
+      transition,
+      options,
+    );
     if (error) return error;
     await loadGame(id);
     return null;
   }
 
-  async function resetRecruitment(): Promise<GeneralError | null> {
+  /** @param options The refusal flags of a window that shows the failure itself. */
+  async function resetRecruitment(
+    options?: Parameters<typeof gameApi.resetRecruitment>[1],
+  ): Promise<GeneralError | null> {
     if (!game.value) return requestNotSent;
     const id = game.value.id;
-    const { error } = await gameApi.resetRecruitment(id);
+    const { error } = await gameApi.resetRecruitment(id, options);
     if (error) return error;
     await loadGame(id);
     return null;
   }
 
-  async function deleteGame(): Promise<GeneralError | null> {
+  /** @param options The refusal flags of a window that shows the failure itself. */
+  async function deleteGame(
+    options?: Parameters<typeof gameApi.deleteGame>[1],
+  ): Promise<GeneralError | null> {
     if (!game.value) return requestNotSent;
-    const { error } = await gameApi.deleteGame(game.value.id);
+    const { error } = await gameApi.deleteGame(game.value.id, options);
     if (error) return error;
     // Refresh the list caches: otherwise the game the user just deleted keeps
     // showing in /games and in the sidebar until the entries expire.
@@ -610,6 +685,9 @@ export const useGameDetailsStore = defineStore("gameDetails", () => {
     loadRooms,
     loadPosts,
     loadPostsByRoomNumber,
+    locateFirstUnreadPost,
+    locatePostPage,
+    pageOfPostNumber,
     loadCharacters,
     loadComments,
     updateComment,

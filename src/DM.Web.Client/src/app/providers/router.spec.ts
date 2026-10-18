@@ -2,12 +2,25 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readdirSync, readFileSync, statSync } from "fs";
 import { dirname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
 import { createPinia, setActivePinia } from "pinia";
-import type { RouteLocationNormalized, RouteMeta } from "vue-router";
+import type {
+  RouteLocationNormalized,
+  RouteLocationRaw,
+  RouteMeta,
+} from "vue-router";
+/**
+ * The question the guard waits on when the store holds nobody: who the session
+ * cookie belongs to. Answered per test; a guest by default.
+ */
+const whoAmI = vi.hoisted(() => vi.fn());
+vi.mock("@/entities/user/api/personalApi", () => ({
+  default: { getMyProfile: whoAmI },
+}));
+
 import router, { guardAuthenticated } from "./router";
 import { REDIRECT_QUERY_KEY } from "@/shared/lib/auth";
 import {
@@ -15,6 +28,10 @@ import {
   formatDocumentTitle,
   joinTitleSegments,
 } from "@/shared/lib/composables/useDocumentTitle";
+import {
+  MODERATION_SECTIONS,
+  moderationPageRole,
+} from "@/shared/config/moderationSections";
 
 /**
  * The shell — left and right sidebars — is what every page is mounted inside,
@@ -32,7 +49,6 @@ const SHELLED: Array<[string, Record<string, unknown>]> = [
   ["/game/abcde", { gameZone: true }],
   ["/blogs/abcde", { blogZone: true }],
   ["/moderation", { moderationZone: true, requiresAuth: true }],
-  ["/messenger", { requiresAuth: true }],
   ["/chat", {}],
   ["/no-such-page-at-all", {}],
 ];
@@ -61,12 +77,22 @@ describe("route table", () => {
     expect(shell.meta).toMatchObject(meta);
   });
 
-  it("leaves the OAuth callback outside the shell on purpose", () => {
-    const shell = shellOf("/auth/callback");
-
-    expect(shell.name).toBe("auth-callback");
-    expect(shell.hasLeft).toBe(false);
+  /**
+   * The messenger lays its list of conversations where the right column
+   * stands, so it is mounted with the left column and without the right one,
+   * every page of it, and every page of it needs a session.
+   */
+  it.each([
+    ["/messenger", "messenger"],
+    ["/messenger/c/c1", "chat"],
+    ["/messenger/user/somebody", "direct-message"],
+  ])("mounts %s without the right column", (path, name) => {
+    const shell = shellOf(path);
+    expect(shell.name).toBe(name);
+    expect(shell.hasLeft).toBe(true);
     expect(shell.hasRight).toBe(false);
+    expect(shell.hasPage).toBe(true);
+    expect(shell.meta).toMatchObject({ requiresAuth: true });
   });
 
   it("resolves every declared name to a path", () => {
@@ -110,6 +136,38 @@ describe("route table", () => {
       "the game pair must not resolve to the post pair",
     ).not.toBe(name);
   });
+
+  /**
+   * The room of posts is read across the whole middle, as on the old site: the
+   * left column with the menu of the game, and no right one. Its tree keeps
+   * the game shell at the depth the game's other pages have it, so moving
+   * between the room and the rest of the game keeps the shell mounted.
+   */
+  it("mounts the room of posts without the right column, in the game shell", () => {
+    const room = shellOf("/game/abcde/rooms/3");
+    expect(room.name).toBe("game-room");
+    expect(room.hasLeft).toBe(true);
+    expect(room.hasRight).toBe(false);
+    expect(room.hasPage).toBe(true);
+    expect(room.meta).toMatchObject({ gameZone: true, dynamicTitle: true });
+
+    const resolved = router.resolve("/game/abcde/rooms/3");
+    expect(resolved.params).toMatchObject({ id: "abcde", num: "3" });
+    const game = router.resolve("/game/abcde");
+    expect(
+      resolved.matched.map((record) => Object.keys(record.components ?? {})),
+    ).toEqual([["left", "page"], ["default"], ["default"]]);
+    expect(game.matched[1].components?.default).toBeDefined();
+
+    // The game itself, its chat rooms and its other pages keep both columns.
+    expect(shellOf("/game/abcde/chat-rooms/2").hasRight).toBe(true);
+    expect(game.name).toBe("game");
+    expect(shellOf("/game/abcde").hasRight).toBe(true);
+    expect(
+      router.resolve({ name: "game-room", params: { id: "abcde", num: 3 } })
+        .path,
+    ).toBe("/game/abcde/rooms/3");
+  });
 });
 
 /**
@@ -125,6 +183,11 @@ describe("the guest guard", () => {
   beforeEach(() => {
     localStorage.clear();
     setActivePinia(createPinia());
+    whoAmI.mockReset();
+    whoAmI.mockResolvedValue({
+      data: null,
+      error: { type: "", title: "", status: 401, traceId: "" },
+    });
   });
 
   // resolve() answers a resolved location, which carries an href the guard's
@@ -134,10 +197,10 @@ describe("the guest guard", () => {
   const arriving = (path: string) =>
     router.resolve(path) as unknown as RouteLocationNormalized;
 
-  it("carries the address the guest was refused", () => {
-    const decision = guardAuthenticated(
+  it("carries the address the guest was refused", async () => {
+    const decision = (await guardAuthenticated(
       arriving("/messenger/c/42?number=3"),
-    ) as {
+    )) as {
       name: string;
       query: Record<string, string>;
     };
@@ -148,15 +211,39 @@ describe("the guest guard", () => {
     expect(decision.query[REDIRECT_QUERY_KEY]).toBe("/messenger/c/42?number=3");
   });
 
-  it("lets a signed-in viewer through", () => {
+  it("lets a signed-in viewer through", async () => {
     localStorage.setItem("user", JSON.stringify({ username: "SolohinLex" }));
     setActivePinia(createPinia());
 
-    expect(guardAuthenticated(arriving("/messenger"))).toBeUndefined();
+    expect(await guardAuthenticated(arriving("/messenger"))).toBeUndefined();
   });
 
-  it("lets anyone through a page that asks for nothing", () => {
-    expect(guardAuthenticated(arriving("/forum"))).toBeUndefined();
+  it("lets anyone through a page that asks for nothing", async () => {
+    expect(await guardAuthenticated(arriving("/forum"))).toBeUndefined();
+    expect(whoAmI).not.toHaveBeenCalled();
+  });
+
+  // The browser holds nobody and the cookie holds a session: a link to a
+  // protected page opens the page, instead of the login window under a header
+  // that greets the reader a moment later.
+  it("waits for the session the server still holds", async () => {
+    whoAmI.mockResolvedValue({
+      data: { id: "user-1", username: "SolohinLex" },
+      error: null,
+    });
+
+    expect(await guardAuthenticated(arriving("/messenger"))).toBeUndefined();
+    expect(whoAmI).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks a guest once, however many protected pages he opens", async () => {
+    await guardAuthenticated(arriving("/messenger"));
+    const second = (await guardAuthenticated(arriving("/notifications"))) as {
+      query: Record<string, string>;
+    };
+
+    expect(second.query.action).toBe("login");
+    expect(whoAmI).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -169,10 +256,67 @@ describe("the guest guard", () => {
  * /game/:id/rooms list drew every room a second time over the sidebar's own
  * room groups, and it asked nothing at all about who was reading it.
  *
+ * "Возврат от внешней авторизации" was the other one, and it was the only
+ * record that lived outside the shell: no provider redirected to it because the
+ * server has no external sign-in, so the page said "OAuth не настроен" to
+ * whoever typed the address and bounced them home three seconds later. The
+ * route is also why the shell record carries the comment it does, and bringing
+ * it back would bring back a bare page nothing leads to.
+ *
  * Name and path both, because either one alone is half the resurrection: a
  * renamed route on the same path is the same duplicate page.
  */
-const RETIRED: Array<[string, string]> = [["game-rooms", "/game/abcde/rooms"]];
+const RETIRED: Array<[string, string]> = [
+  ["game-rooms", "/game/abcde/rooms"],
+  ["auth-callback", "/auth/callback"],
+];
+
+/**
+ * /removed-account was the page every "Аккаунт удален" signature led to, and
+ * it only explained the name. The signatures lead to the profile of the name
+ * now, which gathers what removed accounts left, and a link to the old
+ * address, bookmarked or copied, lands on that profile instead of on "не
+ * найдено". The redirect is resolved the way the router follows it: the
+ * record's own target, handed to resolve.
+ */
+describe("the old address of a removed account", () => {
+  it("redirects to the profile of the name", () => {
+    const record = router
+      .getRoutes()
+      .find((one) => one.path === "/removed-account");
+
+    expect(record, "/removed-account is gone from the table").toBeTruthy();
+    expect(record!.redirect, "/removed-account is a page again").toBeTruthy();
+    expect(record!.components ?? {}).toEqual({});
+
+    const target = router.resolve(record!.redirect as RouteLocationRaw);
+    expect(target.name).toBe("profile");
+    expect(target.params).toEqual({ username: "Аккаунт удален" });
+  });
+});
+
+/**
+ * One ticket of the reader's own. The support form leads its signed-in author
+ * here after the press and the notification of the answer leads here later
+ * (the dispatcher builds the same /my-tickets/{id}), so the address has to be a
+ * page of the shell, and one a guest is turned away from: the ticket is read
+ * through an endpoint that answers only its author and moderation.
+ */
+describe("the page of one of my tickets", () => {
+  it("opens at the address the notification of the answer leads to", () => {
+    const shell = shellOf("/my-tickets/3f2a9c4e-0000-0000-0000-000000000001");
+
+    expect(shell.name).toBe("my-ticket");
+    expect(shell.hasLeft).toBe(true);
+    expect(shell.hasRight).toBe(true);
+    expect(shell.hasPage).toBe(true);
+    expect(shell.meta).toMatchObject({ requiresAuth: true });
+  });
+
+  it("leaves the list of them where it was", () => {
+    expect(router.resolve("/my-tickets").name).toBe("my-tickets");
+  });
+});
 
 describe("retired routes", () => {
   it.each(RETIRED)("keeps %s out of the table", (name, path) => {
@@ -448,9 +592,11 @@ describe("zone pages that title themselves", () => {
 });
 
 describe("room titles", () => {
-  const rooms = (findZoneRoot(rawRoutes, "gameZone")?.children ?? []).filter(
-    (child) => /rooms\/:num$/.test(child.path),
-  );
+  // Read off the whole table: the room of posts is a tree of its own, outside
+  // the shell that holds the rest of the zone (it has no right column).
+  const rooms = router
+    .getRoutes()
+    .filter((record) => /rooms\/:num$/.test(record.path) && record.name);
 
   it("names a room page by its room, never by the rooms group", () => {
     expect(rooms.length, "a post room and a chat room").toBe(2);
@@ -514,6 +660,128 @@ describe("publication routes of a blog", () => {
 });
 
 /**
+ * An address of a route record, its parameters filled with a stand-in value:
+ * what a link to that page would carry.
+ */
+const addressOf = (path: string) => path.replace(/:\w+/g, "x");
+
+/**
+ * The moderation zone: one record owns it, and every section is a child of it.
+ *
+ * The owner is what sends a guest to sign in, what the left sidebar mounts the
+ * moderation menu by, and the door that answers a viewer below a section's
+ * role with the 403 page instead of a refusal line under somebody else's
+ * heading. A section declared beside the zone instead of inside it would have
+ * none of the three, and would look like it worked to whoever tried it as an
+ * administrator.
+ */
+describe("the moderation zone", () => {
+  const zoneRoutes = router
+    .getRoutes()
+    .filter((record) => record.path.startsWith("/moderation/"));
+
+  // The section every moderator may open, so the zone's own address never
+  // answers a moderator with the 403 page.
+  it("opens on the moderators, a section open to every moderator", () => {
+    const entry = router
+      .getRoutes()
+      .find((record) => record.path === "/moderation" && record.redirect);
+
+    expect(entry, "/moderation is not a redirect").toBeTruthy();
+    const target = router.resolve(entry!.redirect as RouteLocationRaw);
+    expect(target.name).toBe("moderation-moderators");
+    expect(moderationPageRole(String(target.name))).toBe("Moderator");
+  });
+
+  it("has no page of its own at its address", () => {
+    // The overview said "Выберите раздел модерации" beside the menu it meant.
+    const pages = router
+      .getRoutes()
+      .filter((record) => record.path === "/moderation" && record.name);
+
+    expect(pages).toEqual([]);
+  });
+
+  it("holds every page under /moderation", () => {
+    expect(zoneRoutes.length).toBeGreaterThan(15);
+
+    const outside = zoneRoutes
+      .map((record) => record.path)
+      .filter((path) => {
+        const resolved = router.resolve(addressOf(path));
+        const insideTheZone = resolved.matched.some(
+          (record) => record.path === "/moderation" && record.children.length,
+        );
+        return (
+          !insideTheZone ||
+          resolved.meta.moderationZone !== true ||
+          resolved.meta.requiresAuth !== true
+        );
+      });
+
+    expect(outside).toEqual([]);
+  });
+
+  it("knows the role of every page it holds", () => {
+    const unknown = zoneRoutes
+      .filter((record) => record.name)
+      .map((record) => String(record.name))
+      .filter((name) => moderationPageRole(name) === undefined);
+
+    expect(unknown).toEqual([]);
+  });
+
+  it.each(MODERATION_SECTIONS.map((section) => [section.label, section.name]))(
+    "opens %s at a page of the zone named by the same words",
+    (label, name) => {
+      const resolved = router.resolve({ name });
+
+      expect(resolved.path.startsWith("/moderation/"), resolved.path).toBe(
+        true,
+      );
+      // The menu row and the tab say one thing: "Запросы на смену имени" was
+      // one name in the strip and a longer one in the tab.
+      expect(resolved.meta.title).toBe(label);
+    },
+  );
+});
+
+/**
+ * The catalogue of schema templates and the page that writes one, the same
+ * prefix problem one section over: "new" is a literal segment competing with
+ * ":id", and the page behind both addresses is one file that tells them apart
+ * by whether the identifier arrived.
+ *
+ * The names are load-bearing beyond the address bar. The catalogue points a row
+ * at the template page by name, the template page pushes back to the catalogue
+ * by name after a write, and vue-router answers a name it does not know by
+ * throwing: a rename takes the section off the screen instead of turning a test
+ * red.
+ */
+describe("schema template routes of the moderation section", () => {
+  const CASES: Array<[string, string]> = [
+    ["/moderation/schema-templates", "moderation-schema-templates"],
+    ["/moderation/schema-templates/new", "moderation-schema-template-new"],
+    ["/moderation/schema-templates/t-1", "moderation-schema-template"],
+  ];
+
+  it.each(CASES)("resolves %s to %s", (path, name) => {
+    expect(router.resolve(path).name).toBe(name);
+  });
+
+  it("hands the page the identifier the address carries", () => {
+    // Which is the whole of what the page has to tell a write that replaces a
+    // template from one that adds another.
+    expect(router.resolve("/moderation/schema-templates/t-1").params).toEqual({
+      id: "t-1",
+    });
+    expect(router.resolve("/moderation/schema-templates/new").params).toEqual(
+      {},
+    );
+  });
+});
+
+/**
  * The static head is what a crawler and the tab before the first paint read,
  * and `afterEach` writes the root route's title over it the moment the bundle
  * boots. Two names for one page is what that produced: the document called the
@@ -566,27 +834,37 @@ describe("titles while an error page is showing", () => {
 });
 
 /**
- * The page inventory of docs/PROGRESS.md is a walkthrough checklist: the owner
- * opens the addresses in it one at a time. /auth/transfer stood in that list and
- * matched no route, so a pass produced a bug report about a page nobody had
- * built, and every link in the section pointed at port 5174 — the preview port
- * only the e2e run starts — so none of them opened at all.
+ * The surface inventory of docs/SURFACES.md is a walkthrough checklist: the
+ * owner opens the addresses in it one at a time. /auth/transfer stood in that
+ * list and matched no route, so a pass produced a bug report about a page nobody
+ * had built, and every link in the section pointed at port 5174 — the preview
+ * port only the e2e run starts — so none of them opened at all.
+ *
+ * What is asserted is the LINK, not the route template beside it: the link
+ * carries seed values (/game/aaaaa, /forum/general/5) and is the thing a click
+ * actually opens, so a template that resolves while its seeded form 404s would
+ * still be caught. Templates whose parameter has no seed value are written
+ * without a link and are deliberately out of scope here.
  *
  * Only that direction is asserted. A page built and never listed is what the
  * walkthrough itself finds, while teaching this test which routes count as pages
  * would restate the route table inside it.
  */
-const PROGRESS = resolve(CLIENT_SRC, "..", "..", "..", "docs", "PROGRESS.md");
+const SURFACES = resolve(CLIENT_SRC, "..", "..", "..", "docs", "SURFACES.md");
 
-/** An address as the inventory writes one: after a line start, a space or a bracket. */
-const ADDRESS = /(?<=^|[\s[(])\/[A-Za-z0-9_.:/-]*/gm;
+/**
+ * The path of a link the inventory offers: everything after the dev server.
+ * A name that is not Latin is linked percent-encoded ("Аккаунт удален"), and
+ * the router decodes it the way the browser hands it over.
+ */
+const ADDRESS = /http:\/\/localhost:\d+(\/[A-Za-z0-9_.:/%-]*)/g;
 
 /** The server the links of the section point at. */
 const SERVER = /http:\/\/localhost:(\d+)/g;
 
 describe("the page inventory", () => {
   const inventory =
-    readFileSync(PROGRESS, "utf8").split("## Инвентарь страниц")[1] ?? "";
+    readFileSync(SURFACES, "utf8").split("## Поверхности")[1] ?? "";
 
   it("is the section this test means", () => {
     // A renamed heading would leave every assertion below reading an empty
@@ -595,7 +873,8 @@ describe("the page inventory", () => {
   });
 
   it("names only addresses the route table answers", () => {
-    const dangling = [...new Set(inventory.match(ADDRESS) ?? [])].filter(
+    const linked = [...inventory.matchAll(ADDRESS)].map((match) => match[1]);
+    const dangling = [...new Set(linked)].filter(
       (address) => router.resolve(address).name === "not-found",
     );
 
@@ -608,5 +887,43 @@ describe("the page inventory", () => {
     ];
 
     expect(ports).toEqual(["5173"]);
+  });
+});
+
+/**
+ * The pages a letter leads to stand alone in the shell.
+ *
+ * The two sidebars are 330px each and they are declared once, by the record
+ * that owns the shell, so every page below it gets them whether it has use for
+ * them or not. Between 1001px and 1123px that leaves the content column 285px,
+ * and a guest card asks for 352px: the card shrinks and its heading wraps,
+ * which the surface does not allow. Below 1000px the shell folds on its own and
+ * above 1123px there is room for both, so the flag is the fix for the band in
+ * between.
+ *
+ * The list is written out rather than derived: a new page reached from a letter
+ * is a decision about the shell, and it should be made here and not inherited
+ * by accident. What the shell draws for the flag is checked where it draws it,
+ * in App.spec.ts.
+ */
+const FROM_LETTER = [
+  "activation",
+  "confirm-email",
+  "reset-password",
+  "change-username",
+  "two-factor-removal",
+  "two-factor-removal-cancel",
+];
+
+describe("pages a letter leads to", () => {
+  const records = router.getRoutes();
+
+  it("marks exactly the six of them", () => {
+    const marked = records
+      .filter((record) => record.meta.fromLetter)
+      .map((record) => String(record.name))
+      .sort();
+
+    expect(marked).toEqual([...FROM_LETTER].sort());
   });
 });

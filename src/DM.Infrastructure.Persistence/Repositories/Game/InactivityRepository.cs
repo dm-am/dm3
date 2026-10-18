@@ -86,42 +86,91 @@ internal class InactivityRepository : IInactivityRepository
     }
 
     /// <inheritdoc />
-    public async Task SetInactivityWarning(Guid gameId, DateTimeOffset warningUtc, CancellationToken ct = default)
+    /// <remarks>
+    /// The same state the selection above asked for, repeated in the WHERE clause
+    /// of the write. The batch is read once and worked through game by game, so
+    /// between the two a master may have posted or restarted the game; without the
+    /// predicate the stamp lands anyway and starts the week that ends in a freeze.
+    /// The row count is what tells the caller whether that happened.
+    /// </remarks>
+    public async Task<bool> SetInactivityWarning(
+        Guid gameId, TimeSpan inactivityThreshold, DateTimeOffset now, CancellationToken ct = default)
     {
-        await _dbContext.Games
+        // The silence itself, and measured back from the same moment the selection
+        // used. A post landing between the two clears the warning stamp as it
+        // writes its own moment, so "still unwarned" alone was true right after it:
+        // the stamp went on a game that had just spoken, and the freeze a week
+        // later reads that post as older than the warning and takes the game.
+        var threshold = now - inactivityThreshold;
+
+        var written = await _dbContext.Games
             .Where(g => g.GameId == gameId)
+            .Where(g => !g.IsRemoved)
+            .Where(g => g.Status == ModuleStatus.Active)
+            .Where(g => g.InactivityWarningUtc == null)
+            .Where(g => (g.LastPostCreatedUtc == null && g.ActivatedUtc < threshold) ||
+                        (g.LastPostCreatedUtc != null && g.LastPostCreatedUtc < threshold))
             .ExecuteUpdateAsync(g => g
-                .SetProperty(x => x.InactivityWarningUtc, warningUtc), ct);
+                .SetProperty(x => x.InactivityWarningUtc, now), ct);
+
+        return written == 1;
     }
 
     /// <inheritdoc />
-    public async Task FreezeGame(Guid gameId, DateTimeOffset closedUtc, CancellationToken ct = default)
+    /// <remarks>
+    /// <inheritdoc cref="SetInactivityWarning" path="/remarks" />
+    /// A post arriving after the warning is the whole question this pass answers,
+    /// and a post clears the warning stamp as it lands, so both halves of it are
+    /// here: the game is frozen only while it is still warned and still silent.
+    /// </remarks>
+    public async Task<bool> FreezeGame(Guid gameId, DateTimeOffset closedUtc, CancellationToken ct = default)
     {
-        await _dbContext.Games
+        var written = await _dbContext.Games
             .Where(g => g.GameId == gameId)
+            .Where(g => !g.IsRemoved)
+            .Where(g => g.Status == ModuleStatus.Active)
+            .Where(g => g.InactivityWarningUtc != null)
+            .Where(g => g.LastPostCreatedUtc == null || g.LastPostCreatedUtc < g.InactivityWarningUtc)
             .ExecuteUpdateAsync(g => g
                 .SetProperty(x => x.Status, ModuleStatus.Closed)
                 .SetProperty(x => x.ClosedReason, ClosedReason.Frozen)
                 .SetProperty(x => x.ClosedUtc, closedUtc)
                 .SetProperty(x => x.InactivityWarningUtc, (DateTimeOffset?)null), ct);
+
+        return written == 1;
     }
 
     /// <inheritdoc />
-    public async Task SetClosureWarning(Guid gameId, DateTimeOffset warningUtc, CancellationToken ct = default)
+    /// <remarks><inheritdoc cref="SetInactivityWarning" path="/remarks" /></remarks>
+    public async Task<bool> SetClosureWarning(
+        Guid gameId, DateTimeOffset warningUtc, CancellationToken ct = default)
     {
-        await _dbContext.Games
+        var written = await _dbContext.Games
             .Where(g => g.GameId == gameId)
+            .Where(g => !g.IsRemoved)
+            .Where(g => g.Status == ModuleStatus.Closed)
+            .Where(g => g.ClosedReason == ClosedReason.Frozen)
+            .Where(g => g.ClosureWarningUtc == null)
             .ExecuteUpdateAsync(g => g
                 .SetProperty(x => x.ClosureWarningUtc, warningUtc), ct);
+
+        return written == 1;
     }
 
     /// <inheritdoc />
-    public async Task CloseGame(Guid gameId, CancellationToken ct = default)
+    /// <remarks><inheritdoc cref="SetInactivityWarning" path="/remarks" /></remarks>
+    public async Task<bool> CloseGame(Guid gameId, CancellationToken ct = default)
     {
-        await _dbContext.Games
+        var written = await _dbContext.Games
             .Where(g => g.GameId == gameId)
+            .Where(g => !g.IsRemoved)
+            .Where(g => g.Status == ModuleStatus.Closed)
+            .Where(g => g.ClosedReason == ClosedReason.Frozen)
+            .Where(g => g.ClosureWarningUtc != null)
             .ExecuteUpdateAsync(g => g
                 .SetProperty(x => x.ClosedReason, ClosedReason.None)
                 .SetProperty(x => x.ClosureWarningUtc, (DateTimeOffset?)null), ct);
+
+        return written == 1;
     }
 }

@@ -1,3 +1,6 @@
+using System.Linq;
+using FluentValidation;
+using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
@@ -29,13 +32,17 @@ namespace DM.Web.API.Features.Account.Credentials;
 public class CredentialsController : ControllerBase
 {
     private readonly ICredentialsApiService _credentialsService;
+    private readonly ILogger<CredentialsController> _logger;
 
     /// <summary>
     /// Creates a new instance of CredentialsController
     /// </summary>
-    public CredentialsController(ICredentialsApiService credentialsService)
+    public CredentialsController(
+        ICredentialsApiService credentialsService,
+        ILogger<CredentialsController> logger)
     {
         _credentialsService = credentialsService;
+        _logger = logger;
     }
 
     #region Password
@@ -82,8 +89,22 @@ public class CredentialsController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> RequestEmailChange([FromBody] EmailChangeRequest request) =>
-        Ok(await _credentialsService.RequestEmailChange(request));
+    public async Task<IActionResult> RequestEmailChange([FromBody] EmailChangeRequest request)
+    {
+        try
+        {
+            return Ok(await _credentialsService.RequestEmailChange(request));
+        }
+        catch (ValidationException refusal) when (refusal.Errors.Any(e =>
+                   e.PropertyName == "Email" && e.ErrorMessage == ValidationError.Taken))
+        {
+            // The one bit of the availability check, given to a signed-in
+            // caller after a matched password, and recorded like the rest of
+            // the table (SECURITY.md).
+            _logger.IdentifierDisclosed(HttpContext, "email-change", ValidationError.Taken);
+            throw;
+        }
+    }
 
     /// <summary>
     /// Complete email change
@@ -94,11 +115,13 @@ public class CredentialsController : ControllerBase
     /// </remarks>
     /// <param name="token">Confirmation token from the mailed link, in the X-Dm-Account-Token header</param>
     /// <response code="204">Email changed successfully</response>
+    /// <response code="400">The address was taken between the request and the click</response>
     /// <response code="404">Token missing, malformed, invalid or expired</response>
     /// <response code="429">Too many requests</response>
     [HttpPost("email-change/confirm", Name = nameof(ConfirmEmailChange))]
     [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> ConfirmEmailChange(

@@ -238,10 +238,10 @@ internal class NotificationBotSender : INotificationBotSender
         EventType eventType, object metadata, SiteAddressConfiguration addresses)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"<b>Dungeon Master: {NotificationText.EscapeHtml(NotificationText.GetTitle(eventType))}</b>");
+        sb.AppendLine($"<b>Dungeon Master: {NotificationText.EscapeHtml(NotificationWording.GetTitle(eventType))}</b>");
         sb.AppendLine();
 
-        foreach (var (name, value) in NotificationText.ReadMetadata(metadata))
+        foreach (var (name, value) in NotificationWording.ReadMetadata(metadata))
         {
             sb.AppendLine($"<b>{NotificationText.EscapeHtml(name)}:</b> {NotificationText.EscapeHtml(value)}");
         }
@@ -276,10 +276,10 @@ internal class NotificationBotSender : INotificationBotSender
         EventType eventType, object metadata, SiteAddressConfiguration addresses)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"Dungeon Master: {NotificationText.GetTitle(eventType)}");
+        sb.AppendLine($"Dungeon Master: {NotificationWording.GetTitle(eventType)}");
         sb.AppendLine();
 
-        foreach (var (name, value) in NotificationText.ReadMetadata(metadata))
+        foreach (var (name, value) in NotificationWording.ReadMetadata(metadata))
         {
             sb.AppendLine($"{name}: {value}");
         }

@@ -116,7 +116,6 @@ public class RefusalsShould : IntegrationTestBase
             Status = ModuleStatus.Active,
             PremoderationStatus = PremoderationStatus.Approved,
             DraftVisibility = DraftVisibility.Public,
-            CommentsEnabled = true,
             IsRemoved = false,
         });
 

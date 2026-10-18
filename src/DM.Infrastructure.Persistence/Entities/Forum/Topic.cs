@@ -66,6 +66,12 @@ public class Topic : ISoftDeletable, IHasEditHistory<TopicEdit>
     public bool IsClosed { get; set; }
 
     /// <summary>
+    /// Closed by its author rather than by a moderator or an administrator. The
+    /// author may reopen only what he closed himself; false while the topic is open
+    /// </summary>
+    public bool ClosedByAuthor { get; set; }
+
+    /// <summary>
     /// Last comment identifier (denormalized)
     /// </summary>
     public Guid? LastCommentId { get; set; }

@@ -8,8 +8,10 @@ import { ref, computed } from "vue";
 import dayjs from "dayjs";
 import type { Poll } from "@/entities/poll";
 import { usePollsStore } from "@/entities/poll";
-import { describeFailure } from "@/shared/lib/errors";
+import { refusalHere } from "@/shared/lib/errors";
+import { fromSiteInput, toSiteInput } from "@/shared/lib/utils/datetime";
 import Button from "@/shared/ui/Button/Button.vue";
+import { DateTimeInput } from "@/shared/ui/DatePicker";
 
 const props = defineProps<{
   poll: Poll;
@@ -24,11 +26,26 @@ const { editPoll } = usePollsStore();
 
 const editTitle = ref(props.poll.title);
 const editDetails = ref(props.poll.details || "");
-const editStartsUtc = ref(
-  dayjs(props.poll.startsUtc).format("YYYY-MM-DDTHH:mm"),
-);
-const editEndsUtc = ref(dayjs(props.poll.endsUtc).format("YYYY-MM-DDTHH:mm"));
+// On the site's clock, the one the card prints the dates by: the editor of a
+// poll the card calls "20:00" opens on 20:00 (toSiteInput, fromSiteInput).
+const editStartsUtc = ref(toSiteInput(props.poll.startsUtc));
+const editEndsUtc = ref(toSiteInput(props.poll.endsUtc));
 const editIsAnonymous = ref(props.poll.isAnonymous);
+
+// The bounds of an edit. A poll that has begun keeps the start it had, which
+// is in the past: the start goes no earlier than the earlier of that and now,
+// or the poll could not be edited at all (the server sets no bound on it
+// either, UpdatePollValidator). The end comes after the start, as the server
+// asks.
+const startsMin = [toSiteInput(props.poll.startsUtc), toSiteInput()].sort()[0];
+const endsMin = computed(() => {
+  const starts = fromSiteInput(editStartsUtc.value);
+  return starts ? toSiteInput(dayjs(starts).add(1, "minute")) : undefined;
+});
+
+// What the two fields say is wrong with them, shown under each.
+const startsReason = ref<string | null>(null);
+const endsReason = ref<string | null>(null);
 const isSubmitting = ref(false);
 const editError = ref("");
 
@@ -43,6 +60,8 @@ const titleId = `${uid}-title`;
 const detailsId = `${uid}-details`;
 const startsId = `${uid}-starts`;
 const endsId = `${uid}-ends`;
+const startsReasonId = `${uid}-starts-reason`;
+const endsReasonId = `${uid}-ends-reason`;
 const kindId = `${uid}-kind`;
 
 // Track if changing from anonymous to public (will reset votes)
@@ -56,23 +75,40 @@ async function saveEdit() {
     return;
   }
 
+  // A cleared field has no moment; read by `new Date` it threw past a raised
+  // isSubmitting and the editor hung.
+  const startsUtc = fromSiteInput(editStartsUtc.value);
+  const endsUtc = fromSiteInput(editEndsUtc.value);
+  if (!startsUtc || !endsUtc) {
+    editError.value = "Укажите начало и окончание опроса";
+    return;
+  }
+  // The lines under the fields say what is wrong; this one says why the
+  // press did nothing.
+  if (startsReason.value || endsReason.value) {
+    editError.value = "Проверьте начало и окончание опроса";
+    return;
+  }
+
   isSubmitting.value = true;
   editError.value = "";
 
   const { error } = await editPoll(props.poll.id!, {
     title: editTitle.value.trim(),
     details: editDetails.value.trim() || undefined,
-    startsUtc: new Date(editStartsUtc.value).toISOString(),
-    endsUtc: new Date(editEndsUtc.value).toISOString(),
+    startsUtc,
+    endsUtc,
     isAnonymous: editIsAnonymous.value,
   });
 
   isSubmitting.value = false;
 
   if (error) {
-    // The server names which refusal a 403 was; this sentence is for a failure
-    // that named nothing.
-    editError.value = describeFailure(error, "Не удалось сохранить");
+    // The editor stays open with every field as it was typed, and the line
+    // beside the button says every refusal - a rejected date pair, a refused
+    // edit, a wait, a dead server - with the plate the interceptor held for it
+    // taken down. An expired session and a dead connection keep the plate.
+    editError.value = refusalHere(error, "Не удалось сохранить") ?? "";
   } else {
     emit("saved");
   }
@@ -96,23 +132,43 @@ async function saveEdit() {
         rows="3"
       />
     </div>
+    <!-- A date and a time under one caption: the caption names the row, and
+         the reason under it describes the row. -->
     <div class="edit-field">
-      <label class="edit-label" :for="startsId"><strong>Начало</strong></label>
-      <input
-        :id="startsId"
+      <span :id="startsId" class="edit-label"><strong>Начало</strong></span>
+      <DateTimeInput
         v-model="editStartsUtc"
-        type="datetime-local"
-        class="edit-input"
+        role="group"
+        :aria-labelledby="startsId"
+        :aria-describedby="startsReason ? startsReasonId : undefined"
+        :min="startsMin"
+        @reason="startsReason = $event"
       />
+      <span
+        v-if="startsReason"
+        :id="startsReasonId"
+        class="edit-field-error"
+        role="alert"
+        >{{ startsReason }}</span
+      >
     </div>
     <div class="edit-field">
-      <label class="edit-label" :for="endsId"><strong>Окончание</strong></label>
-      <input
-        :id="endsId"
+      <span :id="endsId" class="edit-label"><strong>Окончание</strong></span>
+      <DateTimeInput
         v-model="editEndsUtc"
-        type="datetime-local"
-        class="edit-input"
+        role="group"
+        :aria-labelledby="endsId"
+        :aria-describedby="endsReason ? endsReasonId : undefined"
+        :min="endsMin"
+        @reason="endsReason = $event"
       />
+      <span
+        v-if="endsReason"
+        :id="endsReasonId"
+        class="edit-field-error"
+        role="alert"
+        >{{ endsReason }}</span
+      >
     </div>
     <div class="edit-field">
       <span :id="kindId" class="edit-label"><strong>Тип опроса</strong></span>
@@ -135,7 +191,9 @@ async function saveEdit() {
       </div>
     </div>
     <div class="edit-actions">
-      <Button :loading="isSubmitting" @click="saveEdit">Сохранить</Button>
+      <Button variant="primary" :loading="isSubmitting" @click="saveEdit">
+        Сохранить
+      </Button>
       <Button @click="emit('cancel')">Отмена</Button>
       <span v-if="editError" class="edit-error">{{ editError }}</span>
     </div>
@@ -143,33 +201,28 @@ async function saveEdit() {
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 .poll-edit-form
   padding: $small 0
 
 .edit-field
   margin-bottom: $small
 
+// A caption of a field of the page: +field-caption, as FormField draws it.
 .edit-label
   display: block
-  margin-bottom: $tiny
-  color: $text
-  font-size: $secondary-font-size
+  margin-bottom: $minor
+  +field-caption
 
+// The fields of the site (+input): the frame, the ground, the ring and the
+// type of every field of a page, a line at $control-height and the text area
+// growing with its rows. A dashed frame of its own made these the one set of
+// fields on the site drawn another way.
 .edit-input
   display: block
   width: 100%
-  padding: $small
-  border: 1px dashed $border
-  background-color: $input-bg-overlay
-  color: $text
-  font-family: inherit
-  font-size: inherit
   box-sizing: border-box
-
-  &:focus:not(:focus-visible)
-    outline: none
-    border-style: solid
-    border-color: $border-focus
 
 .edit-textarea
   resize: vertical
@@ -185,6 +238,14 @@ async function saveEdit() {
   color: $accent-red
   font-size: $secondary-font-size
 
+// What is wrong with a date, in the red line of 14 FormField draws under a
+// field: the frame of the field stays as it is.
+.edit-field-error
+  display: block
+  margin-top: $minor
+  color: $accent-red
+  font-size: $secondary-font-size
+
 .poll-type-selector
   display: flex
   gap: $medium
@@ -192,7 +253,7 @@ async function saveEdit() {
 .radio-option
   display: flex
   align-items: center
-  gap: $tiny
+  gap: $small
   cursor: pointer
 
   input

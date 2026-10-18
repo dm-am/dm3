@@ -4,7 +4,6 @@ using System.Linq;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
-using DM.Domain.Game.Features.AttributeSchemas;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.Characters;
@@ -37,13 +36,10 @@ internal class UpdateCharacterValidator : AbstractValidator<UpdateCharacter>
                 }
             });
 
-        // Gated on the game having a schema, exactly as on create. A game without
-        // one has no specifications to read, and asking for them anyway threw out
-        // of the validator — the identifier of the schema is null on the game row,
-        // and dereferencing it made a request that merely carries attributes the
-        // game does not use answer 500 instead of being validated at all.
-        WhenAsync(async (c, ct) => c.Attributes != null && c.Attributes.Any() &&
-                                   await characterRepository.CharacterRequiresAttributes(c.CharacterId, ct), () =>
+        // Gated on values having been submitted, and on nothing else: every
+        // game has a sheet, so there is no longer a state in which reading one
+        // could fail.
+        When(c => c.Attributes != null && c.Attributes.Any(), () =>
             RuleForEach(c => c.Attributes)
                 .MustAsync(async (c, attribute, context, _) =>
                 {

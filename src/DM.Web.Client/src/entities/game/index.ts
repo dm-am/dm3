@@ -12,7 +12,9 @@ export type {
   UpdateGameRecruitmentInput,
   Tag,
   Invitation,
-  AttributeSchema,
+  AttributeSchemaDraft,
+  GameAttributeSchema,
+  ReplaceGameAttributeSchemaRequest,
   AttributeSpecification,
   AttributeValueSpecification,
   Character,
@@ -30,6 +32,8 @@ export type {
   Post,
   PostAttachment,
   PostReview,
+  RoomPostsFilter,
+  FirstUnreadRoomPostResult,
 } from "./model/types";
 
 // Enums (exported as values, can also be used as types)
@@ -38,7 +42,6 @@ export {
   GameParticipation,
   ClosedReason,
   CommentariesAccessMode,
-  AttributeSchemaType,
   AttributeSpecificationType,
   RoomType,
   RoomAccessType,
@@ -67,7 +70,12 @@ export { characterStatusLabel } from "./model/characterStatus";
 
 // The two spellings of a review's sign — the name on the wire and the number
 // the rating is counted in.
-export { reviewSignToNumber, reviewSignName } from "./model/reviewSign";
+export {
+  reviewSignToNumber,
+  reviewSignName,
+  reviewSignOptions,
+} from "./model/reviewSign";
+export type { ReviewSignOption } from "./model/reviewSign";
 
 // Attribute-schema helpers: pure functions over the schema shape declared
 // above, framework-free and shared by every embed site of the editor.
@@ -80,6 +88,7 @@ export {
   isBbCode,
   createEmptySchema,
   createEmptySpec,
+  cloneSpecs,
   cloneSpecsWithNewIds,
   cloneSchema,
   normalizeSpecForType,

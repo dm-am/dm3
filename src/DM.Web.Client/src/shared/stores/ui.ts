@@ -16,11 +16,31 @@ export const MESSAGE_LAYOUTS = ["compact", "full"] as const;
 
 export type MessageLayout = (typeof MESSAGE_LAYOUTS)[number];
 
+/** The two side columns of the shell, named by the edge they stand at. */
+export type SidePanel = "left" | "right";
+
 const THEME_STORAGE_KEY = "dm_theme";
 const MESSAGE_LAYOUT_KEY = "dm_message_layout";
+const HYPHENATE_WORDS_KEY = "dm_hyphenate_words";
 
 function isMessageLayout(value: unknown): value is MessageLayout {
   return (MESSAGE_LAYOUTS as readonly unknown[]).includes(value);
+}
+
+/**
+ * A switch of the settings panel that is on until this device turns it off.
+ *
+ * Only an explicit "off" turns it off: an absent key is a device that has
+ * never answered, and anything else is not an answer either, so both keep the
+ * default. The default is the old site's, where the typographic switch below
+ * was on for everyone.
+ */
+function readSwitch(key: string): boolean {
+  return localStorage.getItem(key) !== "off";
+}
+
+function storeSwitch(key: string, on: boolean): void {
+  localStorage.setItem(key, on ? "on" : "off");
 }
 
 /**
@@ -77,17 +97,33 @@ export const useUiStore = defineStore("ui", () => {
   const theme = ref(getInitialTheme());
   const messageLayout = ref<MessageLayout>(getInitialMessageLayout());
 
-  // Mobile off-canvas navigation drawer (burger menu). Ephemeral UI state —
-  // not persisted, always starts closed on load/reload.
-  const isMobileDrawerOpen = ref(false);
-  const openDrawer = () => {
-    isMobileDrawerOpen.value = true;
+  /**
+   * Hyphenation of the text people write in the game and around it: posts and
+   * comments. On by default, as on the old site, whose own "Перенос слов"
+   * switch turned it off for div.dmtxt and nothing else.
+   *
+   * Justification of that text is not a setting. It had a switch of its own
+   * here, and the owner took it away: the text is always set flush on both
+   * sides, as the old site set it for everyone.
+   */
+  const hyphenateWords = ref(readSwitch(HYPHENATE_WORDS_KEY));
+
+  /**
+   * Whether the sliding column of a narrow screen is out over the page, and
+   * which of its two views it shows: the left column or the right one. One
+   * field and not a flag for being out and another for the view: the two
+   * would be two truths to keep in step. Not stored: a reload starts with the
+   * column in.
+   */
+  const openedPanel = ref<SidePanel | null>(null);
+  const openPanel = (side: SidePanel) => {
+    openedPanel.value = side;
   };
-  const closeDrawer = () => {
-    isMobileDrawerOpen.value = false;
+  const closePanel = () => {
+    openedPanel.value = null;
   };
-  const toggleDrawer = () => {
-    isMobileDrawerOpen.value = !isMobileDrawerOpen.value;
+  const togglePanel = (side: SidePanel) => {
+    openedPanel.value = openedPanel.value === side ? null : side;
   };
 
   // Persist to localStorage on change
@@ -98,6 +134,12 @@ export const useUiStore = defineStore("ui", () => {
   watch(messageLayout, (newValue) => {
     localStorage.setItem(MESSAGE_LAYOUT_KEY, newValue);
   });
+
+  watch(hyphenateWords, (on) => storeSwitch(HYPHENATE_WORDS_KEY, on));
+
+  const setHyphenateWords = (on: boolean) => {
+    hyphenateWords.value = on;
+  };
 
   const updateTheme = (newTheme: Theme) => (theme.value = newTheme);
   const toggleTheme = () => {
@@ -136,9 +178,11 @@ export const useUiStore = defineStore("ui", () => {
     messageLayout,
     isCompactLayout,
     setMessageLayout,
-    isMobileDrawerOpen,
-    openDrawer,
-    closeDrawer,
-    toggleDrawer,
+    hyphenateWords,
+    setHyphenateWords,
+    openedPanel,
+    openPanel,
+    closePanel,
+    togglePanel,
   };
 });

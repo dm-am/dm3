@@ -12,16 +12,6 @@ public class PublicationCommentToDelete : Comment
     /// Publication identifier
     /// </summary>
     public Guid PublicationId => EntityId;
-
-    /// <summary>
-    /// Current comment count of the publication
-    /// </summary>
-    public int PublicationCommentCount { get; set; }
-
-    /// <summary>
-    /// Tells if the comment is last comment of the publication
-    /// </summary>
-    public bool IsLastComment { get; set; }
 }
 
 /// <summary>
@@ -74,14 +64,4 @@ public class DeletePublicationCommentEntity
     /// Deletion timestamp
     /// </summary>
     public DateTimeOffset DeletedUtc { get; set; }
-
-    /// <summary>
-    /// New comment count after deletion
-    /// </summary>
-    public int NewCommentCount { get; set; }
-
-    /// <summary>
-    /// New last comment ID (if this was the last comment)
-    /// </summary>
-    public Guid? NewLastCommentId { get; set; }
 }

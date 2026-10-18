@@ -46,7 +46,7 @@ export interface SiteAddress {
  */
 export const SITE_ADDRESSES: SiteAddress[] = [
   { name: "Основной сервер", host: "dm.am", mark: { icon: "globe" } },
-  { name: "Прокси в России", host: "ru.l.dm.am", mark: { label: "RU" } },
+  { name: "RU-прокси", host: "ru.l.dm.am", mark: { label: "RU" } },
 ];
 
 /**
@@ -81,10 +81,15 @@ export function otherSiteAddresses(
  * The origin of a link built to leave this page: a permalink a reader copies,
  * the address of a post pasted into a moderator's warning.
  *
- * It returns the address being read, which is what all eight call sites did on
- * their own. The change is that they no longer know it: naming the canonical
- * address for shared links is one decision, and this is the one place it can be
- * taken. A link built here can be opened from either door of the site.
+ * The address being read, and not one address for every link: the owner put
+ * "always the RU proxy" against "where the reader is" and chose the second
+ * (5 October 2026). A reader on dm.am copies a dm.am link, a reader on the
+ * proxy a proxy link. Every link to a page of the site that a reader copies or
+ * a moderator quotes is built here (the number of a comment, the anchor of a
+ * message of the chat, the post in a warning, the address of a support
+ * ticket), so the decision is taken in one place. The link to a file of a post
+ * is the file's own address: it follows the API's origin, which behind the
+ * edge is this one.
  */
 export function permalinkOrigin(): string {
   return window.location.origin;

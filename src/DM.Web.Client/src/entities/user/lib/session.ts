@@ -110,7 +110,7 @@ export async function completeSecondFactor(
 export async function signOut(): Promise<boolean> {
   const { error } = await accountApi.signOut();
   if (error) {
-    notifyFailure(error, "Не удалось выйти");
+    notifyFailure(error, "Не удалось выйти из аккаунта");
     return false;
   }
 
@@ -137,6 +137,49 @@ export async function signOutAll(): Promise<boolean> {
   }
 
   return signOut();
+}
+
+/**
+ * The answer of the start of the page, one per store: the shell asks at mount
+ * and the route guard may ask before it, and both get the same request.
+ */
+const restorations = new WeakMap<object, Promise<void>>();
+
+/**
+ * Who the viewer is, settled once when the page starts.
+ *
+ * A viewer stored in the browser is refreshed from the server, as before. With
+ * nobody stored, the server is asked anyway: the session lives in a cookie the
+ * page cannot read, and it outlives the stored copy whenever that copy is gone
+ * (site data cleared, another tab's storage lost, a sign-in made on another
+ * address of the same site). The page used to take the empty copy for an
+ * answer and drew a guest over a live session until the reader signed in
+ * again. Asked, the server names the viewer, and the page is signed in at
+ * once; a 401 is a guest, said nowhere, because there is nothing to say.
+ *
+ * Once per page: the result is kept, so the guard that waits for it on every
+ * protected navigation does not ask again, and a guest costs one request.
+ */
+export function restoreSession(): Promise<void> {
+  const auth = useAuthStore();
+  let restoring = restorations.get(auth);
+  if (!restoring) {
+    restoring = auth.isAuthenticated ? fetchUser() : probeSession();
+    restorations.set(auth, restoring);
+  }
+  return restoring;
+}
+
+/** Asks the server who is signed in when the page holds nobody. */
+async function probeSession() {
+  const { data, error } = await personalApi.getMyProfile({
+    probesSession: true,
+  });
+  if (error || !data) return;
+
+  // A sign-in finished while the question was out has the newer answer.
+  const auth = useAuthStore();
+  if (!auth.isAuthenticated) auth.updateUser(data);
 }
 
 /**

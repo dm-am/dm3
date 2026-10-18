@@ -32,7 +32,7 @@ public class EventOutboxShould
 
     /// <summary>
     /// Exactly one implementation of IEventProducer in the production
-    /// assemblies (INV-7): a second one would return silent fire-and-forget to
+    /// assemblies: a second one would return silent fire-and-forget to
     /// whichever host resolved it last.
     /// </summary>
     [Fact]
@@ -53,7 +53,7 @@ public class EventOutboxShould
 
     /// <summary>
     /// The producer neither opens a transaction nor wraps itself in an execution
-    /// strategy (INV-4): the insert is a second, separate commit after the
+    /// strategy: the insert is a second, separate commit after the
     /// domain one - joining a transaction would smuggle in an atomicity the
     /// design rejected, and opening one would wrap a single write for nothing.
     /// </summary>
@@ -76,7 +76,7 @@ public class EventOutboxShould
 
     /// <summary>
     /// The claim locks what it takes and skips what is locked (D9), and the
-    /// mark follows the publish (INV-2).
+    /// mark follows the publish.
     /// </summary>
     [Fact]
     public void ClaimWithSkipLockedAndMarkOnlyAfterPublishing()
@@ -98,7 +98,7 @@ public class EventOutboxShould
     }
 
     /// <summary>
-    /// Only the relay builds a producer for the events exchange (INV-7): the
+    /// Only the relay builds a producer for the events exchange: the
     /// relay is what ties the publish to the confirm and the confirm to the
     /// mark, and a second channel to dm.events would bypass all three.
     /// </summary>

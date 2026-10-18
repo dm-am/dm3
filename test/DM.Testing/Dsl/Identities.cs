@@ -36,5 +36,7 @@ public static class Identities
         public AuthenticationError Error { get; set; }
         public string? AuthenticationToken { get; set; }
         public Guid? TwoFactorChallengeId { get; set; }
+        public int? LockoutSecondsRemaining { get; set; }
+        public DateTimeOffset? BanEndsUtc { get; set; }
     }
 }

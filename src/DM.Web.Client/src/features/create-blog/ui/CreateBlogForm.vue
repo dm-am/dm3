@@ -2,18 +2,28 @@
 /**
  * CreateBlogForm — "Создание блога" (doc 4.2.3.6.5).
  *
+ * Laid out as the creation of a game is, DM2's one form of captioned rows
+ * (_FormRows.sass): the title and who sees the blog in the making beside their
+ * captions, the box under them, the description over the whole width.
+ *
  * Mirrors the CreateGameForm pattern: typed payload (CreateBlogInput ->
  * backend CreateBlogRequest), field-level FluentValidation errors mapped
- * back onto the form, toast for non-field failures, redirect to the created
- * blog. The description is raw BBCode source on this endpoint (unlike the
- * read side, which returns server-rendered HTML), so it gets the BBCode
+ * back onto the form, the non-field failures in a line under the button (the
+ * plate the response interceptor held for them taken down), redirect to the
+ * created blog. The description is raw BBCode source on this endpoint (unlike
+ * the read side, which returns server-rendered HTML), so it gets the BBCode
  * editor.
+ *
+ * "Перенести мой черный список" is CopyBlacklistOption: drawn only when the
+ * author's own list has somebody on it, starting where the account setting
+ * stands. The form sends what the box shows, and leaves the field out where
+ * there is no box, so the server applies the setting itself.
  */
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "@/entities/user";
-import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
+import { CopyBlacklistOption } from "@/features/roster/@x/create-blog";
 import Button from "@/shared/ui/Button/Button.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select } from "@/shared/ui/Select";
@@ -26,26 +36,25 @@ import {
 } from "@/entities/blog";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 import type { BadRequestError } from "@/shared/api/models/common";
-import { useToast } from "@/shared/lib/composables/useToast";
 import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
-import { describeFailure } from "@/shared/lib/errors";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { ActionResult } from "@/shared/ui/ActionResult";
 
 const router = useRouter();
 const { user } = storeToRefs(useAuthStore());
-const toast = useToast();
 const blogsStore = useBlogsStore();
 
 const visibilityOptions = [
-  { value: DraftVisibility.Public, label: "Превью видно всем" },
-  { value: DraftVisibility.Private, label: "Только участникам" },
+  { value: DraftVisibility.Public, label: "Все" },
+  { value: DraftVisibility.Private, label: "Только участники" },
 ];
 
 // Form state (mirrors backend CreateBlogRequest defaults)
 const title = ref("");
 const description = ref("");
 const draftVisibility = ref(DraftVisibility.Public);
-const commentsEnabled = ref(true);
-const copyBlacklist = ref(false);
+/** Undefined while there is no box: the server then follows the setting. */
+const copyBlacklist = ref<boolean | undefined>(undefined);
 
 // See CreateGameForm: released once the blog exists, so the form's own
 // navigation is not questioned.
@@ -62,9 +71,13 @@ const canCreate = computed(() => {
   return user.value && title.value.trim().length > 0;
 });
 
+/** What the server said that no field of the form shows, under the button. */
+const createResult = useActionResult();
+
 function clearErrors() {
   titleError.value = "";
   descriptionError.value = "";
+  createResult.clear();
 }
 
 async function handleSubmit() {
@@ -78,7 +91,6 @@ async function handleSubmit() {
       title: title.value.trim(),
       description: description.value,
       draftVisibility: draftVisibility.value,
-      commentsEnabled: commentsEnabled.value,
       copyBlacklist: copyBlacklist.value,
     };
 
@@ -90,7 +102,10 @@ async function handleSubmit() {
       descriptionError.value = getFieldError(errors, "description") || "";
 
       if (!titleError.value && !descriptionError.value) {
-        toast.error(describeFailure(apiError, "Не удалось создать блог"));
+        // What a field can show it has shown; the rest - a refusal, a rate
+        // limit, a broken server, a 400 that named no field of this form -
+        // stands under the button that was pressed.
+        createResult.refuse(apiError, "Не удалось создать блог");
       }
       return;
     }
@@ -113,125 +128,88 @@ async function handleSubmit() {
 
 <template>
   <form class="create-blog-form" @submit.prevent="handleSubmit">
-    <!-- Basic info -->
-    <section class="form-section">
-      <block-title>Основная информация</block-title>
+    <form-field
+      class="row"
+      label="Название:"
+      name="title"
+      :errors="titleError ? [titleError] : []"
+    >
+      <input
+        v-model="title"
+        type="text"
+        id="title"
+        maxlength="200"
+        @input="titleError = ''"
+      />
+    </form-field>
 
-      <form-field
-        label="Название блога *"
-        name="title"
-        :errors="titleError ? [titleError] : []"
-      >
-        <input
-          v-model="title"
-          type="text"
-          id="title"
-          placeholder="Введите название блога"
-          maxlength="200"
-          @input="titleError = ''"
-        />
-      </form-field>
-    </section>
+    <form-field
+      class="row"
+      label="Кто видит оформляющийся блог:"
+      name="draft-visibility"
+    >
+      <Select
+        id="blog-draft-visibility"
+        :model-value="draftVisibility"
+        :options="visibilityOptions"
+        @update:model-value="(v) => (draftVisibility = v as DraftVisibility)"
+      />
+    </form-field>
 
-    <!-- Description -->
-    <section class="form-section">
-      <block-title>Описание</block-title>
-      <form-field
-        name="description"
-        :errors="descriptionError ? [descriptionError] : []"
-      >
-        <BBCodeEditor
-          v-model="description"
-          context="common"
-          placeholder="Расскажите, о чем ваш блог..."
-          :min-height="200"
-          :max-height="500"
-          :resizable="true"
-          @update:model-value="descriptionError = ''"
-        />
-      </form-field>
-    </section>
+    <CopyBlacklistOption
+      v-if="user"
+      v-model="copyBlacklist"
+      class="copy-option"
+      does="Внесет в черный список блога"
+    />
 
-    <!-- Access settings -->
-    <section class="form-section">
-      <block-title>Настройки доступа</block-title>
+    <form-field
+      label="Описание:"
+      name="description"
+      :errors="descriptionError ? [descriptionError] : []"
+    >
+      <BBCodeEditor
+        v-model="description"
+        context="common"
+        :min-height="200"
+        :max-height="500"
+        :resizable="true"
+        @update:model-value="descriptionError = ''"
+      />
+    </form-field>
 
-      <form-field label="Видимость черновика">
-        <Select
-          id="blog-draft-visibility"
-          :model-value="draftVisibility"
-          :options="visibilityOptions"
-          @update:model-value="(v) => (draftVisibility = v as DraftVisibility)"
-        />
-      </form-field>
-
-      <div class="checkbox-group">
-        <div class="access-option">
-          <label class="checkbox-label">
-            <input v-model="commentsEnabled" type="checkbox" />
-            Комментарии включены
-          </label>
-          <p class="option-hint">Читатели смогут обсуждать блог</p>
-        </div>
-
-        <div class="access-option">
-          <label class="checkbox-label">
-            <input v-model="copyBlacklist" type="checkbox" />
-            Скопировать личный черный список
-          </label>
-          <p class="option-hint">
-            Пользователи из вашего черного списка не получат доступ к блогу
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Submit -->
     <div class="form-actions">
-      <Button type="submit" :loading="isSubmitting" :disabled="!canCreate">
-        Создать блог
+      <Button
+        type="submit"
+        variant="primary"
+        :loading="isSubmitting"
+        :disabled="!canCreate || createResult.waiting.value"
+      >
+        Создать
       </Button>
     </div>
+    <ActionResult :result="createResult" />
 
     <UnsavedChangesGuard :dirty="dirty" />
   </form>
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/FormRows" as *
 
 .create-blog-form
   max-width: $grid-step * 150
 
-.form-section
-  margin-bottom: $big
-  padding: $medium
-  background-color: $bg-element
-  border-radius: $border-radius
+.create-blog-form .row
+  +form-row
 
-.checkbox-group
-  display: flex
-  flex-direction: column
-  gap: $medium
-
-.access-option
-  display: flex
-  flex-direction: column
-
-.checkbox-label
-  display: flex
-  align-items: center
-  gap: $small
-  cursor: pointer
-
-.option-hint
-  margin: $minor 0 0
-  padding-left: 16px + $small
-  color: $text-muted
-  font-size: $secondary-font-size
-  line-height: 1.4
+// The box stands where the boxes of the game's form do: at the left edge of
+// the form, a step from the rows over it and the description under it.
+.copy-option
+  margin: $medium 0
 
 .form-actions
   display: flex
   gap: $small
+  margin-top: $medium
 </style>

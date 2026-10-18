@@ -90,6 +90,15 @@ export function createKeyedCache<T>(options: KeyedCacheOptions): KeyedCache<T> {
 
 /** Whether a thing fetched once is still worth keeping, with no copy of it. */
 export interface Freshness {
+  /**
+   * True while the thing has been recorded and has not yet aged out.
+   *
+   * Not the negation of isStale(): that one answers false both for something
+   * fresh and for something never recorded at all, so a caller asking "may I
+   * skip this read" cannot be answered by it. The two questions differ exactly
+   * where it matters, on the very first call.
+   */
+  isFresh(): boolean;
   /** True once the thing has been recorded and has since aged out. */
   isStale(): boolean;
   /** Record that it was just fetched. */
@@ -119,10 +128,52 @@ export function createFreshness(ttlMs: number): Freshness {
   const store = createKeyedCache<true>({ ttlMs, maxEntries: 1 });
 
   return {
+    // The slot holds `true` only while it is fresh: get() withholds an entry
+    // that has aged out and returns nothing for one that was never written, so
+    // both of the "no" cases answer the same way here.
+    isFresh: () => store.get(SLOT) === true,
     isStale: () => store.isStale(SLOT),
     touch: () => store.set(SLOT, true),
     expire: () => store.expire(SLOT),
     clear: () => store.clear(),
+  };
+}
+
+/** A moment recorded once, read back as the time since it. */
+export interface Stopwatch {
+  /** Milliseconds since the stopwatch was started. */
+  elapsedMs(): number;
+  /**
+   * Milliseconds left of `totalMs` counted from that same moment, floored at
+   * zero: a deadline already behind us has nothing left rather than a negative
+   * amount of it, which every caller would otherwise clamp for itself.
+   */
+  remainingMs(totalMs: number): number;
+}
+
+/**
+ * The clock arithmetic with nothing kept beside it.
+ *
+ * Two places in the client measure elapsed time while holding no answer at all.
+ * The unread-count badge debounces its re-read and must not postpone it past a
+ * ceiling however long the burst of pushes lasts; the first-start retry loop of
+ * the shared socket tells the retry policy how long it has been trying. Both
+ * wrote down a `Date.now()` of their own and subtracted it from the clock
+ * later, which is the arithmetic this file exists to keep in one place: "how
+ * long since" spelled out in three modules is three things to change and two to
+ * forget, and forgetting one breaks nothing any test can see.
+ *
+ * So it lives here, beside the caches that do the same thing with a value
+ * attached, and each caller keeps only what is its own: the ceiling, the retry
+ * schedule, the timer.
+ */
+export function startStopwatch(): Stopwatch {
+  const startedAt = Date.now();
+  const elapsedMs = () => Date.now() - startedAt;
+
+  return {
+    elapsedMs,
+    remainingMs: (totalMs) => Math.max(0, totalMs - elapsedMs()),
   };
 }
 

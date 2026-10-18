@@ -1,8 +1,10 @@
 using System;
 using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Messaging;
+using DM.Web.API.Realtime;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace DM.Web.API.Shared.Configuration;
 
@@ -38,6 +40,25 @@ internal static class HealthCheckExtensions
         // client connects as. Given a bare endpoint it fell back to the library
         // defaults and reported Healthy about a broker nobody could log in to.
         services.AddDmBrokerHealthCheck(configuration, ["messaging"]);
+
+        // A reachable broker and a subscribed consumer are two different states,
+        // and the check above answers only the first: the connection opens, the
+        // probe passes, and the queue the push consumer never declared is a queue
+        // nobody can ask about. So the consumer reports its own subscription, and
+        // this host is the only place that can.
+        //
+        // Registered here rather than beside the hosted service because the holder
+        // exists for this check; both ends of it are one decision. Degraded and
+        // untagged, so /_ready keeps ignoring it and the Docker health check on
+        // /_health, which runs no check at all, is untouched: an instance without
+        // push serves every request.
+        services.AddSingleton<RealtimeSubscriptionState>();
+        services.AddHealthChecks()
+            .Add(new HealthCheckRegistration(
+                "realtime-push",
+                provider => provider.GetRequiredService<RealtimeSubscriptionState>(),
+                HealthStatus.Degraded,
+                ["messaging"]));
 
         return services;
     }

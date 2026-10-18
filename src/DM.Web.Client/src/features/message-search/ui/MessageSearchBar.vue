@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * MessageSearchBar — the global chat's search row.
+ * MessageSearchBar — the search row of a feed of messages: the global chat or
+ * one correspondence (`scope`).
  *
  * The site has exactly one search idiom, the .filter-bar line: a growing
  * FilterSearchInput followed by $control-height buttons (forum, games, blogs,
@@ -10,17 +11,19 @@
  * feed: picking a row jumps the feed to that message and the dropdown stays
  * open, so the next hit is one click away.
  *
- * Scope is the global chat and nothing else (see searchStore), order is the
- * backend's only one, newest first — hence no scope selector and no sort
- * control.
+ * The scope is the feed the row stands over and nothing else (see
+ * searchStore), order is the backend's only one, newest first — hence no
+ * scope selector and no sort control. The field names the feed it searches:
+ * "Поиск по чату" over the global chat, "Поиск по переписке" over a
+ * correspondence.
  *
- * The default slot carries the rest of the row (the chat's "Перейти к дате"
+ * The default slot carries the rest of the row (the feed's "Перейти к дате"
  * button), so the field and the buttons share one line.
  *
  * The endpoint is authenticated, so a guest gets the row without the field
  * rather than a 401 that would throw him off the page.
  */
-import { ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { vClickOutside } from "@/shared/directives";
 import { FilterSearchInput } from "@/shared/ui/Filters";
@@ -28,7 +31,15 @@ import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useAuthStore } from "@/shared/stores";
 import { useMessageSearchStore } from "../model/searchStore";
-import type { MessageSearchResult } from "../model/types";
+import type { MessageSearchResult, MessageSearchScope } from "../model/types";
+
+const props = withDefaults(
+  defineProps<{
+    /** The feed the row stands over, and the only one it searches. */
+    scope?: MessageSearchScope;
+  }>(),
+  { scope: "global" },
+);
 
 const emit = defineEmits<{
   /** Land on this message in the live feed (the page owns the feed). */
@@ -40,10 +51,30 @@ const { query, results, hasMore, loading, loadingMore, error, hasSearched } =
   storeToRefs(store);
 const { user } = storeToRefs(useAuthStore());
 
+// Before the field reads the query back on mount: the query of another feed
+// is not this feed's.
+store.setScope(props.scope);
+
+/** The words of the field, by the feed it searches. */
+const words = computed(() =>
+  props.scope === "global"
+    ? { placeholder: "Поиск по чату", label: "Поиск по глобальному чату" }
+    : { placeholder: "Поиск по переписке", label: "Поиск по переписке" },
+);
+
 const rootRef = ref<HTMLElement | null>(null);
 
 /** The results layer is up or down; the query itself outlives it. */
 const resultsOpen = ref(false);
+
+// Another correspondence opened in the same page: its feed starts unsearched.
+watch(
+  () => props.scope,
+  (scope) => {
+    store.setScope(scope);
+    resultsOpen.value = false;
+  },
+);
 
 /**
  * Applied by the shared filter-search composable — the same 300ms debounce,
@@ -125,8 +156,8 @@ defineExpose({ focus });
       <FilterSearchInput
         v-if="user"
         v-model="localInput"
-        placeholder="Поиск по чату"
-        ariaLabel="Поиск по глобальному чату"
+        :placeholder="words.placeholder"
+        :ariaLabel="words.label"
         @input="handleInput"
         @keydown="onKeydown"
         @focus="reopen"
@@ -257,8 +288,10 @@ defineExpose({ focus });
     background-color: $hover-overlay
   &:focus:not(:focus-visible)
     outline: none
+  // Hits stand flush in the list, so the ring goes inward: on the edge it
+  // would lie on the neighbouring hit.
   &:focus-visible
-    outline: 2px solid $border-focus
+    outline: 2px solid $link
     outline-offset: -2px
 
 .result-time

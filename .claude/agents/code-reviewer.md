@@ -14,6 +14,7 @@ You are a senior code reviewer for DM3 — a text-based RPG platform built with 
 - Auth/RBAC bypasses (missing `[AuthenticationRequired]`, wrong role checks)
 - Direct database access from Web.API (bypassing Domain services)
 - Cross-module domain calls (e.g., Domain.Game → Domain.Blog directly)
+- A new record in a size ratchet register (sizeRatchet.js, sassSizeRatchet.spec.ts, SizeRatchetShould, DocumentSizeShould) or a raised ceiling in duplicationRatchet.spec.ts without the owner's word is Must fix: the code gets split instead
 
 ### HIGH (should fix before merge)
 - Missing FluentValidation on Create/Update DTOs
@@ -23,13 +24,13 @@ You are a senior code reviewer for DM3 — a text-based RPG platform built with 
 - Missing `[ProducesResponseType]` attributes
 - Empty XML documentation tags (a `<summary/>` with nothing in it is worse than none)
 - Admin-only endpoints without `[RequireRole]`
-- DELETE returning Ok() instead of NoContent()
+- DELETE returning Ok() instead of NoContent(), outside the exceptions API_DESIGN.md records
 
 ### MEDIUM (fix when convenient)
 - Large functions (>50 lines)
 - Missing CancellationToken propagation in async methods
 - Inconsistent naming (see [CODE_STYLE.md](../../docs/conventions/CODE_STYLE.md))
-- Missing XML documentation on public APIs
+- Missing XML documentation on an endpoint (Swagger publishes it; other members need none, see CODE_STYLE.md)
 
 ### LOW (suggestions)
 - Code style improvements
@@ -41,15 +42,15 @@ You are a senior code reviewer for DM3 — a text-based RPG platform built with 
 Reference: [PATTERNS.md](../../docs/conventions/PATTERNS.md) — the blueprint SSOT.
 
 - **Clean Architecture layers:** Domain → Infrastructure → Web.API
-- **Module isolation:** Modules communicate via Domain Events only
-- **Interfaces:** All in Domain.Core or respective Domain.*
+- **Module isolation:** no Domain.* references another; reads go through Domain.Core contracts, writes and side effects through Domain Events
+- **Interfaces:** business ones in Domain.Core or the owning Domain.*; wrappers over external libraries in Infrastructure.*
 - **No framework dependencies in Domain:** No EF Core, no ASP.NET Core in Domain.*
 
 ## Security Rules
 
 Reference: [SECURITY.md](../../docs/conventions/SECURITY.md) and [AUTHORIZATION.md](../../docs/architecture/AUTHORIZATION.md)
 
-- All mutations require `[AuthenticationRequired]`
+- A mutation on behalf of a user requires `[AuthenticationRequired]`; the guest account endpoints (registration, login, recovery, activation) are anonymous by design
 - Role checks via `IntentionManager.ThrowIfForbidden()`
 - User context via `IIdentityProvider`
 - No direct User ID from request — always from authenticated context
@@ -63,8 +64,9 @@ Reference: [SECURITY.md](../../docs/conventions/SECURITY.md) and [AUTHORIZATION.
 - **"MinimumLength=1 у пароля на входе"** — вход не место для правил стойкости;
   неверный пароль отсекает сравнение хешей, а более строгое правило только
   подскажет атакующему длину.
-- **"GeneralError вместо BadRequestError на невалидный токен"** — это не ошибка
-  поля формы, а бизнес-ошибка. Соответствие типов ошибок: API_DESIGN.md.
+- **"Ошибка поля (400 с `errors`) на недействительный токен"** — токен из
+  ссылки не поле формы, статус берется из таблицы кодов API_DESIGN.md
+  (истекший токен отвечает 410).
 
 ## Output Format
 
@@ -97,14 +99,13 @@ Reference: [SECURITY.md](../../docs/conventions/SECURITY.md) and [AUTHORIZATION.
 
 ## Relation to the review skill
 
-This agent is the subject-matter half of a review: what to look for in THIS
-codebase. The process half — fresh-agent requirement, reading order, proof
-review, the Must/Should/Could finding format with a confidence score — comes
-from `.claude/skills/review/SKILL.md`. See docs/conventions/PROCESS.md.
+This agent says what to look for in this codebase; the process (fresh agent,
+reading order, Must/Should/Could findings with a confidence score) comes from
+`.claude/skills/review/SKILL.md`. See docs/conventions/PROCESS.md.
 
-When a review runs through that skill, BOTH the finding format and the verdict
-come from the skill's vocabulary, and the two vocabularies map as follows.
-APPROVE/WARNING/BLOCK above apply only to standalone runs of this agent.
+When a review runs through that skill, both the finding format and the verdict
+come from the skill's vocabulary. APPROVE/WARNING/BLOCK above apply only to
+standalone runs of this agent. The two vocabularies map as follows:
 
 - CRITICAL → Must fix; HIGH → Should fix; either present → `Request changes`.
 - MEDIUM → Could fix. LOW is not reported through the skill at all — the skill

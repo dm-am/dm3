@@ -90,7 +90,6 @@ defineSlots<{
   width: 48px
   height: 48px
   object-fit: cover
-  border-radius: $border-radius
   margin: 0 auto
 
 .upload-ext
@@ -98,14 +97,8 @@ defineSlots<{
   font-size: $tertiary-font-size
   font-weight: bold
 
-.upload-name
-  overflow-wrap: anywhere
-
+// A link and not a red word (owner's standard, 27 September 2026): the
+// confirmation it opens is where the danger is spelled out.
 .delete-button
   +inline-link-button
-
-  // Destructive action stays red at rest and on hover
-  &,
-  &:hover:not(:disabled)
-    color: $accent-red
 </style>

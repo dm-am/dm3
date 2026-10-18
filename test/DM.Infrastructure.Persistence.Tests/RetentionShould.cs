@@ -19,8 +19,8 @@ namespace DM.Infrastructure.Persistence.Tests;
 /// none grows without any bound, and the silence reads the same whether the
 /// term was weighed and rejected or never thought about. So a table either
 /// declares a term in the retention registry or is named here as state bounded
-/// by what it belongs to — for every table of the context, with no third state
-/// (INV-5).
+/// by what it belongs to — for every table of the context, with no third
+/// state.
 /// </remarks>
 public class RetentionShould
 {
@@ -33,12 +33,20 @@ public class RetentionShould
     /// </summary>
     private static readonly string[] Bounded =
     [
-        "AchievementCategories", "AchievementTypes", "AttributeSchemata", "AwardTypes",
+        "AchievementCategories", "AchievementTypes", "AwardTypes",
         "Bans", "Blogs", "BlogAssistants", "BlogBlacklists", "Boards", "BoardModerators",
         "Chats", "Characters", "CharacterAttributes", "CharacterEdits", "Comments",
         "CommentEdits", "ContestSeries", "DiceRolls", "FundraisingGoals", "Games",
         "GameAssistants", "GameBlacklists", "GameReviews", "GameTags", "GlobalChatEvents",
         "GlobalChatEventParticipants", "Likes", "Messages", "MessageEdits",
+        // Bounded by its game: one row per game, taken by the cascade the day a
+        // game is deleted for real. A term over it would take the sheet a live
+        // game describes its characters by.
+        "GameAttributeSchemas",
+        // Bounded by the catalogue it is: the starting sheets the site offers,
+        // hidden by a moderator rather than aged out. A term over it would take
+        // the sheet the creation form fills itself from.
+        "AttributeSchemaTemplates",
         "ModeratedProfileNotes", "NotepadEntries",
         // Bounded by its notification: the CASCADE from Notifications is what
         // collects it when the retention term takes the parent row.
@@ -46,7 +54,10 @@ public class RetentionShould
         "PendingRegistrations", "PeriodDigestTopics", "Polls", "PollOptions", "PollVotes",
         "Posts", "PostEdits", "PostPendencies", "PostReviews", "Publications",
         "RoomAccesses", "Rooms", "Rubrics", "RubricAccesses", "Subscriptions", "Tags",
-        "TagGroups", "Tickets", "TicketResponses", "Tokens", "Topics", "TopicEdits",
+        "TagGroups", "Tickets", "Tokens", "Topics", "TopicEdits",
+        // Bounded by its ticket: a hundred comments at most, taken by the cascade
+        // with the ticket.
+        "TicketComments",
         "Uploads", "Users", "UserAchievements", "UserAwards", "UserBlacklists",
         "UserChatLinks", "UserContacts", "UserEndorsements", "UserLoginRecords",
         "UserProfileNotes",

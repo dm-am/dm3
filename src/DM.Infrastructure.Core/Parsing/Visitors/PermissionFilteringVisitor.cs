@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using BBCodeParser.Nodes;
+using DM.Domain.Core.Content;
 
 namespace DM.Infrastructure.Core.Parsing.Visitors;
 
@@ -9,9 +10,11 @@ namespace DM.Infrastructure.Core.Parsing.Visitors;
 /// <see cref="NodeTree.ToHtml(System.Func{Node, bool}, System.Func{Node, string, string})"/>
 /// that enforce DM3's privacy tag visibility rules.
 ///
-/// The only privacy-sensitive tag is [private] (game posts). [mod] is not
-/// filtered here: it is public on read (everyone sees an authored mod
-/// block) and restricted on write (unauthorized [mod] is unwrapped at save
+/// The privacy-sensitive tags are the ones the tag catalogue declares hiding
+/// (<see cref="BBCodeParser.Tags.Tag.Hides"/>), which is [private]: read on every
+/// surface, shown on game posts alone.
+/// [mod] is not filtered here: it is public on read (everyone sees an authored
+/// mod block) and restricted on write (unauthorized [mod] is unwrapped at save
 /// time by ModBlockSanitizer, so it never reaches stored content).
 ///
 /// This is not a mutating visitor — the delegates returned here are pure
@@ -23,12 +26,6 @@ namespace DM.Infrastructure.Core.Parsing.Visitors;
 /// </summary>
 public static class PermissionFilteringVisitor
 {
-    /// <summary>Tag name for the private addressee block.</summary>
-    public const string PrivateTagName = "private";
-
-    /// <summary>Tag name for the quotation block.</summary>
-    public const string QuoteTagName = "quote";
-
     /// <summary>The filter and transform delegates the tree walker needs.</summary>
     public readonly record struct FilterPlan(
         Func<Node, bool> Filter,
@@ -41,63 +38,37 @@ public static class PermissionFilteringVisitor
         new(Filter: node => IsNodeVisible(node, ctx),
             Transform: (node, rendered) => Transform(node, rendered, ctx));
 
-    /// <summary>
-    /// Check whether a tag name is privacy-sensitive (subject to filtering).
-    /// Only [private] qualifies — [mod] is public on read.
-    /// </summary>
-    public static bool IsPrivacySensitiveTag(string? tagName) =>
-        tagName is PrivateTagName;
-
     // ───────────────────────────────────────────────────────────────────
     // FILTER: which nodes are visible to the current viewer
     // ───────────────────────────────────────────────────────────────────
 
     private static bool IsNodeVisible(Node node, RenderContext ctx)
     {
-        // Only tag nodes are ever filtered; plain text always passes through.
-        if (node is not TagNode tagNode) return true;
+        // Only a hiding tag node is ever filtered; plain text and every other tag
+        // always pass through.
+        if (node is not TagNode { Tag.Hides: true } tagNode) return true;
 
-        var tagName = tagNode.Tag?.Name;
-        if (tagName is null) return true;
-
-        // QuoteSource: the two tags a quotation never carries, whoever is
-        // asking. [private] because quoting is republication and the addressee
-        // snapshot does not travel with the text - the block would be shown by
-        // the new post's rules, to a different set of people - so it is dropped
-        // for the post's own author and for a game lead as well. [quote]
-        // because a quotation of a quotation grows the chain by one level on
-        // every reply; the nesting guard in the parser stands against a page
-        // that cannot be rendered, not against this.
-        if (ctx.Audience == RenderAudience.QuoteSource)
-            return tagName is not (PrivateTagName or QuoteTagName);
-
-        // Non-privacy tags are always visible.
-        if (!IsPrivacySensitiveTag(tagName)) return true;
-
-        // PlainText / EmbedSafe: strip the privacy-sensitive tag. Only [private]
-        // reaches this point — [mod] is public on read and returns visible above.
+        // PlainText / EmbedSafe: strip the hiding tag unconditionally.
         if (ctx.Audience is RenderAudience.PlainText or RenderAudience.EmbedSafe)
             return false;
 
-        // AuthorEdit: both tags are always visible. The audience only
-        // reaches this visitor after the render pipeline matched the viewer
-        // against the author id in the envelope; a mismatch is downgraded
-        // to Display before the context is built.
+        // AuthorEdit: always visible. The audience only reaches this visitor
+        // after the render pipeline matched the viewer against the author id in
+        // the envelope; a mismatch is downgraded to Display before the context
+        // is built.
         if (ctx.Audience == RenderAudience.AuthorEdit)
             return true;
 
-        // Display audience: per-tag rules. [private] is the only
-        // privacy-sensitive tag; every other tag already returned true above.
-        return tagName switch
-        {
-            PrivateTagName => IsPrivateVisible(tagNode, ctx),
-            _ => true
-        };
+        return IsPrivateVisible(tagNode, ctx);
     }
 
     private static bool IsPrivateVisible(TagNode tagNode, RenderContext ctx)
     {
-        // [private] is only meaningful in game posts.
+        // [private] is only meaningful in game posts. Anywhere else nobody reads
+        // it, its author included, and the check stands before the author rule
+        // on purpose. The save path refuses such a block with a reason, so what
+        // arrives here never went through it: stored before the refusal existed,
+        // or carried over from DM2, where the author is not around to be told.
         if (ctx.Surface != BbSurface.GamePost) return false;
 
         // Through the context, never off the viewer: an anonymous reader carries
@@ -116,21 +87,26 @@ public static class PermissionFilteringVisitor
         if (viewerId.HasValue && ContainsGuid(ctx.GameLeadUserIds, viewerId.Value))
             return true;
 
+        // A block the grammar did not accept addresses nobody, whatever its
+        // spelling seems to name: which reader it was meant for is exactly what
+        // cannot be read from it. It stays with the author and the leads.
+        if (tagNode.IsBroken) return false;
+
         // Addressee-forever: the character owner of an addressed character
-        // sees the block. Resolved per-block at post save time, keyed by the raw
-        // tag attribute string - which is not what the parser reports, because
-        // the render path encodes the value before the parser ever sees it. So
-        // the encoding is undone here, at the one place that compares the two
-        // (see BbAttributeEncoding). Without that step every name carrying a
-        // character HTML gives meaning to - an apostrophe is enough, D'Artagnan
-        // is an ordinary name - missed its own entry, and the block was hidden
-        // from the player it was addressed to. Safe and silent, which is why
-        // nobody reported it.
-        var attribute = BbAttributeEncoding.Decode(tagNode.AttributeValue);
+        // sees the block. Resolved per-block at post save time, keyed by the tag
+        // attribute exactly as the author wrote it — which is what the parser
+        // reports, nothing having rewritten or encoded it on the way in.
+        var attribute = tagNode.AttributeValue ?? string.Empty;
         if (viewerId.HasValue &&
             ctx.PrivateAddresseeOwnerUserIdsByAttribute.TryGetValue(attribute, out var allowed) &&
             allowed.Contains(viewerId.Value))
             return true;
+
+        // The two overrides share text addressed to characters, and only that.
+        // A bare [private] names no character: it is text for the leads, and a
+        // setting that shares the addressed lines of a post or a room is not a
+        // decision about it.
+        if (!PrivateBlockMarkup.NamesAddressees(attribute)) return false;
 
         // Per-post override: author marked the post as "share private with all".
         // Pre-condition: the caller has already verified the viewer can read
@@ -148,31 +124,15 @@ public static class PermissionFilteringVisitor
     // ───────────────────────────────────────────────────────────────────
     // TRANSFORM: the callback rewrites a tag's attribute value, and the tag
     // templates substitute what it returns wherever they write {value} - the
-    // opening markup and the closing markup both. It cannot augment the HTML
-    // around a tag, so AuthorEdit round-trip attributes are emitted by
-    // dedicated tag templates in BbParserProvider instead.
-    //
-    // It used not to run at depth at all: the recursive TagNode.ToHtml passed
-    // only the filter down to its children and dropped this callback, so it
-    // ran on the children of the root and on nobody deeper - silently, which
-    // is the worst way for a transform to not run. The single iterative walk
-    // carries both delegates to every node.
+    // opening markup and the closing markup both, encoded there. It cannot
+    // augment the HTML around a tag, so AuthorEdit round-trip attributes are
+    // emitted by dedicated tag templates in BbParserProvider instead.
     // ───────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// The attribute value the tag templates substitute, per audience.
     /// </summary>
     /// <remarks>
-    /// What the parser reports is the encoded value, not the written one -
-    /// <see cref="BbParserWrapper"/> HTML-encodes every attribute the parser
-    /// substitutes into markup, on the exact string it hands over. On the HTML
-    /// path that is invisible: the browser decodes the entities back for the
-    /// reader. On the source path there is no browser, so an author who quoted
-    /// <c>[spoiler="A &amp; B"]</c> would get <c>A &amp;amp; B</c> into the composer
-    /// and would save it that way. Decode is the exact inverse of Encode (see
-    /// <see cref="BbAttributeEncoding"/>), so the value comes back as written -
-    /// and goes through the same encoding again when the reply is saved.
-    ///
     /// AuthorEdit is left alone on purpose. Its [private] template writes the
     /// value into <c>data-bb-addressees</c>, which the editor turns back into
     /// the tag on save: rewriting it there would edit the author's own text
@@ -181,42 +141,37 @@ public static class PermissionFilteringVisitor
     private static string Transform(Node node, string rendered, RenderContext ctx) =>
         ctx.Audience switch
         {
-            RenderAudience.QuoteSource => BbAttributeEncoding.Decode(rendered),
-            RenderAudience.Display => RecipientsLine(node, rendered, ctx),
+            RenderAudience.Display => Recipients(node, rendered, ctx),
             _ => rendered
         };
 
     /// <summary>
-    /// The names the recipients line under a [private] block prints: the frozen
-    /// addressees, not the text of the tag.
+    /// The names a [private] block carries as its recipients, for the tooltip
+    /// over it: the frozen addressees, not the text of the tag.
     /// </summary>
     /// <remarks>
     /// The two disagree the moment a character is renamed. The tag keeps the
     /// name the author typed - it is their text and it stays as written - but
     /// the name is only a way of pointing at a character, and it can be given
     /// up and taken by another. The block still goes to the character the
-    /// snapshot froze it to, so the line has to name that character; composed
-    /// from the tag it names whoever answers to the name today, who may never
-    /// have seen the block.
-    ///
-    /// The value is encoded on the way out because the [private] tag is
-    /// declared insecure - the parser substitutes its attribute as it stands -
-    /// and a character name is user text. What arrives here is already encoded,
-    /// by <see cref="BbParserWrapper"/>, which is why the lookup decodes first.
+    /// snapshot froze it to, so the recipients have to name that character;
+    /// composed from the tag they name whoever answers to the name today, who
+    /// may never have seen the block.
     ///
     /// No entry, no names: an old snapshot names nobody, and a block that
     /// resolved to nobody has nobody to name. Both fall back to the author's
-    /// text, which is what this line has always printed.
+    /// text, which is what the recipients have always named. The tag names the
+    /// leads in front of what is returned here and encodes the list where it
+    /// writes it (PrivateTag).
     /// </remarks>
-    private static string RecipientsLine(Node node, string rendered, RenderContext ctx)
+    private static string Recipients(Node node, string rendered, RenderContext ctx)
     {
-        if (node is not TagNode tagNode || tagNode.Tag?.Name != PrivateTagName) return rendered;
+        if (node is not TagNode { Tag.Hides: true } tagNode || tagNode.IsBroken) return rendered;
 
-        var attribute = BbAttributeEncoding.Decode(rendered);
-        return ctx.PrivateAddresseeNamesByAttribute.TryGetValue(attribute, out var names) &&
+        return ctx.PrivateAddresseeNamesByAttribute.TryGetValue(rendered ?? string.Empty, out var names) &&
                names.Count > 0
-            ? BbAttributeEncoding.Encode(string.Join(", ", names))
-            : rendered;
+            ? string.Join(", ", names)
+            : rendered ?? string.Empty;
     }
 
     private static bool ContainsGuid(IReadOnlyCollection<Guid> set, Guid value)

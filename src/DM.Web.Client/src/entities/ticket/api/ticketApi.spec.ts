@@ -21,7 +21,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/shared/api", () => ({
-  Api: { get: vi.fn().mockResolvedValue({ data: null, error: null }) },
+  Api: {
+    get: vi.fn().mockResolvedValue({ data: null, error: null }),
+    post: vi.fn().mockResolvedValue({ data: null, error: null }),
+  },
   X_DM_TICKET_TOKEN: "X-Dm-Ticket-Token",
 }));
 
@@ -75,5 +78,78 @@ describe("ticketApi.getMyTickets", () => {
       skip: undefined,
       take: 20,
     });
+  });
+});
+
+/**
+ * A queue of moderation is asked for by its status and its reason, and by
+ * nothing else: nobody takes a ticket in hand any more (owner, 12.10, line 51),
+ * and the wire has no flag of who took one.
+ */
+describe("ticketApi.getTickets", () => {
+  beforeEach(() => vi.mocked(Api.get).mockClear());
+
+  it("asks for a queue by status and reason alone", async () => {
+    await ticketApi.getTickets({ status: "WaitingForUser", subtype: "Bug" });
+
+    const [path, query] = vi.mocked(Api.get).mock.calls[0];
+    expect(path).toBe("moderation/tickets");
+    expect(query).toEqual({ status: "WaitingForUser", subtype: "Bug" });
+    expect(Object.keys(query ?? {})).toEqual(["status", "subtype"]);
+  });
+
+  it("offers no way to take a ticket in hand", () => {
+    expect(
+      Object.getOwnPropertyNames(Object.getPrototypeOf(ticketApi)),
+    ).not.toContain("assignTicketToMe");
+  });
+});
+
+/**
+ * An answer of a ticket's conversation goes where its writer reads the
+ * ticket: a member and a moderator to the ticket by its number, the guest to
+ * the ticket of his token, the token in its header (TokenGatedActionsShould:
+ * a URL is written verbatim into the proxy access log). Who wrote it is the
+ * session's or the token's to say. The body is the text, and for moderation
+ * the status the answer moves the ticket to: closing is an answer too, sent
+ * the same way, and there is no closing of its own.
+ */
+describe("ticketApi answers", () => {
+  beforeEach(() => vi.mocked(Api.post).mockClear());
+
+  it("writes a member's answer to the ticket by its number, the text alone", async () => {
+    await ticketApi.createComment("t-1", { text: "Вот ссылка" });
+
+    expect(vi.mocked(Api.post)).toHaveBeenCalledWith(
+      "moderation/tickets/t-1/comments",
+      { text: "Вот ссылка" },
+    );
+  });
+
+  it("writes moderation's answer with the status it moves the ticket to", async () => {
+    await ticketApi.createComment("t-1", { text: "", status: "Closed" });
+
+    expect(vi.mocked(Api.post)).toHaveBeenCalledWith(
+      "moderation/tickets/t-1/comments",
+      { text: "", status: "Closed" },
+    );
+  });
+
+  it("offers no closing apart from an answer", () => {
+    expect(
+      Object.getOwnPropertyNames(Object.getPrototypeOf(ticketApi)),
+    ).not.toContain("resolveTicket");
+  });
+
+  it("writes the guest's comment to the ticket of his token, the token in its header", async () => {
+    const token = "5eedc0de5eedc0de5eedc0de5eedc0de";
+
+    await ticketApi.createTrackedComment(token, "Почта та же");
+
+    const [path, body, options] = vi.mocked(Api.post).mock.calls[0];
+    expect(path).toBe("tickets/track/comments");
+    expect(path).not.toContain(token);
+    expect(body).toEqual({ text: "Почта та же" });
+    expect(options).toEqual({ headers: { "X-Dm-Ticket-Token": token } });
   });
 });

@@ -88,9 +88,12 @@ internal static class PostMappers
     private static readonly Expression<Func<DbPost, Post>> ExpandedPost =
         ExpressionSplicer.Expand(PostProjection);
 
-    /// <summary>EF projection to the domain post</summary>
+    /// <summary>
+    /// EF projection to the domain post. Keeps the posts of removed accounts,
+    /// signed by nobody (<see cref="RemovedAuthors"/>).
+    /// </summary>
     public static IQueryable<Post> ProjectToPost(this IQueryable<DbPost> query) =>
-        query.Select(ExpandedPost);
+        query.KeepingRemovedAuthors().Select(ExpandedPost);
 
     /// <summary>
     /// EF projection for the game-comment delete path; the counters are set by
@@ -98,7 +101,7 @@ internal static class PostMappers
     /// </summary>
     public static IQueryable<GameCommentToDelete> ProjectToGameCommentToDelete(
         this IQueryable<DbComment> query) =>
-        query.Select(ExpressionSplicer.Expand(
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(
             CommentProjections.WithCommentFields<GameCommentToDelete>(
                 c => new GameCommentToDelete())));
 }

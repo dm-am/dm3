@@ -20,6 +20,31 @@ import type { GameReview } from "@/shared/api/models/game/reviews";
 import { Api } from "@/shared/api";
 
 /**
+ * Who says the refusal out loud, passed through to the HTTP client untouched.
+ *
+ * A screen that answers a failure where the reader is looking — the line under
+ * a form, the strip in place of a list — is the one carrier of that failure,
+ * and the response interceptor has to stay quiet or the same sentence stands in
+ * two places at once. Every call that leaves these out is unchanged: the client
+ * then sees nothing and the interceptor speaks as it always did.
+ *
+ * The caller sets them, never the method. One address is read by screens that
+ * answer for it and by screens that show nothing — the eligibility question is
+ * asked by both — and a flag nailed inside the method would take the toast away
+ * from the second kind without anyone asking for it.
+ *
+ * Declared here rather than imported: `shared/api` keeps its own copy of the
+ * type to itself, and the client reads the two fields off the request by name,
+ * so a structural twin carries them just as well.
+ */
+type RefusalFlags = {
+  /** The screen shows a 403 and a 5xx itself. */
+  ownsRefusal?: boolean;
+  /** The screen shows a 429 itself, the wait included. */
+  ownsRateLimit?: boolean;
+};
+
+/**
  * Paging plus search and sorting of one user's game reviews — mirrors the
  * server's UserGameReviewsQuery. `sortBy: "author"` means the other side of
  * the pair, which is the author for reviews received and the game for reviews
@@ -42,6 +67,35 @@ export type EndorsementsQuery = PagingQuery & {
   sortBy?: "created" | "author";
   sortOrder?: "asc" | "desc";
 };
+
+/**
+ * One builder for the query string of the endorsement and game-review list
+ * endpoints — when a new param is added on the BE, only one place changes.
+ * The endpoints differ only in their default page size.
+ *
+ * The page number becomes skip/take here. It used to be forwarded as
+ * `number`, which the server queries do not bind: an unknown query parameter
+ * is ignored rather than refused, so every page of the profile's lists
+ * answered with page one while the pager and the address bar said otherwise.
+ */
+function buildListParams(
+  q: GameReviewsQuery | EndorsementsQuery | undefined,
+  defaultTake: number,
+) {
+  const params: Record<string, string | number | undefined> = {};
+  if (!q) return params;
+  const pageSize = q.take ?? defaultTake;
+  params.take = pageSize;
+  if (q.number && q.number > 1) {
+    params.skip = (q.number - 1) * pageSize;
+  } else if (q.skip != null) {
+    params.skip = q.skip;
+  }
+  if (q.search) params.search = q.search;
+  if (q.sortBy) params.sortBy = q.sortBy;
+  if (q.sortOrder) params.sortOrder = q.sortOrder;
+  return params;
+}
 
 /**
  * The user directory and everything hanging off a public profile: the user
@@ -123,26 +177,21 @@ export default new (class UserApi {
     return Api.get<Envelope<UserProfile>>(`users/${username}/profile`);
   }
 
-  /** Get personal note about a user (viewer's own note) */
-  public getUserProfileNote(username: Username) {
-    return Api.get<UserProfileNote>(`users/me/notes/${username}`);
-  }
-
   /** Create or update personal note about a user */
   public upsertUserProfileNote(username: Username, text: string) {
     return Api.put<UserProfileNote>(`users/me/notes/${username}`, { text });
   }
 
   /** Delete personal note about a user */
-  public deleteUserProfileNote(username: Username) {
-    return Api.delete(`users/me/notes/${username}`);
+  public deleteUserProfileNote(username: Username, options?: RefusalFlags) {
+    return Api.delete(`users/me/notes/${username}`, undefined, options);
   }
 
   /** Get endorsements written about a user (they are the recipient). */
   public getUserEndorsements(username: Username, q?: EndorsementsQuery) {
     return Api.get<ListEnvelope<UserEndorsement>>(
       `users/${username}/endorsements`,
-      this.buildListParams(q, 20),
+      buildListParams(q, 20),
     );
   }
 
@@ -150,37 +199,8 @@ export default new (class UserApi {
   public getWrittenUserEndorsements(username: Username, q?: EndorsementsQuery) {
     return Api.get<ListEnvelope<UserEndorsement>>(
       `users/${username}/written-endorsements`,
-      this.buildListParams(q, 20),
+      buildListParams(q, 20),
     );
-  }
-
-  /**
-   * One builder for the query string of the endorsement and game-review list
-   * endpoints — when a new param is added on the BE, only one place changes.
-   * The endpoints differ only in their default page size.
-   *
-   * The page number becomes skip/take here. It used to be forwarded as
-   * `number`, which the server queries do not bind: an unknown query parameter
-   * is ignored rather than refused, so every page of the profile's lists
-   * answered with page one while the pager and the address bar said otherwise.
-   */
-  private buildListParams(
-    q: GameReviewsQuery | EndorsementsQuery | undefined,
-    defaultTake: number,
-  ) {
-    const params: Record<string, string | number | undefined> = {};
-    if (!q) return params;
-    const pageSize = q.take ?? defaultTake;
-    params.take = pageSize;
-    if (q.number && q.number > 1) {
-      params.skip = (q.number - 1) * pageSize;
-    } else if (q.skip != null) {
-      params.skip = q.skip;
-    }
-    if (q.search) params.search = q.search;
-    if (q.sortBy) params.sortBy = q.sortBy;
-    if (q.sortOrder) params.sortOrder = q.sortOrder;
-    return params;
   }
 
   /**
@@ -193,7 +213,7 @@ export default new (class UserApi {
   public getUserGameReviews(username: Username, q?: GameReviewsQuery) {
     return Api.get<ListEnvelope<GameReview>>(
       `users/${username}/game-reviews`,
-      this.buildListParams(q, 10),
+      buildListParams(q, 10),
     );
   }
 
@@ -201,7 +221,7 @@ export default new (class UserApi {
   public getWrittenUserGameReviews(username: Username, q?: GameReviewsQuery) {
     return Api.get<ListEnvelope<GameReview>>(
       `users/${username}/written-game-reviews`,
-      this.buildListParams(q, 10),
+      buildListParams(q, 10),
     );
   }
 
@@ -212,28 +232,39 @@ export default new (class UserApi {
    * "Написать рекомендацию" control is drawn on `canCreate` and on nothing
    * else, so the site never offers what the POST would refuse. A guest is
    * answered 200 with canCreate=false rather than 401.
+   *
+   * @param options Set by the write form, which stands a failed question in its
+   * own strip with the read offered again. The profile asks the same question
+   * to decide whether to draw the control and shows nothing when it fails, so
+   * it leaves these out and the interceptor speaks for it as before.
    */
-  public getEndorsementEligibility(username: Username) {
+  public getEndorsementEligibility(username: Username, options?: RefusalFlags) {
     return Api.get<Envelope<EndorsementEligibility>>(
       `users/${username}/endorsements/eligibility`,
+      undefined,
+      undefined,
+      options,
     );
   }
 
   /**
    * Create endorsement for a user.
    *
-   * `ownsRefusal`: the sole caller is the write form, and a refusal there
-   * belongs under the field next to the text it refused, not in a toast that
-   * outlives the page.
+   * @param options Set by the write form, which prints a refused save under the
+   * field next to the text it refused, the wait on a 429 included, rather than
+   * in a plate that outlives the page. It used to be nailed on in here, which
+   * decided for every future caller of this address — including one that would
+   * show nothing and be left silent.
    */
   public createUserEndorsement(
     username: Username,
     request: CreateUserEndorsementRequest,
+    options?: RefusalFlags,
   ) {
     return Api.post<UserEndorsement>(
       `users/${username}/endorsements`,
       request,
-      { ownsRefusal: true },
+      options,
     );
   }
 

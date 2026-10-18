@@ -25,11 +25,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/block-dangerous-git.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-dangerous-git.js\""
           },
           {
             "type": "command",
-            "command": "node .claude/hooks/block-new-migrations.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-new-migrations.js\""
           }
         ]
       },
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/block-new-migrations.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-new-migrations.js\""
           }
         ]
       }
@@ -49,7 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/lint-edited-file.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-edited-file.js\""
           }
         ]
       }

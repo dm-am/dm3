@@ -38,10 +38,19 @@ internal class WarningApiService : IWarningApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Warning>> GetAllWarnings(string? userLogin = null)
+    public async Task<ListEnvelope<WarningLogEntry>> GetWarningLog(WarningsQuery query)
     {
-        var warnings = await _warningService.GetAllWarnings(userLogin);
-        return new ListEnvelope<Warning>(warnings.Select(_mapper.ToWarning));
+        var (warnings, paging) = await _warningService.GetLog(query.Username, query);
+        return new ListEnvelope<WarningLogEntry>(
+            warnings.Select(_mapper.ToLogEntry).ToList(), new PagingInfo(paging));
+    }
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<Warning>> GetAllWarnings(WarningsQuery query)
+    {
+        var (warnings, paging) = await _warningService.GetAllWarnings(query.Username, query);
+        return new ListEnvelope<Warning>(
+            warnings.Select(_mapper.ToWarning).ToList(), new PagingInfo(paging));
     }
 
     /// <inheritdoc />
@@ -61,8 +70,15 @@ internal class WarningApiService : IWarningApiService
     }
 
     /// <inheritdoc />
-    public Task RemoveWarning(Guid warningId)
+    public async Task<Envelope<Warning>> ChangeWarningPoints(
+        Guid warningId, ChangeWarningPointsRequest request)
     {
-        return _warningService.RemoveWarning(warningId);
+        var warning = await _warningService.ChangeWarningPoints(
+            warningId, request.Points, request.Reason);
+        return new Envelope<Warning>(_mapper.ToWarning(warning));
     }
+
+    /// <inheritdoc />
+    public Task DeleteProfilePicture(Guid warningId) =>
+        _warningService.DeleteProfilePicture(warningId);
 }

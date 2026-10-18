@@ -2,15 +2,24 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Core.Parsing;
 using DM.Web.API.Features.Personal.Notifications;
+using DM.Web.API.Notifications;
+using DM.Web.API.Realtime;
 using DM.Web.API.Shared.Configuration;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 using MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions;
@@ -41,6 +50,8 @@ public class NotificationWireShould
     private const string BusMetadata = """{"gameTitle":"Frozen Keep","daysPending":3}""";
 
     private static readonly Guid SampleId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+    private static readonly Guid Reader = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
     [Fact]
     public void WriteOneNotificationTheSameWayOverBothTransports()
@@ -97,6 +108,81 @@ public class NotificationWireShould
     }
 
     /// <summary>
+    /// The push carries the row the list shows: the title, the address, the
+    /// details, the date and the mark, put together by the one mapper both
+    /// transports call.
+    /// </summary>
+    /// <remarks>
+    /// The hub built its DTO by hand next to the list's, field by field. A field
+    /// added to one and not to the other arrives on the open tab as undefined
+    /// over the socket and as a value over REST, and nothing fails. The push
+    /// is unread by definition: it is the moment the notification appears.
+    ///
+    /// The pushed copy is taken from the processor itself, so a hub that went
+    /// back to building the DTO on its own would be caught here, and the listed
+    /// copy is handed the bag under CLR member names, so the words and the path
+    /// are shown to be read whatever the spelling of the bag.
+    /// </remarks>
+    [Fact]
+    public async Task PushTheRowTheListShows()
+    {
+        var createdUtc = new DateTimeOffset(2026, 10, 12, 11, 43, 0, TimeSpan.Zero);
+        using var metadata = JsonDocument.Parse(
+            """{"characterName":"Цири","gameTitle":"Ведьмак","gameId":"vedmak~aBcD","masterUsername":"SolohinLex"}""");
+
+        var pushed = await PushAsync(new RealtimeNotification
+        {
+            NotificationId = SampleId,
+            EventType = EventType.StatusCharacterAccepted,
+            CreatedUtc = createdUtc,
+            Metadata = metadata.RootElement.Clone(),
+            RecipientIds = [Reader]
+        });
+        var listed = NotificationMapper.ToNotification(new ListedNotification
+        {
+            NotificationId = SampleId,
+            EventType = EventType.StatusCharacterAccepted,
+            CreatedUtc = createdUtc,
+            Metadata = new Dictionary<string, object>
+            {
+                ["CharacterName"] = "Цири",
+                ["GameTitle"] = "Ведьмак",
+                ["GameId"] = "vedmak~aBcD",
+                ["MasterUsername"] = "SolohinLex"
+            },
+            IsRead = false
+        });
+
+        // Compared as the reader parses them. The two serializers escape a letter
+        // outside ASCII each their own way, one as a numeric escape and one as
+        // the letter, and the title is Russian: the same string, two spellings
+        // of the same JSON.
+        var wires = new[]
+        {
+            JsonSerializer.Serialize(pushed, ApiContract),
+            JsonSerializer.Serialize(listed, ApiContract),
+            JsonSerializer.Serialize(pushed, HubContract),
+            JsonSerializer.Serialize(listed, HubContract)
+        }.Select(Parsed).ToArray();
+
+        wires.Distinct().Should().ContainSingle(
+            "the push and the row of the list are one notification on one open tab. Wires: {0}",
+            string.Join(" | ", wires.Distinct()));
+
+        // Guards against the pair agreeing on nothing: two empty titles and two
+        // missing dates would satisfy the equality above.
+        using var wire = JsonDocument.Parse(wires[2]);
+        var row = wire.RootElement;
+        row.GetProperty("title").GetString().Should().Be("Персонаж принят");
+        row.GetProperty("url").GetString().Should().Be("/game/vedmak~aBcD");
+        row.GetProperty("createdUtc").GetDateTimeOffset().Should().Be(createdUtc);
+        row.GetProperty("isRead").GetBoolean().Should().BeFalse();
+        row.GetProperty("details").EnumerateArray()
+            .Select(detail => $"{detail.GetProperty("label").GetString()}: {detail.GetProperty("value").GetString()}")
+            .Should().Equal("Персонаж: Цири", "Игра: Ведьмак", "Мастер: SolohinLex");
+    }
+
+    /// <summary>
     /// The host registers the hub through the shared entry point.
     /// </summary>
     /// <remarks>
@@ -137,4 +223,57 @@ public class NotificationWireShould
             .PayloadSerializerOptions;
 
     private static string SourceDirectory => Path.Combine(DM.Testing.RepositoryLayout.Root, "src");
+
+    /// <summary>
+    /// A wire as the reader parses it, written back with every letter as itself.
+    /// </summary>
+    private static string Parsed(string wire) =>
+        JsonNode.Parse(wire)!.ToJsonString(new JsonSerializerOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        });
+
+    /// <summary>
+    /// What the hub sends the connections of the reader when the message reaches the API.
+    /// </summary>
+    private static async Task<Notification> PushAsync(RealtimeNotification message)
+    {
+        Notification? sent = null;
+        var reader = Stand.Of<INotificationHub>((_, args) =>
+        {
+            sent = (Notification)args[0]!;
+            return Task.CompletedTask;
+        });
+        var clients = Stand.Of<IHubClients<INotificationHub>>((_, _) => reader);
+        var hub = Stand.Of<IHubContext<NotificationHub, INotificationHub>>((_, _) => clients);
+        var connections = Stand.Of<IUserConnectionService>((_, _) =>
+            new Dictionary<Guid, IEnumerable<string>> { [Reader] = ["reader-connection"] });
+
+        await new RealtimeNotificationProcessor(
+                NullLogger<RealtimeNotificationProcessor>.Instance, connections, hub)
+            .Process("routing-key", message, CancellationToken.None);
+
+        sent.Should().NotBeNull("the reader is connected and the notification is addressed to them");
+        return sent!;
+    }
+
+    /// <summary>
+    /// Stands in for an interface of the host, answering every call the way the
+    /// test says. Hand-written stand-ins would have to follow every member SignalR
+    /// adds to its client and context interfaces.
+    /// </summary>
+    public class Stand : DispatchProxy
+    {
+        private Func<MethodInfo, object?[], object?> _answer = (_, _) => null;
+
+        public static T Of<T>(Func<MethodInfo, object?[], object?> answer) where T : class
+        {
+            var proxy = Create<T, Stand>();
+            ((Stand)(object)proxy)._answer = answer;
+            return proxy;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
+            _answer(targetMethod!, args ?? []);
+    }
 }

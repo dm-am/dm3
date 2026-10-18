@@ -1,6 +1,7 @@
 using System;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using AwesomeAssertions;
 using Xunit;
 
@@ -58,5 +59,40 @@ public class AccessRestrictionsShould
         var both = new Subject(AccessPolicy.DemocraticBan | AccessPolicy.FullBan);
 
         both.MaySpeak(inOwnSpace: true).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The refusal names what this ban forbids, and the two scopes forbid
+    /// different things.
+    /// </summary>
+    /// <remarks>
+    /// One sentence for both told a reader under the ordinary ban that
+    /// commenting was closed to him, while his own game and his own blog stayed
+    /// open and showed him the field.
+    /// </remarks>
+    [Fact]
+    public void RefuseTheOrdinaryBanWithoutClosingOwnSpace()
+    {
+        var refusal = Record.Exception(() => DemocraticallyBanned.ThrowIfMayNotComment());
+
+        refusal.Should().BeOfType<HttpException>();
+        refusal!.Message.Should().Be("Во время бана нельзя комментировать форум и чужие игры и блоги");
+    }
+
+    [Fact]
+    public void RefuseTheFullBanEverywhere()
+    {
+        var refusal = Record.Exception(() => FullyBanned.ThrowIfMayNotComment(inOwnSpace: true));
+
+        refusal.Should().BeOfType<HttpException>();
+        refusal!.Message.Should().Be("Во время полного бана писать нельзя нигде");
+    }
+
+    [Fact]
+    public void SayNothingWhenTheCommentIsAllowed()
+    {
+        Record.Exception(() => DemocraticallyBanned.ThrowIfMayNotComment(inOwnSpace: true))
+            .Should().BeNull();
+        Record.Exception(() => Unrestricted.ThrowIfMayNotComment()).Should().BeNull();
     }
 }

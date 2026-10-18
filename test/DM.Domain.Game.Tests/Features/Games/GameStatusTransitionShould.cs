@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Statuses;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Caching;
 using DM.Domain.Core.Enums;
@@ -14,7 +15,7 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
-using DM.Domain.Game.Features.AttributeSchemas;
+using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using GameDto = DM.Domain.Game.Features.Games.Game;
@@ -22,6 +23,7 @@ using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing.Dsl;
 using DM.Testing;
+using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
@@ -55,12 +57,13 @@ public class GameStatusTransitionShould : UnitTestBase
         var creationValidator = Mock<IGameCreationValidator>();
         creationValidator.ValidateAndAuthorize(Arg.Any<CreateGame>()).Returns(Task.CompletedTask);
 
-        var dataResolver = Mock<IGameCreationDataResolver>();
-        dataResolver.ResolveTagIds(Arg.Any<IEnumerable<int>?>()).Returns(Array.Empty<Guid>());
+        var tagResolver = Mock<IGameTagResolver>();
+        tagResolver.ResolveTagIds(Arg.Any<IEnumerable<int>?>()).Returns(Array.Empty<Guid>());
 
         _intentionManager = Mock<IIntentionManager>();
 
-        var schemaService = Mock<IAttributeSchemaService>();
+        var gameSchemaRepository = Mock<IGameAttributeSchemaRepository>();
+        gameSchemaRepository.Get(Arg.Any<Guid>()).Returns(new GameAttributeSchema());
 
         _repository = Mock<IGameRepository>();
 
@@ -108,21 +111,23 @@ public class GameStatusTransitionShould : UnitTestBase
             gamesQueryValidator,
             updateGameValidator,
             creationValidator,
-            dataResolver,
+            tagResolver,
             _intentionManager,
-            schemaService,
+            gameSchemaRepository,
             _repository,
             userRepository,
             invitationService,
             identityProvider,
             gameBlacklistRepository,
+            Mock<IUserBlacklistChecker>(),
             unreadCountersRepository,
             subscriptionService,
             _dateTimeProvider,
             guidFactory,
             _producer,
             cache,
-            logger);
+            logger,
+            new TagNamesAsTyped());
     }
 
     private Guid SetupGame(

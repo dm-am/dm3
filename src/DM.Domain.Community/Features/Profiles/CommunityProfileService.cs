@@ -97,4 +97,23 @@ internal class CommunityProfileService : ICommunityProfileService
     /// <inheritdoc />
     public Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistory(Guid userId) =>
         _usernameHistoryReader.GetByUserIdAsync(userId);
+
+    /// <summary>
+    /// Key of the one cached summary. It depends on nobody's identity - the sums are
+    /// of public counters, and every reader is shown the same ones - so one entry
+    /// serves the whole site.
+    /// </summary>
+    private const string RemovedAccountSummaryKey = "removed_account_summary";
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Cached for the short time the lists are: the sums are counted over every
+    /// removed account on the site, and a minute is well below what anybody could
+    /// tell from them.
+    /// </remarks>
+    public Task<GeneralUser> GetRemovedAccountSummary() =>
+        _cache.GetOrCreateAsync(
+            RemovedAccountSummaryKey,
+            () => _userRepository.GetRemovedAccountSummaryAsync(),
+            CachePolicy.Medium);
 }

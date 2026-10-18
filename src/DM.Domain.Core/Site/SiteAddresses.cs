@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DM.Domain.Core.Site;
 
@@ -15,7 +16,10 @@ namespace DM.Domain.Core.Site;
 /// address they use stops answering.
 /// </para>
 /// <para>
-/// Hosts rather than URLs, canonical first, exactly as a visitor would type them.
+/// Hosts rather than URLs, canonical first, exactly as a visitor would type them,
+/// and each with the name the site calls it by: a host on its own says nothing
+/// to the reader who meets it in a letter, and this list exists precisely for
+/// the reader whose usual address stopped answering.
 /// The client keeps its own copy for the same reason it does not fetch this: the
 /// moment somebody needs the other address is the moment the site stopped
 /// answering, and a request cannot be served then. Two copies of two strings that
@@ -25,6 +29,20 @@ namespace DM.Domain.Core.Site;
 /// </remarks>
 public static class SiteAddresses
 {
-    /// <summary>The hosts, the canonical one first.</summary>
-    public static IReadOnlyList<string> Hosts { get; } = ["dm.am", "ru.l.dm.am"];
+    /// <summary>The addresses, the canonical one first.</summary>
+    public static IReadOnlyList<SiteAddress> All { get; } =
+    [
+        new("Основной сервер", "dm.am"),
+        new("RU-прокси", "ru.l.dm.am"),
+    ];
+
+    /// <summary>The hosts alone, in the same order.</summary>
+    public static IReadOnlyList<string> Hosts { get; } = All.Select(address => address.Host).ToList();
 }
+
+/// <summary>
+/// One address of the site.
+/// </summary>
+/// <param name="Name">What the site calls this address</param>
+/// <param name="Host">The host itself, as a visitor would type it</param>
+public record SiteAddress(string Name, string Host);

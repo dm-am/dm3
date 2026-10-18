@@ -7,12 +7,14 @@
  * it holds throwaway local state and has no submit action.
  */
 import { computed, reactive, ref } from "vue";
-import type { AttributeSchema } from "@/entities/game";
+import type { AttributeSpecification } from "@/entities/game";
 import { CharacterSheetFields } from "@/entities/game";
 import FormField from "@/shared/ui/Form/FormField.vue";
 
+// Only the specification list drives the preview; a draft and a saved sheet
+// both answer to that much.
 const props = defineProps<{
-  schema: AttributeSchema;
+  schema: { specifications: AttributeSpecification[] };
 }>();
 
 // Throwaway preview state (never submitted anywhere).
@@ -50,7 +52,6 @@ const orderedSpecs = computed(() =>
   padding: $medium
   background-color: $bg-element
   border: 1px dashed $border
-  border-radius: $border-radius
 
 .preview-header
   font-weight: bold

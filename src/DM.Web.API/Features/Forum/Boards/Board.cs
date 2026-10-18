@@ -64,6 +64,35 @@ public class Board
     /// Last created topic in the board
     /// </summary>
     public BoardLastTopic? LastTopic { get; set; }
+
+    /// <summary>
+    /// What the viewer may do on this board. Null in the list of boards and in
+    /// the topics of a board: it is answered on a read of one board and on the
+    /// board of a topic read alone, the shapes the forum page offers a new topic
+    /// from
+    /// </summary>
+    public BoardViewer? Viewer { get; set; }
+}
+
+/// <summary>
+/// What the viewer may do on a board. Each flag is asked by the same code the
+/// write it stands for is refused by, so a page that offers by it offers only
+/// what the server takes; the server refuses all the same.
+/// </summary>
+public class BoardViewer
+{
+    /// <summary>
+    /// Whether the viewer may open a topic on the board: the board's policy
+    /// against his role, and the ban. False for a guest
+    /// </summary>
+    public bool CanCreateTopic { get; set; }
+
+    /// <summary>
+    /// Whether signing in is the way to a topic here: the viewer is a guest,
+    /// and an ordinary member may open topics on the board. False for anybody
+    /// signed in, and on a board whose topics come from the moderation
+    /// </summary>
+    public bool CanCreateTopicAfterSignIn { get; set; }
 }
 
 /// <summary>

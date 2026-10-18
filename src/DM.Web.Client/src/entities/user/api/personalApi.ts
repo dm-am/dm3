@@ -29,6 +29,23 @@ export type UpdateProfilePayload = {
 };
 
 /**
+ * The refusal a caller takes over because its own screen carries it: the
+ * window that asks before the avatar is reset prints a refusal in itself, and
+ * the response interceptor has to stay quiet or the same sentence stands in
+ * two places. Every call that leaves it out is unchanged.
+ *
+ * Declared here rather than imported: `shared/api` keeps its own copy of the
+ * type to itself, and the client reads the two fields off the request by name,
+ * so a structural twin carries them just as well.
+ */
+type RefusalFlags = {
+  /** The screen shows a 403 and a 5xx itself. */
+  ownsRefusal?: boolean;
+  /** The screen shows a 429 itself, the wait included. */
+  ownsRateLimit?: boolean;
+};
+
+/**
  * Personal API - manages current user's profile and preferences
  *
  * Endpoints:
@@ -39,9 +56,17 @@ export default new (class PersonalApi {
   /**
    * Get current user's full profile
    * Returns PersonalProfile including private fields (email, visibility settings)
+   *
+   * `probesSession` is for the one call that asks whether anybody is signed in
+   * at all: its 401 means a guest, not an expired session.
    */
-  public getMyProfile() {
-    return Api.get<PersonalProfile>("users/me/profile");
+  public getMyProfile(options?: { probesSession?: boolean }) {
+    return Api.get<PersonalProfile>(
+      "users/me/profile",
+      undefined,
+      undefined,
+      options,
+    );
   }
 
   /**
@@ -56,8 +81,8 @@ export default new (class PersonalApi {
    * Reset my avatar. Idempotent: safe to call on a user
    * without an avatar.
    */
-  public removeMyAvatar() {
-    return Api.delete("users/me/profile/avatar");
+  public removeMyAvatar(options?: RefusalFlags) {
+    return Api.delete("users/me/profile/avatar", undefined, options);
   }
 
   /**

@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Users;
+using DM.Web.API.Shared.BbRendering;
 
 namespace DM.Web.API.Features.Moderation.Bans;
 
@@ -10,9 +13,13 @@ namespace DM.Web.API.Features.Moderation.Bans;
 /// </summary>
 /// <remarks>
 /// Derived from the stored ban, not sent with it: permanence is the length of the
-/// window and voluntariness is a column. An Auto member used to head this list for
-/// a ban issued automatically on warning points - points are clamped to 0..6 and
-/// compared with no threshold anywhere, so nothing could ever produce it.
+/// window and voluntariness is a column. There is deliberately no Auto member. The
+/// site does issue bans of its own on warning points, and one of them is a
+/// <see cref="Temporary" /> ban and nothing else - a two-day window a senior
+/// moderator then settles. Who issued it is already on the ban, in the moderator
+/// field: the automatic one carries the system account there. A member of its own
+/// would put the same fact in a second place, and the two would answer differently
+/// the first time one of them was written by hand.
 /// </remarks>
 public enum BanType
 {
@@ -58,6 +65,13 @@ public class Ban
     public BanType Type { get; set; }
 
     /// <summary>
+    /// What the ban forbids: DemocraticBan, the ordinary ("демократический")
+    /// one, or FullBan. Sent so that the list names the scope in words instead
+    /// of guessing it from anything else.
+    /// </summary>
+    public AccessPolicy AccessPolicy { get; set; }
+
+    /// <summary>
     /// Ban start timestamp (UTC)
     /// </summary>
     public DateTimeOffset StartedUtc { get; set; }
@@ -68,14 +82,23 @@ public class Ban
     public DateTimeOffset? ExpiresUtc { get; set; }
 
     /// <summary>
-    /// Ban reason/comment
+    /// Ban reason, rendered: the window that issues a ban takes it in the BBCode
+    /// editor, and it reads as a comment does
     /// </summary>
-    public string Comment { get; set; } = "";
+    public CommonBbText Comment { get; set; } = null!;
 
     /// <summary>
     /// Whether the ban is currently active
     /// </summary>
     public bool IsActive { get; set; }
+
+    /// <summary>
+    /// Whether the reader may lift the ban now. Answered by the rule that refuses
+    /// the lift itself, so a list that offers the lift by this flag never offers
+    /// one the server turns down: a senior moderator lifts a running ban of
+    /// somebody else's, an administrator a permanent one as well.
+    /// </summary>
+    public bool CanLift { get; set; }
 
     /// <summary>
     /// Whether the ban was lifted early (distinguishes lifted from expired in history)
@@ -93,17 +116,99 @@ public class Ban
     public DateTimeOffset? LiftedUtc { get; set; }
 
     /// <summary>
-    /// Who lifted the ban, by identifier. An id and not a user object: the row
-    /// stores the moderator's id without a navigation to it, and inventing one
-    /// would add a foreign key for a field the history does not print. It used to
-    /// be a User the mapping explicitly ignored, so it was null on every ban.
+    /// Moderator who lifted the ban early, null while the ban runs its course or
+    /// when that account is gone
     /// </summary>
-    public Guid? LiftedByUserId { get; set; }
+    /// <remarks>
+    /// The user, as <see cref="Moderator" /> is: the ban list signs the lift with
+    /// a link to whoever lifted it, as it signs the issue.
+    /// </remarks>
+    public User? LiftedBy { get; set; }
 
     /// <summary>
     /// Why the ban was lifted early
     /// </summary>
     public string? LiftReason { get; set; }
+}
+
+/// <summary>
+/// What happened to a ban at a moment of the ban list
+/// </summary>
+public enum BanLogEntryKind
+{
+    /// <summary>
+    /// The ban was issued; the entry stands at the start of the ban
+    /// </summary>
+    Issued = 1,
+
+    /// <summary>
+    /// The ban was lifted early; the entry stands at the moment of the lift
+    /// </summary>
+    Lifted = 2
+}
+
+/// <summary>
+/// One entry of the ban list: an issue or a lift, at the moment it happened
+/// </summary>
+/// <remarks>
+/// The list is written the way DM2's bot wrote its ban log, a comment for every
+/// issue and every lift in the order they happened. A lifted ban therefore gives
+/// two entries carrying the same ban: its issue, and its lift above every entry
+/// that happened before the lift.
+/// </remarks>
+public class BanLogEntry
+{
+    /// <summary>
+    /// Number of the entry in the whole list, counted from the oldest entry,
+    /// which is 1, as DM2 numbered the comments of its ban log. A new entry
+    /// happens after every entry there is, so the number of an entry never
+    /// changes, and the list of one person shows the numbers of the whole list.
+    /// The page of an entry is asked for by it (<see cref="BansQuery.Entry" />).
+    /// </summary>
+    /// <example>2077</example>
+    public int Number { get; set; }
+
+    /// <summary>
+    /// Whether the entry is the issue of the ban or its lift
+    /// </summary>
+    public BanLogEntryKind Kind { get; set; }
+
+    /// <summary>
+    /// When it happened (UTC): the start of the ban for an issue, the moment of
+    /// the lift for a lift
+    /// </summary>
+    public DateTimeOffset OccurredUtc { get; set; }
+
+    /// <summary>
+    /// The ban as it stands now. For a lift the end date it carries is the end
+    /// of the ban that was lifted, not the day of the lift.
+    /// </summary>
+    public Ban Ban { get; set; } = null!;
+}
+
+/// <summary>
+/// Filter and page of the ban list
+/// </summary>
+public class BansQuery : PagingQuery
+{
+    /// <summary>
+    /// Username the list is narrowed to. Empty is the whole website; a name nobody
+    /// carries is an empty page rather than a refusal, as in the warning log.
+    /// </summary>
+    /// <example>problemuser</example>
+    public string? Username { get; set; }
+
+    /// <summary>
+    /// Number of an entry (<see cref="BanLogEntry.Number" />) whose page of this
+    /// list is asked for, in place of the page <c>skip</c> names: the link to an
+    /// entry, which outlives the page number the entry stood on, since every new
+    /// entry moves it down. An entry this list does not have, gone or of
+    /// somebody else, leaves the page to <c>skip</c>. The page is told by
+    /// <c>paging.skip</c> of the answer.
+    /// </summary>
+    /// <example>2077</example>
+    [Range(1, int.MaxValue, ErrorMessage = "Номер записи начинается с 1")]
+    public int? Entry { get; set; }
 }
 
 /// <summary>
@@ -151,13 +256,19 @@ public class CreateBanRequest
 /// <summary>
 /// Request to lift a ban early
 /// </summary>
+/// <remarks>
+/// Sent in the body of the DELETE, the way the removal of an account sends its
+/// reason: it is a record about a person, and addresses end up in logs.
+/// </remarks>
 public class LiftBanRequest
 {
     /// <summary>
-    /// Reason for lifting the ban early
+    /// Reason for lifting the ban early, required: the lift is drawn in the ban
+    /// list as a decision of its own, and one without words would be the only
+    /// decision there nobody explained
     /// </summary>
     /// <example>User appealed successfully</example>
-    public string? Reason { get; set; }
+    public string Reason { get; set; } = "";
 }
 
 /// <summary>

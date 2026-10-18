@@ -47,7 +47,7 @@ import {
 } from "@/entities/blog";
 import { BlogStatusButtons, BlogJoinActions } from "@/features/blog-actions";
 import { useAuthStore } from "@/entities/user";
-import { UserRole } from "@/shared/api/models/common";
+import { UserRole, type GeneralError } from "@/shared/api/models/common";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarCounter from "./SidebarCounter.vue";
 import SidebarSectionTitle from "./SidebarSectionTitle.vue";
@@ -55,7 +55,6 @@ import SidebarSkeleton from "./SidebarSkeleton.vue";
 import BlogRubricLink from "./BlogRubricLink.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{ blogId: string }>();
 
@@ -121,15 +120,20 @@ const showModeration = computed(
   () => isGlobalMentor.value || isGlobalSeniorModerator.value,
 );
 
-// Confirmed moderation actions share a single dialog (mirrors GamePanel).
+// Confirmed moderation actions share a single dialog, and the request is the
+// dialog's action (mirrors GamePanel).
 interface ModAction {
   title: string;
   message: string;
   confirmLabel: string;
-  danger?: boolean;
-  run: () => Promise<void>;
+  /** What the window says when the server named nothing. */
+  failure: string;
+  run: () => Promise<{ error: GeneralError | null }>;
 }
 const pendingMod = ref<ModAction | null>(null);
+
+/** The window prints the refusal, so the interceptor keeps quiet about it. */
+const DIALOG_OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
 
 // The three premoderation moves, each with the wording of its own dialog
 // (mirrors GamePanel).
@@ -138,18 +142,18 @@ const PREMOD_PROMPTS: Record<
   { title: string; message: string; confirmLabel: string }
 > = {
   [BlogPremoderationTransition.SetApproved]: {
-    title: "Одобрение блога",
-    message: "Одобрить блог? Он станет виден всем.",
+    title: "Одобрить блог?",
+    message: "Блог станет виден всем",
     confirmLabel: "Одобрить",
   },
   [BlogPremoderationTransition.SetAwaitingEdits]: {
-    title: "Возврат на доработку",
-    message: "Вернуть блог автору на доработку?",
+    title: "Вернуть блог на доработку?",
+    message: "Автор сможет доработать блог и отправить его на проверку заново",
     confirmLabel: "Вернуть",
   },
   [BlogPremoderationTransition.SubmitForApproval]: {
-    title: "Отправка на проверку",
-    message: "Отправить блог на проверку наставнику?",
+    title: "Отправить блог на проверку?",
+    message: "Блог уйдет наставнику на проверку",
     confirmLabel: "Отправить",
   },
 };
@@ -157,32 +161,28 @@ const PREMOD_PROMPTS: Record<
 function askPremod(t: BlogPremoderationTransition) {
   pendingMod.value = {
     ...PREMOD_PROMPTS[t],
-    run: async () => {
-      const error = await store.changePremoderation(t);
-      if (error) notifyFailure(error, "Не удалось изменить премодерацию");
-    },
+    failure: "Не удалось изменить премодерацию",
+    run: async () => ({
+      error: await store.changePremoderation(t, DIALOG_OWNS_REFUSAL),
+    }),
   };
 }
 
 function askDelete() {
   pendingMod.value = {
-    title: "Удаление блога",
-    message: "Удалить этот блог? Действие необратимо.",
-    confirmLabel: "Удалить блог",
-    danger: true,
+    title: "Удалить блог?",
+    message: "Блог будет удален без возможности восстановления",
+    confirmLabel: "Удалить",
+    failure: "Не удалось удалить блог",
     run: async () => {
-      const error = await store.deleteBlog();
-      if (error) notifyFailure(error, "Не удалось удалить блог");
-      else router.push({ name: "blogs" });
+      const error = await store.deleteBlog(DIALOG_OWNS_REFUSAL);
+      if (!error) router.push({ name: "blogs" });
+      return { error };
     },
   };
 }
 
-async function confirmMod() {
-  const action = pendingMod.value;
-  pendingMod.value = null;
-  if (action) await action.run();
-}
+const runMod = () => pendingMod.value?.run();
 </script>
 
 <template>
@@ -314,7 +314,7 @@ async function confirmMod() {
         </template>
         <li v-if="isGlobalSeniorModerator" class="link">
           <span class="muted" aria-hidden="true">- </span>
-          <button type="button" class="strip-action danger" @click="askDelete">
+          <button type="button" class="strip-action" @click="askDelete">
             Удалить блог
           </button>
         </li>
@@ -329,14 +329,16 @@ async function confirmMod() {
       :title="pendingMod?.title ?? ''"
       :message="pendingMod?.message ?? ''"
       :confirm-label="pendingMod?.confirmLabel"
-      :danger="pendingMod?.danger"
-      @confirm="confirmMod"
-      @cancel="pendingMod = null"
+      :failure="pendingMod?.failure"
+      :action="runMod"
+      @update:show="(open: boolean) => !open && (pendingMod = null)"
     />
   </SidebarBlock>
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 // Rubrics nest under their group row: the indent is the nesting, which is why
 // the rubric rows carry no "- " prefix of their own.
 .rubric-list
@@ -353,19 +355,9 @@ async function confirmMod() {
 .error
   color: $accent-red
 
-// Strip actions mimic a plain sidebar link but trigger a store mutation.
+// Strip actions are words of the menu like the links around them, and they
+// trigger a store mutation. Deleting is not coloured: it asks first, and the
+// question carries the weight of the act.
 .strip-action
-  padding: 0
-  border: none
-  background: none
-  font: inherit
-  color: $link
-  cursor: pointer
-
-  &:hover
-    color: $link-hover
-    text-decoration: underline
-
-  &.danger
-    color: $accent-red
+  +inline-link-button
 </style>

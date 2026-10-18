@@ -77,11 +77,6 @@ public class Publication : ILikable
     public DateTimeOffset? PublishedUtc { get; set; }
 
     /// <summary>
-    /// Whether comments are enabled
-    /// </summary>
-    public bool CommentsEnabled { get; set; }
-
-    /// <summary>
     /// View count
     /// </summary>
     public int ViewCount { get; set; }

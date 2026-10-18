@@ -22,8 +22,8 @@ internal class GameCharacterStatusChangedNotificationGenerator : INotificationGe
         EventType.StatusCharacterAccepted,
         EventType.StatusCharacterDied,
         EventType.StatusCharacterResurrected,
+        EventType.StatusCharacterReadmitted,
         EventType.StatusCharacterLeft,
-        EventType.StatusCharacterReturned,
         EventType.StatusCharacterExiled,
         EventType.StatusCharacterRetired
     };

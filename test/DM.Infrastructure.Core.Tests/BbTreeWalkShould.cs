@@ -25,7 +25,9 @@ namespace DM.Infrastructure.Core.Tests;
 /// the depth guard), so any difference here is a regression rather than an
 /// intention.
 ///
-/// One expectation has since been moved on purpose, and it is the only one.
+/// Two expectations have since been moved on purpose, and they are the only
+/// ones.
+///
 /// The recursive renderer dropped the text children of a list on the HTML path,
 /// so "мимо" and "тоже мимо" - words their author typed and got back, whole, on
 /// every later edit - reached no reader. The HTML expectation below carried that
@@ -35,9 +37,13 @@ namespace DM.Infrastructure.Core.Tests;
 /// invented items: text before the first item comes out ahead of the list, text
 /// between two items splits it, and each ul still holds only li. See
 /// TagNode.EmitList for why that shape and not another, and
-/// BbListTextShould for the cases the rule is pinned on. The other two
-/// expectations are untouched - the text projection and the source were keeping
-/// those words all along, and this fixture is what says they still do.
+/// BbListTextShould for the cases the rule is pinned on.
+///
+/// The text output carried the substitutions of the HTML: entities for the
+/// characters markup reserves, a break tag for the newline, an entity for the
+/// dash. It is plain text now (see NodeTree.ToText): the characters as typed, the
+/// newline as a newline, and the parser's text table in place of the aliases.
+/// The words it keeps and their order are what they were.
 ///
 /// What the fixture pins, in order of appearance:
 /// - an attribute value substituted into both the opening and the closing markup;
@@ -50,7 +56,8 @@ namespace DM.Infrastructure.Core.Tests;
 /// - a preformatted tag, which turns alias substitution off for its subtree;
 /// - a tag with no children at all;
 /// - a tag that never closes;
-/// - security substitutions in ordinary text, and their absence from ToBb.
+/// - security substitutions in ordinary text, and their absence from ToText and
+///   ToBb.
 /// </remarks>
 public class BbTreeWalkShould
 {
@@ -75,14 +82,14 @@ public class BbTreeWalkShould
     }
 
     [Fact]
-    public void EmitTheSameText_AsTheRecursiveWalkDid()
+    public void EmitTheSameWords_AsTheRecursiveWalkDid_AsPlainText()
     {
         Parse().ToText().Should().Be(
-            "жирный &ndash; текст<br />" +
+            "жирный ~ текст\n" +
             "миморазтоже мимодва" +
-            "[b]не тег[/b] &lt; &amp; &gt;" +
+            "[b]не тег[/b] < & >" +
             "a -- b" +
-            "a &lt; b &amp; c");
+            "a < b & c");
     }
 
     [Fact]
@@ -115,7 +122,8 @@ public class BbTreeWalkShould
         };
 
         var aliases = new Dictionary<string, string> { { "--", "&ndash;" }, { "\n", "<br />" } };
+        var text = new Dictionary<string, string> { { "--", "~" } };
 
-        return new BbParser(tags, BbParser.SecuritySubstitutions, aliases).Parse(Fixture);
+        return new BbParser(tags, BbParser.SecuritySubstitutions, aliases, textSubstitutions: text).Parse(Fixture);
     }
 }

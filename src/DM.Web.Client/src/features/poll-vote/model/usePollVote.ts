@@ -11,7 +11,7 @@ export function usePollVote() {
 
   async function voteForOption(pollId: PollId, optionId: PollOptionId) {
     const { error } = await vote(pollId, optionId);
-    if (error) notifyFailure(error, "Не удалось проголосовать");
+    if (error) notifyFailure(error, "Не удалось проголосовать в опросе");
   }
 
   async function cancelVote(pollId: PollId) {

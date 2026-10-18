@@ -36,22 +36,30 @@ public class PrivateBlockPatternShould : IntegrationTestBase
     {
     }
 
-    private static readonly Regex DotNet = new(
-        PrivateBlockMarkup.BlockPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex DotNet = new(PrivateBlockMarkup.BlockPattern, RegexOptions.Compiled);
 
     [Theory]
     // One block, the ordinary case.
     [InlineData("до [private]тайна[/private] после", "до   после")]
     // Two blocks: what stands between them is public and stays.
     [InlineData("A [private]x[/private] СЕРЕДИНА [private]y[/private] B", "A   СЕРЕДИНА   B")]
-    // Addressees, quoted and bare, are part of the tag rather than of the text.
-    [InlineData("[private=Вася]x[/private] хвост", "  хвост")]
+    // Addressees are part of the tag rather than of the text, and so is every
+    // spelling the renderer reads as a hidden block.
     [InlineData("[private=\"Вася, Петя\"]x[/private] хвост", "  хвост")]
-    // Casing is the author's business.
-    [InlineData("до [PRIVATE]тайна[/PRIVATE] после", "до   после")]
-    // An unclosed tag is not a block: there is nothing to cut out, and what
-    // follows it is indexed. This is the shape the save path has to refuse.
-    [InlineData("до [private]без закрытия", "до [private]без закрытия")]
+    [InlineData("[private=Вася]x[/private] хвост", "  хвост")]
+    [InlineData("[private to=\"Вася\"]x[/private] хвост", "  хвост")]
+    // The opening and the closing tag in any casing, as on the page.
+    [InlineData("до [PRIVATE]тайна[/private] после", "до   после")]
+    [InlineData("до [private]тайна[/PRIVATE] после", "до   после")]
+    [InlineData("до [Private]тайна[/pRiVaTe] после", "до   после")]
+    // A block nobody closed runs to the end of the text, as on the page.
+    [InlineData("до [private]без закрытия", "до  ")]
+    [InlineData("до [private", "до  ")]
+    // A line break at the very end is where the two engines read an end anchor
+    // differently; the pattern has none, so it is cut the same way.
+    [InlineData("до [private]тайна\n", "до  ")]
+    // A word that starts like the tag is a word.
+    [InlineData("[privateer] и [private_x]", "[privateer] и [private_x]")]
     public async Task CutTheSameTextAsTheDotNetSideDoes(string input, string expected)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -60,7 +68,7 @@ public class PrivateBlockPatternShould : IntegrationTestBase
         var inPostgres = await dbContext.Database
             // The column has to be named Value: that is the shape SqlQuery reads a
             // scalar out of.
-            .SqlQuery<string>($"select regexp_replace({input}, {PrivateBlockMarkup.BlockPattern}, ' ', 'gi') as \"Value\"")
+            .SqlQuery<string>($"select regexp_replace({input}, {PrivateBlockMarkup.BlockPattern}, ' ', {PrivateBlockMarkup.BlockPatternFlags}) as \"Value\"")
             .SingleAsync();
 
         inPostgres.Should().Be(expected);

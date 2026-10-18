@@ -13,9 +13,9 @@ $animation-time: .4s
 $transition-fast: 0.1s ease
 $transition-normal: 0.15s ease
 
-/// The tempo of a wait. The skeleton shimmer and the busy bar of a control
-/// travel at it, so two waits on one screen keep the same time instead of
-/// beating against each other. It was one number written twice, in two files.
+/// The tempo of a wait. Every placeholder that shimmers travels at it, so two
+/// waits on one screen keep the same time instead of beating against each
+/// other. It was one number written twice, in two files.
 $loading-tempo: 1.5s
 
 /// Typography
@@ -44,12 +44,33 @@ $scroll-nav-width: 24px
 $border-radius: $small
 $bubble-radius: 20px // testimonial speech bubble
 
-/// Height of a button and of the filter bar. NOT of a bare <input>: the input
-/// base sizes itself by padding and lands near 33px, and pulling it onto this
-/// token would re-measure every form on the site. So a bare control set beside
-/// a Button in one flex row is about 5px shorter — put it in a wrapper of this
-/// height, the way the filter bar's .search-container does.
+/// Side of an icon control in a speech bubble's corner (BubbleAction). Here
+/// and not in the component because the bubble holds a share of its first line
+/// for two of them (SpeechBubble), and the two numbers must move together.
+$bubble-action-size: 24px
+
+/// Height of every control on a page: a field of one line, a list, the search
+/// of a filter bar, a date field, a segmented pill and any button. One number,
+/// so a field and the button beside it stand level in one row. The field takes
+/// it by declaration (+input in Inputs.sass) and not from its padding: a height
+/// that came out of a font's line box moved whenever the font did.
+///
+/// The measure is the filter bar of the games list, the search, "Фильтры" and
+/// the sort as they stood before the 32 of 27 September: every other control of
+/// a page is drawn after them (owner's standard, 28 September 2026). A window
+/// keeps its own 52 ($dialog-control-height in _DialogSurface.sass), and a
+/// field of several lines grows with its rows.
 $control-height: 38px
+
+/// The type of a page control: the caption of a button and the text typed
+/// into a field of one line. The filter bar's 14, and one size for both, so a
+/// field and a button in one row read as one row. A field of several lines
+/// keeps the body's 16, and a window its own 15.
+$control-font-size: $secondary-font-size
+
+/// How far into a field of one line its text starts, the search of the filter
+/// bar included. A button centres its caption and takes $button-padding.
+$field-inset: $small
 
 /// Pointer target floor, WCAG 2.5.8. The drawn glyph of an icon-only control
 /// may be smaller than this; the area that answers a finger may not. Grown by
@@ -60,6 +81,8 @@ $tap-target-min: 24px
 $disabled-opacity: 0.5
 $muted-opacity: 0.5
 
-/// Buttons — unified with FilterButton visual style
+/// The side padding of every button, the filter bar's "Фильтры" and sort. A
+/// field of one line has its own 8 ($field-inset above): its text starts at
+/// the frame, a caption is centred in its box.
 $button-padding: 0 $medium
 $button-border-radius: $border-radius

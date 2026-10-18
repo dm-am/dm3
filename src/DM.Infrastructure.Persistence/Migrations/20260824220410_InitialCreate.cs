@@ -273,19 +273,21 @@ namespace DM.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "AttributeSchemata",
+                name: "AttributeSchemaTemplates",
                 columns: table => new
                 {
-                    AttributeSchemaId = table.Column<Guid>(type: "uuid", nullable: false),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Type = table.Column<int>(type: "integer", nullable: false),
+                    TemplateId = table.Column<Guid>(type: "uuid", nullable: false),
                     Title = table.Column<string>(type: "text", nullable: false),
                     Specifications = table.Column<string>(type: "jsonb", nullable: false),
+                    IsDefault = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    UpdatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_AttributeSchemata", x => x.AttributeSchemaId);
+                    table.PrimaryKey("PK_AttributeSchemaTemplates", x => x.TemplateId);
                 });
 
             migrationBuilder.CreateTable(
@@ -358,7 +360,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     PremoderationStatus = table.Column<int>(type: "integer", nullable: false),
                     MentorId = table.Column<Guid>(type: "uuid", nullable: true),
                     DraftVisibility = table.Column<int>(type: "integer", nullable: false),
-                    CommentsEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     PublicationCount = table.Column<int>(type: "integer", nullable: false),
                     CommentCount = table.Column<int>(type: "integer", nullable: false),
                     PopularityScore = table.Column<int>(type: "integer", nullable: false),
@@ -506,7 +507,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     SearchText = table.Column<string>(type: "text", nullable: true, defaultValue: ""),
-                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", stored: true)
+                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[[Pp][Rr][Ii][Vv][Aa][Tt][Ee](?=[\\]=\\s]|$)(?:[^\\[]|\\[(?!/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\]))*(?:\\[/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\])?', ' ', 'g'))", stored: true)
                 },
                 constraints: table =>
                 {
@@ -626,7 +627,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     PopularityScoreUpdatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     MasterId = table.Column<Guid>(type: "uuid", nullable: false),
                     MentorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AttributeSchemaId = table.Column<Guid>(type: "uuid", nullable: true),
                     Title = table.Column<string>(type: "text", nullable: false),
                     SystemName = table.Column<string>(type: "text", nullable: true),
                     NarrativeSetting = table.Column<string>(type: "text", nullable: true),
@@ -644,12 +644,26 @@ namespace DM.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Games", x => x.GameId);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "GameAttributeSchemas",
+                columns: table => new
+                {
+                    GameId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Specifications = table.Column<string>(type: "jsonb", nullable: false),
+                    Version = table.Column<int>(type: "integer", nullable: false),
+                    UpdatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_GameAttributeSchemas", x => x.GameId);
                     table.ForeignKey(
-                        name: "FK_Games_AttributeSchemata_AttributeSchemaId",
-                        column: x => x.AttributeSchemaId,
-                        principalTable: "AttributeSchemata",
-                        principalColumn: "AttributeSchemaId",
-                        onDelete: ReferentialAction.Restrict);
+                        name: "FK_GameAttributeSchemas_Games_GameId",
+                        column: x => x.GameId,
+                        principalTable: "Games",
+                        principalColumn: "GameId",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -758,7 +772,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     GlobalChatEventId = table.Column<Guid>(type: "uuid", nullable: true),
                     SearchText = table.Column<string>(type: "text", nullable: true, defaultValue: ""),
-                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", stored: true)
+                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[[Pp][Rr][Ii][Vv][Aa][Tt][Ee](?=[\\]=\\s]|$)(?:[^\\[]|\\[(?!/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\]))*(?:\\[/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\])?', ' ', 'g'))", stored: true)
                 },
                 constraints: table =>
                 {
@@ -945,7 +959,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     SearchText = table.Column<string>(type: "text", nullable: true, defaultValue: ""),
-                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", stored: true)
+                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[[Pp][Rr][Ii][Vv][Aa][Tt][Ee](?=[\\]=\\s]|$)(?:[^\\[]|\\[(?!/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\]))*(?:\\[/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\])?', ' ', 'g'))", stored: true)
                 },
                 constraints: table =>
                 {
@@ -974,7 +988,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     ModifiedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     IsPublished = table.Column<bool>(type: "boolean", nullable: false),
                     PublishedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    CommentsEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     ViewCount = table.Column<int>(type: "integer", nullable: false),
                     CommentCount = table.Column<int>(type: "integer", nullable: false),
                     LastCommentId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -1028,8 +1041,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     ViewPrivateText = table.Column<bool>(type: "boolean", nullable: false),
                     ViewDiceResults = table.Column<bool>(type: "boolean", nullable: false),
                     DiceEnabled = table.Column<bool>(type: "boolean", nullable: false),
-                    PreviousRoomId = table.Column<Guid>(type: "uuid", nullable: true),
-                    NextRoomId = table.Column<Guid>(type: "uuid", nullable: true),
                     IsArchived = table.Column<bool>(type: "boolean", nullable: false),
                     HiddenWithoutAccess = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
@@ -1046,16 +1057,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         principalTable: "Games",
                         principalColumn: "GameId",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_Rooms_Rooms_NextRoomId",
-                        column: x => x.NextRoomId,
-                        principalTable: "Rooms",
-                        principalColumn: "RoomId");
-                    table.ForeignKey(
-                        name: "FK_Rooms_Rooms_PreviousRoomId",
-                        column: x => x.PreviousRoomId,
-                        principalTable: "Rooms",
-                        principalColumn: "RoomId");
                 });
 
             migrationBuilder.CreateTable(
@@ -1133,22 +1134,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "TicketResponses",
-                columns: table => new
-                {
-                    TicketResponseId = table.Column<Guid>(type: "uuid", nullable: false),
-                    TicketId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AuthorId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Text = table.Column<string>(type: "text", nullable: false),
-                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    IsFromModerator = table.Column<bool>(type: "boolean", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TicketResponses", x => x.TicketResponseId);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Tickets",
                 columns: table => new
                 {
@@ -1165,21 +1150,12 @@ namespace DM.Infrastructure.Persistence.Migrations
                     UpdatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     Description = table.Column<string>(type: "text", nullable: false),
                     Comment = table.Column<string>(type: "text", nullable: false),
-                    AssignedModeratorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AnswerAuthorId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ResolvedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    Answer = table.Column<string>(type: "text", nullable: true),
-                    WarningId = table.Column<Guid>(type: "uuid", nullable: true),
-                    BanId = table.Column<Guid>(type: "uuid", nullable: true)
+                    ResolvedById = table.Column<Guid>(type: "uuid", nullable: true),
+                    ResolvedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Tickets", x => x.TicketId);
-                    table.ForeignKey(
-                        name: "FK_Tickets_Bans_BanId",
-                        column: x => x.BanId,
-                        principalTable: "Bans",
-                        principalColumn: "BanId");
                 });
 
             migrationBuilder.CreateTable(
@@ -1242,12 +1218,13 @@ namespace DM.Infrastructure.Persistence.Migrations
                     IsAttached = table.Column<bool>(type: "boolean", nullable: false),
                     AttachOrder = table.Column<int>(type: "integer", nullable: true),
                     IsClosed = table.Column<bool>(type: "boolean", nullable: false),
+                    ClosedByAuthor = table.Column<bool>(type: "boolean", nullable: false),
                     LastCommentId = table.Column<Guid>(type: "uuid", nullable: true),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     SearchText = table.Column<string>(type: "text", nullable: true, defaultValue: ""),
-                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || setweight(to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi')), 'B')", stored: true)
+                    SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || setweight(to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[[Pp][Rr][Ii][Vv][Aa][Tt][Ee](?=[\\]=\\s]|$)(?:[^\\[]|\\[(?!/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\]))*(?:\\[/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\])?', ' ', 'g')), 'B')", stored: true)
                 },
                 constraints: table =>
                 {
@@ -1464,7 +1441,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     ChatId = table.Column<Guid>(type: "uuid", nullable: false),
                     IsRemoved = table.Column<bool>(type: "boolean", nullable: false),
                     DeletedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
-                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
+                    DeletedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    HistoryClearedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1663,6 +1641,33 @@ namespace DM.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "TicketComments",
+                columns: table => new
+                {
+                    TicketCommentId = table.Column<Guid>(type: "uuid", nullable: false),
+                    TicketId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AuthorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Text = table.Column<string>(type: "text", nullable: false),
+                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TicketComments", x => x.TicketCommentId);
+                    table.ForeignKey(
+                        name: "FK_TicketComments_Tickets_TicketId",
+                        column: x => x.TicketId,
+                        principalTable: "Tickets",
+                        principalColumn: "TicketId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_TicketComments_Users_AuthorId",
+                        column: x => x.AuthorId,
+                        principalTable: "Users",
+                        principalColumn: "UserId",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TwoFactorChallenges",
                 columns: table => new
                 {
@@ -1768,6 +1773,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     PostsPerPage = table.Column<int>(type: "integer", nullable: false),
                     MessagesPerPage = table.Column<int>(type: "integer", nullable: false),
                     EntitiesPerPage = table.Column<int>(type: "integer", nullable: false),
+                    TimeZoneId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     DiscordPreferences = table.Column<string>(type: "jsonb", nullable: true),
                     TelegramPreferences = table.Column<string>(type: "jsonb", nullable: true),
                     EmailPreferences = table.Column<string>(type: "jsonb", nullable: true)
@@ -1795,18 +1801,34 @@ namespace DM.Infrastructure.Persistence.Migrations
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     Text = table.Column<string>(type: "text", nullable: false),
                     EntitySnapshot = table.Column<string>(type: "text", nullable: true),
+                    ProfileStatusSnapshot = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    ProfileAvatarUploadId = table.Column<Guid>(type: "uuid", nullable: true),
                     Points = table.Column<int>(type: "integer", nullable: false),
-                    IsRemoved = table.Column<bool>(type: "boolean", nullable: false)
+                    OriginalPoints = table.Column<int>(type: "integer", nullable: false),
+                    PointsChangedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PointsChangedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    PointsChangeText = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Warnings", x => x.WarningId);
+                    table.ForeignKey(
+                        name: "FK_Warnings_Uploads_ProfileAvatarUploadId",
+                        column: x => x.ProfileAvatarUploadId,
+                        principalTable: "Uploads",
+                        principalColumn: "UploadId",
+                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_Warnings_Users_AuthorId",
                         column: x => x.AuthorId,
                         principalTable: "Users",
                         principalColumn: "UserId",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Warnings_Users_PointsChangedByUserId",
+                        column: x => x.PointsChangedByUserId,
+                        principalTable: "Users",
+                        principalColumn: "UserId");
                     table.ForeignKey(
                         name: "FK_Warnings_Users_TargetUserId",
                         column: x => x.TargetUserId,
@@ -1871,6 +1893,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     { new Guid("00000000-0000-0000-0003-00000000000c"), "game_drops", "Игры, покинутые добровольно (смерть персонажа и изгнание мастером не считаются)", "walking-boot", true, 11, 12, "Дропы" },
                     { new Guid("00000000-0000-0000-0003-00000000000d"), "bans_received", "Баны, полученные от модерации", "plastic-duck", true, 10, 13, "Баны" }
                 });
+
+            migrationBuilder.InsertData(
+                table: "AttributeSchemaTemplates",
+                columns: new[] { "TemplateId", "CreatedByUserId", "CreatedUtc", "IsDefault", "IsRemoved", "Specifications", "Title", "UpdatedUtc" },
+                values: new object[] { new Guid("b1a5c0de-0000-4000-8000-000000000001"), null, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), true, false, "[{\"Id\":\"b1a5c0de-0000-4000-8000-000000000109\",\"Title\":\"HP\",\"Constraints\":{\"_t\":\"NumberAttributeConstraints\",\"MaxLength\":null,\"Required\":false},\"Order\":0,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000103\",\"Title\":\"\\u041C\\u0438\\u0440\\u043E\\u0432\\u043E\\u0437\\u0437\\u0440\\u0435\\u043D\\u0438\\u0435\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":0,\"Values\":[{\"Value\":\"\\u0417\\u0430\\u043A\\u043E\\u043D\\u043E\\u043F\\u043E\\u0441\\u043B\\u0443\\u0448\\u043D\\u044B\\u0439 \\u0434\\u043E\\u0431\\u0440\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u041D\\u0435\\u0439\\u0442\\u0440\\u0430\\u043B\\u044C\\u043D\\u044B\\u0439 \\u0434\\u043E\\u0431\\u0440\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u0425\\u0430\\u043E\\u0442\\u0438\\u0447\\u043D\\u044B\\u0439 \\u0434\\u043E\\u0431\\u0440\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u0417\\u0430\\u043A\\u043E\\u043D\\u043E\\u043F\\u043E\\u0441\\u043B\\u0443\\u0448\\u043D\\u044B\\u0439 \\u043D\\u0435\\u0439\\u0442\\u0440\\u0430\\u043B\\u044C\\u043D\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u041D\\u0435\\u0439\\u0442\\u0440\\u0430\\u043B\\u044C\\u043D\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u0425\\u0430\\u043E\\u0442\\u0438\\u0447\\u043D\\u044B\\u0439 \\u043D\\u0435\\u0439\\u0442\\u0440\\u0430\\u043B\\u044C\\u043D\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u0417\\u0430\\u043A\\u043E\\u043D\\u043E\\u043F\\u043E\\u0441\\u043B\\u0443\\u0448\\u043D\\u044B\\u0439 \\u0437\\u043B\\u043E\\u0439\",\"Modifier\":null},{\"Value\":\"\\u041D\\u0435\\u0439\\u0442\\u0440\\u0430\\u043B\\u044C\\u043D\\u044B\\u0439 \\u0437\\u043B\\u043E\\u0439\",\"Modifier\":null},{\"Value\":\"\\u0425\\u0430\\u043E\\u0442\\u0438\\u0447\\u043D\\u044B\\u0439 \\u0437\\u043B\\u043E\\u0439\",\"Modifier\":null}],\"Required\":false},\"Order\":1,\"IsDescriptor\":true,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010a\",\"Title\":\"\\u0421\\u0438\\u043B\\u0430\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":2,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010b\",\"Title\":\"\\u041B\\u043E\\u0432\\u043A\\u043E\\u0441\\u0442\\u044C\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":3,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010c\",\"Title\":\"\\u0412\\u044B\\u043D\\u043E\\u0441\\u043B\\u0438\\u0432\\u043E\\u0441\\u0442\\u044C\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":4,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010d\",\"Title\":\"\\u0418\\u043D\\u0442\\u0435\\u043B\\u043B\\u0435\\u043A\\u0442\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":5,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010e\",\"Title\":\"\\u041C\\u0443\\u0434\\u0440\\u043E\\u0441\\u0442\\u044C\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":6,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010f\",\"Title\":\"\\u041E\\u0431\\u0430\\u044F\\u043D\\u0438\\u0435\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":7,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000104\",\"Title\":\"\\u0412\\u043D\\u0435\\u0448\\u043D\\u043E\\u0441\\u0442\\u044C\",\"Constraints\":{\"_t\":\"BbCodeAttributeConstraints\",\"MaxLength\":20000,\"Required\":false},\"Order\":8,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000105\",\"Title\":\"\\u0425\\u0430\\u0440\\u0430\\u043A\\u0442\\u0435\\u0440\",\"Constraints\":{\"_t\":\"BbCodeAttributeConstraints\",\"MaxLength\":20000,\"Required\":false},\"Order\":9,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000106\",\"Title\":\"\\u0418\\u0441\\u0442\\u043E\\u0440\\u0438\\u044F\",\"Constraints\":{\"_t\":\"BbCodeAttributeConstraints\",\"MaxLength\":20000,\"Required\":false},\"Order\":10,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000107\",\"Title\":\"\\u041D\\u0430\\u0432\\u044B\\u043A\\u0438\",\"Constraints\":{\"_t\":\"BbCodeAttributeConstraints\",\"MaxLength\":20000,\"Required\":false},\"Order\":11,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000108\",\"Title\":\"\\u0418\\u043D\\u0432\\u0435\\u043D\\u0442\\u0430\\u0440\\u044C\",\"Constraints\":{\"_t\":\"BbCodeAttributeConstraints\",\"MaxLength\":20000,\"Required\":false},\"Order\":12,\"IsDescriptor\":false,\"IsHidden\":false}]", "Классическая схема", new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)) });
 
             migrationBuilder.InsertData(
                 table: "AwardTypes",
@@ -2077,7 +2104,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     { new Guid("00000000-0000-0000-0000-00000000003c"), "Игра подходит для начинающих", 60, 0, new Guid("00000000-0000-0000-0005-000000000007"), "Для новичков" },
                     { new Guid("00000000-0000-0000-0000-00000000003d"), "Мастер игры — начинающий", 61, 1, new Guid("00000000-0000-0000-0005-000000000007"), "Мастер-новичок" },
                     { new Guid("00000000-0000-0000-0000-00000000003e"), "Возможны продолжительные периоды без постов", 62, 2, new Guid("00000000-0000-0000-0005-000000000005"), "Сухие сезоны" },
-                    { new Guid("00000000-0000-0000-0000-00000000003f"), "Erotic Role-Play: [tipimg:/images/erp-tooltip.gif]эротические сцены[/tipimg] как основа игрового процесса", 63, 0, new Guid("00000000-0000-0000-0005-000000000008"), "ERP" },
+                    { new Guid("00000000-0000-0000-0000-00000000003f"), "Erotic Role-Play: [tip img=\"/images/erp-tooltip.gif\"]эротические сцены[/tip] как основа игрового процесса", 63, 0, new Guid("00000000-0000-0000-0005-000000000008"), "ERP" },
                     { new Guid("00000000-0000-0000-0000-000000000040"), "Чернуха, максимально шокирующий и отталкивающий контент без ограничений", 64, 2, new Guid("00000000-0000-0000-0005-000000000008"), "Шок-контент" },
                     { new Guid("00000000-0000-0000-0000-000000000041"), "Игра затрагивает спорные или чувствительные социальные темы", 65, 1, new Guid("00000000-0000-0000-0005-000000000008"), "Острые темы" },
                     { new Guid("00000000-0000-0000-0000-000000000042"), "Движок Modiphius: пул из двух d20 против характеристики", 66, 0, new Guid("00000000-0000-0000-0005-000000000001"), "2d20" },
@@ -2091,11 +2118,11 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             migrationBuilder.InsertData(
                 table: "Topics",
-                columns: new[] { "TopicId", "AttachOrder", "AuthorId", "BoardId", "CreatedUtc", "DeletedByUserId", "DeletedUtc", "IsAttached", "IsClosed", "IsRemoved", "LastCommentId", "Text", "Title", "TopicNumber" },
+                columns: new[] { "TopicId", "AttachOrder", "AuthorId", "BoardId", "ClosedByAuthor", "CreatedUtc", "DeletedByUserId", "DeletedUtc", "IsAttached", "IsClosed", "IsRemoved", "LastCommentId", "Text", "Title", "TopicNumber" },
                 values: new object[,]
                 {
-                    { new Guid("00000000-0000-0000-0000-000000000001"), null, new Guid("00000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000001"), new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, true, false, false, null, "Ваши отзывы отсюда попадают (после минимального анализа на нарушения правил) прямиком на главную.", "Отзывы о ДМ", 1 },
-                    { new Guid("00000000-0000-0000-0000-000000000100"), null, new Guid("00000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000001"), new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 1, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, true, false, false, null, "Здесь можно обсудить решения модераторов и администрации. Конструктивная критика приветствуется.", "Обсуждение действий администрации", 2 }
+                    { new Guid("00000000-0000-0000-0000-000000000001"), null, new Guid("00000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000001"), false, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, true, false, false, null, "Ваши отзывы отсюда попадают (после минимального анализа на нарушения правил) прямиком на главную.", "Отзывы о ДМ", 1 },
+                    { new Guid("00000000-0000-0000-0000-000000000100"), null, new Guid("00000000-0000-0000-0000-000000000001"), new Guid("00000000-0000-0000-0000-000000000001"), false, new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 1, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, true, false, false, null, "Здесь можно обсудить решения модераторов и администрации. Конструктивная критика приветствуется.", "Обсуждение действий администрации", 2 }
                 });
 
             migrationBuilder.CreateIndex(
@@ -2122,9 +2149,23 @@ namespace DM.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_AttributeSchemata_UserId",
-                table: "AttributeSchemata",
-                column: "UserId");
+                name: "IX_AttributeSchemaTemplates_CreatedByUserId",
+                table: "AttributeSchemaTemplates",
+                column: "CreatedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AttributeSchemaTemplates_IsDefault",
+                table: "AttributeSchemaTemplates",
+                column: "IsDefault",
+                unique: true,
+                filter: "\"IsDefault\" = true and \"IsRemoved\" = false");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AttributeSchemaTemplates_Title",
+                table: "AttributeSchemaTemplates",
+                column: "Title",
+                unique: true,
+                filter: "\"IsRemoved\" = false");
 
             migrationBuilder.CreateIndex(
                 name: "IX_AwardTypes_Code",
@@ -2164,9 +2205,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "BlockedUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_BlogBlacklists_BlogId",
+                name: "IX_BlogBlacklists_BlogId_BlockedUserId",
                 table: "BlogBlacklists",
-                column: "BlogId");
+                columns: new[] { "BlogId", "BlockedUserId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Blogs_AuthorId",
@@ -2320,9 +2362,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "BlockedUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_GameBlacklists_GameId",
+                name: "IX_GameBlacklists_GameId_BlockedUserId",
                 table: "GameBlacklists",
-                column: "GameId");
+                columns: new[] { "GameId", "BlockedUserId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_GameReviews_AuthorId_GameId",
@@ -2347,10 +2390,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 table: "GameReviews",
                 column: "ModifiedByUserId");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Games_AttributeSchemaId",
-                table: "Games",
-                column: "AttributeSchemaId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Games_DeletedByUserId",
@@ -2385,9 +2424,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "TagId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_GlobalChatEventParticipants_GlobalChatEventId",
+                name: "IX_GlobalChatEventParticipants_GlobalChatEventId_UserId",
                 table: "GlobalChatEventParticipants",
-                column: "GlobalChatEventId");
+                columns: new[] { "GlobalChatEventId", "UserId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_GlobalChatEventParticipants_UserId",
@@ -2398,6 +2438,13 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_GlobalChatEvents_CreatedByUserId",
                 table: "GlobalChatEvents",
                 column: "CreatedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_GlobalChatEvents_Status",
+                table: "GlobalChatEvents",
+                column: "Status",
+                unique: true,
+                filter: "\"Status\" = 1");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Likes_DeletedByUserId",
@@ -2675,9 +2722,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "AuthorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Publications_BlogId",
+                name: "IX_Publications_BlogId_PublicationNumber",
                 table: "Publications",
-                column: "BlogId");
+                columns: new[] { "BlogId", "PublicationNumber" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Publications_CreatedUtc",
@@ -2741,16 +2789,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_Rooms_NextRoomId",
-                table: "Rooms",
-                column: "NextRoomId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Rooms_PreviousRoomId",
-                table: "Rooms",
-                column: "PreviousRoomId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_RubricAccesses_RubricId",
                 table: "RubricAccesses",
                 column: "RubricId");
@@ -2799,29 +2837,19 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "TagGroupId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_TicketResponses_AuthorId",
-                table: "TicketResponses",
+                name: "IX_TicketComments_AuthorId",
+                table: "TicketComments",
                 column: "AuthorId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_TicketResponses_TicketId",
-                table: "TicketResponses",
-                column: "TicketId");
+                name: "IX_TicketComments_TicketId_CreatedUtc_TicketCommentId",
+                table: "TicketComments",
+                columns: new[] { "TicketId", "CreatedUtc", "TicketCommentId" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Tickets_AnswerAuthorId",
+                name: "IX_Tickets_ResolvedById",
                 table: "Tickets",
-                column: "AnswerAuthorId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Tickets_AssignedModeratorId",
-                table: "Tickets",
-                column: "AssignedModeratorId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Tickets_BanId",
-                table: "Tickets",
-                column: "BanId");
+                column: "ResolvedById");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Tickets_TargetId",
@@ -2832,11 +2860,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "IX_Tickets_UserId",
                 table: "Tickets",
                 column: "UserId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Tickets_WarningId",
-                table: "Tickets",
-                column: "WarningId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Tokens_CreatorId",
@@ -3146,6 +3169,16 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "AuthorId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Warnings_PointsChangedByUserId",
+                table: "Warnings",
+                column: "PointsChangedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Warnings_ProfileAvatarUploadId",
+                table: "Warnings",
+                column: "ProfileAvatarUploadId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Warnings_TargetUserId",
                 table: "Warnings",
                 column: "TargetUserId");
@@ -3168,9 +3201,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "ModifiedByUserId");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_AttributeSchemata_Users_UserId",
-                table: "AttributeSchemata",
-                column: "UserId",
+                name: "FK_AttributeSchemaTemplates_Users_CreatedByUserId",
+                table: "AttributeSchemaTemplates",
+                column: "CreatedByUserId",
                 principalTable: "Users",
                 principalColumn: "UserId",
                 onDelete: ReferentialAction.SetNull);
@@ -3798,32 +3831,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                 onDelete: ReferentialAction.Cascade);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_TicketResponses_Tickets_TicketId",
-                table: "TicketResponses",
-                column: "TicketId",
-                principalTable: "Tickets",
-                principalColumn: "TicketId",
-                onDelete: ReferentialAction.Cascade);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_TicketResponses_Users_AuthorId",
-                table: "TicketResponses",
-                column: "AuthorId",
-                principalTable: "Users",
-                principalColumn: "UserId",
-                onDelete: ReferentialAction.Cascade);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Tickets_Users_AnswerAuthorId",
+                name: "FK_Tickets_Users_ResolvedById",
                 table: "Tickets",
-                column: "AnswerAuthorId",
-                principalTable: "Users",
-                principalColumn: "UserId");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Tickets_Users_AssignedModeratorId",
-                table: "Tickets",
-                column: "AssignedModeratorId",
+                column: "ResolvedById",
                 principalTable: "Users",
                 principalColumn: "UserId");
 
@@ -3840,13 +3850,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                 column: "UserId",
                 principalTable: "Users",
                 principalColumn: "UserId");
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_Tickets_Warnings_WarningId",
-                table: "Tickets",
-                column: "WarningId",
-                principalTable: "Warnings",
-                principalColumn: "WarningId");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Tokens_Users_CreatorId",
@@ -3932,8 +3935,8 @@ namespace DM.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
-                name: "FK_AttributeSchemata_Users_UserId",
-                table: "AttributeSchemata");
+                name: "FK_AttributeSchemaTemplates_Users_CreatedByUserId",
+                table: "AttributeSchemaTemplates");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_Boards_Users_LastTopicAuthorId",
@@ -4110,7 +4113,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "Subscriptions");
 
             migrationBuilder.DropTable(
-                name: "TicketResponses");
+                name: "TicketComments");
 
             migrationBuilder.DropTable(
                 name: "Tokens");
@@ -4233,7 +4236,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                 name: "Games");
 
             migrationBuilder.DropTable(
-                name: "AttributeSchemata");
+                name: "AttributeSchemaTemplates");
 
             migrationBuilder.DropTable(
                 name: "Boards");

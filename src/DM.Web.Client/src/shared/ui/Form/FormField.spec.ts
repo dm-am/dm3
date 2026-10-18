@@ -10,11 +10,15 @@
  * a click on the label put the caret nowhere.
  *
  * The wiring now happens here, over the row the slot rendered, because that is
- * the only place that knows which element the caller put in. Every case below
- * fails if that binding is taken back out.
+ * the only place that knows which element the caller put in. The cases on the
+ * binding below fail if that binding is taken back out.
  */
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { dirname, join, resolve } from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 import { nextTick } from "vue";
+import { parse as parseSfc, compileStyle } from "vue/compiler-sfc";
 import { mount } from "@vue/test-utils";
 import FormField from "./FormField.vue";
 
@@ -252,5 +256,134 @@ describe("FormField description", () => {
     expect(wrapper.find(".form-field-row").attributes("aria-describedby")).toBe(
       wrapper.find(".form-field-error").attributes("id"),
     );
+  });
+});
+
+/**
+ * The row stretches what the reader types into, and that rule used to reach
+ * the checkbox as well: `.form-field-row :deep(input)` carries the scope
+ * attribute, so at 0,2,1 it outranked the site-wide `input[type="checkbox"]`
+ * at 0,1,1 and the box ran the width of the field, pushing the line of text
+ * beside it out of the row. Every call site that puts a checkbox in a field
+ * drew it that way.
+ *
+ * Neither vitest nor jsdom applies a scoped stylesheet — the plugin hands the
+ * component over with its styles left out, and jsdom's cascade would not weigh
+ * specificity anyway. So the sheet is compiled here exactly as the build
+ * compiles it (the same shared sass layer, the same scope rewrite), and every
+ * selector that stretches a control is asked directly whether it matches a
+ * real checkbox in a real row.
+ */
+describe("FormField control width", () => {
+  /** Stands in for the build's scope id; compileStyle writes it verbatim. */
+  const SCOPE = "data-v-formfield";
+
+  // Through fileURLToPath and not `new URL(".", import.meta.url)`: under the
+  // jsdom environment the global URL resolves against the document's own base,
+  // so a relative step off this module lands on http://localhost:3000.
+  const HERE = dirname(fileURLToPath(import.meta.url));
+  const CLIENT_SRC = resolve(HERE, "../../..");
+  const CLIENT_ROOT = resolve(CLIENT_SRC, "..");
+
+  /**
+   * The shared sass layer vite puts in front of every stylesheet it compiles.
+   * Read from the config rather than copied, so a rename there fails loudly
+   * here instead of leaving this test compiling a different stylesheet.
+   */
+  const sharedLayer = (): string => {
+    const config = readFileSync(join(CLIENT_ROOT, "vite.config.ts"), "utf8");
+    const injected = /additionalData:\s*`([^`]*)`/.exec(config);
+    if (!injected)
+      throw new Error(
+        "vite.config.ts no longer injects a shared sass layer through additionalData",
+      );
+    return injected[1];
+  };
+
+  const compileSheet = (): string => {
+    const filename = join(HERE, "FormField.vue");
+    const { descriptor } = parseSfc(readFileSync(filename, "utf8"), {
+      filename,
+    });
+    const style = descriptor.styles[0];
+    const result = compileStyle({
+      source: style.content,
+      filename,
+      id: SCOPE,
+      scoped: true,
+      preprocessLang: "sass",
+      preprocessOptions: {
+        // compiler-sfc asks for the indented syntax the legacy way
+        // (`indentedSyntax`), which the modern sass API ignores.
+        syntax: "indented",
+        additionalData: sharedLayer(),
+        // The layer reaches its modules through the `@` alias, which is vite's
+        // and means nothing to sass on its own.
+        importers: [
+          {
+            findFileUrl: (url: string) =>
+              url.startsWith("@/")
+                ? pathToFileURL(join(CLIENT_SRC, url.slice(2)))
+                : null,
+          },
+        ],
+      },
+    });
+    if (result.errors.length) throw result.errors[0];
+    return result.code;
+  };
+
+  /** Every selector in the compiled sheet that stretches a control. */
+  const stretchingSelectors = (): string[] =>
+    [...compileSheet().matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((rule) => /(^|;)\s*width:\s*100%\s*(;|$)/.test(rule[2]))
+      .flatMap((rule) => rule[1].split(","))
+      .map((selector) => selector.trim())
+      .filter(Boolean);
+
+  /** A row as a caller writes it, in the document so ancestors can match. */
+  const renderRow = (markup: string): HTMLElement => {
+    const row = document.createElement("div");
+    row.className = "form-field-row";
+    row.setAttribute(SCOPE, "");
+    row.innerHTML = markup;
+    document.body.appendChild(row);
+    return row;
+  };
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("leaves a checkbox and a radio out of the stretched controls", () => {
+    const row = renderRow(
+      '<label class="checkbox-label"><input type="checkbox" /> Комментарии включены</label>' +
+        '<label><input type="radio" /> Анонимный</label>',
+    );
+    const selectors = stretchingSelectors();
+
+    for (const option of row.querySelectorAll("input"))
+      for (const selector of selectors)
+        expect(
+          option.matches(selector),
+          `${option.type} matches ${selector}`,
+        ).toBe(false);
+  });
+
+  it("still stretches the fields the reader types into", () => {
+    // Without this the rule could be deleted outright and the case above would
+    // read as satisfied.
+    const row = renderRow(
+      "<input type='text' /><textarea></textarea><select></select>",
+    );
+    const selectors = stretchingSelectors();
+
+    const controls = row.querySelectorAll("input, textarea, select");
+    expect(controls).toHaveLength(3);
+    for (const control of controls)
+      expect(
+        selectors.some((selector) => control.matches(selector)),
+        `${control.tagName} matches nothing that stretches it`,
+      ).toBe(true);
   });
 });

@@ -8,7 +8,6 @@ import type {
   PagingQuery,
   Comment,
   Message,
-  QuoteSource,
   User,
 } from "@/shared/api/models/common";
 import type {
@@ -21,7 +20,8 @@ import type {
   GameUser,
   CreateGameInput,
   UpdateGameInput,
-  AttributeSchema,
+  GameAttributeSchema,
+  ReplaceGameAttributeSchemaRequest,
   Tag,
   Character,
   CharacterInput,
@@ -34,6 +34,8 @@ import type {
   PostReview,
   FirstUnreadPostResult,
   FirstUnreadCommentResult,
+  FirstUnreadRoomPostResult,
+  RoomPostsFilter,
   CreateRoomInput,
   PostPendencyInput,
   CreatePostInput,
@@ -52,6 +54,27 @@ import { RENDER_AUDIENCE } from "@/shared/api/audience";
 
 /** Request options that put a read past both caches. */
 const FRESH = { headers: { "Cache-Control": "no-cache" } };
+
+/**
+ * The refusal a caller takes over because its own screen carries it.
+ *
+ * A screen that answers a failure where the reader is looking — the strip in
+ * place of a list, the card in place of a sheet, the line under a form — is the
+ * one carrier of that failure, and the response interceptor has to stay quiet
+ * or the same sentence stands in two places at once. The methods below pass
+ * this through untouched; every call that leaves it out is unchanged, because
+ * the client then sees nothing and the interceptor speaks as it always did.
+ *
+ * Declared here rather than imported: `shared/api` keeps its own copy of the
+ * type to itself, and the client reads the two fields off the request by name,
+ * so a structural twin carries them just as well.
+ */
+type RefusalFlags = {
+  /** The screen shows a 403 and a 5xx itself. */
+  ownsRefusal?: boolean;
+  /** The screen shows a 429 itself, the wait included. */
+  ownsRateLimit?: boolean;
+};
 
 /**
  * Search params for games API
@@ -151,8 +174,11 @@ export interface GamesSearchParams {
 class GameApi {
   /**
    * Unified search method for games with full filter support
+   *
+   * @param options Set by a caller whose screen shows the failure itself: the
+   * games table puts it in a strip where the rows would be.
    */
-  public searchGames(params: GamesSearchParams = {}) {
+  public searchGames(params: GamesSearchParams = {}, options?: RefusalFlags) {
     const queryParams: Record<
       string,
       string | number | boolean | string[] | number[] | undefined
@@ -209,7 +235,12 @@ class GameApi {
       queryParams.skip = (params.number - 1) * pageSize;
     }
 
-    return Api.get<ListEnvelope<Game>>("games", queryParams);
+    return Api.get<ListEnvelope<Game>>(
+      "games",
+      queryParams,
+      undefined,
+      options,
+    );
   }
 
   /**
@@ -327,18 +358,37 @@ class GameApi {
    * Display audience is what separates it from getCharacterForEdit below:
    * BbCode attribute values arrive as server-rendered HTML in valueBbText, so
    * the page binds them through ContentText and never renders raw markup.
+   *
+   * @param options Set by the sheet page, which draws a failed read as a card
+   * in place of the character and needs no plate over it.
    */
-  public getCharacter(characterId: string) {
-    return Api.get<Envelope<Character>>(`characters/${characterId}`);
+  public getCharacter(characterId: string, options?: RefusalFlags) {
+    return Api.get<Envelope<Character>>(
+      `characters/${characterId}`,
+      undefined,
+      undefined,
+      options,
+    );
   }
 
   public getRooms(gameId: string) {
     return Api.get<ListEnvelope<Room>>(`games/${gameId}/rooms`);
   }
 
-  public getPosts(roomId: string, paging?: PagingQuery) {
+  /**
+   * One page of a room. The filter travels under the names the API takes;
+   * repeated values (authors, characters) go out as the parameter repeated.
+   */
+  public getPosts(
+    roomId: string,
+    paging?: PagingQuery,
+    filter?: RoomPostsFilter,
+  ) {
     // Convert page number to skip/take for backend
-    const queryParams: Record<string, number | undefined> = {};
+    const queryParams: Record<
+      string,
+      string | number | boolean | string[] | undefined
+    > = { ...filter };
     const pageSize = paging?.take ?? 20;
     queryParams.take = pageSize;
 
@@ -356,8 +406,13 @@ class GameApi {
    * answer. It was typed as a bare Post while the wire carried
    * `{ resource: ... }`, which nothing noticed while nobody read the body.
    */
-  public getPost(postId: string) {
-    return Api.get<Envelope<Post>>(`posts/${postId}`);
+  public getPost(postId: string, options?: RefusalFlags) {
+    return Api.get<Envelope<Post>>(
+      `posts/${postId}`,
+      undefined,
+      undefined,
+      options,
+    );
   }
 
   /**
@@ -373,18 +428,6 @@ class GameApi {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
-  }
-
-  /**
-   * Fetch the markup of a quotation of a game post.
-   *
-   * The server composes the whole tag, author included, already filtered for
-   * whoever is asking. The client does not build one out of the rendered page:
-   * that conversion is lossy, and the source of somebody else's message is not
-   * something the browser holds.
-   */
-  public getPostQuote(postId: string) {
-    return Api.get<Envelope<QuoteSource>>(`posts/${postId}/quote`);
   }
 
   /**
@@ -410,8 +453,8 @@ class GameApi {
   }
 
   /** Soft-delete a post (author or moderator+; PostIntention.Delete). */
-  public deletePost(postId: string) {
-    return Api.delete(`posts/${postId}`);
+  public deletePost(postId: string, options?: RefusalFlags) {
+    return Api.delete(`posts/${postId}`, undefined, options);
   }
 
   public createPostReview(
@@ -471,8 +514,16 @@ class GameApi {
   }
 
   /** Soft-delete a review (author any time, or senior moderator+). */
-  public deletePostReview(postId: string, reviewId: string) {
-    return Api.delete(`posts/${postId}/reviews/${reviewId}`);
+  public deletePostReview(
+    postId: string,
+    reviewId: string,
+    options?: RefusalFlags,
+  ) {
+    return Api.delete(
+      `posts/${postId}/reviews/${reviewId}`,
+      undefined,
+      options,
+    );
   }
 
   // Game comments
@@ -491,8 +542,8 @@ class GameApi {
     return Api.patch<Envelope<Comment>>(`games/comments/${id}`, comment);
   }
 
-  public deleteGameComment(id: string) {
-    return Api.delete(`games/comments/${id}`);
+  public deleteGameComment(id: string, options?: RefusalFlags) {
+    return Api.delete(`games/comments/${id}`, undefined, options);
   }
 
   /**
@@ -505,18 +556,6 @@ class GameApi {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
-  }
-
-  /**
-   * Fetch the markup of a quotation of a game comment.
-   *
-   * The server composes the whole tag, author included, already filtered for
-   * whoever is asking. The client does not build one out of the rendered page:
-   * that conversion is lossy, and the source of somebody else's message is not
-   * something the browser holds.
-   */
-  public getGameCommentQuote(id: string) {
-    return Api.get<Envelope<QuoteSource>>(`games/comments/${id}/quote`);
   }
 
   public likeGameComment(id: string) {
@@ -547,6 +586,50 @@ class GameApi {
     return Api.post<Envelope<GameReview>>(`games/${gameId}/reviews`, review);
   }
 
+  /**
+   * Fetch one game review's source for the editor, the way the post review
+   * editor asks for its own (getPostReviewForEdit): the listing carries the
+   * display rendering, and the AuthorEdit audience is the author's view of
+   * what they wrote.
+   */
+  public getGameReviewForEdit(gameId: string, reviewId: string) {
+    return Api.get<Envelope<GameReview>>(
+      `games/${gameId}/reviews/${reviewId}`,
+      undefined,
+      RENDER_AUDIENCE.AuthorEdit,
+    );
+  }
+
+  /**
+   * Edit a game review (PATCH v1/games/{id}/reviews/{reviewId}). The backend
+   * gates it to the author inside 24 hours of publication, an admin exempt
+   * from the window on their own review (GameReviewService); the card mirrors
+   * both halves on the pencil. An omitted text keeps the stored one.
+   */
+  public updateGameReview(
+    gameId: string,
+    reviewId: string,
+    patch: { text?: string },
+  ) {
+    return Api.patch<Envelope<GameReview>>(
+      `games/${gameId}/reviews/${reviewId}`,
+      patch,
+    );
+  }
+
+  /** Soft-delete a game review (author any time, or senior moderator+). */
+  public deleteGameReview(
+    gameId: string,
+    reviewId: string,
+    options?: RefusalFlags,
+  ) {
+    return Api.delete(
+      `games/${gameId}/reviews/${reviewId}`,
+      undefined,
+      options,
+    );
+  }
+
   // Game users
   public getUsers(gameId: string) {
     return Api.get<ListEnvelope<GameUser>>(`games/${gameId}/users`);
@@ -558,10 +641,6 @@ class GameApi {
 
   public unsubscribe(id: string) {
     return Api.delete(`games/${id}/readers`);
-  }
-
-  public getSchemas() {
-    return Api.get<ListEnvelope<AttributeSchema>>("schemas");
   }
 
   /**
@@ -581,13 +660,26 @@ class GameApi {
     );
   }
 
-  public createSchema(schema: AttributeSchema) {
-    // The create endpoint wraps the payload in a single-resource envelope
-    return Api.post<Envelope<AttributeSchema>>("schemas", schema);
-  }
-
-  public updateSchema(id: string, schema: Partial<AttributeSchema>) {
-    return Api.patch<Envelope<AttributeSchema>>(`schemas/${id}`, schema);
+  /**
+   * Replace the character sheet of a game.
+   *
+   * The whole set every time, and the version the sheet was read at: the save
+   * drops the values of every specification it leaves out, so a sheet somebody
+   * else has changed in the meantime is refused rather than overwritten.
+   *
+   * @param options Set by the data-loss confirmation, which prints a refused
+   * save in itself.
+   */
+  public replaceAttributeSchema(
+    gameId: string,
+    schema: ReplaceGameAttributeSchemaRequest,
+    options?: RefusalFlags,
+  ) {
+    return Api.put<Envelope<GameAttributeSchema>>(
+      `games/${gameId}/attribute-schema`,
+      schema,
+      options,
+    );
   }
 
   public createGame(game: CreateGameInput) {
@@ -595,18 +687,36 @@ class GameApi {
     return Api.post<Envelope<Game>>("games", game);
   }
 
-  public deleteGame(id: string) {
-    return Api.delete(`games/${id}`);
+  public deleteGame(id: string, options?: RefusalFlags) {
+    return Api.delete(`games/${id}`, undefined, options);
   }
 
-  public createCharacter(id: string, character: CharacterInput) {
-    return Api.post<Envelope<Character>>(`games/${id}/characters`, character);
+  /**
+   * @param options Set by the sheet form, which answers a refused save in the
+   * line it keeps under the fields.
+   */
+  public createCharacter(
+    id: string,
+    character: CharacterInput,
+    options?: RefusalFlags,
+  ) {
+    return Api.post<Envelope<Character>>(
+      `games/${id}/characters`,
+      character,
+      options,
+    );
   }
 
-  public updateCharacter(characterId: string, character: CharacterInput) {
+  /** @param options As in createCharacter — the same form sends both. */
+  public updateCharacter(
+    characterId: string,
+    character: CharacterInput,
+    options?: RefusalFlags,
+  ) {
     return Api.patch<Envelope<Character>>(
       `characters/${characterId}`,
       character,
+      options,
     );
   }
 
@@ -637,15 +747,18 @@ class GameApi {
   public changeCharacterStatus(
     characterId: string,
     transition: CharacterStatusTransition,
+    options?: RefusalFlags,
   ) {
-    return Api.post<Envelope<Character>>(`characters/${characterId}/status`, {
-      transition,
-    });
+    return Api.post<Envelope<Character>>(
+      `characters/${characterId}/status`,
+      { transition },
+      options,
+    );
   }
 
   /** Soft-delete a character (master or owner). */
-  public deleteCharacter(characterId: string) {
-    return Api.delete(`characters/${characterId}`);
+  public deleteCharacter(characterId: string, options?: RefusalFlags) {
+    return Api.delete(`characters/${characterId}`, undefined, options);
   }
 
   // Invitations
@@ -681,6 +794,20 @@ class GameApi {
   public getFirstUnreadPost(gameId: string) {
     return Api.get<Envelope<FirstUnreadPostResult>>(
       `games/${gameId}/posts/first-unread`,
+    );
+  }
+
+  /**
+   * Where one room opens when no page is named, counted at the page size the
+   * room is listed at. The caller falls back to the first page on any failure,
+   * so it takes the refusal over and no plate is raised for it.
+   */
+  public getFirstUnreadRoomPost(roomId: string, take: number) {
+    return Api.get<Envelope<FirstUnreadRoomPostResult>>(
+      `rooms/${roomId}/posts/first-unread`,
+      { take },
+      undefined,
+      { ownsRefusal: true },
     );
   }
 
@@ -742,8 +869,8 @@ class GameApi {
     return this.notepadOf(gameId).update(entryId, input);
   }
 
-  public deleteNote(gameId: string, entryId: string) {
-    return this.notepadOf(gameId).remove(entryId);
+  public deleteNote(gameId: string, entryId: string, options?: RefusalFlags) {
+    return this.notepadOf(gameId).remove(entryId, options);
   }
 
   // === The two notepads of a character (CharacterController) ===
@@ -781,8 +908,12 @@ class GameApi {
     return this.characterNotepadOf(characterId).update(entryId, input);
   }
 
-  public deleteCharacterNote(characterId: string, entryId: string) {
-    return this.characterNotepadOf(characterId).remove(entryId);
+  public deleteCharacterNote(
+    characterId: string,
+    entryId: string,
+    options?: RefusalFlags,
+  ) {
+    return this.characterNotepadOf(characterId).remove(entryId, options);
   }
 
   public getCharacterMasterNotepad(characterId: string) {
@@ -804,8 +935,12 @@ class GameApi {
     return this.characterMasterNotepadOf(characterId).update(entryId, input);
   }
 
-  public deleteCharacterMasterNote(characterId: string, entryId: string) {
-    return this.characterMasterNotepadOf(characterId).remove(entryId);
+  public deleteCharacterMasterNote(
+    characterId: string,
+    entryId: string,
+    options?: RefusalFlags,
+  ) {
+    return this.characterMasterNotepadOf(characterId).remove(entryId, options);
   }
 
   // === Game blacklist ===
@@ -828,12 +963,19 @@ class GameApi {
     return Api.post<Envelope<Room>>(`games/${gameId}/rooms`, room);
   }
 
-  public updateRoom(id: string, room: Partial<Room>) {
+  /**
+   * A partial PATCH of a room. previousRoomId moves it: right after that room
+   * of the game, or first when it is null; left out, the order stays.
+   */
+  public updateRoom(
+    id: string,
+    room: Partial<Room> & { previousRoomId?: string | null },
+  ) {
     return Api.patch<Envelope<Room>>(`rooms/${id}`, room);
   }
 
-  public deleteRoom(id: string) {
-    return Api.delete(`rooms/${id}`);
+  public deleteRoom(id: string, options?: RefusalFlags) {
+    return Api.delete(`rooms/${id}`, undefined, options);
   }
 
   /**
@@ -853,8 +995,8 @@ class GameApi {
     return Api.post<Envelope<RoomAccess>>(`rooms/${roomId}/accesses`, access);
   }
 
-  public deleteRoomAccess(accessId: string) {
-    return Api.delete(`rooms/accesses/${accessId}`);
+  public deleteRoomAccess(accessId: string, options?: RefusalFlags) {
+    return Api.delete(`rooms/accesses/${accessId}`, undefined, options);
   }
 
   // === Post pendencies (turn-tracking) ===
@@ -872,8 +1014,16 @@ class GameApi {
 
   // === Game users (Master-only removal) ===
 
-  public removeAssistant(gameId: string, username: string) {
-    return Api.delete(`games/${gameId}/users/assistants/${username}`);
+  public removeAssistant(
+    gameId: string,
+    username: string,
+    options?: RefusalFlags,
+  ) {
+    return Api.delete(
+      `games/${gameId}/users/assistants/${username}`,
+      undefined,
+      options,
+    );
   }
 
   // === Game mutations ===
@@ -882,8 +1032,16 @@ class GameApi {
     return Api.patch<Envelope<Game>>(`games/${id}/details`, patch);
   }
 
-  public transitionStatus(id: string, transition: GameStatusTransition) {
-    return Api.post<Envelope<Game>>(`games/${id}/status`, { transition });
+  public transitionStatus(
+    id: string,
+    transition: GameStatusTransition,
+    options?: RefusalFlags,
+  ) {
+    return Api.post<Envelope<Game>>(
+      `games/${id}/status`,
+      { transition },
+      options,
+    );
   }
 
   /**
@@ -894,14 +1052,21 @@ class GameApi {
   public changePremoderation(
     id: string,
     transition: GamePremoderationTransition,
+    options?: RefusalFlags,
   ) {
-    return Api.post<Envelope<Game>>(`games/${id}/premoderation`, {
-      transition,
-    });
+    return Api.post<Envelope<Game>>(
+      `games/${id}/premoderation`,
+      { transition },
+      options,
+    );
   }
 
-  public resetRecruitment(id: string) {
-    return Api.post<Envelope<Game>>(`games/${id}/reset-recruitment-date`);
+  public resetRecruitment(id: string, options?: RefusalFlags) {
+    return Api.post<Envelope<Game>>(
+      `games/${id}/reset-recruitment-date`,
+      undefined,
+      options,
+    );
   }
 }
 

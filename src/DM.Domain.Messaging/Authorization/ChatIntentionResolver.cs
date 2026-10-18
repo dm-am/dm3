@@ -33,6 +33,19 @@ internal class ChatIntentionResolver : IIntentionResolver<ChatIntention, Chat>
                 target.Type == ChatType.Group &&
                 (target.Participants?.Any(p => p.UserId == user.UserId) ?? false),
 
+            // A participant leaves a group. A direct chat has nobody to stay in it
+            // after one of the two is gone, so it is not left.
+            ChatIntention.LeaveChat =>
+                target.Type == ChatType.Group &&
+                (target.Participants?.Any(p => p.UserId == user.UserId) ?? false),
+
+            // A participant clears his own view of a direct or group chat. The
+            // global chat and a game room chat have no participant rows to keep
+            // the mark on.
+            ChatIntention.ClearHistory =>
+                target.Type is ChatType.Direct or ChatType.Group &&
+                (target.Participants?.Any(p => p.UserId == user.UserId) ?? false),
+
             _ => false
         };
 }

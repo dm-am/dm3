@@ -70,10 +70,21 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
   };
 
   // The three mutators return the problem document instead of swallowing it.
-  // They used to return void, so a rejected subscribe — already subscribed,
-  // blacklisted by the author — was indistinguishable from a successful one and
-  // the caller announced "Вы подписались" either way. The list is only refetched
-  // when something actually changed.
+  // They used to return void, so a rejected subscribe (already subscribed,
+  // blacklisted by the author) was indistinguishable from a successful one, and
+  // the caller reported it as done either way. A refusal now stops the caller
+  // before it reports anything, and the list is only refetched when something
+  // actually changed.
+  //
+  // That refetch is forced, and the argument is not decoration. The list is read
+  // through useApiList, which keeps it fresh for a minute, so an unforced
+  // fetch() right after a mutation returns at the freshness check without
+  // asking the server: the row this call had just deleted stayed in the list,
+  // the subscribe button went on reading "Подписан", and the next click sent
+  // the id of a subscription the server no longer had — a refusal for an
+  // unsubscribe that had in fact gone through. The minute of caching is there
+  // for readers; a caller that has just changed the data on the server is not
+  // one of them.
   const subscribe = async (
     targetType: SubscriptionTargetType,
     targetId: string,
@@ -85,7 +96,7 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
       settings,
     });
     if (error) return error;
-    await all.fetch();
+    await all.fetch(true);
     return null;
   };
 
@@ -94,7 +105,7 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
   ): Promise<GeneralError | null> => {
     const { error } = await subscriptionApi.unsubscribe(subscriptionId);
     if (error) return error;
-    await all.fetch();
+    await all.fetch(true);
     return null;
   };
 
@@ -106,7 +117,7 @@ export const useSubscriptionsStore = defineStore("subscriptions", () => {
       settings,
     });
     if (error) return error;
-    await all.fetch();
+    await all.fetch(true);
     return null;
   };
 

@@ -11,8 +11,17 @@ namespace DM.Web.API.Middleware;
 internal static class ExceptionProblemDetailsFactoryExtensions
 {
     public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
-        HttpException httpException, HttpContext httpContext) =>
-        factory.CreateProblemDetails(httpContext, (int)httpException.StatusCode, httpException.Message);
+        HttpException httpException, HttpContext httpContext)
+    {
+        var problem = factory.CreateProblemDetails(
+            httpContext, (int)httpException.StatusCode, httpException.Message);
+        foreach (var (key, value) in httpException.Extensions)
+        {
+            problem.Extensions[key] = value;
+        }
+
+        return problem;
+    }
 
     /// <summary>
     /// A refusal says only that it refused.
@@ -66,8 +75,21 @@ internal static class ExceptionProblemDetailsFactoryExtensions
     /// gets a constant title and the correlation token; the message itself is
     /// already written to the log at LogCritical.
     /// </summary>
+    /// <remarks>
+    /// The title is the sentence the reader sees: forms relay it into their own
+    /// strip and the response interceptor raises it as a toast. So it is copy
+    /// and not a label, one sentence with no period, and the client holds the
+    /// same words for the 5xx this middleware never sees, because an edge that
+    /// refuses a request answers with no document at all. The two copies are
+    /// held equal by generalRefusal.spec.ts on the client side.
+    ///
+    /// No call site reads the detail. It carries the token support asks for and
+    /// no longer opens by repeating the title above it: one event said twice in
+    /// one document is where a second wording of it starts.
+    /// </remarks>
     public static ProblemDetails CreateFrom(this ProblemDetailsFactory factory,
         Exception exception, HttpContext httpContext, Guid correlationId) =>
-        factory.CreateProblemDetails(httpContext, StatusCodes.Status500InternalServerError, "Ошибка сервера",
-            detail: $"Ошибка сервера. Обратитесь в поддержку и назовите этот токен: {correlationId}");
+        factory.CreateProblemDetails(httpContext, StatusCodes.Status500InternalServerError,
+            "Ошибка сервера",
+            detail: $"Обратитесь в поддержку и назовите этот токен: {correlationId}");
 }

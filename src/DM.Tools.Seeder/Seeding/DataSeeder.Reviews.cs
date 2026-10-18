@@ -397,7 +397,6 @@ internal sealed partial class DataSeeder
                 };
                 _dbContext.Set<Character>().Add(longestChar);
                 AddLegacyCharacterAttributes(longestChar.CharacterId,
-                    race: "Человек", @class: "Паладин",
                     appearance: "Высокий светловолосый мужчина в сияющих доспехах.");
                 result.CharactersCreated++;
 
@@ -589,7 +588,6 @@ internal sealed partial class DataSeeder
                     };
                     _dbContext.Set<Character>().Add(chuckChar);
                     AddLegacyCharacterAttributes(chuckChar.CharacterId,
-                        race: "Человек", @class: "Варвар",
                         appearance: "Коренастый мужчина с обветренным лицом и мощными руками. На поясе всегда висит мешочек с грейпфрутами.",
                         temper: "Буйный, но добродушный. Впадает в ярость при виде несправедливости. И при виде апельсинов.",
                         story: "Бывший фермер из долины Золотых Рощ, где выращивают лучшие грейпфруты континента. Ушел в приключенцы после того, как орки сожгли его плантацию.",

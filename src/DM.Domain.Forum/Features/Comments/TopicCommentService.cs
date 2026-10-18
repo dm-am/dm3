@@ -6,7 +6,6 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Topics;
-using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Content;
@@ -33,7 +32,7 @@ internal class TopicCommentService : ITopicCommentService
     private readonly ITopicCommentRepository _repository;
     private readonly IUnreadCountersRepository _countersRepository;
     private readonly IEventProducer _invokedEventProducer;
-    private readonly IUserBlacklistChecker _userBlacklistChecker;
+    private readonly IBbTagNameCase _tagNames;
 
     public TopicCommentService(
         IValidator<CreateComment> createValidator,
@@ -46,7 +45,7 @@ internal class TopicCommentService : ITopicCommentService
         ITopicCommentRepository repository,
         IUnreadCountersRepository countersRepository,
         IEventProducer invokedEventProducer,
-        IUserBlacklistChecker userBlacklistChecker)
+        IBbTagNameCase tagNames)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -58,7 +57,7 @@ internal class TopicCommentService : ITopicCommentService
         _repository = repository;
         _countersRepository = countersRepository;
         _invokedEventProducer = invokedEventProducer;
-        _userBlacklistChecker = userBlacklistChecker;
+        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
@@ -67,14 +66,15 @@ internal class TopicCommentService : ITopicCommentService
         await _createValidator.ValidateAndThrowAsync(createComment);
 
         var topic = await _topicService.GetAsync(createComment.EntityId);
+        // MayCreate's question, so the form the page offers and this refusal
+        // cannot part.
         _intentionManager.ThrowIfForbidden(TopicIntention.CreateComment, topic);
 
-        // Check if topic author has blocked the current user
+        // A topic is a public place: the personal blacklist of whoever opened it
+        // does not close it to anybody. Keeping somebody out of the forum is a
+        // ban, and the gate above asks it; the author's list only hides the
+        // blocked person's comments from the author (HideComments).
         var currentUser = _identityProvider.Current.User;
-        if (topic.Author != null && await _userBlacklistChecker.IsBlockedAsync(topic.Author.UserId, currentUser.UserId))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Вы не можете комментировать этот топик");
-        }
 
         var createEntity = new CreateTopicCommentEntity
         {
@@ -82,7 +82,7 @@ internal class TopicCommentService : ITopicCommentService
             AuthorId = currentUser.UserId,
             // Strip [mod] authored by a non-moderator (it renders as a green
             // mod block on the Comment surface); Moderator+ may author it.
-            Text = ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role)
+            Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role), BbTagSet.WithModBlock)
         };
 
         var createdComment = await _repository.Create(createEntity);
@@ -91,6 +91,14 @@ internal class TopicCommentService : ITopicCommentService
 
         return createdComment;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The one gate CreateAsync is refused by: a closed topic and the ban are
+    /// both in it (TopicIntentionResolver.CreateComment).
+    /// </remarks>
+    public bool MayCreate(Topics.Topic topic) =>
+        _intentionManager.IsAllowed(TopicIntention.CreateComment, topic);
 
     /// <inheritdoc />
     public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid topicId, CommentsQuery query,
@@ -109,9 +117,28 @@ internal class TopicCommentService : ITopicCommentService
     /// <inheritdoc />
     public async Task<Comment> GetAsync(Guid commentId)
     {
-        return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
+        var comment = await FindAsync(commentId);
+
+        // The four discussions share one table and the row above is read by its
+        // id alone, so the discussion is asked here exactly as the listing asks it.
+        // A discussion that is not there to the reader - hidden, removed, or of
+        // another kind, which this route has nothing to check by - answers exactly
+        // as a comment that is not there: a different answer would tell a
+        // stranger that the id resolves, and to what.
+        await DiscussionRefusal.AsCommentNotFound(commentId, () => _topicService.GetAsync(comment.EntityId));
+
+        return comment;
     }
+
+    /// <summary>
+    /// The comment by its identifier, among the comments of topics only (the
+    /// repository narrows it: a lookup by id alone let this route edit a comment
+    /// of a game or a blog past that discussion's blacklist). The edit keeps to
+    /// this lookup: who may edit is CommentIntention.Edit's answer on the row.
+    /// </summary>
+    private async Task<Comment> FindAsync(Guid commentId) =>
+        await _repository.Get(commentId) ??
+        throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
 
     /// <inheritdoc />
     public async Task<FirstUnreadComment> GetFirstUnreadAsync(string boardAlias, int topicNumber,
@@ -146,7 +173,7 @@ internal class TopicCommentService : ITopicCommentService
     public async Task<Comment> UpdateAsync(UpdateComment updateComment)
     {
         await _updateValidator.ValidateAndThrowAsync(updateComment);
-        var comment = await GetAsync(updateComment.CommentId);
+        var comment = await FindAsync(updateComment.CommentId);
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
@@ -165,7 +192,7 @@ internal class TopicCommentService : ITopicCommentService
         if (!string.IsNullOrEmpty(text))
         {
             // Strip [mod] authored by a non-moderator before comparing/saving.
-            text = ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role);
+            text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role), BbTagSet.WithModBlock);
         }
         if (string.IsNullOrEmpty(text) || text == comment.Text)
         {
@@ -197,22 +224,27 @@ internal class TopicCommentService : ITopicCommentService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Comment)comment);
 
-        Guid? newLastCommentId = null;
-        if (comment.IsLastComment)
-        {
-            newLastCommentId = await _repository.GetNewestCommentIdExcept(comment.TopicId, commentId);
-        }
-
         var deleteComment = new DeleteTopicCommentEntity
         {
             CommentId = commentId,
             TopicId = comment.TopicId,
-            NewLastCommentId = newLastCommentId,
             DeletedByUserId = _identityProvider.Current.User.UserId,
             DeletedUtc = _dateTimeProvider.Now
         };
 
-        await _repository.Delete(deleteComment);
+        // The topic's last-comment pointer moves inside Delete, in the transaction
+        // that marks the comment.
+        var removed = await _repository.Delete(deleteComment);
+        if (!removed)
+        {
+            // Somebody else removed this comment between the read above and the
+            // write. The topic's unread counter and the event belong to the removal
+            // that happened, and repeating them here takes the counter down twice
+            // for one comment. The caller is answered the same either way: the
+            // comment is gone, which is what they asked for.
+            return;
+        }
+
         await _countersRepository.DecrementAsync(comment.EntityId, UnreadEntryType.Message, comment.CreatedUtc);
 
         await _invokedEventProducer.SendAsync(EventType.DeletedTopicComment, commentId);

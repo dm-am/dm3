@@ -5,12 +5,12 @@
 /**
  * A single reply of the global chat is addressed under the global chat.
  *
- * These seven requests used to go to `messages/{id}` — the endpoint of private
+ * These six requests used to go to `messages/{id}` — the endpoint of private
  * correspondence, which reads a message only for a participant of its chat.
  * The global chat has no participants, because the right to read it belongs to
- * everyone signed in, so all seven answered 404, including on the reader's own
- * line: editing, liking, deleting, quoting and following a link to a message
- * were dead in the chat.
+ * everyone signed in, so all six answered 404, including on the reader's own
+ * line: editing, liking, deleting and following a link to a message were dead
+ * in the chat.
  *
  * The URL is the whole of what is asserted here, because the URL was the whole
  * of the defect.
@@ -88,14 +88,6 @@ describe("globalChatApi single message operations", () => {
 
     expect(vi.mocked(Api.delete)).toHaveBeenCalledWith(
       `global-chat/messages/${messageId}/likes`,
-    );
-  });
-
-  it("asks for the markup of a quotation of a reply", async () => {
-    await globalChatApi.getMessageQuote(messageId);
-
-    expect(vi.mocked(Api.get)).toHaveBeenCalledWith(
-      `global-chat/messages/${messageId}/quote`,
     );
   });
 });

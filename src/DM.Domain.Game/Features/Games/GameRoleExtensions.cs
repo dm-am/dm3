@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Domain.Game.Features.Games;
 
@@ -37,7 +39,7 @@ public static class GameRoleExtensions
     {
         var roles = new List<GameRole>();
 
-        if (game.Master.UserId == userId)
+        if (game.Master?.UserId == userId)
         {
             roles.Add(GameRole.Master);
         }
@@ -118,19 +120,38 @@ public static class GameRoleExtensions
     /// Whether the game's owner put this user on its blacklist.
     /// </summary>
     /// <remarks>
-    /// The blacklist closes writing and leaves reading alone: the game is public
-    /// to everybody else, so hiding it from one person would promise a privacy it
-    /// does not have. Every refusal built on this predicate is therefore on a
-    /// write intention, and the storage filters that answer the game and room
-    /// lists do not consult the list at all.
+    /// The rule of the game's blacklist, written once. It closes two things and
+    /// nothing else: the game's discussion (a new comment and the rewrite of one's
+    /// own) and the application (a new one and the edit of one's own). Everything
+    /// else stays as it is for anybody: reading, subscribing, posting in the rooms,
+    /// the chat room, a review of the game, a rating of a post, a like. Who writes
+    /// in the rooms is decided by the rooms and the roster, and a review or a
+    /// rating is feedback a moderator answers for, not the master.
     ///
-    /// One spelling on purpose. The question was written out six times as an
-    /// inline Any over BlacklistedUsers, and a rule this short is exactly the kind
-    /// whose copies drift the moment one of them is edited.
+    /// The intention resolver asks this predicate for the two intentions it
+    /// closes (CreateComment, CreateCharacter), so an IsAllowed answer does not
+    /// lie; the services ask <see cref="ThrowIfBlacklisted" /> first, so the
+    /// refusal says why instead of the generic "not enough rights".
+    /// BlacklistRuleShould holds both the one spelling and the short list of
+    /// places that ask it.
     /// </remarks>
     public static bool IsBlacklisted(this Game game, Guid userId)
     {
         return game.BlacklistedUsers.Any(b => b.UserId == userId);
+    }
+
+    /// <summary>
+    /// Refuse the user an action the game's blacklist closes to them, in the
+    /// words that say so.
+    /// </summary>
+    /// <param name="game">Game the action writes into</param>
+    /// <param name="userId">The user acting on their own behalf</param>
+    public static void ThrowIfBlacklisted(this Game game, Guid userId)
+    {
+        if (game.IsBlacklisted(userId))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
+        }
     }
 
     /// <summary>

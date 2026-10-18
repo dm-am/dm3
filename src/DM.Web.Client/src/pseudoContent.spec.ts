@@ -37,20 +37,13 @@ const SKIP_DIRS = new Set(["node_modules", "dist", "coverage"]);
 const STYLE_FILES = [".vue", ".sass", ".scss", ".css"];
 
 /**
- * Pseudo content that stays, and what each one is for. The bullets are the
- * one place the rule is still broken: they become the " | " the design
- * language spells a separator with, which is a visible edit the owner has not
- * ruled on yet, and the day he does their two entries go with them.
+ * Pseudo content that stays, and what each one is for.
  */
 const ALLOWED: Record<string, string> = {
   "assets/styles/Reset.sass .expand-marker &::before":
     "the disclosure triangle, a drawing that disclosureMarker.spec.ts requires to live here and not in the markup",
   "shared/ui/MonthYearPicker/MonthYearPicker.vue .myp-trigger-section::before":
     "an invisible copy of the widest label, holding the width; what a reader sees and copies is the text node painted over it",
-  "pages/account/sections/AccountSecurityHistorySection.vue .event-device &::after":
-    "a bullet between two values of the security line, awaiting its replacement by a separator a reader can copy",
-  "pages/account/sections/AccountSecurityHistorySection.vue .event-ip &::after":
-    "the same bullet, one value further along the same line",
   "shared/ui/BBCodeEditor/BBCodeEditor.vue .wysiwyg-content :deep(.tiptap) p.is-editor-empty:first-child::before":
     "the editor placeholder, here for the same reason as the disclosure triangle: it must not reach a copy. A text node would be a node of the document being edited, so it would be typed over, selected and saved as content; and by the time there is anything to copy the hint is already gone",
 };

@@ -14,15 +14,18 @@ public interface IPublicationRepository
     // === READ ===
 
     /// <summary>
-    /// Count publications for a blog
+    /// Count publications for a blog: the published ones, the reader's own drafts,
+    /// and every draft when <paramref name="everyUnpublished" /> is set
     /// </summary>
-    Task<int> CountPublications(Guid blogId, Guid? rubricId, bool includeUnpublished, CancellationToken ct = default);
+    Task<int> CountPublications(Guid blogId, Guid? rubricId, Guid viewerId, bool everyUnpublished,
+        CancellationToken ct = default);
 
     /// <summary>
-    /// Get publications for a blog
+    /// Get publications for a blog: the published ones, the reader's own drafts,
+    /// and every draft when <paramref name="everyUnpublished" /> is set
     /// </summary>
-    Task<IEnumerable<Publication>> GetPublications(
-        Guid blogId, Guid? rubricId, bool includeUnpublished, PagingData paging, CancellationToken ct = default);
+    Task<IEnumerable<Publication>> GetPublications(Guid blogId, Guid? rubricId, Guid viewerId,
+        bool everyUnpublished, PagingData paging, CancellationToken ct = default);
 
     /// <summary>
     /// Get publication by ID
@@ -35,7 +38,11 @@ public interface IPublicationRepository
     /// profile widget never shows content the user hasn't released yet.
     /// Returns null when the user has no published publications at all.
     /// </summary>
-    Task<Publication?> GetBestUserPublication(Guid authorId, CancellationToken ct = default);
+    /// <param name="authorIds">
+    /// The author, or every removed account for the profile of "Аккаунт удален"
+    /// </param>
+    /// <param name="ct">Cancellation token</param>
+    Task<Publication?> GetBestUserPublication(IReadOnlyCollection<Guid> authorIds, CancellationToken ct = default);
 
     // === WRITE ===
 

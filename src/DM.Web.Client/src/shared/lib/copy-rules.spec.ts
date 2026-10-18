@@ -116,12 +116,13 @@ const TEMA = /(?<![А-я])[Тт]ем(?:а|ы|е|у|ой|ам|ах|ами)(?![А-
  *
  * The rule read "check the files whose path names the forum", which is a rule
  * about where the word was last caught rather than about the word. It left out
- * the dictionary of notification headings
- * (entities/notification/lib/notificationTitle.ts): the line a reader sees over
- * every forum notification sits in a file named after neither a topic nor a
- * forum, so "Новая тема на форуме" would have passed it. Six more files name the
- * entity from outside those directories -- the router, the home page, the news
- * block, the testimonials page, the profile and the rules.
+ * the dictionary of notification headings the client kept then: the line a
+ * reader sees over every forum notification sat in a file named after neither
+ * a topic nor a forum, so "Новая тема на форуме" would have passed it. The
+ * headings are the server's now (NotificationWording), and the client names no
+ * event. Six more files name the entity from outside those directories -- the
+ * router, the home page, the news block, the testimonials page, the profile and
+ * the rules.
  *
  * So the whole client is read, and the word is flagged where the forum stands
  * next to it. Next to it, and not in the same string: a .vue template is one
@@ -342,7 +343,7 @@ const RETIRED_COPY: { text: string; instead: string }[] = [
   {
     text: "вышлем ссылку для отслеживания обращения",
     instead:
-      "the number and the link are printed on the success card, nothing is mailed",
+      "the link to the ticket's page is printed on the success card, nothing is mailed",
   },
   {
     text: "мы ответим по нему",
@@ -395,6 +396,36 @@ const RETIRED_COPY: { text: string; instead: string }[] = [
     instead:
       '"тысячи участников" — "игрок" is a role inside a game, and the masters are not one',
   },
+  {
+    text: "удалить учетную запись в любое время через настройки профиля",
+    instead:
+      "the truth: no screen removes an account, a reader asks support and a senior moderator does it",
+  },
+  {
+    text: "в обезличенном виде",
+    instead:
+      "what actually happens to the content: it stays where it is and the author name stops being shown",
+  },
+  {
+    text: "хранится, пока существует аккаунт, и еще 1 год после его удаления",
+    instead:
+      "the truth: the row is kept, and the address stays reserved after the removal",
+  },
+  {
+    text: "хранится, пока существует аккаунт, и еще 3 года после его удаления",
+    instead:
+      "the truth: the row is kept, and the name stays reserved after the removal",
+  },
+  {
+    text: "автобан на 12 часов",
+    instead:
+      "the ban the site actually issues: the ordinary scope for 48 hours (WarningPolicy)",
+  },
+  {
+    text: "нельзя писать на форуме, в чате, в чужих играх",
+    instead:
+      "what the ordinary ban forbids (AUTHORIZATION.md): the global chat and the forum, and the discussion of other people's games and blogs — private chats and posts in rooms are not touched",
+  },
 ];
 
 /**
@@ -408,17 +439,18 @@ function probeOf(phrase: string): string {
 
 /**
  * The other half of the same edits. Dropping the support link out of the
- * hacking rule, splitting the news line back in two, or leaving a guest the
- * tracking link without the number it carries, brings no retired wording back,
- * so the scan above cannot see it. Each anchor is the shortest phrase that
- * carries the point, so re-wording around it is still free.
+ * hacking rule, splitting the news line back in two, or taking the address of
+ * a guest's ticket page out of the sentence that tells him where the answer
+ * appears brings no retired wording back, so the scan above cannot see it.
+ * Each anchor is the shortest phrase that carries the point, so re-wording
+ * around it is still free.
  */
 const REQUIRED_COPY: { file: string; what: string; pattern: RegExp }[] = [
   {
     file: "pages/rules/RulesPage.vue",
     what: "the hacking rule sends a vulnerability report to the support form",
     pattern:
-      /сначала согласуйте с администрацией через\s*<router-link to="\/support"\s*>\s*<strong>форму поддержки<\/strong>/,
+      /сначала согласуйте с администрацией через\s*<router-link :to="supportFor\('Bug'\)"\s*>\s*<strong>форму поддержки<\/strong>/,
   },
   {
     file: "pages/home/RecentNews.vue",
@@ -427,8 +459,15 @@ const REQUIRED_COPY: { file: string; what: string; pattern: RegExp }[] = [
   },
   {
     file: "features/support-ticket/ui/SupportTicketForm.vue",
-    what: "a guest reads the ticket number itself, not only a link holding it",
-    pattern: /Номер обращения:\s*<code>\{\{ trackingToken \}\}/,
+    what: "a guest who has sent a ticket reads the address of its page as a link in the sentence that says the answer appears there",
+    pattern:
+      /Ответ появится на странице обращения: <router-link[^>]*'support-track'[^>]*>\{\{ trackingAddress \}\}<\/router-link\s*>/,
+  },
+  {
+    file: "pages/support/TicketTrackPage.vue",
+    what: "a guest on his ticket's page reads its address as a link in the sentence that says the answer appears there",
+    pattern:
+      /Ответ появится на этой странице: <router-link[^>]*'support-track'[^>]*>\{\{ address \}\}<\/router-link\s*>/,
   },
 ];
 
@@ -452,13 +491,11 @@ function emDashCount(file: string, raw: string): number {
  * taste: every entry is either grammar or a separator between two values.
  */
 const EM_DASH_BUDGET: { file: string; count: number }[] = [
-  // A dictionary of BBCode tags: lemma, separator, gloss.
-  { file: "shared/ui/BBCodeEditor/BBCodeEditor.vue", count: 18 },
-  // Filter chips: the dash sits between the two ends of a range. The date
-  // ranges all draw through formatDateRangeForDisplay, so the separator is
-  // spelled once there; what is left in UsersFilter are the numeric ranges.
-  { file: "features/user-filter/ui/UsersFilter.vue", count: 4 },
-  { file: "shared/lib/filters/utils.ts", count: 1 },
+  // Filter chips: the dash sits between the two ends of a range. Both kinds
+  // of range draw through a helper in utils.ts — dates through one, numbers
+  // through the other — so the separator is spelled once for each and nowhere
+  // in the filters themselves.
+  { file: "shared/lib/filters/utils.ts", count: 2 },
   // Credits: a role, the omitted copula, the name that holds it.
   { file: "widgets/footer/Footer.vue", count: 4 },
   // Definitions in the legal pages and in the rules. Russian writes the
@@ -478,11 +515,12 @@ const EM_DASH_BUDGET: { file: string; count: number }[] = [
 ];
 
 /**
- * The sum of the budget: 18 glosses, 5 range separators, 4 credit lines,
- * 41 definitions and one invitation the owner released by name. Spelled out so the number stays a claim someone argued for
- * rather than whatever the tree happens to hold today.
+ * The sum of the budget: 2 range separators, 4 credit lines, 41 definitions
+ * and one invitation the owner released by name. Spelled out so the number
+ * stays a claim someone argued for rather than whatever the tree happens to
+ * hold today.
  */
-const EM_DASH_TOTAL = 69;
+const EM_DASH_TOTAL = 48;
 
 /**
  * What draws as a colour pictograph rather than as text.

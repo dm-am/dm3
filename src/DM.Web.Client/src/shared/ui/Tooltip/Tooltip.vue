@@ -6,58 +6,61 @@
     @mouseleave="handleMouseLeave"
     @focusin="handleFocusIn"
     @focusout="handleFocusOut"
-    @touchstart="handleTouchStart"
-    @keydown.esc="hide"
-    :aria-describedby="isVisible ? tooltipId : undefined"
+    @pointerup="handlePointerUp"
+    @click="handleClick"
+    @keydown.esc="close"
+    :aria-describedby="shown ? tooltipId : undefined"
     :tabindex="focusable ? 0 : undefined"
   >
     <slot />
   </span>
   <Teleport to="body">
     <Transition name="tooltip-fade">
-      <div
-        v-if="isVisible && !disabled && (text || hasContentSlot)"
-        ref="tooltipRef"
+      <TooltipBubble
+        v-if="shown"
+        ref="bubbleRef"
         :id="tooltipId"
-        role="tooltip"
-        class="tooltip"
-        :class="`tooltip--${position.placement}`"
-        :style="tooltipStyle"
+        :text="text"
+        :rich="hasContentSlot"
+        :anchor="triggerRect"
+        :placement="placement"
         @mouseenter="handleTooltipMouseEnter"
         @mouseleave="handleTooltipMouseLeave"
         @focusout="handleFocusOut"
       >
-        <span ref="contentRef" class="tooltip-text">
-          <slot name="content">{{ text }}</slot>
-        </span>
-        <span class="tooltip-arrow" :style="arrowStyle" />
-      </div>
+        <slot name="content">{{ text }}</slot>
+      </TooltipBubble>
     </Transition>
   </Teleport>
 </template>
 
 <script setup lang="ts">
+import { ref, computed, watch, onMounted, onUnmounted, useSlots } from "vue";
+import TooltipBubble from "./TooltipBubble.vue";
 import {
-  ref,
-  computed,
-  watch,
-  nextTick,
-  onMounted,
-  onUnmounted,
-  toRef,
-  useSlots,
-} from "vue";
-import { useTooltip } from "./useTooltip";
+  TAP_CLOSE_DELAY,
+  TAP_MAX_DURATION,
+  bubbleHasControls,
+  closesByItself,
+  disabledControlOf,
+  isCompatMouseEvent,
+  isKeyboardFocus,
+  isShortPress,
+  isTap,
+  isTouchEvent,
+  tapTargetOf,
+  trackInput,
+} from "./touchRule";
 import type { TooltipPlacement } from "./types";
 
 const slots = useSlots();
 const hasContentSlot = computed(() => !!slots.content);
 
-// Shows text/content on hover, keyboard focus, or touch tap (WCAG 1.4.13).
-// Trigger is only reachable by Tab when `focusable` is set (the caller's
-// element already provides its own focus target otherwise, e.g. a <button>).
-// Tab can continue into interactive tooltip content (links, buttons) without
-// closing it — see handleFocusOut below.
+// Shows text/content on hover, on focus from the keyboard, and on a tap by the
+// touch rule of touchRule.ts (WCAG 1.4.13). Trigger is only reachable by Tab
+// when `focusable` is set (the caller's element already provides its own
+// focus target otherwise, e.g. a <button>). Tab can continue into interactive
+// tooltip content (links, buttons) without closing it — see handleFocusOut.
 //
 // The tooltip describes its trigger and never names it: `aria-describedby`
 // lands on the wrapper span, and only while the tooltip is on screen. An
@@ -74,6 +77,11 @@ const props = withDefaults(
     /** Make the trigger span keyboard-focusable (tabindex="0"). Use when the
      * slotted content isn't itself a focusable element (e.g. plain text). */
     focusable?: boolean;
+    /** A tap on the button inside shows the tooltip after the button acts.
+     * Only for a tooltip that carries data (not the button's name) on a
+     * button that leaves the reader on the page: a tag in the picker, a like.
+     * Every other button and every link opens nothing on a tap. */
+    showOnTap?: boolean;
   }>(),
   {
     text: undefined,
@@ -81,6 +89,7 @@ const props = withDefaults(
     delay: 150,
     disabled: false,
     focusable: false,
+    showOnTap: false,
   },
 );
 
@@ -88,175 +97,110 @@ const props = withDefaults(
 const tooltipId = `tooltip-${Math.random().toString(36).slice(2, 9)}`;
 
 const triggerRef = ref<HTMLElement | null>(null);
-const tooltipRef = ref<HTMLElement | null>(null);
-const contentRef = ref<HTMLElement | null>(null);
-const shrunkWidth = ref<number | null>(null);
+const bubbleRef = ref<InstanceType<typeof TooltipBubble> | null>(null);
 
-const { isVisible, position, show, hide, updatePosition } = useTooltip(
-  triggerRef,
-  tooltipRef,
-  toRef(props, "placement"),
+/**
+ * What opened the bubble, which is also what closes it: the pointer that
+ * hovers leaves, the keyboard focus moves on, the tap is undone by a tap. One
+ * source per bubble, so that the focus a tap gives a trigger cannot hold open
+ * a bubble the tap's own rules have closed, and the focus leaving the trigger
+ * for a term inside the bubble cannot close a bubble the finger opened.
+ */
+type OpenedBy = "hover" | "focus" | "tap";
+const openedBy = ref<OpenedBy | null>(null);
+const isVisible = computed(() => openedBy.value !== null);
+const shown = computed(
+  () =>
+    isVisible.value &&
+    !props.disabled &&
+    !!(props.text || hasContentSlot.value),
 );
 
-// Solve shrinkwrap problem using canvas text measurement. Plain-text
-// tooltips only: rich `#content` popovers skip the shrink (see
-// measureAndShrink) and size themselves via CSS width/max-width.
-const MAX_TOOLTIP_WIDTH = 340;
-const measurePhase = ref<"measure" | "final">("measure");
+const triggerRect = (): DOMRect | null =>
+  triggerRef.value?.getBoundingClientRect() ?? null;
 
-// Singleton canvas for text measurement (performance optimization)
-let measureCanvas: HTMLCanvasElement | null = null;
-let measureCtx: CanvasRenderingContext2D | null = null;
+const bubbleElement = (): HTMLElement | null =>
+  bubbleRef.value?.element ?? null;
 
-// Measure text width using canvas (accurate, no layout needed)
-function measureTextWidth(text: string, font: string): number {
-  if (!measureCanvas) {
-    measureCanvas = document.createElement("canvas");
-    measureCtx = measureCanvas.getContext("2d");
-  }
-  if (!measureCtx) return 0;
-  measureCtx.font = font;
-  return measureCtx.measureText(text).width;
-}
-
-// Simulate word wrapping and find widest line (respects \n as forced line breaks)
-function getWidestLineWidth(
-  text: string,
-  font: string,
-  maxWidth: number,
-): number {
-  // Split by newlines first (white-space: pre-line preserves them)
-  const paragraphs = text.split(/\n/);
-  let widestWidth = 0;
-
-  for (const paragraph of paragraphs) {
-    if (!paragraph.trim()) continue;
-
-    // Simulate word wrapping within each paragraph
-    const words = paragraph.split(/(\s+)/);
-    let currentLine = "";
-
-    for (const word of words) {
-      const testLine = currentLine + word;
-      const testWidth = measureTextWidth(testLine, font);
-
-      if (testWidth > maxWidth && currentLine.length > 0) {
-        // Line would overflow, measure current line and start new one
-        const lineWidth = measureTextWidth(currentLine.trimEnd(), font);
-        widestWidth = Math.max(widestWidth, lineWidth);
-        currentLine = word.trimStart();
-      } else {
-        currentLine = testLine;
-      }
-    }
-
-    // Measure last line of paragraph
-    if (currentLine.length > 0) {
-      const lineWidth = measureTextWidth(currentLine.trimEnd(), font);
-      widestWidth = Math.max(widestWidth, lineWidth);
-    }
-  }
-
-  return widestWidth;
-}
-
-function measureAndShrink() {
-  if (!tooltipRef.value || !contentRef.value) return;
-
-  // Rich slot content (block layout, nested elements, grids) cannot be
-  // simulated by the canvas TEXT measurement: textContent glues all nodes
-  // into one pseudo-line, under-measures the real block layout and the
-  // resulting width clips the popover (eaten right padding, cut columns).
-  // Skip the shrink entirely — CSS `width: max-content` + `max-width: 340px`
-  // already size slot popovers from their content.
-  if (hasContentSlot.value) {
-    measurePhase.value = "final";
-    updatePosition();
-    return;
-  }
-
-  if (measurePhase.value === "measure") {
-    const text = contentRef.value.textContent || "";
-    if (!text.trim()) {
-      measurePhase.value = "final";
-      return;
-    }
-
-    // Get computed font, padding, and border
-    const style = getComputedStyle(tooltipRef.value);
-    const font = `${style.fontSize} ${style.fontFamily}`;
-    const paddingLeft = parseFloat(style.paddingLeft) || 0;
-    const paddingRight = parseFloat(style.paddingRight) || 0;
-    const borderLeft = parseFloat(style.borderLeftWidth) || 0;
-    const borderRight = parseFloat(style.borderRightWidth) || 0;
-    const horizontalExtra =
-      paddingLeft + paddingRight + borderLeft + borderRight;
-
-    // Max text width (content area)
-    const maxTextWidth = MAX_TOOLTIP_WIDTH - horizontalExtra;
-
-    // Check if text has explicit newlines or needs wrapping
-    const hasNewlines = text.includes("\n");
-    const naturalWidth = measureTextWidth(text.replace(/\n/g, " "), font);
-
-    let textWidth: number;
-    if (!hasNewlines && naturalWidth <= maxTextWidth) {
-      // Single line, fits without wrapping
-      textWidth = naturalWidth;
-    } else {
-      // Has newlines or needs wrapping - find widest line
-      textWidth = getWidestLineWidth(text, font, maxTextWidth);
-    }
-
-    // With box-sizing: border-box, width includes padding and border
-    shrunkWidth.value = Math.ceil(textWidth) + horizontalExtra;
-    measurePhase.value = "final";
-    nextTick(() => updatePosition());
-  }
-}
-
-// Simple hover state machine
 let showTimer: ReturnType<typeof setTimeout> | null = null;
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
+let tapTimer: ReturnType<typeof setTimeout> | null = null;
 
 function clearAllTimers() {
-  if (showTimer) {
-    clearTimeout(showTimer);
-    showTimer = null;
+  for (const timer of [showTimer, hideTimer, tapTimer]) {
+    if (timer) clearTimeout(timer);
   }
-  if (hideTimer) {
-    clearTimeout(hideTimer);
-    hideTimer = null;
+  showTimer = null;
+  hideTimer = null;
+  tapTimer = null;
+}
+
+function open(by: OpenedBy) {
+  clearAllTimers();
+  openedBy.value = by;
+  if (by === "tap") tapTimer = setTimeout(closeIfPlain, TAP_CLOSE_DELAY);
+}
+
+function close() {
+  clearAllTimers();
+  openedBy.value = null;
+}
+
+// A one-line bubble of plain words goes by itself. A longer one, or one with
+// something to press in it, waits for the finger.
+function closeIfPlain() {
+  tapTimer = null;
+  const bubble = bubbleElement();
+  if (!bubble || closesByItself(bubble, bubbleRef.value?.content ?? null)) {
+    close();
   }
 }
 
+function scheduleHide() {
+  if (showTimer) clearTimeout(showTimer);
+  if (hideTimer) clearTimeout(hideTimer);
+  showTimer = null;
+  hideTimer = setTimeout(close, props.delay);
+}
+
+// ---------------------------------------------------------------------------
+// Mouse. The mouse events a browser makes up after a tap are not hover.
+// ---------------------------------------------------------------------------
+
 function handleMouseEnter() {
-  if (props.disabled) return;
-  clearAllTimers();
-  showTimer = setTimeout(show, props.delay);
+  if (props.disabled || isCompatMouseEvent()) return;
+  if (hideTimer) clearTimeout(hideTimer);
+  hideTimer = null;
+  if (isVisible.value) return;
+  if (showTimer) clearTimeout(showTimer);
+  showTimer = setTimeout(() => open("hover"), props.delay);
 }
 
 function handleMouseLeave() {
-  clearAllTimers();
-  hideTimer = setTimeout(hide, props.delay);
+  if (isCompatMouseEvent()) return;
+  scheduleHide();
 }
 
 function handleTooltipMouseEnter() {
   // Cancel pending hide when entering tooltip
-  clearAllTimers();
+  if (isCompatMouseEvent()) return;
+  if (hideTimer) clearTimeout(hideTimer);
+  hideTimer = null;
 }
 
 function handleTooltipMouseLeave() {
   // Schedule hide when leaving tooltip
-  clearAllTimers();
-  hideTimer = setTimeout(hide, props.delay);
+  if (isCompatMouseEvent()) return;
+  scheduleHide();
 }
 
+// ---------------------------------------------------------------------------
 // Keyboard: show immediately on focus (no delay), hide when focus leaves
-function handleFocusIn() {
-  if (props.disabled) return;
-  clearAllTimers();
-  show();
+// ---------------------------------------------------------------------------
+
+function handleFocusIn(e: FocusEvent) {
+  if (props.disabled || !isKeyboardFocus(e.target)) return;
+  open("focus");
 }
 
 function handleFocusOut(e: FocusEvent) {
@@ -266,167 +210,97 @@ function handleFocusOut(e: FocusEvent) {
   // Keep tooltip open when focus moves into the tooltip itself, symmetric
   // to handleTooltipMouseEnter — lets Tab reach links inside tooltip content
   // (e.g. award popovers) instead of closing on the way there
-  if (next && tooltipRef.value?.contains(next)) return;
-  clearAllTimers();
-  hide();
+  if (next && bubbleElement()?.contains(next)) return;
+  // Only the keyboard's bubble goes with the focus. A tap on a term inside a
+  // bubble the finger opened takes the focus off the trigger (the term takes
+  // none), and that closed the bubble under the finger.
+  if (openedBy.value !== "focus") return;
+  close();
 }
 
-// Touch: show immediately, hide on touch outside
-function handleTouchStart() {
-  if (props.disabled) return;
-  clearAllTimers();
-  if (!isVisible.value) {
-    show();
-  }
+// ---------------------------------------------------------------------------
+// Touch, by the rule of touchRule.ts
+// ---------------------------------------------------------------------------
+
+// When the tap of a disabled control was taken from pointerup, so that a click
+// some browser may still send for it does not undo it.
+let tapTakenAt = Number.NEGATIVE_INFINITY;
+
+function toggleByTap() {
+  if (openedBy.value === "tap") close();
+  else open("tap");
 }
 
-function handleDocumentTouch(e: TouchEvent) {
-  if (!isVisible.value) return;
-  const target = e.target as Node;
-  if (
-    triggerRef.value?.contains(target) ||
-    tooltipRef.value?.contains(target)
-  ) {
+// A disabled control sends no click, and its tooltip is the one that says why
+// it is disabled. Its tap is read from the pointer: released where it went
+// down, and soon (the press was measured on the document a moment before).
+function handlePointerUp(e: PointerEvent) {
+  if (props.disabled || !triggerRef.value || !isTouchEvent(e)) return;
+  if (!disabledControlOf(e.target, triggerRef.value) || !isShortPress()) {
     return;
   }
-  hide();
+  tapTakenAt = e.timeStamp;
+  toggleByTap();
 }
 
-onMounted(() => {
-  document.addEventListener("touchstart", handleDocumentTouch, {
-    passive: true,
-  });
-});
-
-// Update position when tooltip becomes visible
-watch(isVisible, async (visible) => {
-  if (visible) {
-    // Reset to measurement phase
-    measurePhase.value = "measure";
-    shrunkWidth.value = null;
-    await nextTick();
-    measureAndShrink();
-  } else {
-    shrunkWidth.value = null;
-    measurePhase.value = "measure";
+function handleClick(e: MouseEvent) {
+  if (props.disabled || !isTap(e)) return;
+  if (e.timeStamp - tapTakenAt < TAP_MAX_DURATION) return;
+  switch (tapTargetOf(e.target)) {
+    case "link":
+      return;
+    case "control":
+      // The button has acted; its data follows, and a second tap on it acts
+      // again rather than hiding what it just showed.
+      if (props.showOnTap) open("tap");
+      return;
+    case "text":
+      toggleByTap();
   }
-});
+}
 
-// Re-measure when text changes while tooltip is visible
-watch(
-  () => props.text,
-  async () => {
-    if (isVisible.value) {
-      // Reset and re-measure
-      measurePhase.value = "measure";
-      shrunkWidth.value = null;
-      await nextTick();
-      measureAndShrink();
-    }
-  },
-);
+// While a bubble is up: a press anywhere else closes it, and so does a scroll
+// under a bubble the finger opened, which would otherwise ride along with its
+// trigger or stick to the edge of the window once the trigger has left it.
+function handleDocumentPointerDown(e: Event) {
+  const target = e.target as Node | null;
+  if (!target) return;
+  // The trigger's own tap decides for itself (handleClick).
+  if (triggerRef.value?.contains(target)) return;
+  const bubble = bubbleElement();
+  if (bubble?.contains(target)) {
+    // A bubble of plain words has nothing to reach: a finger on it wants it
+    // out of the way. One with a link or a term stays for them.
+    if (openedBy.value === "tap" && !bubbleHasControls(bubble)) close();
+    return;
+  }
+  close();
+}
+
+function handleScroll() {
+  if (openedBy.value === "tap") close();
+}
+
+function listen(on: boolean) {
+  const method = on ? "addEventListener" : "removeEventListener";
+  document[method]("pointerdown", handleDocumentPointerDown, true);
+  window[method]("scroll", handleScroll, true);
+}
+
+watch(isVisible, (visible) => listen(visible));
+
+onMounted(trackInput);
 
 // Cleanup
 onUnmounted(() => {
   clearAllTimers();
-  document.removeEventListener("touchstart", handleDocumentTouch);
-});
-
-const tooltipStyle = computed(() => ({
-  top: `${position.value.top}px`,
-  left: `${position.value.left}px`,
-  ...(shrunkWidth.value ? { width: `${shrunkWidth.value}px` } : {}),
-}));
-
-// Arrow offset style - adjusts arrow position when tooltip is clamped to viewport
-const arrowStyle = computed(() => {
-  const offset = position.value.arrowOffset;
-  if (!offset) return {};
-  // For top/bottom placement, offset moves arrow horizontally
-  // translateX is relative to the arrow's centered position (50%)
-  return { transform: `translateX(calc(-50% + ${offset}px))` };
+  listen(false);
 });
 </script>
 
 <style scoped lang="sass">
-@use "@/assets/styles/ZIndex" as *
-
+// The bubble's own look lives in TooltipBubble.vue.
 .tooltip-trigger
   // No styles - behaves as inline text
   display: inline
-
-.tooltip
-  position: fixed
-  z-index: $z-tooltip
-  box-sizing: border-box
-  width: max-content
-  max-width: 340px
-  padding: $small $medium
-  font-size: $secondary-font-size
-  line-height: 1.4
-  color: $tooltip-text
-  background-color: $tooltip-bg
-  border: 1px solid $tooltip-border
-  border-radius: $border-radius
-  box-shadow: 0 2px 8px $shadow-color
-  white-space: pre-line
-  // Allow hovering over tooltip content
-  pointer-events: auto
-
-// Must be inline for getClientRects() to return one rect per line
-.tooltip-text
-  display: inline
-
-  img
-    display: block
-    max-width: 100%
-    height: auto
-    border-radius: $tiny
-
-// Arrow - purely decorative, must not capture events
-.tooltip-arrow
-  position: absolute
-  width: 0
-  height: 0
-  border: 6px solid transparent
-  pointer-events: none  // Critical: don't block clicks
-
-.tooltip--top .tooltip-arrow
-  bottom: -10px
-  left: 50%
-  transform: translateX(-50%)
-  border-top-color: $tooltip-bg
-  border-bottom-width: 0
-
-.tooltip--bottom .tooltip-arrow
-  top: -10px
-  left: 50%
-  transform: translateX(-50%)
-  border-bottom-color: $tooltip-bg
-  border-top-width: 0
-
-.tooltip--left .tooltip-arrow
-  right: -10px
-  top: 50%
-  transform: translateY(-50%)
-  border-left-color: $tooltip-bg
-  border-right-width: 0
-
-.tooltip--right .tooltip-arrow
-  left: -10px
-  top: 50%
-  transform: translateY(-50%)
-  border-right-color: $tooltip-bg
-  border-left-width: 0
-
-// Fade transition
-.tooltip-fade-enter-active,
-.tooltip-fade-leave-active
-  transition: opacity 0.15s ease
-  @media (prefers-reduced-motion: reduce)
-    transition: none
-
-.tooltip-fade-enter-from,
-.tooltip-fade-leave-to
-  opacity: 0
 </style>

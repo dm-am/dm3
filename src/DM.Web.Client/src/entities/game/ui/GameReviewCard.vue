@@ -13,10 +13,12 @@
          recipient. -->
     <template #left>
       <user-link
+        v-if="review.author"
         :user="review.author"
         :search-query="searchQuery"
         :hide-badge="true"
-      /><template v-if="showGame && review.gameId"
+      /><removed-account-link v-else /><template
+        v-if="showGame && review.gameId"
         >{{ " " }}<span class="about-connector">о</span>{{ " "
         }}<router-link
           class="about-link"
@@ -33,6 +35,13 @@
         </secondary-text></Tooltip
       >
     </template>
+
+    <!-- The edit and delete icons, forwarded to the bubble corner. Only the
+         game's own reviews tab passes them (GameReviewEditable); the profile
+         listings draw the card read-only. -->
+    <template v-if="$slots.actions" #actions>
+      <slot name="actions" />
+    </template>
   </SpeechBubble>
 </template>
 
@@ -48,7 +57,7 @@
  */
 import { computed } from "vue";
 import type { GameReview } from "@/shared/api/models/game/reviews";
-import { UserLink } from "@/entities/user/@x/game";
+import { RemovedAccountLink, UserLink } from "@/entities/user/@x/game";
 import { SpeechBubble } from "@/shared/ui/SpeechBubble";
 import { ContentText } from "@/shared/ui/Content";
 import { Tooltip } from "@/shared/ui/Tooltip";

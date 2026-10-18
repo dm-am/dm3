@@ -128,11 +128,6 @@ public class Game : ISoftDeletable
     public Guid? MentorId { get; set; }
 
     /// <summary>
-    /// Character attribute schema identifier
-    /// </summary>
-    public Guid? AttributeSchemaId { get; set; }
-
-    /// <summary>
     /// Title
     /// </summary>
     public string Title { get; set; } = null!;
@@ -168,7 +163,7 @@ public class Game : ISoftDeletable
     public bool HidePostStats { get; set; }
 
     /// <summary>
-    /// Policy for game comments read/write access
+    /// Who may write in the game discussion; reading follows the game itself
     /// </summary>
     public CommentsAccessMode CommentsAccessMode { get; set; }
 

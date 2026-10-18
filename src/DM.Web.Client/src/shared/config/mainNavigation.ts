@@ -34,10 +34,13 @@ export const MAIN_NAV_SECTIONS: readonly MainNavSection[] = [
     title: "Для новичков",
     to: { name: "forum", params: { alias: "newbies" } },
   },
+  // The moderators, a section every moderator may open, where the address of
+  // the zone leads too (product doc 4.2.1.5): the zone has no page of its own
+  // to land on.
   {
     key: "moderation",
     title: "Модерация",
-    to: { name: "moderation" },
+    to: { name: "moderation-moderators" },
     moderatorOnly: true,
   },
 ];

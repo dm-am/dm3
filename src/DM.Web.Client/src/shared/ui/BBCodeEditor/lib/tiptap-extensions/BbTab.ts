@@ -1,7 +1,8 @@
 /**
  * Tiptap BbTab Extension
  *
- * Renders [tab] as an inline tab element (4 non-breaking spaces).
+ * Renders [tab] as an inline tab element: three non-breaking spaces, as the
+ * server draws it.
  * Uses data-bb-tag="tab" for lossless round-trip conversion.
  */
 
@@ -69,7 +70,7 @@ export const BbTab = Node.create<BbTabOptions>({
         class: "bb-tab",
         "data-bb-tag": "tab",
       }),
-      "\u00A0\u00A0\u00A0\u00A0", // 4 non-breaking spaces
+      "\u00A0\u00A0\u00A0", // 3 non-breaking spaces, as on the server
     ];
   },
 

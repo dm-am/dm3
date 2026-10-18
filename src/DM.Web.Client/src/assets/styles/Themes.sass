@@ -19,6 +19,8 @@
 $text: var(--text)
 $text-muted: var(--text-muted)
 $text-meta: var(--text-meta)
+// The green text of DM2: the hidden text of [private], on the page itself.
+$text-green: var(--text-green)
 // Inks for a TINT of the accent (see the +tint mixin), not for a solid fill:
 // against the solid accent they measure 1.00-1.15.
 $text-on-green: var(--text-on-green)
@@ -68,11 +70,12 @@ $border-focus: var(--border-focus)
 $border-accent-blue: var(--border-accent-blue)
 $border-accent-green: var(--border-accent-green)
 $border-accent-red: var(--border-accent-red)
+$border-accent-yellow: var(--border-accent-yellow)
 
 // Inputs
 $input-bg: var(--input-bg)
 $input-bg-overlay: var(--input-bg-overlay)
-$input-bg-disabled: var(--input-bg-disabled)
+$input-bg-autofill: var(--input-bg-autofill)
 
 // Progress
 $progress-bg-overlay: var(--progress-bg-overlay)
@@ -98,6 +101,15 @@ $active-overlay: var(--active-overlay)
 // when composed over $bg-page. Use for buttons, dropdowns, any "control surface".
 $control-bg-overlay: var(--control-bg-overlay)
 $control-bg-hover-overlay: var(--control-bg-hover-overlay)
+// The button scale: a constant frame plus three steps of fill (rest, hover,
+// press). One step of the palette at four weights — see ThemeVariables.css.
+$control-border-overlay: var(--control-border-overlay)
+$control-fill-overlay: var(--control-fill-overlay)
+$control-fill-hover-overlay: var(--control-fill-hover-overlay)
+$control-fill-press-overlay: var(--control-fill-press-overlay)
+// Lightening steps for a SOLID fill (the primary button): white over $link.
+$primary-hover-overlay: var(--primary-hover-overlay)
+$primary-press-overlay: var(--primary-press-overlay)
 $shadow-color: var(--shadow-color)
 $nsfw-overlay: var(--nsfw-overlay)
 $highlight-overlay-green: var(--highlight-overlay-green)

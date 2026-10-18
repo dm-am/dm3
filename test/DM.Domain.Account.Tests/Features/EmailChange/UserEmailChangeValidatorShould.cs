@@ -131,4 +131,41 @@ public class UserEmailChangeValidatorShould : UnitTestBase
         result.ShouldHaveValidationErrorFor(x => x.Password)
             .WithErrorMessage(ValidationError.Invalid);
     }
+
+    /// <summary>
+    /// A wrong password learns nothing about the new address: "taken" is
+    /// said only after the password matched.
+    /// </summary>
+    [Fact]
+    public async Task NotSayTakenToAWrongPassword()
+    {
+        repository.IsEmailFree("held@example.com", default).Returns(false);
+        var input = new UserEmailChange
+        {
+            Username = "testuser",
+            Password = "wrongpassword",
+            Email = "held@example.com"
+        };
+
+        var result = await validator.TestValidateAsync(input);
+
+        result.ShouldHaveValidationErrorFor(u => u.Password);
+        result.ShouldNotHaveValidationErrorFor(u => u.Email);
+    }
+
+    [Fact]
+    public async Task SayTakenOnlyAfterTheMatchedPassword()
+    {
+        repository.IsEmailFree("held@example.com", default).Returns(false);
+        var input = new UserEmailChange
+        {
+            Username = "testuser",
+            Password = "correctpassword",
+            Email = "held@example.com"
+        };
+
+        var result = await validator.TestValidateAsync(input);
+
+        result.ShouldHaveValidationErrorFor(u => u.Email).WithErrorMessage(ValidationError.Taken);
+    }
 }

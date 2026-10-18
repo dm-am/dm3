@@ -9,6 +9,10 @@ using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
 using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 
+using DM.Web.API.IntegrationTests.Helpers;
+
+using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAttributeSchema;
+
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
 /// <summary>
@@ -63,6 +67,7 @@ public class PostAttachmentLifecycleShould : IntegrationTestBase
             CommentsAccessMode = CommentsAccessMode.Public,
             IsRemoved = false,
         });
+        db.Set<DbGameAttributeSchema>().Add(GameSheetTestHelper.Sheet(gameId));
 
         db.Set<DbRoom>().Add(new DbRoom
         {

@@ -40,6 +40,23 @@ import { Api } from "@/shared/api";
 const FRESH = { headers: { "Cache-Control": "no-cache" } };
 
 /**
+ * The refusal a caller takes over because its own screen carries it: the
+ * moderation windows print a refused save in themselves, and the response
+ * interceptor has to stay quiet or the same sentence stands in two places.
+ * Every call that leaves it out is unchanged.
+ *
+ * Declared here rather than imported: `shared/api` keeps its own copy of the
+ * type to itself, and the client reads the two fields off the request by name,
+ * so a structural twin carries them just as well.
+ */
+type RefusalFlags = {
+  /** The screen shows a 403 and a 5xx itself. */
+  ownsRefusal?: boolean;
+  /** The screen shows a 429 itself, the wait included. */
+  ownsRateLimit?: boolean;
+};
+
+/**
  * API client for the award/achievement catalogs and user records.
  *
  * Endpoint structure:
@@ -89,29 +106,40 @@ export default new (class AchievementApi {
   public updateAchievementCategory(
     id: string,
     body: UpdateAchievementCategoryRequest,
+    options?: RefusalFlags,
   ) {
     return Api.patch<AchievementCategoryEnvelope>(
       `moderation/achievement-categories/${id}`,
       body,
+      options,
     );
   }
 
-  public createAchievementType(body: CreateAchievementTypeRequest) {
+  public createAchievementType(
+    body: CreateAchievementTypeRequest,
+    options?: RefusalFlags,
+  ) {
     return Api.post<AchievementTypeEnvelope>(
       "moderation/achievement-types",
       body,
+      options,
     );
   }
 
-  public updateAchievementType(id: string, body: UpdateAchievementTypeRequest) {
+  public updateAchievementType(
+    id: string,
+    body: UpdateAchievementTypeRequest,
+    options?: RefusalFlags,
+  ) {
     return Api.patch<AchievementTypeEnvelope>(
       `moderation/achievement-types/${id}`,
       body,
+      options,
     );
   }
 
-  public deleteAchievementType(id: string) {
-    return Api.delete(`moderation/achievement-types/${id}`);
+  public deleteAchievementType(id: string, options?: RefusalFlags) {
+    return Api.delete(`moderation/achievement-types/${id}`, undefined, options);
   }
 
   // ---- Awards: public read ----
@@ -171,16 +199,31 @@ export default new (class AchievementApi {
     return Api.get<AchievementTypesResponse>("moderation/achievement-types");
   }
 
-  public updateAwardType(id: string, body: UpdateAwardTypeRequest) {
-    return Api.patch<AwardTypeEnvelope>(`moderation/award-types/${id}`, body);
+  public updateAwardType(
+    id: string,
+    body: UpdateAwardTypeRequest,
+    options?: RefusalFlags,
+  ) {
+    return Api.patch<AwardTypeEnvelope>(
+      `moderation/award-types/${id}`,
+      body,
+      options,
+    );
   }
 
   public deactivateAwardType(id: string) {
     return Api.delete(`moderation/award-types/${id}`);
   }
 
-  public createContestSeries(body: CreateContestSeriesRequest) {
-    return Api.post<ContestSeriesEnvelope>("moderation/contest-series", body);
+  public createContestSeries(
+    body: CreateContestSeriesRequest,
+    options?: RefusalFlags,
+  ) {
+    return Api.post<ContestSeriesEnvelope>(
+      "moderation/contest-series",
+      body,
+      options,
+    );
   }
 
   public updateContestSeries(id: string, body: UpdateContestSeriesRequest) {
@@ -207,9 +250,15 @@ export default new (class AchievementApi {
     );
   }
 
-  public revokeUserAward(username: string, awardId: string) {
+  public revokeUserAward(
+    username: string,
+    awardId: string,
+    options?: RefusalFlags,
+  ) {
     return Api.delete(
       `moderation/users/${encodeURIComponent(username)}/awards/${awardId}`,
+      undefined,
+      options,
     );
   }
 })();

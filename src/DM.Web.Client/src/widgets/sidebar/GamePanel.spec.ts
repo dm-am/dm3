@@ -14,12 +14,15 @@
  * GET games/{id}/chat-rooms over the same rooms the first list already had,
  * drew every chat room a second time.
  */
-import { describe, it, expect, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { nextTick } from "vue";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import GamePanel from "./GamePanel.vue";
 import {
+  CommentariesAccessMode,
   GameParticipation,
+  gameApi,
   useGameDetailsStore,
   type Character,
   type Game,
@@ -74,7 +77,13 @@ const rooms = [
 function mountPanel(
   participation: GameParticipation[] = [],
   premoderationStatus?: GamePremoderationStatus,
+  overrides: Record<string, unknown> = {},
 ) {
+  // The server serves roles in a game to a signed-in viewer alone, and the menu
+  // reads them only for one: a participant here is someone signed in, unless
+  // the test has already signed somebody in itself.
+  const auth = useAuthStore();
+  if (participation.length && !auth.user) signedInAs(UserRole.RegularUser);
   const store = useGameDetailsStore();
   store.game = {
     ...game,
@@ -87,7 +96,10 @@ function mountPanel(
   store.characters = [
     { id: "c-1", name: "Гоблин", isNpc: false, status: "Active" },
   ] as unknown as Character[];
-  return mount(GamePanel, { props: { gameId: "abcde" }, global: { stubs } });
+  return mount(GamePanel, {
+    props: { gameId: "abcde" },
+    global: { stubs: { ...stubs, ...overrides } },
+  });
 }
 
 /** Sign in, optionally with a site-wide role. Must precede mountPanel. */
@@ -194,6 +206,36 @@ describe("GamePanel", () => {
     expect(menu).toContain("- Заметки игры");
   });
 
+  // A session can end under an open page: a 401 on any request drops the
+  // viewer from the auth store (sessionExpiry.ts), while the refetch that
+  // brings a guest's roles is a round trip away and may never land. The rows
+  // that need a signed-in master leave with the viewer, and the roles the
+  // store still holds do not keep them.
+  it("takes the master's rows away the moment the session ends", async () => {
+    const wrapper = mountPanel([GameParticipation.Owner], "AwaitingEdits");
+    expect(wrapper.text()).toContain("Управление игрой");
+    expect(rows(wrapper)).toContain("- Настройки");
+
+    // What the app does on a 401, and nothing else: no refetch follows.
+    useAuthStore().updateUser(null);
+    await nextTick();
+
+    const menu = rows(wrapper);
+    expect(wrapper.text()).not.toContain("Управление игрой");
+    for (const row of [
+      "- Настройки",
+      "- Создать NPC",
+      "- Отправить на проверку",
+      "- Заметки игры",
+    ]) {
+      expect(menu).not.toContain(row);
+    }
+    expect(wrapper.find("game-status-buttons-stub").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Действия с игрой");
+    // The served roles are still the master's: the menu read the viewer.
+    expect(useGameDetailsStore().isMaster).toBe(true);
+  });
+
   // Premoderation. The server grants exactly three moves and grants them to
   // two different audiences; a row the panel shows to anybody else is a
   // promise the server answers with 403 or 400, which is the defect this
@@ -271,5 +313,127 @@ describe("GamePanel", () => {
       expect(menu).not.toContain("- Отправить на премодерацию");
       expect(menu).not.toContain("- Выпустить из премодерации");
     });
+  });
+});
+
+/**
+ * The question before a moderation move waits for the answer and says a
+ * refusal in itself. It used to close before the request went out, so a
+ * refused verdict came back as a plate over a menu that looked as if nothing
+ * had been asked.
+ */
+describe("GamePanel moderation question", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("keeps the question open with the refusal in it", async () => {
+    signedInAs(UserRole.Mentor);
+    const store = useGameDetailsStore();
+    const change = vi.spyOn(store, "changePremoderation").mockResolvedValue({
+      type: "",
+      title: "",
+      status: 404,
+      traceId: "t",
+    });
+    const wrapper = mountPanel([], "AwaitingApproval", {
+      ConfirmDialog: false,
+    });
+
+    const approve = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Одобрить игру");
+    await approve!.trigger("click");
+    document.body
+      .querySelector<HTMLButtonElement>(".dialog-btn-submit")
+      ?.click();
+    await flushPromises();
+
+    expect(change).toHaveBeenCalledWith("SetApproved", {
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
+    expect(
+      document.body.querySelector(".dialog-refusal")?.textContent?.trim(),
+    ).toBe("Не удалось изменить премодерацию");
+    expect(document.body.textContent).toContain("Одобрить игру?");
+    wrapper.unmount();
+  });
+});
+
+/**
+ * "Обсуждение" is a row for everybody who sees the game: everybody reads the
+ * discussion, empty or not, whatever its mode. Read-only to those outside the
+ * game, or closed to him by the game's blacklist, it is closed to his writing
+ * and not to his reading.
+ */
+describe("GamePanel discussion row", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function mountWith(
+    // A string: a game the server still sends with the old members-only mode
+    // is read as any other, and the enum need not name that mode.
+    commentariesAccess: CommentariesAccessMode | string,
+    participation: GameParticipation[] = [],
+    over: Partial<Game> = {},
+  ) {
+    const wrapper = mountPanel(participation);
+    const store = useGameDetailsStore();
+    store.game = {
+      ...store.game,
+      privacySettings: { commentariesAccess },
+      ...over,
+    } as unknown as Game;
+    return wrapper;
+  }
+
+  const hasRow = (wrapper: ReturnType<typeof mountPanel>) =>
+    rows(wrapper).some((row) => row.startsWith("- Обсуждение"));
+
+  it("keeps the row for somebody outside a game sent with the old members-only mode", async () => {
+    const wrapper = mountWith("Private");
+    await flushPromises();
+
+    expect(hasRow(wrapper)).toBe(true);
+  });
+
+  // Nothing is asked of the discussion to draw the row: whether it has
+  // comments is no question the menu answers.
+  it.each([
+    ["somebody outside a read-only game", CommentariesAccessMode.Readonly, []],
+    [
+      "a player of a read-only game",
+      CommentariesAccessMode.Readonly,
+      [GameParticipation.Player],
+    ],
+    ["anybody in an open game", CommentariesAccessMode.Public, []],
+  ])("keeps the row of an empty discussion for %s", async (_, mode, roles) => {
+    const asked = vi.spyOn(gameApi, "getGameComments");
+    const wrapper = mountWith(mode, roles);
+    await flushPromises();
+
+    expect(hasRow(wrapper)).toBe(true);
+    expect(asked).not.toHaveBeenCalled();
+  });
+
+  it("keeps the row of an empty discussion for the one on the blacklist", async () => {
+    signedInAs(UserRole.RegularUser);
+    const wrapper = mountWith(CommentariesAccessMode.Public, [], {
+      viewerBlacklisted: true,
+      viewer: { canComment: false },
+    } as Partial<Game>);
+    await flushPromises();
+
+    expect(hasRow(wrapper)).toBe(true);
   });
 });

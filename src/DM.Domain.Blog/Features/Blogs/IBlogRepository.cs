@@ -136,7 +136,7 @@ public interface IBlogRepository
     Task<Blog> UpdateBlog(UpdateBlogEntity entity, CancellationToken ct = default);
 
     /// <summary>
-    /// Delete blog (soft delete)
+    /// Delete blog (soft delete) and drop the subscriptions to it
     /// </summary>
     Task DeleteBlog(Guid blogId, Guid deletedByUserId, CancellationToken ct = default);
 

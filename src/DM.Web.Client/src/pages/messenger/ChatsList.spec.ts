@@ -13,6 +13,7 @@
  * the roster, the other page of this slice that answered the same way.
  */
 import { describe, expect, it, vi } from "vitest";
+import { defineComponent, h, ref, type Component } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useMessagingStore } from "@/entities/message";
@@ -26,7 +27,11 @@ vi.mock("vue-router", () => ({
 
 const EMPTY = "Нет переписок";
 
-function render(state: { loading?: boolean; error?: string | null } = {}) {
+function render(
+  state: { loading?: boolean; error?: string | null } = {},
+  props: { narrow?: boolean } = {},
+  component: Component = ChatsList,
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const store = useMessagingStore();
@@ -36,7 +41,9 @@ function render(state: { loading?: boolean; error?: string | null } = {}) {
   store.loadingChats = state.loading ?? false;
   store.error = state.error ?? null;
 
-  const wrapper = mount(ChatsList, {
+  const wrapper = mount(component, {
+    props,
+    attachTo: document.body,
     global: {
       plugins: [pinia],
       stubs: { RouterLink: { template: "<a><slot /></a>" } },
@@ -77,5 +84,41 @@ describe("ChatsList", () => {
     const { wrapper } = render();
 
     expect(wrapper.text()).toContain(EMPTY);
+  });
+
+  /**
+   * Narrow, the list keeps the pictures and the counts; its search is a
+   * magnifier that asks for the words back, and the caret goes in the field.
+   */
+  it("searches from its magnifier when narrow, and asks to be widened", async () => {
+    // The page that holds the list, as MessengerPage does: narrow until the
+    // list asks for its words.
+    const narrow = ref(true);
+    const widen = vi.fn(() => {
+      narrow.value = false;
+    });
+    const Host = defineComponent(
+      () => () => h(ChatsList, { narrow: narrow.value, onWiden: widen }),
+    );
+    const { wrapper } = render({}, {}, Host);
+
+    expect(wrapper.find("input").exists()).toBe(false);
+    const magnifier = wrapper.get('button[aria-label="Поиск собеседника"]');
+    await magnifier.trigger("click");
+    await flushPromises();
+
+    expect(widen).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(wrapper.get("input").element);
+    wrapper.unmount();
+  });
+
+  it("has the field of the search when it has its words", () => {
+    const { wrapper } = render();
+
+    expect(wrapper.get("input").attributes("placeholder")).toBe(
+      "Поиск собеседника",
+    );
+    expect(wrapper.find(".search-open").exists()).toBe(false);
+    wrapper.unmount();
   });
 });

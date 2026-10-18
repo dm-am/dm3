@@ -27,10 +27,17 @@ internal class BoardIntentionResolver : IIntentionResolver<ForumIntention, Board
                 return (target.CreateTopicPolicy & userPolicy) != BoardAccessPolicy.None &&
                        user.MaySpeak();
             case ForumIntention.AdministrateTopics when user.IsAuthenticated:
-                return user.Role >= UserRole.Admin ||
-                       target.ModeratorIds.Contains(user.UserId);
+                return AdministratesTopics(user, target);
             default:
                 return false;
         }
     }
+
+    /// <summary>
+    /// Whether the user administrates every topic of the board: an administrator,
+    /// or a moderator of that board. Shared with the topic's own rules, so the
+    /// moderator's right to close a topic is stated once.
+    /// </summary>
+    internal static bool AdministratesTopics(IAuthorizationSubject user, Board board) =>
+        user.Role >= UserRole.Admin || board.ModeratorIds.Contains(user.UserId);
 }

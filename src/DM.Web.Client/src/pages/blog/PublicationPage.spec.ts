@@ -11,16 +11,23 @@
  * What this holds: the page reads the publication named in the address, hands
  * it to the card the product decided a publication looks like, runs its
  * discussion against the publication's own endpoints, and offers the composer
- * to exactly whom the server would take a comment from
- * (PublicationIntentionResolver.CreateComment: signed in, published, comments
- * enabled). The blog's own commentsEnabled flag is not that rule and does not
- * reach here.
+ * by the publication's answer about the viewer (viewer.canComment), which the
+ * server asks with the code that refuses the comment: published, the blog's
+ * blacklist and the ban. A draft has no discussion at all: nothing to read and
+ * nothing to write. Comments of a publication cannot be turned off. The blog's
+ * blacklist closes a published one to writing and not to reading: it stays,
+ * empty or not, with the plaque of a refusal where the form would be.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { defineComponent, h, watchEffect } from "vue";
 import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { blogApi, type Publication } from "@/entities/blog";
+import {
+  blogApi,
+  useBlogDetailsStore,
+  type Blog,
+  type Publication,
+} from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
 import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
 import PublicationPage from "./PublicationPage.vue";
@@ -67,6 +74,7 @@ vi.mock("@/widgets/discussion", () => ({
       "draftKey",
       "canComment",
       "closedHint",
+      "viewerBlacklisted",
     ],
     template: "<div class='discussion-stub' />",
   },
@@ -81,19 +89,28 @@ const PUBLICATION: Publication = {
   author: { username: "SolohinLex" },
   createdUtc: "2026-08-01T10:00:00Z",
   isPublished: true,
-  commentsEnabled: true,
   viewCount: 0,
   commentCount: 2,
   likes: [],
+  // As a signed-in reader is answered: a guest is told no by the server, and
+  // the page must not take this "yes" for his.
+  viewer: { canComment: true },
 } as unknown as Publication;
 
 function render({
   publication = PUBLICATION,
   username = null as string | null,
+  blacklisted = false,
 } = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useAuthStore().user = username ? ({ username } as never) : null;
+  // The blog the shell has loaded around the page: its blacklist is the
+  // publication's too.
+  useBlogDetailsStore().blog = {
+    id: "blog-guid",
+    viewerBlacklisted: blacklisted,
+  } as unknown as Blog;
 
   vi.spyOn(blogApi, "getPublication").mockResolvedValue({
     data: { resource: publication },
@@ -140,7 +157,11 @@ describe("PublicationPage", () => {
     const { wrapper, announced } = render();
     await flushPromises();
 
-    expect(blogApi.getPublication).toHaveBeenCalledWith("pub-readable");
+    // The address slot alone: what travels beside it is how the refusal is
+    // carried, and that is the subject of its own check below.
+    const [askedFor] =
+      vi.mocked(blogApi.getPublication).mock.calls.at(-1) ?? [];
+    expect(askedFor).toBe("pub-readable");
     expect(wrapper.find(".card-stub").text()).toContain("Полет над гнездом");
     // The card is the page, so it draws no title of its own: the heading of
     // the zone reads "{блог} | {публикация}", and this is its second half.
@@ -177,8 +198,8 @@ describe("PublicationPage", () => {
 
     const props = discussion(wrapper);
     expect(props.canComment).toBe(false);
-    // No hint either: a guest is told to sign in, and a hint would stand
-    // instead of that invitation.
+    // Not closed either: a guest is told to sign in, and signing in opens the
+    // composer here.
     expect(props.closedHint).toBeUndefined();
   });
 
@@ -189,28 +210,83 @@ describe("PublicationPage", () => {
     expect(discussion(wrapper).canComment).toBe(true);
   });
 
-  it("refuses the composer when the publication has comments off", async () => {
+  // A ban is nothing the page can see in the publication: the answer of the
+  // server is the only thing that says no, and it is enough.
+  it("offers nothing where the publication takes no comment from the reader", async () => {
     const { wrapper } = render({
       username: "gamer",
-      publication: { ...PUBLICATION, commentsEnabled: false },
+      publication: { ...PUBLICATION, viewer: { canComment: false } },
     });
     await flushPromises();
 
     const props = discussion(wrapper);
     expect(props.canComment).toBe(false);
-    expect(props.closedHint).toBe("Комментарии к этой публикации отключены");
+    expect(props.closedHint).toBeUndefined();
   });
 
-  it("refuses the composer on a draft the author is reading", async () => {
+  // A feed carries no answer, and an answer that did not come is no "yes".
+  it("offers nothing on a publication that says nothing about the viewer", async () => {
+    const { wrapper } = render({
+      username: "gamer",
+      publication: { ...PUBLICATION, viewer: undefined },
+    });
+    await flushPromises();
+
+    expect(discussion(wrapper).canComment).toBe(false);
+  });
+
+  // The answer is about whoever held the session when the publication was
+  // read: the guest who signs in from the prompt under the comments is asked
+  // about again, and gets the form by the new answer.
+  it("reads the publication again when the viewer changes", async () => {
+    const { wrapper } = render({
+      publication: { ...PUBLICATION, viewer: { canComment: false } },
+    });
+    await flushPromises();
+    expect(blogApi.getPublication).toHaveBeenCalledOnce();
+
+    vi.mocked(blogApi.getPublication).mockResolvedValue({
+      data: { resource: PUBLICATION },
+      error: null,
+    } as never);
+    useAuthStore().updateUser({ username: "gamer" } as never);
+    await flushPromises();
+
+    expect(blogApi.getPublication).toHaveBeenCalledTimes(2);
+    expect(discussion(wrapper).canComment).toBe(true);
+  });
+
+  // A draft is not discussed, so it has no discussion at all: no composer for
+  // the author reading it, and no sentence promising comments later.
+  it("draws no discussion under a draft", async () => {
     const { wrapper } = render({
       username: "SolohinLex",
       publication: { ...PUBLICATION, isPublished: false },
     });
     await flushPromises();
 
+    expect(wrapper.find(".card-stub").exists()).toBe(true);
+    expect(wrapper.find(".discussion-stub").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("после публикации");
+  });
+
+  // The blog's blacklist reaches its publications: the discussion is read and
+  // not written by the one on the list, and the line in the composer's place
+  // says why.
+  it("says the blog's blacklist under the discussion", async () => {
+    const { wrapper } = render({
+      username: "gamer",
+      blacklisted: true,
+      publication: { ...PUBLICATION, viewer: { canComment: false } },
+    });
+    await flushPromises();
+
     const props = discussion(wrapper);
     expect(props.canComment).toBe(false);
-    expect(props.closedHint).toContain("после публикации");
+    expect(props.closedHint).toBe(
+      "Вы в черном списке этого блога: писать комментарии нельзя",
+    );
+    expect(props.viewerBlacklisted).toBe(true);
   });
 
   it("says a failed load failed instead of drawing an empty page", async () => {
@@ -226,5 +302,59 @@ describe("PublicationPage", () => {
 
     expect(wrapper.text()).toContain("Публикация не найдена");
     expect(wrapper.find(".discussion-stub").exists()).toBe(false);
+  });
+
+  /**
+   * A broken server was announced twice on this page: the card said the API's
+   * sentence where the text should have been, and the response interceptor put
+   * the same sentence in a plate over it. The interceptor keeps quiet for a
+   * request that says it draws the refusal itself, which this one is — the card
+   * is the whole page when the read fails, and a plate in the corner explains
+   * an empty screen to nobody.
+   *
+   * The flags are what is asserted, not the absent toast: the interceptor lives
+   * in the HTTP client, and the client is behind the mocked service here.
+   */
+  it("takes a 5xx over from the interceptor and says it in the card", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const read = vi.spyOn(blogApi, "getPublication").mockResolvedValue({
+      data: null,
+      error: { type: "", title: "Ошибка сервера", status: 500, traceId: "t" },
+    } as never);
+
+    const wrapper = mount(PublicationPage, { global: { plugins: [pinia] } });
+    await flushPromises();
+
+    expect(read).toHaveBeenCalledWith(
+      "pub-readable",
+      expect.objectContaining({ ownsRefusal: true, ownsRateLimit: true }),
+    );
+    expect(wrapper.text()).toContain("Ошибка сервера");
+  });
+
+  it("says the wait in the card, with the seconds the server asked for", async () => {
+    // The limiter's title names the refusal without the number, and the number
+    // is the part a reader acts on. Taking the refusal over means the card has
+    // to carry the sentence that holds it, or the wait is lost with the plate.
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    vi.spyOn(blogApi, "getPublication").mockResolvedValue({
+      data: null,
+      error: {
+        type: "",
+        title: "Слишком много запросов",
+        status: 429,
+        traceId: "t",
+        retryAfterSeconds: 30,
+      },
+    } as never);
+
+    const wrapper = mount(PublicationPage, { global: { plugins: [pinia] } });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Слишком много попыток, попробуйте через 30 секунд",
+    );
   });
 });

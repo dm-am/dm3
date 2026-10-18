@@ -1,0 +1,56 @@
+// =============================================================================
+// MENU
+// =============================================================================
+// The one menu of the site: the panel that drops from the sort of a list
+// (SortButton) and from "…" of a correspondence (ConversationLine). The
+// ground, frame, corners and shadow are every floating panel's
+// (=dropdown-surface); a line of it is 14 with 8 over and under and 16 at the
+// sides, and answers the pointer with the hover overlay. Where a panel hangs
+// and how wide it is belongs to the control that opens it.
+//
+// Mixins only: a rule written here would be emitted again into every
+// stylesheet that uses this one.
+// =============================================================================
+
+@use "Themes" as *
+@use "Variables" as *
+@use "Filters" as *
+
+/// The panel: its ground and frame, and the 8 above the first line and under
+/// the last one.
+=menu-panel
+  padding: $small 0
+  +dropdown-surface
+
+/// A line of the menu that acts: a button or a link, the full width of the
+/// panel. The current choice of a menu that has one (the sort) keeps the
+/// selection overlay instead of the hover.
+=menu-item
+  display: block
+  width: 100%
+  padding: $small $medium
+  font-size: $secondary-font-size
+  font-family: inherit
+  text-align: left
+  cursor: pointer
+  border: none
+  background: none
+  color: $text
+  transition: background-color $transition-fast
+
+  &:hover:not(.selected)
+    background-color: $hover-overlay
+
+  &.selected
+    background-color: $selected-overlay
+
+/// The grey line under the words of a line (what a sort orders by).
+=menu-hint
+  font-size: $tertiary-font-size
+  color: $text-muted
+
+/// The rule between two groups of lines.
+=menu-divider
+  height: 1px
+  margin: $small 0
+  background-color: $border

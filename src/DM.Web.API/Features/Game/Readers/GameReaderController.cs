@@ -97,6 +97,6 @@ public class GameReaderController : ControllerBase
         return NoContent();
     }
 
-    // Note: DELETE /{username} is not provided - readers can only unsubscribe themselves
-    // Use blacklist to prevent problematic users from accessing content
+    // Note: DELETE /{username} is not provided - readers can only unsubscribe themselves.
+    // The blacklist does not remove one either: it closes writing, not reading.
 }

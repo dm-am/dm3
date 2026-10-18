@@ -19,6 +19,15 @@
  * separator cannot be transform-animated anyway without breaking the
  * strip's wrap-at-separator behavior).
  *
+ * Every width wraps the strip at the separators, a phone's too: nothing of a
+ * row is put away and no row scrolls sideways (owner, 12 October 2026), so
+ * where the column is narrow the strip takes the lines it needs. A tab and the
+ * bar after it are one unbreakable item, and the line breaks at the space
+ * after the bar only: a bar closes a line and never opens one, as in the forum
+ * board strip. A no-break space before the bar would not do it, since the tab
+ * is an inline-block (it has to be, for the FLIP transform), and Chrome breaks
+ * after an inline-block whatever text follows it.
+ *
  * Accessibility: ARIA tablist/tab pattern with automatic activation.
  * Roving `tabindex` keeps only the active tab in the Tab-key cycle.
  * Arrow / Home / End walk the DECLARED order (the `tabs` prop), never the
@@ -122,6 +131,9 @@ const declaredPosition = computed(
 
 const root = ref<HTMLElement | null>(null);
 
+/** Whether a tab has another after it, and so a bar. */
+const hasNext = (index: number) => index < orderedTabs.value.length - 1;
+
 // The roving-tabindex target is by definition the selected tab, wherever
 // the active-first reorder has just put it. One selector serves both the
 // post-selection focus move and useFlipReorder's focus restoration.
@@ -190,32 +202,37 @@ useFlipReorder({
     role="tablist"
     :aria-label="ariaLabel"
   >
-    <!-- The separator is a real " | " text node, so a select-all copy of
-         the strip reads "О себе | Игры | ..." with actual spaces. Those
-         spaces are also the strip's only wrap opportunities (buttons are
-         nowrap). aria-hidden keeps the decorative separators out of the
-         tablist's accessible content. -->
-    <template v-for="(tab, index) in orderedTabs" :key="tab.value">
-      <span v-if="index > 0" class="separator" aria-hidden="true">{{
-        " | "
-      }}</span>
-      <button
-        :id="tabId(tab.value)"
-        type="button"
-        role="tab"
-        class="tab"
-        :class="{ active: tab.value === modelValue }"
-        :aria-selected="tab.value === modelValue"
-        :aria-controls="panelId(tab.value)"
-        :aria-posinset="declaredPosition.get(tab.value)"
-        :aria-setsize="visibleTabs.length"
-        :tabindex="tab.value === modelValue ? 0 : -1"
-        @click="selectTab(tab.value)"
-        @keydown="onKeydown"
-      >
-        {{ tab.label }}
-      </button>
-    </template>
+    <!-- One inline run: the separators are real text nodes, so a select-all
+         copy of the strip reads "О себе | Игры | ..." on one line. The space
+         after a bar is the strip's only wrap opportunity (a tab and its bar
+         are one nowrap item): the strip wraps, never scrolls. aria-hidden
+         keeps the decorative separators out of the tablist's accessible
+         content, and the item holding a tab has no role, so to a reader the
+         tab is still a child of the tablist. -->
+    <template v-for="(tab, index) in orderedTabs" :key="tab.value"
+      ><span class="tabs__item"
+        ><button
+          :id="tabId(tab.value)"
+          type="button"
+          role="tab"
+          class="tab"
+          :class="{ active: tab.value === modelValue }"
+          :aria-selected="tab.value === modelValue"
+          :aria-controls="panelId(tab.value)"
+          :aria-posinset="declaredPosition.get(tab.value)"
+          :aria-setsize="visibleTabs.length"
+          :tabindex="tab.value === modelValue ? 0 : -1"
+          @click="selectTab(tab.value)"
+          @keydown="onKeydown"
+        >
+          {{ tab.label }}</button
+        ><span v-if="hasNext(index)" class="separator" aria-hidden="true">{{
+          " |"
+        }}</span></span
+      ><span v-if="hasNext(index)" class="separator" aria-hidden="true">{{
+        " "
+      }}</span></template
+    >
   </div>
 </template>
 
@@ -228,6 +245,10 @@ useFlipReorder({
 .tabs
   display: block
   margin-bottom: $small
+
+// A tab and the bar after it: the line never breaks between the two.
+.tabs__item
+  white-space: nowrap
 
 .separator
   color: $text-muted
@@ -249,18 +270,24 @@ useFlipReorder({
   // Hard kill any inherited text-decoration so a tab can never pick up
   // an underline from a global anchor/button rule outside :hover.
   text-decoration: none
+  // The tempo of every link of the site (Reset.sass, +link-tone).
+  transition: color $transition-normal
 
   &:hover
     color: $link-hover
     text-decoration: underline
 
-  // Active tab: link color + semibold — same idiom as the forum board
-  // strip's current item; underline stays hover-only.
+  // Active tab: link color + bold — same idiom as the forum board strip's
+  // current item; underline stays hover-only. 700 and not 600: the face has
+  // two weights, and a bold link is the bold one.
   &.active
-    font-weight: 600
+    font-weight: 700
 
+  // A bare word, not a box (no padding, no fill): the thin ring of a text
+  // link, not the 2px ring of a block control — that one drawn around a word
+  // is the rectangle the owner rejected.
   &:focus-visible
-    outline: 2px solid $border-focus
+    outline: 1px solid $link
     outline-offset: 2px
 
 // "headings" variant: the strip reads as a row of page-title-sized section

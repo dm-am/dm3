@@ -40,8 +40,13 @@ import {
   getMetricValue,
   formatThreshold,
   metricDisplayNumber,
+  achievementMetal,
+  metalStyle,
 } from "@/entities/achievement";
-import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
+import {
+  shownOnPage,
+  useGuardedRequest,
+} from "@/shared/lib/composables/useGuardedRequest";
 
 const props = defineProps<{
   username: string;
@@ -76,9 +81,12 @@ function load(username: string) {
   emit("state", "loading");
   return run(
     async () => {
+      // Each answer is taken over as it lands: the section says the failure
+      // in its own box, and the plate for the first would be up before the
+      // second arrived (shownOnPage).
       const [earnedRes, catalogRes] = await Promise.all([
-        achievementApi.getUserAchievements(username),
-        achievementApi.getAchievementTypes(),
+        achievementApi.getUserAchievements(username).then(shownOnPage),
+        achievementApi.getAchievementTypes().then(shownOnPage),
       ]);
       // The chains are drawn from both halves together, so either failure is the
       // section's failure and neither half is applied on its own.
@@ -202,14 +210,6 @@ function tileTitle(chain: Chain): string {
   return chain.earned ? chain.earned.type.title : chain.tiers[0].type.title;
 }
 
-function tierClass(tier: number | null): string {
-  if (tier === 1) return "tier-bronze";
-  if (tier === 2) return "tier-silver";
-  if (tier === 3) return "tier-gold";
-  if (tier === 4) return "tier-platinum";
-  return "tier-base";
-}
-
 const ROMAN = ["", "I", "II", "III", "IV"];
 function roman(n: number): string {
   return ROMAN[n] ?? "";
@@ -290,17 +290,14 @@ function progressLabel(chain: Chain): string {
       >
         <div
           class="chain"
-          :class="[
-            tierClass(chain.maxEarnedTier),
-            { 'chain--locked': chain.locked },
-          ]"
+          :class="{ 'chain--locked': chain.locked }"
+          :style="metalStyle(achievementMetal(chain.maxEarnedTier))"
         >
           <div class="chain-icon-wrap">
             <GameIcon :name="chain.iconName" class="chain-icon" />
             <span
               v-if="chain.maxEarnedTier > 0"
               class="chain-degree"
-              :class="tierClass(chain.maxEarnedTier)"
               aria-hidden="true"
               >{{ roman(chain.maxEarnedTier) }}</span
             >
@@ -339,7 +336,7 @@ function progressLabel(chain: Chain): string {
         </div>
 
         <template #content>
-          <div class="chain-popover" :class="tierClass(chain.maxEarnedTier)">
+          <div class="chain-popover">
             <div class="chain-popover__header">
               <strong class="chain-popover__title">{{ chain.title }}</strong>
               <span class="chain-popover__badge">
@@ -360,12 +357,12 @@ function progressLabel(chain: Chain): string {
                 v-for="t in chain.tiers"
                 :key="t.type.id"
                 class="chain-popover__tier"
-                :class="[
-                  tierClass(t.type.tier),
+                :class="
                   t.earnedUtc
                     ? 'chain-popover__tier--earned'
-                    : 'chain-popover__tier--locked',
-                ]"
+                    : 'chain-popover__tier--locked'
+                "
+                :style="metalStyle(achievementMetal(t.type.tier))"
               >
                 <span class="chain-popover__tier-degree">{{
                   roman(t.type.tier ?? 0)
@@ -388,7 +385,10 @@ function progressLabel(chain: Chain): string {
 </template>
 
 <style scoped lang="sass">
+// The grid below is measured against the column the section stands in, not
+// against the window: the sidebars take a fixed share of it.
 .achievements-section
+  container: achievements / inline-size
   display: flex
   flex-direction: column
   // Unified with .awards-section: explicit gap between the BlockTitle and
@@ -413,11 +413,15 @@ function progressLabel(chain: Chain): string {
   column-gap: $tiny
   align-items: start
 
-  @media (max-width: $bp-mobile)
-    grid-template-columns: repeat(4, minmax(0, 1fr))
-
   :deep(.tooltip-trigger)
     display: flex
+
+// Eight cells hold the longest word of a caption ("Приключение", 70px) from a
+// column of 600px up. The column is 556px at 1280, where the eighth part broke
+// that word in the middle; below 600px the grid takes six.
+@container achievements (max-width: 599px)
+  .chains
+    grid-template-columns: repeat(6, minmax(0, 1fr))
 
 .chain
   position: relative
@@ -442,12 +446,13 @@ function progressLabel(chain: Chain): string {
   display: inline-block
   line-height: 0
 
-// The icon is tinted with the tier color of the senior earned tier — the
+// The icon is tinted with the metal of the senior earned tier (the tile
+// hands it down as --tier-metal, see entities/achievement tierMetal) — the
 // level reads at a glance, the roman badge doubles it with a number. At
 // 52px vs the awards' 72px — awards are deliberately the larger section.
 .chain-icon
   font-size: 52px
-  color: var(--card-tier-color, $heading)
+  color: var(--tier-metal, $text-muted)
 
 // Thematic title of the earned tier, centered under the icon. Smaller than
 // the award caption ($tertiary vs $secondary) — achievements are the lighter
@@ -503,8 +508,11 @@ function progressLabel(chain: Chain): string {
     opacity: 0.45
 
 // Roman degree of the earned tier — a pill badge in the bottom-right
-// corner of the icon. Tier-colored background, contrasting text, thin
-// border in the tile color (separates it from the icon).
+// corner of the icon, drawn exactly as the award badge beside it: filled with
+// the tier metal under a light numeral, and a border in the page colour that
+// lifts it off the icon it overlaps. The fill is the metal and not a dark
+// shade under a metal numeral: that shade was the one dark patch on a light
+// page, outside the four metals every tile is drawn in.
 .chain-degree
   position: absolute
   right: -4px
@@ -520,14 +528,12 @@ function progressLabel(chain: Chain): string {
   font-weight: 700
   letter-spacing: 0.5px
   line-height: 1
-  color: var(--card-tier-color, $heading)
-  background-color: var(--tier-badge-bg)
+  color: var(--tier-badge-text)
+  background-color: var(--tier-metal, $text-muted)
   border: 2px solid $bg-page
   border-radius: $minor
-  // currentColor IS the tier metal: one hairline holds the badge apart from
-  // the page in the dark theme, where its fill is a shade off the page colour.
-  outline: 1px solid currentColor
   font-variant-numeric: tabular-nums
+  text-shadow: 0 0 1px var(--tier-badge-halo)
 
 // Bar colors are unified with the poll bar (`ProgressBar.vue`):
 // background — $progress-bg-overlay, fill — $progress-fill-overlay.
@@ -556,29 +562,12 @@ function progressLabel(chain: Chain): string {
   line-height: 1
   text-align: center
 
-// Tier color tokens — the SAME award-metal tokens as ProfileAwardsSection
-// (see ThemeVariables.css), so award and achievement icons render in
-// identical metals. Platinum (tier IV) is achievement-only — awards have
-// no fourth metal; it stays colder than silver (a teal cast) so the
-// silver/platinum pair never gets confused.
-.tier-bronze
-  --card-tier-color: var(--award-bronze)
-.tier-silver
-  --card-tier-color: var(--award-silver)
-.tier-gold
-  --card-tier-color: var(--award-gold)
-.tier-platinum
-  --card-tier-color: var(--achievement-platinum)
-.tier-base
-  --card-tier-color: #{$heading}
-
 // --- Rich popover ---
 // The `#content` slot in `<Tooltip>` takes HTML; the tooltip provides
 // padding and max-width, the rest is styled here. The tooltip's
 // white-space: pre-line does not interfere — we render explicit blocks.
-// The popover root carries the chain's tier class (the tooltip is
-// teleported to body, so the tile's --card-tier-color does not cascade);
-// each tier row then overrides it with its own tier class.
+// The tooltip is teleported to body, so the tile's --tier-metal does not
+// cascade into it: each tier row carries the metal of its own tier.
 
 .chain-popover
   display: flex
@@ -617,7 +606,7 @@ function progressLabel(chain: Chain): string {
     // shade over it is a white overlay rather than a theme token, exactly as
     // in the tier list's divider below.
     background-color: rgba(255, 255, 255, 0.12)
-    border-radius: 999px
+    border-radius: $border-radius
     letter-spacing: 0.5px
 
   &__desc
@@ -654,16 +643,17 @@ function progressLabel(chain: Chain): string {
     &--locked
       opacity: 0.45
 
+  // The same badge as on the tile: metal fill, light numeral.
   &__tier-degree
     text-align: center
     font-size: 10px
     font-weight: 700
-    color: var(--card-tier-color, $heading)
-    background-color: var(--tier-badge-bg)
+    color: var(--tier-badge-text)
+    background-color: var(--tier-metal, $text-muted)
     border-radius: $minor
-    outline: 1px solid currentColor
     padding: 2px 0
     line-height: 1
+    text-shadow: 0 0 1px var(--tier-badge-halo)
 
   // Never truncated: every catalog title fits the popover width in one
   // line (see min-width above); anything longer wraps whole instead of

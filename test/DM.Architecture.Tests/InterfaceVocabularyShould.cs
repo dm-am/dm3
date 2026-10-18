@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Xunit;
@@ -10,7 +11,7 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// One meaning is called by one word, and the letters of that word are the ones
 /// the convention allows -- outside the client, where the client's own check
-/// cannot see.
+/// cannot see, and for the words in the client as well.
 /// </summary>
 /// <remarks>
 /// GLOSSARY states the rule in as many words: one Russian word and one English
@@ -64,18 +65,49 @@ public class InterfaceVocabularyShould
     /// <remarks>
     /// The rule used to read "check the files whose path names the forum", which
     /// is a rule about where the word was last caught rather than about the word.
-    /// The dispatcher's dictionary of notification headings
-    /// (DM.Workers.NotificationDispatcher/Dispatching/NotificationText.cs) is
+    /// The dictionary of notification headings
+    /// (DM.Domain.Personal/Features/Notifications/NotificationWording.cs) is
     /// named after neither a topic nor a forum, so the line a reader sees over
     /// every forum notification was outside it; so were four passages of
     /// AUTHORIZATION.md that call the entity by the retired word.
+    ///
+    /// The ending is optional: the genitive plural has none. Without it the rule
+    /// read "список закрепленных тем" and "удаление тем форума" as clean, and
+    /// that is the form a list of topics is named in. The same three letters are
+    /// also the pronoun ("тем же", "тем, что"), which <see cref="Pronoun"/> tells
+    /// apart.
     /// </remarks>
     private static readonly Regex Tema =
-        new(@"(?<![А-Яа-я])[Тт]ем(а|ы|е|у|ой|ам|ах|ами)(?![А-Яа-я])", RegexOptions.Compiled);
+        new(@"(?<![А-Яа-я])[Тт]ем(а|ы|е|у|ой|ам|ах|ами)?(?![А-Яа-я])", RegexOptions.Compiled);
 
-    /// <summary>The forum standing next to the word is what makes it the entity.</summary>
+    /// <summary>
+    /// The bare "тем" that is the pronoun and not the noun, read from the word
+    /// on: "тем же", "тем не менее", "тем лучше", "тем ли способом", "под тем
+    /// полем", "тем, кто". A line break counts as the space it stands for.
+    /// </summary>
+    private static readonly Regex Pronoun =
+        new(@"^[Тт]ем(\s+(же|самым|не\s+менее|более|больше|лучше|хуже|меньше|сильнее|ли|что|кто|\p{L}+(ом|ем|ым|им))(?!\p{L})|\s*,\s*(что|кто|чем|как|куда|где|у|к|в|на|с)(?!\p{L}))",
+            RegexOptions.Compiled);
+
+    /// <summary>
+    /// The forum standing next to the word is what makes it the entity, and so do
+    /// comments: a "тема с чужими комментариями" or "пост, тема, комментарий" is
+    /// the thing a comment is written under.
+    /// </summary>
     private static readonly Regex ForumNearby =
-        new("форум|топик|topic", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new("форум|топик|topic|комментари", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// A word right before "тема" that makes it the entity wherever it stands.
+    /// Only a topic is pinned, and the label of the pin handle
+    /// ("Порядок закрепленной темы ...") has neither the forum nor a comment
+    /// within reach in its template.
+    /// </summary>
+    private static readonly Regex EntityBefore =
+        new(@"закрепл\p{L}*\s+$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>How far before the word <see cref="EntityBefore"/> looks, in characters.</summary>
+    private const int Lead = 30;
 
     /// <summary>Text around the word that counts as its neighbourhood, in characters.</summary>
     private const int Neighbourhood = 60;
@@ -99,31 +131,45 @@ public class InterfaceVocabularyShould
     /// "Занятные темы" -- a title the owner wrote, and award titles are his to
     /// write (a neighbouring one is called "Народное признание, например").
     /// Renaming it would also be a seed change, and the seed is the same row in
-    /// the migration and in both model snapshots.
+    /// the migration and in both model snapshots. "Платиновые темы" is an item of
+    /// the old site's lore (ERROR_PAGES_AND_LORE.md), listed under the name its
+    /// community gave it.
     /// </summary>
     private static readonly Regex[] ProperNames =
     [
-        new("Занятные темы", RegexOptions.Compiled)
+        new("Занятные темы", RegexOptions.Compiled),
+        new("Платиновые темы", RegexOptions.Compiled)
     ];
 
     /// <summary>
-    /// The seeded forum, which is simulated user speech rather than the site's
-    /// own words: a seeded post asks about "темная тема сайта" and announces a
-    /// contest whose "Тема" is its subject. Neither is the forum entity, and
-    /// rewriting quoted speech to a term of the interface is not the rule.
+    /// The retired word named as retired. The glossary's rows read "term, our
+    /// word, the word we do not use", and the row for the forum entity has to
+    /// spell the word it retires or it records nothing. Only that spelling is
+    /// let through -- the word in quotes in the cell right after "Топик" -- so
+    /// prose elsewhere in the same file that calls a topic by the old word is
+    /// still caught.
     /// </summary>
-    private const string SimulatedSpeech = "src/DM.Tools.Seeder/Seeding/DataSeeder.Forum.cs";
+    private static readonly Regex[] RetiredMentions =
+    [
+        new(@"\|\s*Топик\s*\|\s*""Тем[аыеу]""", RegexOptions.Compiled)
+    ];
 
     /// <summary>The entity called by the other word, judged by the text around each hit.</summary>
     private static bool CallsTheEntityATema(string text)
     {
         foreach (Match hit in Tema.Matches(text))
         {
+            if (!hit.Groups[1].Success && Pronoun.IsMatch(text[hit.Index..Math.Min(text.Length, hit.Index + 40)]))
+            {
+                continue;
+            }
+
             var from = Math.Max(0, hit.Index - Neighbourhood);
             var to = Math.Min(text.Length, hit.Index + hit.Length + Neighbourhood);
             var around = text[from..to];
+            var lead = text[Math.Max(0, hit.Index - Lead)..hit.Index];
 
-            if (!ForumNearby.IsMatch(around))
+            if (!ForumNearby.IsMatch(around) && !EntityBefore.IsMatch(lead))
             {
                 continue;
             }
@@ -134,6 +180,11 @@ public class InterfaceVocabularyShould
             }
 
             if (Array.Exists(ProperNames, name => name.IsMatch(around)))
+            {
+                continue;
+            }
+
+            if (Array.Exists(RetiredMentions, mention => mention.IsMatch(around)))
             {
                 continue;
             }
@@ -167,7 +218,7 @@ public class InterfaceVocabularyShould
         var offenders = new List<string>();
         var scanned = 0;
 
-        foreach (var file in ReadableText(root))
+        foreach (var file in ReadableText(root).Concat(ClientText(root)))
         {
             scanned++;
             var text = File.ReadAllText(file);
@@ -182,7 +233,7 @@ public class InterfaceVocabularyShould
                 }
             }
 
-            if (relative != SimulatedSpeech && CallsTheEntityATema(text))
+            if (CallsTheEntityATema(text))
             {
                 offenders.Add($"{relative}: the forum entity is a \"топик\"");
             }
@@ -190,7 +241,7 @@ public class InterfaceVocabularyShould
 
         scanned.Should().BeGreaterThan(0, "a rule that reads nothing passes");
         offenders.Should().BeEmpty(
-            "the documentation and the seed are where the next screen takes its words from");
+            "the documentation, the seed and the screens are where the next screen takes its words from");
     }
 
     [Fact]
@@ -253,6 +304,35 @@ public class InterfaceVocabularyShould
         foreach (var file in FilesUnder(Path.Combine(root, "src"), "*.cs"))
         {
             yield return file;
+        }
+    }
+
+    /// <summary>
+    /// The client's own sources, for the words only. The client checks them too
+    /// (copy-rules.spec.ts), but its rule for the entity stood where this one did
+    /// and missed the same forms: the pin handle of every pinned topic was read
+    /// out as "Порядок закрепленной темы". The characters stay the client's
+    /// business: its motto is the one place the typographic quotes are allowed.
+    /// Specs are left out, as there: they quote the words they forbid.
+    /// </summary>
+    private static IEnumerable<string> ClientText(string root)
+    {
+        var client = Path.Combine(root, "src", "DM.Web.Client", "src");
+        if (!Directory.Exists(client))
+        {
+            yield break;
+        }
+
+        foreach (var pattern in new[] { "*.vue", "*.ts" })
+        {
+            foreach (var file in FilesUnder(client, pattern))
+            {
+                if (!file.EndsWith(".spec.ts", StringComparison.Ordinal) &&
+                    !file.EndsWith(".d.ts", StringComparison.Ordinal))
+                {
+                    yield return file;
+                }
+            }
         }
     }
 

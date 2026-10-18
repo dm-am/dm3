@@ -51,6 +51,12 @@ internal abstract class AccountMailSender
         new Uri(new Uri(_siteAddresses.PublicUrl), $"{page}#token={token}").ToString();
 
     /// <summary>
+    /// A mailed link to a page of the site that carries no secret.
+    /// </summary>
+    protected string SiteLink(string page) =>
+        new Uri(new Uri(_siteAddresses.PublicUrl), page).ToString();
+
+    /// <summary>
     /// Render the view model and send it, with the logo the templates reference.
     /// </summary>
     protected async Task Send<TViewModel>(string email, string subject, TViewModel viewModel)

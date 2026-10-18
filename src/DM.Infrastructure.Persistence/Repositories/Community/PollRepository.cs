@@ -6,6 +6,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Community.Features.Polls;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbPoll = DM.Infrastructure.Persistence.Entities.Community.Poll;
@@ -186,60 +187,90 @@ internal class PollRepository : IPollRepository
     public async Task<Poll> Update(Guid pollId, string? title, string? details,
         DateTimeOffset? startDate, DateTimeOffset? endDate, bool? isAnonymous)
     {
-        var dbPoll = await LoadPoll(pollId, tracked: true) ?? throw new InvalidOperationException(
-            $"Poll {pollId} does not exist");
-
-        if (title != null)
+        // Everything the edit does lives inside the block: the read the reset
+        // decision is made on has to happen under the lock, and a strategy retry
+        // clears the change tracker, so modifications applied outside would be
+        // dropped on the second attempt.
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            dbPoll.Title = title;
-        }
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-        if (details != null)
-        {
-            dbPoll.Details = details == string.Empty ? null : details;
-        }
-
-        if (startDate.HasValue)
-        {
-            dbPoll.StartsUtc = startDate.Value.ToUniversalTime();
-        }
-
-        if (endDate.HasValue)
-        {
-            dbPoll.EndsUtc = endDate.Value.ToUniversalTime();
-        }
-
-        var resetsVotes = isAnonymous.HasValue && dbPoll.IsAnonymous && !isAnonymous.Value;
-        if (isAnonymous.HasValue)
-        {
-            dbPoll.IsAnonymous = isAnonymous.Value;
-        }
-
-        if (resetsVotes)
-        {
-            // Reset votes when changing from Anonymous to Public. ExecuteDelete
-            // by PollId under one transaction with the flag save: deleting the
-            // loaded graph left a window where a vote inserted concurrently by
-            // the raw ON CONFLICT path survived "reset all votes" (review of
-            // W1.1). Server-side delete sees every row, and the transaction
-            // keeps the pair both-or-neither. The tracked modifications survive
-            // a strategy retry as they are - nothing here re-adds entities.
-            var strategy = _dbContext.Database.CreateExecutionStrategy();
-            await strategy.ExecuteAsync(async () =>
+            // The poll row first, and the flag comes back with the lock rather
+            // than being read again afterwards. Whether the votes are reset is a
+            // decision about the flag as it stands now, and it used to be made on
+            // a row read with no lock at all: a vote committed between that read
+            // and the delete outlived the reset it was supposed to be cleared by,
+            // and one committed just after it was deleted by a reset the voter's
+            // ballot never showed. Vote holds the same row FOR SHARE, so the two
+            // orderings are now the only ones: the vote is already here and gets
+            // deleted, or it waits for this commit and lands on a poll that is
+            // already public.
+            //
+            // A list rather than a single value, because "no rows" is the poll
+            // that is not there and false is a poll that is public.
+            var locked = await _dbContext.Database
+                .SqlQueryRaw<bool>(
+                    """SELECT "IsAnonymous" AS "Value" FROM "Polls" WHERE "PollId" = {0} FOR UPDATE""",
+                    pollId)
+                .ToListAsync();
+            if (locked.Count == 0)
             {
-                await using var transaction =
-                    await _dbContext.Database.BeginTransactionAsync();
+                throw new InvalidOperationException($"Poll {pollId} does not exist");
+            }
+
+            var wasAnonymous = locked[0];
+
+            // The row alone. Its options and every vote cast on them are a read
+            // of unbounded size, and holding a write lock while it runs makes
+            // every voter wait for it; the answer this method returns is read
+            // after the commit, where the wait costs nobody anything.
+            var dbPoll = await _dbContext.Polls
+                .TagWith("DM.Community.Polls.Edited")
+                .FirstAsync(p => p.PollId == pollId);
+
+            if (title != null)
+            {
+                dbPoll.Title = title;
+            }
+
+            if (details != null)
+            {
+                dbPoll.Details = details == string.Empty ? null : details;
+            }
+
+            if (startDate.HasValue)
+            {
+                dbPoll.StartsUtc = startDate.Value.ToUniversalTime();
+            }
+
+            if (endDate.HasValue)
+            {
+                dbPoll.EndsUtc = endDate.Value.ToUniversalTime();
+            }
+
+            // Off the locked value, not off the loaded row: what the reset turns
+            // on is the state no other writer can move until this commit.
+            var resetsVotes = isAnonymous.HasValue && wasAnonymous && !isAnonymous.Value;
+            if (isAnonymous.HasValue)
+            {
+                dbPoll.IsAnonymous = isAnonymous.Value;
+            }
+
+            if (resetsVotes)
+            {
+                // Reset votes when changing from Anonymous to Public: an
+                // anonymous ballot cannot be republished with names on it.
+                // Server-side delete rather than the loaded graph, because the
+                // vote writes bypass the change tracker and the graph only holds
+                // what this context happened to read.
                 await _dbContext.PollVotes
                     .Where(v => v.PollId == pollId)
                     .ExecuteDeleteAsync();
-                await _dbContext.SaveChangesAsync();
-                await transaction.CommitAsync();
-            });
-        }
-        else
-        {
+            }
+
             await _dbContext.SaveChangesAsync();
-        }
+            await transaction.CommitAsync();
+        });
 
         return (await LoadPoll(pollId)).ToPoll();
     }
@@ -276,9 +307,26 @@ internal class PollRepository : IPollRepository
         }
 
         var votedUtc = _dateTimeProvider.Now;
+
+        // The poll row is read FOR SHARE so that the wait is asked for here
+        // rather than inherited: the referential check on "PollId" takes FOR KEY
+        // SHARE on the same row anyway, and the reset's FOR UPDATE refuses that
+        // one just as well, but a lock taken by a constraint is a side effect and
+        // not a statement about ordering. Either way a vote cast while an
+        // anonymous ballot is being cleared queues behind the reset instead of
+        // landing inside it, and two voters never wait on each other, shared
+        // locks not conflicting.
+        //
+        // The lock and the insert are one statement, so there is nothing here for
+        // a transaction to hold together and nothing for the execution strategy
+        // to replay as a unit: a single statement is its own transaction, and the
+        // strategy retries it on its own.
         var inserted = await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "PollVotes" ("PollId", "UserId", "PollOptionId", "VotedUtc")
-            VALUES ({pollId}, {userId}, {optionId}, {votedUtc})
+            SELECT {pollId}, {userId}, {optionId}, {votedUtc}
+            FROM "Polls"
+            WHERE "PollId" = {pollId}
+            FOR SHARE
             ON CONFLICT ("PollId", "UserId") DO NOTHING
             """);
 

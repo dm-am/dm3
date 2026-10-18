@@ -30,7 +30,8 @@ public class CharacterIntentionResolverShould : UnitTestBase
         bool isNpc = false,
         bool isDead = false,
         bool isPlayerLeft = false,
-        CharacterAccessPolicy accessPolicy = CharacterAccessPolicy.NoAccess) => new()
+        CharacterAccessPolicy accessPolicy = CharacterAccessPolicy.NoAccess,
+        bool isPlayerExiled = false) => new()
         {
             AuthorId = isNpc ? Guid.Empty : PlayerId,
             GameMasterId = MasterId,
@@ -40,6 +41,7 @@ public class CharacterIntentionResolverShould : UnitTestBase
             IsNpc = isNpc,
             IsDead = isDead,
             IsPlayerLeft = isPlayerLeft,
+            IsPlayerExiled = isPlayerExiled,
             AccessPolicy = accessPolicy,
         };
 
@@ -207,19 +209,79 @@ public class CharacterIntentionResolverShould : UnitTestBase
         // Retired because the player left, not because the character died.
         resolver.IsAllowed(master, CharacterIntention.Resurrect,
             Character(CharacterStatus.Retired, isDead: false)).Should().BeFalse();
+
+        // Exiled, not dead: the way back from an exile is its own.
+        resolver.IsAllowed(master, CharacterIntention.Resurrect,
+            Character(CharacterStatus.Retired, isPlayerExiled: true)).Should().BeFalse();
     }
 
+    /// <summary>
+    /// Exile is the lead's move, so the lead may take it back: the master and his
+    /// assistants, the same hands that exile. Nobody else, the player included.
+    /// </summary>
     [Fact]
-    public void AllowReturnOnlyToAPlayerWhoLeftVoluntarily()
+    public void LetTheLeadBringBackTheCharacterHeExiled()
     {
-        var player = Create.User(PlayerId).WithRole(UserRole.RegularUser).Please();
+        var exiled = Character(CharacterStatus.Retired, isPlayerExiled: true);
 
-        resolver.IsAllowed(player, CharacterIntention.Return,
-            Character(CharacterStatus.Retired, isPlayerLeft: true)).Should().BeTrue();
+        resolver.IsAllowed(Create.User(MasterId).WithRole(UserRole.RegularUser).Please(),
+            CharacterIntention.Readmit, exiled).Should().BeTrue();
+        resolver.IsAllowed(Create.User(AssistantId).WithRole(UserRole.RegularUser).Please(),
+            CharacterIntention.Readmit, exiled).Should().BeTrue();
 
-        // Exiled, not left: returning is not the player's to decide.
-        resolver.IsAllowed(player, CharacterIntention.Return,
-            Character(CharacterStatus.Retired, isPlayerLeft: false)).Should().BeFalse();
+        resolver.IsAllowed(Create.User(PlayerId).WithRole(UserRole.RegularUser).Please(),
+            CharacterIntention.Readmit, exiled).Should().BeFalse("the player was thrown out, he does not let himself back");
+        resolver.IsAllowed(Create.User(StrangerId).WithRole(UserRole.Admin).Please(),
+            CharacterIntention.Readmit, exiled).Should().BeFalse("the moderation does not run the roster");
+    }
+
+    /// <summary>
+    /// Readmit undoes an exile and nothing else: not a death, and not a character
+    /// that is still in play.
+    /// </summary>
+    [Theory]
+    [InlineData(CharacterStatus.Retired, true, false)]
+    [InlineData(CharacterStatus.Retired, false, false)]
+    [InlineData(CharacterStatus.Active, false, true)]
+    public void BringBackOnlyACharacterThatWasExiled(CharacterStatus status, bool isDead, bool isPlayerExiled)
+    {
+        var master = Create.User(MasterId).WithRole(UserRole.RegularUser).Please();
+
+        resolver.IsAllowed(master, CharacterIntention.Readmit,
+            Character(status, isDead: isDead, isPlayerExiled: isPlayerExiled)).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// A character its player took out of the game comes back by nobody's move:
+    /// not the player's, not the lead's, not the moderation's. Every intention
+    /// that puts a character back into play is asked; the transitions that would
+    /// reach them from Retired are held by CharacterStatusTransitionsShould.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void BringBackNoCharacterItsPlayerTookOut(bool alsoDead, bool alsoExiled)
+    {
+        // Left, and marked dead or exiled by the lead as well: leaving still wins.
+        var left = Character(CharacterStatus.Retired, isDead: alsoDead, isPlayerLeft: true,
+            isPlayerExiled: alsoExiled);
+        var everybody = new[]
+        {
+            Create.User(PlayerId).WithRole(UserRole.RegularUser).Please(),
+            Create.User(MasterId).WithRole(UserRole.RegularUser).Please(),
+            Create.User(AssistantId).WithRole(UserRole.RegularUser).Please(),
+            Create.User(StrangerId).WithRole(UserRole.Moderator).Please(),
+            Create.User(StrangerId).WithRole(UserRole.SeniorModerator).Please(),
+            Create.User(StrangerId).WithRole(UserRole.Admin).Please(),
+        };
+
+        foreach (var user in everybody)
+        {
+            resolver.IsAllowed(user, CharacterIntention.Accept, left).Should().BeFalse(user.Role.ToString());
+            resolver.IsAllowed(user, CharacterIntention.Resurrect, left).Should().BeFalse(user.Role.ToString());
+            resolver.IsAllowed(user, CharacterIntention.Readmit, left).Should().BeFalse(user.Role.ToString());
+        }
     }
 
     [Fact]

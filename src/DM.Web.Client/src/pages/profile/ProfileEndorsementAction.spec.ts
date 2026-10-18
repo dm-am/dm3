@@ -5,9 +5,12 @@
 /**
  * "Написать рекомендацию" in the actions row of somebody else's profile.
  *
- * Two things are gated here. It stands beside "Написать сообщение", in the
- * branch that only a signed-in reader of another person's profile sees — the
- * row is where a reader looks for what can be done about this participant.
+ * Two things are gated here. It stands in the branch that only a signed-in
+ * reader of another person's profile sees — the row is where a reader looks
+ * for what can be done about this participant — third, after "Написать
+ * сообщение" and the subscription: it comes and goes with the server's answer,
+ * and in front of the subscription it moved the subscription between the
+ * second and the third place from one profile to the next.
  * And it is drawn on `canEndorse` and nothing else: that flag is the server's
  * own answer (useEndorsementEligibility, tested at runtime next door), because
  * three of the five conditions the POST enforces — probation, a shared game, a
@@ -93,7 +96,8 @@ const visitorBranch = (): Node => {
   const branch = (row.children ?? []).find(
     (c) =>
       c.type === ELEMENT &&
-      directive(c, "else-if") === "currentUser && !isOwnProfile",
+      directive(c, "else-if") ===
+        "currentUser && !isOwnProfile && !isRemovedAccount",
   );
   if (!branch) throw new Error("the actions row has no visitor branch");
   return branch;
@@ -104,24 +108,25 @@ const controls = (): Node[] =>
   (visitorBranch().children ?? []).filter((c) => c.type === ELEMENT);
 
 describe("the write-recommendation action", () => {
-  it("stands next to Написать сообщение in the visitor's actions row", () => {
-    const labels = controls().map((c) => deepText(c));
+  it("stands after the message and the subscription in the visitor's actions row", () => {
+    const labels = controls().map((c) => deepText(c) || c.tag);
 
-    expect(labels.slice(0, 2)).toEqual([
+    expect(labels.slice(0, 3)).toEqual([
       "Написать сообщение",
+      "UserSubscribeButton",
       "Написать рекомендацию",
     ]);
   });
 
   it("opens the write form for this profile's owner", () => {
-    const action = controls()[1];
+    const action = controls()[2];
 
     expect(action.tag).toBe("router-link");
     expect(directive(action, "bind", "to")).toBe("writeEndorsementLink");
   });
 
   it("is drawn on the server's answer and on nothing else", () => {
-    expect(directive(controls()[1], "if")).toBe("canEndorse");
+    expect(directive(controls()[2], "if")).toBe("canEndorse");
   });
 
   it("takes that answer from the shared eligibility question", () => {

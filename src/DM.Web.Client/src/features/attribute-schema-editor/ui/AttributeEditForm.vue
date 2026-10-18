@@ -76,7 +76,9 @@ function onTypeChange(value: string) {
     </form-field>
 
     <div class="edit-actions">
-      <Button type="button" @click="$emit('done')">Готово</Button>
+      <Button type="button" variant="primary" @click="$emit('done')">
+        Готово
+      </Button>
     </div>
   </div>
 </template>
@@ -86,7 +88,6 @@ function onTypeChange(value: string) {
   padding: $medium
   background-color: $bg-element-overlay
   border: 1px solid $border
-  border-radius: $border-radius
 
 .edit-header
   font-weight: bold

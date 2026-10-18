@@ -12,6 +12,10 @@ using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Chara
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
+using DM.Web.API.IntegrationTests.Helpers;
+
+using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAttributeSchema;
+
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
 /// <summary>
@@ -109,6 +113,7 @@ public class GameNpcRosterShould : IntegrationTestBase
             CreatedUtc = DateTimeOffset.UtcNow
         };
         dbContext.Games.Add(game);
+        dbContext.Set<DbGameAttributeSchema>().Add(GameSheetTestHelper.Sheet(game.GameId));
 
         var suffix = Guid.NewGuid().ToString("N")[..6];
         var npcName = "Трактирщик " + suffix;

@@ -11,14 +11,15 @@
 // and DataTable and its own skeleton each held a private copy of 768 — change
 // one and the table parts from its placeholder on a phone.
 //
-// The header's three compression steps (1699/1489/1339) are NOT here on
-// purpose: they squeeze one menu progressively, they do not switch a layout.
-// Header.vue says so where they are written, and styleSystem.spec.ts names that
-// file as the one place a literal width may still stand.
+// The steps of the header's menu are NOT here on purpose: they squeeze one
+// menu progressively, they do not switch a layout. Header.vue says so where
+// they are written, and styleSystem.spec.ts names that file as the one place a
+// literal width may still stand.
 // =============================================================================
 
-// Shell breakpoint — below this both page sidebars leave the 3-column flow;
-// the burger + off-canvas drawer becomes the navigation entry point.
+// Shell breakpoint — up to this both page sidebars leave the 3-column flow and
+// become the two views of one column that slides in from the one button of the
+// header, at its left edge.
 $bp-shell: 1000px
 
 // Tablet-ish content reflow (grids dropping a column, etc.)

@@ -29,12 +29,15 @@ namespace DM.Domain.Account.Tests.Features.TwoFactor;
 /// That order is the point: everything that can go wrong with a setup - a clock
 /// adrift, an app that saved nothing, the wrong QR scanned - is discovered at the
 /// confirmation rather than days later at a sign-in where the only way in left is
-/// recovery (INV-2).
+/// recovery.
 /// </remarks>
 public class TwoFactorServiceShould : UnitTestBase
 {
     private static readonly Guid UserId = Guid.Parse("6c5b4a39-2817-4655-9403-1122334455aa");
     private static readonly DateTimeOffset Moment = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+
+    /// <summary>When the secret a confirmation is checked against was issued.</summary>
+    private static readonly DateTimeOffset SecretIssued = Moment.AddMinutes(-1);
     private const string Password = "correct horse";
 
     private readonly ITwoFactorRepository _repository;
@@ -69,6 +72,14 @@ public class TwoFactorServiceShould : UnitTestBase
         _securityManager.ComparePasswords(Password, "salt", "hash").Returns(true);
         _cryptoService.Encrypt(Arg.Any<string>())
             .Returns(call => Task.FromResult("envelope:" + (string)call[0]));
+        // The write is what decides whether the secret was taken, so the default
+        // of a substitute - false - would refuse every setup in this file. The
+        // reissue answers the same way, and for the same reason: the factor it
+        // issues a set for can be gone by the time the set is written.
+        _repository.IssueSecret(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTimeOffset>(),
+            Arg.Any<CancellationToken>()).Returns(true);
+        _repository.ReplaceRecoveryCodes(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<byte[]>>(),
+            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(true);
 
         _service = new TwoFactorService(
             _repository,
@@ -106,7 +117,7 @@ public class TwoFactorServiceShould : UnitTestBase
 
     // ── Issuing the secret ──
 
-    /// <summary>AC-2: the answer carries the secret and the otpauth URI.</summary>
+    /// <summary>The answer carries the secret and the otpauth URI.</summary>
     [Fact]
     public async Task HandOverTheSecretAndTheUri()
     {
@@ -134,7 +145,7 @@ public class TwoFactorServiceShould : UnitTestBase
         setup.OtpAuthUri.Should().NotContain("reader@example.com");
     }
 
-    /// <summary>INV-3: what reaches storage is the envelope, not the secret.</summary>
+    /// <summary>What reaches storage is the envelope, not the secret.</summary>
     [Fact]
     public async Task StoreTheSecretOnlyInsideTheEnvelope()
     {
@@ -145,7 +156,7 @@ public class TwoFactorServiceShould : UnitTestBase
             UserId, "envelope:" + setup.Secret, Moment, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>AC-3: without the password nothing is issued.</summary>
+    /// <summary>Without the password nothing is issued.</summary>
     [Fact]
     public async Task RefuseToIssueASecretWithoutTheCurrentPassword()
     {
@@ -155,7 +166,7 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>AC-4: a second call before confirmation replaces the secret.</summary>
+    /// <summary>A second call before confirmation replaces the secret.</summary>
     [Fact]
     public async Task ReplaceAnUnconfirmedSecretRatherThanRepeatIt()
     {
@@ -184,12 +195,12 @@ public class TwoFactorServiceShould : UnitTestBase
     // ── Confirming ──
 
     /// <summary>
-    /// INV-2: only a code that matched the issued secret switches the factor on.
+    /// Only a code that matched the issued secret switches the factor on.
     /// </summary>
     [Fact]
     public async Task SwitchTheFactorOnOnlyForACodeThatMatched()
     {
-        _repository.Find(UserId, Arg.Any<CancellationToken>()).Returns(Unconfirmed(Moment.AddMinutes(-1)));
+        _repository.Find(UserId, Arg.Any<CancellationToken>()).Returns(Unconfirmed(SecretIssued));
         _verifier.Accept(Arg.Any<TwoFactorState>(), "000000", null, Arg.Any<CancellationToken>())
             .Returns(false);
 
@@ -197,10 +208,10 @@ public class TwoFactorServiceShould : UnitTestBase
 
         thrown.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         await _repository.DidNotReceive().Confirm(
-            Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<IReadOnlyList<byte[]>>(),
-            Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(),
+            Arg.Any<IReadOnlyList<byte[]>>(), Arg.Any<CancellationToken>());
 
-        // AC-5: the attempt is counted. In the journal the owner reads, and not
+        // The attempt is counted. In the journal the owner reads, and not
         // in the lockout counter of the login - a person mistyping their very
         // first setup code must not be able to lock their own sign-in.
         await _auditService.Received(1).LogAsync(
@@ -215,7 +226,7 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>AC-7: the recovery codes come back once, with the confirmation.</summary>
+    /// <summary>The recovery codes come back once, with the confirmation.</summary>
     [Fact]
     public async Task IssueTheRecoveryCodesWithTheConfirmation()
     {
@@ -229,7 +240,7 @@ public class TwoFactorServiceShould : UnitTestBase
         // is shown in this answer and never again, so it cannot be stored by a
         // second write that may not happen.
         await _repository.Received(1).Confirm(
-            UserId, Moment, Arg.Is<IReadOnlyList<byte[]>>(hashes => hashes.Count == 10),
+            UserId, SecretIssued, Moment, Arg.Is<IReadOnlyList<byte[]>>(hashes => hashes.Count == 10),
             Arg.Any<CancellationToken>());
         await _repository.DidNotReceive().ReplaceRecoveryCodes(
             Arg.Any<Guid>(), Arg.Any<IReadOnlyList<byte[]>>(), Arg.Any<DateTimeOffset>(),
@@ -239,7 +250,7 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>AC-8 and INV-16: confirming ends every other session.</summary>
+    /// <summary>Confirming ends every other session.</summary>
     /// <remarks>
     /// And ends them before the factor goes on, which is the order that survives
     /// a failure. The other way round, a fault while ending the sessions leaves
@@ -259,7 +270,8 @@ public class TwoFactorServiceShould : UnitTestBase
         {
             _authenticationService.LogoutElsewhere();
             _repository.Confirm(
-                UserId, Moment, Arg.Any<IReadOnlyList<byte[]>>(), Arg.Any<CancellationToken>());
+                UserId, SecretIssued, Moment, Arg.Any<IReadOnlyList<byte[]>>(),
+                Arg.Any<CancellationToken>());
         });
     }
 
@@ -276,7 +288,7 @@ public class TwoFactorServiceShould : UnitTestBase
     public async Task LeaveTheFactorOffWhenTheConfirmationCannotBeStored()
     {
         ArrangeConfirmation();
-        _repository.Confirm(UserId, Moment, Arg.Any<IReadOnlyList<byte[]>>(),
+        _repository.Confirm(UserId, SecretIssued, Moment, Arg.Any<IReadOnlyList<byte[]>>(),
                 Arg.Any<CancellationToken>())
             .Returns<bool>(_ => throw new InvalidOperationException("storage is down"));
 
@@ -292,7 +304,7 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>AC-6: past the setup window the confirmation is refused.</summary>
+    /// <summary>Past the setup window the confirmation is refused.</summary>
     [Fact]
     public async Task RefuseAConfirmationPastTheSetupWindow()
     {
@@ -304,8 +316,8 @@ public class TwoFactorServiceShould : UnitTestBase
 
         thrown.StatusCode.Should().Be(HttpStatusCode.Gone);
         await _repository.DidNotReceive().Confirm(
-            Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<IReadOnlyList<byte[]>>(),
-            Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(),
+            Arg.Any<IReadOnlyList<byte[]>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -318,7 +330,7 @@ public class TwoFactorServiceShould : UnitTestBase
         thrown.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>AC-7, the other half: the set cannot be had a second time.</summary>
+    /// <summary>A factor already on cannot be confirmed a second time.</summary>
     [Fact]
     public async Task RefuseASecondConfirmationOfAFactorAlreadyOn()
     {
@@ -328,25 +340,54 @@ public class TwoFactorServiceShould : UnitTestBase
 
         thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
         await _repository.DidNotReceive().Confirm(
-            Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<IReadOnlyList<byte[]>>(),
+            Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(),
+            Arg.Any<IReadOnlyList<byte[]>>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// The confirmation names the secret it checked, so a setup started
+    /// elsewhere cannot be switched on by somebody else's code.
+    /// </summary>
+    /// <remarks>
+    /// The window is between the read of the state and the stamp: a second device
+    /// asking for a QR replaces the secret in place, and a stamp that only asked
+    /// "still off?" would switch the account on to a secret its owner has never
+    /// seen - and hand out the recovery set for it.
+    /// </remarks>
+    [Fact]
+    public async Task NameTheSecretItCheckedWhenSwitchingTheFactorOn()
+    {
+        ArrangeConfirmation();
+
+        await _service.Confirm("123456");
+
+        await _repository.Received(1).Confirm(
+            UserId, SecretIssued, Moment, Arg.Any<IReadOnlyList<byte[]>>(),
             Arg.Any<CancellationToken>());
     }
 
     /// <summary>
-    /// Two confirmations racing each other switch the factor on once.
+    /// The secret gone from under the confirmation is refused, and refused the
+    /// way a code that does not match is.
     /// </summary>
+    /// <remarks>
+    /// Which is what the code has become: it belongs to a secret the account no
+    /// longer holds, because another setup replaced it or a confirmation arrived
+    /// first. What the owner has to do either way is scan what is on the screen
+    /// now and type a code for that.
+    /// </remarks>
     [Fact]
-    public async Task RefuseAConfirmationThatLostTheRaceToSwitchOn()
+    public async Task RefuseAConfirmationOfASecretThatIsNoLongerThere()
     {
-        _repository.Find(UserId, Arg.Any<CancellationToken>()).Returns(Unconfirmed(Moment.AddMinutes(-1)));
+        _repository.Find(UserId, Arg.Any<CancellationToken>()).Returns(Unconfirmed(SecretIssued));
         _verifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
             Arg.Any<CancellationToken>()).Returns(true);
-        _repository.Confirm(UserId, Moment, Arg.Any<IReadOnlyList<byte[]>>(),
+        _repository.Confirm(UserId, SecretIssued, Moment, Arg.Any<IReadOnlyList<byte[]>>(),
             Arg.Any<CancellationToken>()).Returns(false);
 
         var thrown = await Assert.ThrowsAsync<HttpException>(() => _service.Confirm("123456"));
 
-        thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        thrown.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         // The set belongs to whichever confirmation switched the factor on, and
         // the loser is told nothing was switched on by it.
@@ -355,9 +396,29 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
+    /// <summary>
+    /// A setup that lost the race to a confirmation is refused by the write.
+    /// </summary>
+    /// <remarks>
+    /// The read above it answered "off" and a confirmation committed between the
+    /// two. Same refusal as the read gives, because what the owner is told must
+    /// not depend on which of the two noticed.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseASetupThatLostTheRaceToAConfirmation()
+    {
+        _repository.Find(UserId, Arg.Any<CancellationToken>()).Returns(Unconfirmed(SecretIssued));
+        _repository.IssueSecret(UserId, Arg.Any<string>(), Moment, Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var thrown = await Assert.ThrowsAsync<HttpException>(() => _service.IssueSecret(Password));
+
+        thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
     // ── Switching off and reissuing ──
 
-    /// <summary>INV-18: switching off costs the password and a second factor.</summary>
+    /// <summary>Switching off costs the password and a second factor.</summary>
     [Fact]
     public async Task RefuseToSwitchOffWithoutTheCurrentPassword()
     {
@@ -396,7 +457,7 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>AC-25 and INV-17: a reissue retires the previous set whole.</summary>
+    /// <summary>A reissue retires the previous set whole.</summary>
     [Fact]
     public async Task ReplaceTheWholeSetOfRecoveryCodes()
     {
@@ -429,9 +490,37 @@ public class TwoFactorServiceShould : UnitTestBase
         thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
+    /// <summary>
+    /// A factor taken off while the reissue was asked for hands out no codes.
+    /// </summary>
+    /// <remarks>
+    /// The state is read before the password and the code are checked, and a
+    /// mailed removal coming due needs no code of its own: told by the read
+    /// alone, the answer showed the owner ten recovery codes for a factor that
+    /// was no longer there - a way into the account that does not exist.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseToReissueCodesForAFactorTakenOffWhileItWasAsked()
+    {
+        _repository.Find(UserId, Arg.Any<CancellationToken>()).Returns(Confirmed());
+        _verifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
+            Arg.Any<CancellationToken>()).Returns(true);
+        _repository.ReplaceRecoveryCodes(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<byte[]>>(),
+            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(false);
+
+        var thrown = await Assert.ThrowsAsync<HttpException>(
+            () => _service.ReissueRecoveryCodes(Password, "123456"));
+
+        thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        thrown.Message.Should().Be(RefusalMessage.TwoFactorNotEnabled);
+        await _auditService.DidNotReceive().LogAsync(
+            Arg.Any<Guid>(), SecurityEventType.TwoFactorRecoveryCodesReissued,
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
+    }
+
     // ── Status ──
 
-    /// <summary>INV-1: "on" is the confirmation stamp and nothing else.</summary>
+    /// <summary>The status "on" is the confirmation stamp and nothing else.</summary>
     [Fact]
     public async Task CallTheFactorOnExactlyWhenTheStampIsThere()
     {
@@ -448,7 +537,7 @@ public class TwoFactorServiceShould : UnitTestBase
         status.RecoveryCodesLeft.Should().Be(7);
     }
 
-    /// <summary>INV-3: the status says nothing that could pass the factor.</summary>
+    /// <summary>The status says nothing that could pass the factor.</summary>
     [Fact]
     public async Task SayNothingInTheStatusThatCouldPassTheFactor()
     {
@@ -465,10 +554,10 @@ public class TwoFactorServiceShould : UnitTestBase
 
     private void ArrangeConfirmation()
     {
-        _repository.Find(UserId, Arg.Any<CancellationToken>()).Returns(Unconfirmed(Moment.AddMinutes(-1)));
+        _repository.Find(UserId, Arg.Any<CancellationToken>()).Returns(Unconfirmed(SecretIssued));
         _verifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
             Arg.Any<CancellationToken>()).Returns(true);
-        _repository.Confirm(UserId, Moment, Arg.Any<IReadOnlyList<byte[]>>(),
+        _repository.Confirm(UserId, SecretIssued, Moment, Arg.Any<IReadOnlyList<byte[]>>(),
             Arg.Any<CancellationToken>()).Returns(true);
     }
 }

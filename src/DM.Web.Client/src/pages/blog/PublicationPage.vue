@@ -15,20 +15,19 @@
  *
  * The discussion is the site-wide section, wired the way the blog's own is.
  * Two things differ, and both come from the server. Who may write is the
- * publication's business and not the blog's (PublicationIntentionResolver
- * .CreateComment: signed in, published, comments enabled) — the blog-level
- * commentsEnabled flag does not reach here. And the discussion is not marked
- * read on arrival: the blog has an endpoint for that and the publication has
- * none, so there is nothing honest to call.
+ * publication's business and not the blog's: the publication answers it about
+ * the viewer (published, the blog's blacklist, the ban). And the discussion is
+ * not marked read on arrival: the blog has an endpoint for that and the
+ * publication has none, so there is nothing honest to call.
  *
  * The publication is fetched here rather than taken from the blog store: the
  * store holds a page of the feed, and this page is reachable without ever
  * opening the feed.
  */
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
-import { blogApi } from "@/entities/blog";
+import { blogApi, useBlogDetailsStore } from "@/entities/blog";
 import type { Publication } from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
 import { PublicationCard } from "@/features/publication";
@@ -39,7 +38,7 @@ import { createCommentSection } from "@/shared/lib/composables/createCommentSect
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useZoneSection } from "@/shared/lib/composables/useZoneSection";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
-import { describeFailure } from "@/shared/lib/errors";
+import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
 import type { CommentsQuery } from "@/shared/api";
 
 const route = useRoute();
@@ -74,7 +73,7 @@ const {
 } = createCommentSection({
   getComments: (id, query) => blogApi.getPublicationComments(id, query),
   updateComment: (id, comment) => blogApi.updatePublicationComment(id, comment),
-  deleteComment: (id) => blogApi.deletePublicationComment(id),
+  deleteComment: (id, options) => blogApi.deletePublicationComment(id, options),
   likeComment: (id) => blogApi.likePublicationComment(id),
   unlikeComment: (id) => blogApi.unlikePublicationComment(id),
   currentUsername: () => user.value?.username,
@@ -82,15 +81,34 @@ const {
 
 const LOAD_FAILURE = "Не удалось загрузить публикацию";
 
+/**
+ * The page answers a failed read itself, in the card below, so the read takes
+ * the refusal over and the interceptor says nothing about a 403, a 429 or a
+ * 5xx. Without it the same sentence stood twice: once in the middle of the
+ * page, once on a plate in the corner. The plate alone would not do — a text
+ * that failed to load leaves an empty page, and the card is what says which
+ * page is empty and offers the read again.
+ *
+ * An expired session and a dead connection stay with the interceptor: neither
+ * is about this publication, and only the interceptor knows the other address
+ * of the site.
+ */
+const OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
+
 async function load() {
   const id = pubId.value;
   if (!id) return;
   loading.value = true;
   failure.value = null;
 
-  const { data, error } = await blogApi.getPublication(id);
+  const { data, error } = await blogApi.getPublication(id, OWNS_REFUSAL);
   if (error) {
-    failure.value = describeFailure(error, LOAD_FAILURE);
+    // A wait is said in the shared wording, the one the interceptor would have
+    // raised: it is the only one that names the seconds the server asked for.
+    failure.value =
+      error.status === 429
+        ? describeRateLimit(error.retryAfterSeconds)
+        : describeFailure(error, LOAD_FAILURE);
     publication.value = null;
   } else {
     publication.value = data?.resource ?? null;
@@ -101,25 +119,44 @@ async function load() {
 
 useFetchData(load, [{ param: (p) => p.pubId, callback: () => load() }]);
 
-// The client half of PublicationIntentionResolver.CreateComment. The blacklist
-// and the ban are not asked here for the same reason the blog discussion does
-// not ask them: a refused POST is the signal, and the ban rule exempts your own
-// blog, which no blanket client-side gate can express.
-const canComment = computed(
-  () =>
-    !!user.value &&
-    !!publication.value?.isPublished &&
-    !!publication.value?.commentsEnabled,
+// The blog's blacklist reaches the comments under its publications, where it
+// takes "Редактировать" off the viewer's own. The flag comes with the blog the
+// shell has loaded around this page.
+const { blog } = storeToRefs(useBlogDetailsStore());
+const viewerBlacklisted = computed(
+  () => !!user.value && !!blog.value?.viewerBlacklisted,
 );
 
-// Said instead of the composer to a signed-in reader who still may not write.
-// A guest gets the sign-in prompt from the section itself.
-const closedHint = computed(() => {
-  if (!user.value || canComment.value || !publication.value) return undefined;
-  return publication.value.isPublished
-    ? "Комментарии к этой публикации отключены"
-    : "Черновик обсуждать нельзя, комментарии откроются после публикации";
-});
+// Who may write is the publication's answer about the viewer, asked by the
+// code that refuses the comment (PublicationCommentService): published, the
+// blog's blacklist and the ban with its exemption for one's own blog. The page
+// used to repeat the first two and leave the ban to a refused POST. The answer
+// is for whoever held the session when the publication was read, so the page
+// reads it again when the viewer changes: the guest who signs in from the
+// prompt under the comments gets the form then, and a viewer whose session has
+// just ended is offered nothing.
+const canComment = computed(
+  () => !!user.value && !!publication.value?.viewer?.canComment,
+);
+watch(
+  () => user.value?.username ?? null,
+  () => load(),
+);
+
+// A draft has no discussion at all: nobody comments on it, so there is nothing
+// to read either, and a sentence promising comments after publication was the
+// refusal standing where the form would be. A published one has its
+// discussion whatever is in it.
+const hasDiscussion = computed(() => !!publication.value?.isPublished);
+
+// The plaque in place of the form for the one on the blog's blacklist: what
+// was written stays to read, empty or not. A ban says nothing here, as in the
+// blog's own discussion.
+const closedHint = computed(() =>
+  viewerBlacklisted.value
+    ? "Вы в черном списке этого блога: писать комментарии нельзя"
+    : undefined,
+);
 
 // The discussion runs against the publication guid the server answered with,
 // not the id in the URL: the resolver route hands over a guid already, but a
@@ -134,7 +171,6 @@ const create = (text: string) =>
 
 const fetchEditSource = (id: string) =>
   blogApi.getPublicationCommentForEdit(id);
-const fetchQuoteSource = (id: string) => blogApi.getPublicationCommentQuote(id);
 </script>
 
 <template>
@@ -150,6 +186,7 @@ const fetchQuoteSource = (id: string) => blogApi.getPublicationCommentQuote(id);
       <PublicationCard :publication="publication" standalone />
 
       <DiscussionSection
+        v-if="hasDiscussion"
         :comments="comments"
         :paging="commentsPaging"
         :loading="commentsLoading"
@@ -162,7 +199,6 @@ const fetchQuoteSource = (id: string) => blogApi.getPublicationCommentQuote(id);
         :like="likeComment"
         :unlike="unlikeComment"
         :fetch-edit-source="fetchEditSource"
-        :fetch-quote-source="fetchQuoteSource"
         :paging-to="{
           name: 'blog-publication',
           params: { id: blogId, pubId },
@@ -170,6 +206,7 @@ const fetchQuoteSource = (id: string) => blogApi.getPublicationCommentQuote(id);
         :draft-key="composerDraftKey('publication', 'comment', publication.id)"
         :can-comment="canComment"
         :closed-hint="closedHint"
+        :viewer-blacklisted="viewerBlacklisted"
       />
     </template>
   </div>

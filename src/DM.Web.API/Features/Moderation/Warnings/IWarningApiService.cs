@@ -15,9 +15,14 @@ public interface IWarningApiService
     Task<UserWarningsInfo> GetUserWarnings(string login);
 
     /// <summary>
-    /// Get all warnings (for moderators)
+    /// Get a page of the warning log, open to everyone
     /// </summary>
-    Task<ListEnvelope<Warning>> GetAllWarnings(string? userLogin = null);
+    Task<ListEnvelope<WarningLogEntry>> GetWarningLog(WarningsQuery query);
+
+    /// <summary>
+    /// Get a page of the warning log with the evidence (for moderators)
+    /// </summary>
+    Task<ListEnvelope<Warning>> GetAllWarnings(WarningsQuery query);
 
     /// <summary>
     /// Create a warning
@@ -25,7 +30,12 @@ public interface IWarningApiService
     Task<Envelope<Warning>> CreateWarning(CreateWarningRequest request);
 
     /// <summary>
-    /// Remove (deactivate) a warning
+    /// Change the points of a warning, keeping the warning itself
     /// </summary>
-    Task RemoveWarning(Guid warningId);
+    Task<Envelope<Warning>> ChangeWarningPoints(Guid warningId, ChangeWarningPointsRequest request);
+
+    /// <summary>
+    /// Take the picture out of a warning on a profile, for good
+    /// </summary>
+    Task DeleteProfilePicture(Guid warningId);
 }

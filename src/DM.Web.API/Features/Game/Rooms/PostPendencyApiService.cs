@@ -21,10 +21,9 @@ internal class PostPendencyApiService : IPostPendencyApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<PostPendency>> Create(Guid roomId, PostPendency postPendency)
+    public async Task<Envelope<PostPendency>> Create(Guid roomId, CreatePostPendencyRequest request)
     {
-        var createPostPendency = _mapper.ToCreatePostPendency(postPendency);
-        createPostPendency.RoomId = roomId;
+        var createPostPendency = _mapper.ToCreatePostPendency(roomId, request);
         var createdPostPendency = await _pendencyService.CreateAsync(createPostPendency);
         return new Envelope<PostPendency>(_mapper.ToPostPendency(createdPostPendency));
     }

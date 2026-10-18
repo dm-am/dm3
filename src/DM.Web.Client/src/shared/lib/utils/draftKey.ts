@@ -24,7 +24,8 @@ export type DraftEntity =
   | "publication"
   | "game"
   | "room"
-  | "chat";
+  | "chat"
+  | "ticket";
 
 /**
  * Subjects there is exactly one of, so there is nothing to tell apart: the

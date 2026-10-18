@@ -1,17 +1,51 @@
 <script setup lang="ts">
-import { ref } from "vue";
+/**
+ * "Входы", a section of the profile's "Модерация" tab: the address the account
+ * is registered to, the addresses it signs in from, and the history of its
+ * sign-ins, the last behind a reveal.
+ *
+ * The two lists are the site's tables (DataTable), as the games and blogs of
+ * the profile are: they used to be tables of a look of their own, with grey
+ * headers of another size and rules of another colour.
+ */
+import { computed, ref } from "vue";
 import { useExpandableSection } from "@/shared/lib/composables/useExpandableSection";
 import { symbols } from "@/shared/lib/utils/icons";
 import type { UserIpInfo, LoginRecord } from "@/shared/api/models/moderation";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { NOTHING_TO_SHOW } from "@/shared/lib/constants/copy";
+import { DataTable, type Column } from "@/shared/ui/DataTable";
+import { BlockTitle } from "@/shared/ui/Layout";
+import { StatLine } from "@/shared/ui/StatLine";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
 
-defineProps<{
+const props = defineProps<{
   email?: string;
   ipAddresses?: UserIpInfo[];
   loginHistory?: LoginRecord[];
 }>();
+
+const ipColumns: Column[] = [
+  { key: "ipAddress", label: "IP" },
+  { key: "firstSeen", label: "Первый вход", width: "25%" },
+  { key: "lastSeen", label: "Последний вход", width: "25%" },
+  { key: "loginsCount", label: "Входов", width: "15%", align: "center" },
+];
+
+const historyColumns: Column[] = [
+  { key: "when", label: "Дата", width: "40%" },
+  { key: "ipAddress", label: "IP" },
+  { key: "result", label: "Результат", width: "20%", align: "center" },
+];
+
+// DataTable keys its rows by `id`.
+const ipRows = computed(() =>
+  (props.ipAddresses ?? []).map((ip) => ({ ...ip, id: ip.ipAddress })),
+);
+const historyRows = computed(() =>
+  (props.loginHistory ?? []).map((record, index) => ({
+    ...record,
+    id: `${record.loginUtc}-${record.ipAddress}-${index}`,
+  })),
+);
 
 // Login-history table — a content expandable section (unified reveal
 // animation + the page-wide "Развернуть/Свернуть все" toggle).
@@ -26,162 +60,78 @@ const { toggle: toggleLoginHistory, zoneBindings: historyZoneBindings } =
 </script>
 
 <template>
-  <div class="mod-section">
-    <h4 class="mod-section_title">Информация</h4>
+  <section class="mod-section">
+    <BlockTitle>Входы</BlockTitle>
 
-    <div v-if="email" class="mod-field">
-      <span class="mod-field_label">Почта:</span>
-      <span class="mod-field_value">{{ email }}</span>
-    </div>
+    <StatLine v-if="email" label="Почта" :value="email" class="mod-ip_email" />
 
-    <div class="mod-subsection">
-      <h5 class="mod-subsection_title">
-        IP-адреса ({{ ipAddresses?.length ?? 0 }})
-      </h5>
-      <table v-if="ipAddresses?.length" class="mod-table">
-        <thead>
-          <tr>
-            <th>IP</th>
-            <th>Первый вход</th>
-            <th>Последний вход</th>
-            <th>Входов</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="ip in ipAddresses" :key="ip.ipAddress">
-            <td class="mod-ip">{{ ip.ipAddress }}</td>
-            <td>{{ formatDate(ip.firstSeenUtc) }}</td>
-            <td>{{ formatDate(ip.lastSeenUtc) }}</td>
-            <td>{{ ip.loginsCount }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <secondary-text v-else>{{ NOTHING_TO_SHOW }}</secondary-text>
-    </div>
+    <p class="mod-ip_caption">IP-адреса:</p>
+    <DataTable :columns="ipColumns" :data="ipRows" aria-label="IP-адреса">
+      <template #cell-firstSeen="{ row }">{{
+        formatDate(row.firstSeenUtc)
+      }}</template>
+      <template #cell-lastSeen="{ row }">{{
+        formatDate(row.lastSeenUtc)
+      }}</template>
+    </DataTable>
 
-    <div class="mod-subsection">
-      <h5 class="mod-subsection_title">
-        <button
-          type="button"
-          class="mod-collapsible"
-          :aria-expanded="showLoginHistory"
-          @click="toggleLoginHistory()"
+    <button
+      v-if="loginHistory?.length"
+      type="button"
+      class="mod-ip_history"
+      :aria-expanded="showLoginHistory"
+      @click="toggleLoginHistory()"
+    >
+      История входов ({{ loginHistory.length }})<span
+        class="mod-expand-icon expand-marker"
+        :class="{ expanded: showLoginHistory }"
+        aria-hidden="true"
+      />
+    </button>
+    <div ref="historyZoneRef" class="expand-zone" v-bind="historyZoneBindings">
+      <div v-if="showLoginHistory" class="mod-ip_history-table">
+        <DataTable
+          :columns="historyColumns"
+          :data="historyRows"
+          aria-label="История входов"
         >
-          История входов ({{ loginHistory?.length ?? 0 }})
-          <span
-            class="mod-expand-icon expand-marker"
-            :class="{ expanded: showLoginHistory }"
-            aria-hidden="true"
-          />
-        </button>
-      </h5>
-      <div
-        ref="historyZoneRef"
-        class="expand-zone"
-        v-bind="historyZoneBindings"
-      >
-        <table
-          v-if="showLoginHistory && loginHistory?.length"
-          class="mod-table"
-        >
-          <thead>
-            <tr>
-              <th>Дата</th>
-              <th>IP</th>
-              <th>Результат</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="record in loginHistory"
-              :key="`${record.loginUtc}-${record.ipAddress}`"
-              :class="{ 'mod-row-failed': !record.isSuccessful }"
-            >
-              <td>{{ formatDateFull(record.loginUtc) }}</td>
-              <td class="mod-ip">{{ record.ipAddress }}</td>
-              <td>
-                <span v-if="record.isSuccessful" class="mod-success">{{
-                  symbols.checkmark
-                }}</span>
-                <span v-else class="mod-fail">{{ symbols.cross }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+          <template #cell-when="{ row }">{{
+            formatDateFull(row.loginUtc)
+          }}</template>
+          <template #cell-result="{ row }">
+            <span v-if="row.isSuccessful" class="mod-success">{{
+              symbols.checkmark
+            }}</span>
+            <span v-else class="mod-fail">{{ symbols.cross }}</span>
+          </template>
+        </DataTable>
       </div>
     </div>
-  </div>
+  </section>
 </template>
 
 <style scoped lang="sass">
-.mod-section
-  margin-bottom: $medium
+@use "@/assets/styles/Inputs" as *
 
-.mod-section_title
-  margin: 0 0 $small 0
-  color: $heading
-
-.mod-field
+.mod-ip_email
   margin-bottom: $small
 
-.mod-field_label
-  color: $text-muted
-  margin-right: $small
-
-.mod-field_value
+.mod-ip_caption
+  margin: 0 0 $small
   color: $text
 
-.mod-subsection
-  margin-top: $small
-
-.mod-subsection_title
-  margin: 0 0 $small 0
-  font-size: $secondary-font-size
-  color: $heading-alt
-
-// Button reset so the toggle inside the <h5> looks exactly like the plain
-// heading text it replaced (full-width clickable row, inherited heading
-// font/color, no button chrome).
-.mod-collapsible
+// A reveal is pressed like a link of the text and answers the pointer as one.
+.mod-ip_history
   display: block
-  width: 100%
-  box-sizing: border-box
-  border: none
-  background: none
-  padding: 0
-  font: inherit
-  color: inherit
-  text-align: left
-  cursor: pointer
-  &:hover
-    color: $link-hover
+  margin-top: $small
+  +inline-link-button($text)
 
 .mod-expand-icon
-  font-size: $tertiary-font-size
   margin-left: $minor
-
-.mod-table
-  width: 100%
-  border-collapse: collapse
-  font-size: $secondary-font-size
-
-  th
-    text-align: left
-    padding: $minor $small
-    border-bottom: 1px solid $border
-    color: $text-muted
-    font-weight: bold
-
-  td
-    padding: $minor $small
-    border-bottom: 1px solid $bg-element-accent
-
-.mod-ip
-  font-family: $code-font
   font-size: $tertiary-font-size
 
-.mod-row-failed
-  background: $bg-highlight-red
+.mod-ip_history-table
+  padding-top: $small
 
 .mod-success
   color: $accent-green

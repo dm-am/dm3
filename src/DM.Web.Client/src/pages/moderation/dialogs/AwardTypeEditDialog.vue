@@ -2,11 +2,16 @@
 /**
  * AwardTypeEditDialog — edit an award-type catalog entry (title /
  * description / icon / tier / sortOrder).
+ *
+ * The window runs the request (Dialog `action`): it waits for the answer,
+ * prints a refusal in itself - a name the catalogue already carries as well as
+ * a refusal the interceptor used to say in a plate over it - and closes on
+ * success alone. An edited description is typed text, so the window asks
+ * before it is dropped.
  */
 import { ref, computed } from "vue";
 import { achievementApi } from "@/entities/achievement";
 import type { AwardType } from "@/shared/api/models/achievements";
-import { describeFailure } from "@/shared/lib/errors";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
@@ -27,9 +32,6 @@ const iconName = ref(props.awardType.iconName);
 const tier = ref<number | null>(props.awardType.tier ?? null);
 const sortOrder = ref(props.awardType.sortOrder);
 
-const saving = ref(false);
-const error = ref<string | null>(null);
-
 const canSubmit = computed(
   () =>
     title.value.trim().length > 0 &&
@@ -37,11 +39,11 @@ const canSubmit = computed(
     iconName.value.trim().length > 0,
 );
 
-async function submit() {
-  if (!canSubmit.value || saving.value) return;
-  saving.value = true;
-  error.value = null;
-  const { error: e } = await achievementApi.updateAwardType(
+/** The description differs from what the window opened with. */
+const dirty = computed(() => description.value !== props.awardType.description);
+
+async function send() {
+  const result = await achievementApi.updateAwardType(
     props.awardType.id,
     {
       title: title.value,
@@ -50,33 +52,24 @@ async function submit() {
       tier: tier.value,
       sortOrder: sortOrder.value,
     },
+    { ownsRefusal: true, ownsRateLimit: true },
   );
-  saving.value = false;
-  if (e) {
-    error.value = describeFailure(e, "Не удалось сохранить");
-    return;
-  }
-  emit("success");
+  if (!result.error) emit("success");
+  return result;
 }
 </script>
 
 <template>
-  <Dialog narrow>
+  <Dialog
+    :action="send"
+    failure="Не удалось сохранить"
+    :dirty="dirty"
+    @close="emit('cancel')"
+  >
     <DialogTitle>Редактировать тип: {{ awardType.code }}</DialogTitle>
 
-    <Form
-      :valid="canSubmit"
-      :loading="saving"
-      action="Сохранить"
-      cancel="Отмена"
-      @submit="submit"
-      @cancel="emit('cancel')"
-    >
-      <FormField
-        label="Название"
-        name="award-type-title"
-        :errors="error ? [error] : []"
-      >
+    <Form :valid="canSubmit" action="Сохранить" cancel="Отмена">
+      <FormField label="Название" name="award-type-title" field="title">
         <input
           id="award-type-title"
           v-model="title"
@@ -86,7 +79,11 @@ async function submit() {
         />
       </FormField>
 
-      <FormField label="Описание" name="award-type-description">
+      <FormField
+        label="Описание"
+        name="award-type-description"
+        field="description"
+      >
         <textarea
           id="award-type-description"
           v-model="description"
@@ -99,6 +96,7 @@ async function submit() {
       <FormField
         label="Имя иконки (из game-icons sprite)"
         name="award-type-icon"
+        field="iconName"
       >
         <input
           id="award-type-icon"
@@ -112,6 +110,7 @@ async function submit() {
       <FormField
         label="Tier (1 gold / 2 silver / 3 bronze / 5 diamond / null)"
         name="award-type-tier"
+        field="tier"
       >
         <input
           id="award-type-tier"
@@ -122,7 +121,11 @@ async function submit() {
         />
       </FormField>
 
-      <FormField label="Порядок сортировки" name="award-type-sort">
+      <FormField
+        label="Порядок сортировки"
+        name="award-type-sort"
+        field="sortOrder"
+      >
         <input
           id="award-type-sort"
           v-model.number="sortOrder"

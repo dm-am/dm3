@@ -132,14 +132,16 @@ public class ChatRoomController : ControllerBase
     /// <param name="limit">Maximum number of messages (1-100, default 50)</param>
     /// <response code="200">Returns messages with pagination cursor</response>
     /// <response code="400">Limit is outside the 1-100 range</response>
-    /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to view messages in this chat room</response>
     /// <response code="404">Chat room not found</response>
+    /// <remarks>
+    /// Open to a guest, as the posts of a room are: an open chat room is read by
+    /// everybody who sees its game. A closed room, and any room of a game the
+    /// reader does not see, answers as a room that is not there.
+    /// </remarks>
     [HttpGet("{id}/messages", Name = nameof(GetChatRoomMessages))]
-    [AuthenticationRequired]
     [ProducesResponseType(typeof(CursorEnvelope<Message>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetChatRoomMessages(

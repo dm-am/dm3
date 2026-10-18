@@ -25,6 +25,21 @@ public class UserSettings
     public PagingSettings Paging { get; set; } = null!;
 
     /// <summary>
+    /// IANA name of the reader's time zone ("Europe/Moscow"), for the letters.
+    /// </summary>
+    /// <remarks>
+    /// The site formats a date in the browser, which knows where its reader is.
+    /// A letter has no browser, so this is where the zone comes from. Null means
+    /// UTC, which is what every account had before there was a zone to keep.
+    ///
+    /// Written at registration, and after that only when the reader says so -
+    /// never by a login. A login that moves it is a login the account owner did
+    /// not necessarily make, and the letter warning them about it would then be
+    /// stamped in the hours of whoever it warns about.
+    /// </remarks>
+    public string? TimeZoneId { get; set; }
+
+    /// <summary>
     /// Default user settings for a guest or a newbie
     /// </summary>
     /// <remarks>

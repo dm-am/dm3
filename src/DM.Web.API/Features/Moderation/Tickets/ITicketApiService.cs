@@ -12,14 +12,11 @@ namespace DM.Web.API.Features.Moderation.Tickets;
 public interface ITicketApiService
 {
     /// <summary>
-    /// Get all tickets visible to the caller role
+    /// Get the queue: tickets visible to the caller role, narrowed by status and
+    /// subtype
     /// </summary>
-    Task<ListEnvelope<Ticket>> GetTickets(PagingQuery query, TicketStatus? status = null, TicketSubtype? subtype = null);
-
-    /// <summary>
-    /// Get a page of tickets assigned to current moderator
-    /// </summary>
-    Task<ListEnvelope<Ticket>> GetMyAssignedTickets(PagingQuery query);
+    Task<ListEnvelope<Ticket>> GetTickets(PagingQuery query, TicketStatus? status = null,
+        TicketSubtype? subtype = null);
 
     /// <summary>
     /// Get a page of tickets filed by current user, optionally filtered by status and subtype
@@ -28,9 +25,9 @@ public interface ITicketApiService
         TicketStatus? status = null, TicketSubtype? subtype = null);
 
     /// <summary>
-    /// Get ticket by ID with the conversation thread
+    /// Get ticket by ID with the conversation
     /// </summary>
-    Task<Envelope<TicketDetails>?> GetTicket(Guid ticketId);
+    Task<Envelope<TicketDetails>> GetTicket(Guid ticketId);
 
     /// <summary>
     /// Create a new ticket
@@ -38,14 +35,10 @@ public interface ITicketApiService
     Task<Envelope<Ticket>> CreateTicket(CreateTicketRequest request);
 
     /// <summary>
-    /// Assign ticket to current moderator
+    /// Answer in the conversation of a ticket, and read the ticket back as it
+    /// stands after the answer
     /// </summary>
-    Task<Envelope<Ticket>> AssignToMe(Guid ticketId);
-
-    /// <summary>
-    /// Resolve a ticket
-    /// </summary>
-    Task<Envelope<Ticket>> ResolveTicket(Guid ticketId, ResolveTicketRequest request);
+    Task<Envelope<TicketDetails>> CreateComment(Guid ticketId, AnswerTicketRequest request);
 
     /// <summary>
     /// Get ticket statistics

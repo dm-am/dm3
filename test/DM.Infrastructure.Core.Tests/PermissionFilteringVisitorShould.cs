@@ -132,22 +132,15 @@ public class PermissionFilteringVisitorShould
     }
 
     /// <summary>
-    /// The unquoted attribute form, which is the only one the product produces.
+    /// Every spelling of the block is a block, and none of them reaches a reader
+    /// the block was not addressed to.
     /// </summary>
     /// <remarks>
-    /// Every other test in this class writes [private="B"], and the editor writes
-    /// [private=B]: bbcode.ts builds the tag without quotes, the toolbar wraps a
-    /// selection without quotes, and the editor's own help text teaches the
-    /// unquoted form. So both halves of the contract were covered — on different
-    /// syntaxes — and nothing covered the syntax that actually travels.
-    ///
-    /// Theory rather than two facts so the pair stays visibly symmetrical: if the
-    /// parser ever stops accepting one of them, the row says which.
-    ///
-    /// The one-sided rows are the same leak through the spelling nobody checked:
-    /// a leading quote used to be read as "already quoted" and passed through, so
-    /// the parser refused the unterminated attribute and the block was served as
-    /// plain text to every reader of the room.
+    /// The editor used to write the unquoted form, and a spelling the parser did
+    /// not read was served as plain text to every reader of the room: the
+    /// one-sided rows are that leak through the spelling nobody checked. The
+    /// quoted form is the only one that addresses anybody now; the rest are blocks
+    /// that address nobody (see the tests below), and a stranger sees none of them.
     /// </remarks>
     [Theory]
     [InlineData("[private=B]secret[/private]")]
@@ -273,6 +266,116 @@ public class PermissionFilteringVisitorShould
         html.Should().Contain("secret");
     }
 
+    /// <summary>
+    /// The two settings share the text a post addresses to characters, and a
+    /// block that addresses nobody is not that: a bare [private] is text for the
+    /// leads, and a block the grammar did not accept is one whose addressee
+    /// cannot be read. Both stay with the author and the leads.
+    /// </summary>
+    [Theory]
+    [InlineData("[private]secret[/private]", true, false)]
+    [InlineData("[private]secret[/private]", false, true)]
+    [InlineData("[private=\"\"]secret[/private]", true, false)]
+    [InlineData("[private=B]secret[/private]", true, false)]
+    [InlineData("[private to=\"B\"]secret[/private]", false, true)]
+    public void KeepABlockThatAddressesNobodyFromTheSettingsThatShareAddressedText(
+        string input, bool shareWithAll, bool roomShowsPrivateText)
+    {
+        var ctx = DisplayCtxForGamePost(Viewer(UserRole.RegularUser, OtherUser)) with
+        {
+            PostSharePrivateWithAll = shareWithAll,
+            RoomViewPrivateText = roomShowsPrivateText,
+            GameLeadUserIds = [MasterId]
+        };
+
+        RenderWithContext(input, BbSurface.GamePost, ctx).Should().NotContain("secret");
+        RenderWithContext(input, BbSurface.GamePost, ctx with { Viewer = Viewer(UserRole.RegularUser, MasterId) })
+            .Should().Contain("secret");
+        RenderWithContext(input, BbSurface.GamePost, ctx with { Viewer = Viewer(UserRole.RegularUser, AuthorId) })
+            .Should().Contain("secret");
+    }
+
+    /// <summary>
+    /// A misspelled block is not read for its name, even when the snapshot holds
+    /// an entry under the text it seems to carry.
+    /// </summary>
+    [Theory]
+    [InlineData("[private=B]secret[/private]")]
+    [InlineData("[private=\"B]secret[/private]")]
+    [InlineData("[PRIVATE to=\"B\"]secret[/private]")]
+    public void HideAMisspelledBlockFromTheOwnerOfTheNameItSeemsToCarry(string input)
+    {
+        var addressees = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal)
+        {
+            ["B"] = new HashSet<Guid> { OwnerB }
+        };
+        var ctx = DisplayCtxForGamePost(Viewer(UserRole.RegularUser, OwnerB)) with
+        {
+            PrivateAddresseeOwnerUserIdsByAttribute = addressees
+        };
+
+        RenderWithContext(input, BbSurface.GamePost, ctx).Should().NotContain("secret");
+    }
+
+    /// <summary>
+    /// A name in capitals is the name: the block is well spelled, and it reaches
+    /// the reader it names.
+    /// </summary>
+    /// <remarks>
+    /// It used to be a block that addressed nobody, and its addressee never saw
+    /// a line written for them by an author who typed with Caps Lock on.
+    /// </remarks>
+    [Theory]
+    [InlineData("[PRIVATE=\"B\"]secret[/PRIVATE]")]
+    [InlineData("[Private=\"B\"]secret[/private]")]
+    public void ShowABlockSpelledInCapitalsToTheOwnerOfTheNameItCarries(string input)
+    {
+        var addressees = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal)
+        {
+            ["B"] = new HashSet<Guid> { OwnerB }
+        };
+        var ctx = DisplayCtxForGamePost(Viewer(UserRole.RegularUser, OwnerB)) with
+        {
+            PrivateAddresseeOwnerUserIdsByAttribute = addressees
+        };
+
+        RenderWithContext(input, BbSurface.GamePost, ctx).Should().Contain("secret");
+        RenderWithContext(input, BbSurface.GamePost, ctx with { Viewer = Viewer(UserRole.RegularUser, OtherUser) })
+            .Should().NotContain("secret");
+    }
+
+    /// <summary>
+    /// Off the game post a block is read and erased for every reader, its author
+    /// and the game's leads included.
+    /// </summary>
+    [Theory]
+    [InlineData(BbSurface.Comment)]
+    [InlineData(BbSurface.GlobalChatMessage)]
+    [InlineData(BbSurface.Profile)]
+    [InlineData(BbSurface.DirectMessage)]
+    public void StripPrivate_ForEveryReader_OffTheGamePost(BbSurface surface)
+    {
+        var ctx = DisplayCtxForGamePost(Viewer(UserRole.RegularUser, AuthorId)) with
+        {
+            Surface = surface,
+            GameLeadUserIds = [MasterId],
+            PostSharePrivateWithAll = true,
+            RoomViewPrivateText = true,
+            PrivateAddresseeOwnerUserIdsByAttribute = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal)
+            {
+                ["B"] = new HashSet<Guid> { OwnerB }
+            }
+        };
+
+        foreach (var reader in new[] { AuthorId, MasterId, OwnerB, OtherUser })
+        {
+            var html = RenderWithContext("before [private=\"B\"]secret[/private] after", surface,
+                ctx with { Viewer = Viewer(UserRole.Admin, reader) });
+
+            html.Should().Be("before  after");
+        }
+    }
+
     [Fact]
     public void StripPrivate_InPlainTextAudience()
     {
@@ -322,8 +425,8 @@ public class PermissionFilteringVisitorShould
                 "[img]https://example.com/b.png[/img] после")]
     [InlineData("до [link]https://example.com/a\n[private=\"B\"]secret[/private]\n" +
                 "[link]https://example.com/b[/link] после")]
-    [InlineData("до [img=100 alt=\"x\"]https://example.com/a.png\n[private=\"B\"]secret[/private]\n" +
-                "[img=100 alt=\"y\"]https://example.com/b.png[/img] после")]
+    [InlineData("до [img width=\"100\" height=\"50\"]https://example.com/a.png\n[private=\"B\"]secret[/private]\n" +
+                "[img width=\"100\" height=\"60\"]https://example.com/b.png[/img] после")]
     public void StripPrivate_WhenAnUnclosedTagAboveItReachesForTheNextClosingTag(string input)
     {
         var viewer = Viewer(UserRole.RegularUser, OtherUser);

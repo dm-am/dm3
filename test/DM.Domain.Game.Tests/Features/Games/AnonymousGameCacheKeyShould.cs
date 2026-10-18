@@ -1,10 +1,8 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
+using DM.Testing;
 using AwesomeAssertions;
 using Xunit;
 
@@ -33,10 +31,7 @@ public class AnonymousGameCacheKeyShould
     [Fact]
     public void TellApartEveryQueryItAgreesToCache()
     {
-        var properties = typeof(GamesQuery)
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(property => property.CanWrite)
-            .ToList();
+        var properties = QueryProbes.WritableProperties(typeof(GamesQuery));
 
         properties.Should().NotBeEmpty(
             "the query declares the fields this is about, and finding none passes everything");
@@ -54,7 +49,7 @@ public class AnonymousGameCacheKeyShould
             // descending, so a single arbitrary probe would read a correct
             // normalisation as a missing field. What has to hold is that the
             // property is capable of changing the key at all.
-            var cacheable = Candidates(property.PropertyType)
+            var cacheable = QueryProbes.Candidates(property.PropertyType)
                 .Select(value => Query(property, value))
                 .Where(GameService.IsCacheableAnonymousQuery)
                 .ToList();
@@ -128,63 +123,5 @@ public class AnonymousGameCacheKeyShould
         GameService.BuildAnonymousCacheKey(upper).Should().Be(GameService.BuildAnonymousCacheKey(lower),
             "the repository lowercases the sort field and matches the statuses as a set, so " +
             "these are one listing and two entries of it are one wasted");
-    }
-
-    /// <summary>Values of the given type that a default query does not carry.</summary>
-    private static IReadOnlyCollection<object> Candidates(Type type)
-    {
-        var underlying = Nullable.GetUnderlyingType(type) ?? type;
-
-        if (underlying == typeof(string))
-        {
-            // "asc" is here because one of these strings is read as an order and
-            // the rest of the alphabet means the same thing as no value at all.
-            return ["distinct", "asc"];
-        }
-
-        if (underlying == typeof(int))
-        {
-            // Both Skip and Take are plain integers with defaults of their own, so
-            // a constant would silently match one of them and check nothing.
-            return [17];
-        }
-
-        if (underlying == typeof(bool))
-        {
-            return [true, false];
-        }
-
-        if (underlying == typeof(DateTimeOffset))
-        {
-            return [new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)];
-        }
-
-        if (underlying.IsEnum)
-        {
-            return Enum.GetValues(underlying).Cast<object>().ToArray();
-        }
-
-        return Collections(underlying);
-    }
-
-    /// <summary>One-element collections of whatever the property holds.</summary>
-    private static IReadOnlyCollection<object> Collections(Type type)
-    {
-        if (!type.IsGenericType || !typeof(IEnumerable).IsAssignableFrom(type))
-        {
-            return [];
-        }
-
-        var item = type.GetGenericArguments()[0];
-
-        return Candidates(item)
-            .Select(value =>
-            {
-                var list = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(item))!;
-                list.Add(value);
-
-                return (object)list;
-            })
-            .ToArray();
     }
 }

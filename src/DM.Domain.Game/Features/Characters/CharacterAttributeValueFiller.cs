@@ -4,42 +4,32 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Game.Features.AttributeSchemas;
+using DM.Domain.Game.Features.GameAttributeSchemas;
 
 namespace DM.Domain.Game.Features.Characters;
 
 /// <inheritdoc />
 internal class CharacterAttributeValueFiller : ICharacterAttributeValueFiller
 {
-    private readonly IAttributeSchemaService _schemaService;
+    private readonly IGameAttributeSchemaRepository _gameSchemaRepository;
     private readonly IAttributeValueValidator _attributeValueValidator;
 
     /// <inheritdoc />
     public CharacterAttributeValueFiller(
-        IAttributeSchemaService schemaService,
+        IGameAttributeSchemaRepository gameSchemaRepository,
         IAttributeValueValidator attributeValueValidator)
     {
-        _schemaService = schemaService;
+        _gameSchemaRepository = gameSchemaRepository;
         _attributeValueValidator = attributeValueValidator;
     }
 
     public async Task Fill(IEnumerable<Character> characters, Games.Game game, Guid viewerId)
     {
-        var schemaId = game.AttributeSchemaId;
-        if (!schemaId.HasValue)
-        {
-            foreach (var character in characters)
-            {
-                character.Attributes = [];
-            }
-            return;
-        }
-
         // Leads (master/assistant) see every hidden value in the game — same
         // lead-override the [private] contract uses. Mentors/moderators do not.
         var viewerIsLead = game.GetRoles(viewerId).HasEditAccess();
 
-        var schema = await _schemaService.GetAsync(schemaId.Value);
+        var schema = await _gameSchemaRepository.Get(game.Id);
         // At most one spec per schema is the descriptor ("show on game main page").
         var descriptorSpec = schema.Specifications.FirstOrDefault(s => s.IsDescriptor);
         foreach (var character in characters)

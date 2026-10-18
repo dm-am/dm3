@@ -206,7 +206,7 @@ public class RoomController : ControllerBase
     /// Create new post pendency
     /// </summary>
     /// <param name="id">Room identifier</param>
-    /// <param name="postPendency">Post pendency details</param>
+    /// <param name="request">Character whose turn it is to post</param>
     /// <response code="200">Pendency created, returns the pendency</response>
     /// <response code="400">Some of claim parameters were invalid</response>
     /// <response code="401">User must be authenticated</response>
@@ -222,8 +222,8 @@ public class RoomController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CreatePostPendency(Guid id, [FromBody] PostPendency postPendency) =>
-        Ok(await _postPendencyApiService.Create(id, postPendency));
+    public async Task<IActionResult> CreatePostPendency(Guid id, [FromBody] CreatePostPendencyRequest request) =>
+        Ok(await _postPendencyApiService.Create(id, request));
 
     /// <summary>
     /// Delete post pendency

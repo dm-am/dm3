@@ -1,5 +1,4 @@
 using System;
-using DM.Domain.Core.Comments;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
@@ -95,7 +94,19 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
                 // to complain about and loses the game. The louder failure is the safer
                 // one here, and GameInactivityProcessorShould pins this order.
                 await CreateSystemComment(gameId, InactivityWarningMessage, ct);
-                await _inactivityRepository.SetInactivityWarning(gameId, now, ct);
+                if (!await _inactivityRepository.SetInactivityWarning(
+                        gameId, InactivityThreshold, now, ct))
+                {
+                    // The game stopped being an unwarned, silent, active one between
+                    // the selection and this write: another instance warned it, the
+                    // master restarted it, or somebody posted. Nothing was written,
+                    // so nothing is announced.
+                    _logger.LogInformation(
+                        "Game {GameId} was no longer silent and unwarned when the pass reached it",
+                        gameId);
+                    continue;
+                }
+
                 await _eventProducer.SendAsync(EventType.GameInactivityWarning, gameId);
 
                 _logger.LogInformation("Sent inactivity warning for game {GameId}", gameId);
@@ -117,7 +128,16 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
         {
             try
             {
-                await _inactivityRepository.FreezeGame(gameId, now, ct);
+                if (!await _inactivityRepository.FreezeGame(gameId, now, ct))
+                {
+                    // A post or a restart landed between the selection and this
+                    // write, and the game is no longer silent. Freezing it anyway
+                    // would take a running game away from its table.
+                    _logger.LogInformation(
+                        "Game {GameId} came back to life before the freeze reached it", gameId);
+                    continue;
+                }
+
                 await _eventProducer.SendAsync(EventType.StatusGameFrozen, gameId);
 
                 _logger.LogInformation("Froze inactive game {GameId}", gameId);
@@ -142,7 +162,15 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
                 // Comment before stamp, for the reason spelled out in the inactivity
                 // pass above: a silent closure is worse than a repeated warning.
                 await CreateSystemComment(gameId, ClosureWarningMessage, ct);
-                await _inactivityRepository.SetClosureWarning(gameId, now, ct);
+                if (!await _inactivityRepository.SetClosureWarning(gameId, now, ct))
+                {
+                    // Warned by another instance, or restarted by the master, since
+                    // the selection. Nothing was written, so nothing is announced.
+                    _logger.LogInformation(
+                        "Frozen game {GameId} was already warned when the pass reached it", gameId);
+                    continue;
+                }
+
                 await _eventProducer.SendAsync(EventType.GameClosureWarning, gameId);
 
                 _logger.LogInformation("Sent closure warning for frozen game {GameId}", gameId);
@@ -164,7 +192,16 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
         {
             try
             {
-                await _inactivityRepository.CloseGame(gameId, ct);
+                if (!await _inactivityRepository.CloseGame(gameId, ct))
+                {
+                    // The game is no longer a warned frozen one - restarted, or
+                    // closed by another instance running the same pass. Announcing
+                    // a closure here would say a running game had been closed.
+                    _logger.LogInformation(
+                        "Game {GameId} was no longer frozen when the closure reached it", gameId);
+                    continue;
+                }
+
                 await _eventProducer.SendAsync(EventType.StatusGameClosed, gameId);
 
                 _logger.LogInformation("Closed frozen game {GameId}", gameId);
@@ -184,16 +221,12 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
         var commentId = _guidFactory.Create();
         var now = _dateTimeProvider.Now;
 
-        // Get current comment count - we need to increment it
-        var currentCount = await _commentRepository.Count(gameId, new CommentsQuery());
-
         var entity = new CreateGameCommentEntity
         {
             CommentId = commentId,
             GameId = gameId,
             AuthorId = SystemUser.Id,
             Text = text,
-            NewCommentCount = currentCount + 1,
             CreatedUtc = now
         };
 

@@ -31,7 +31,7 @@ import { FilterSearchInput, SortButton } from "@/shared/ui/Filters";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import { Api } from "@/shared/api";
 import { BlogStatusBadge, useBlogDisplay, type Blog } from "@/entities/blog";
-import { UserLink } from "@/entities/user";
+import { RemovedAccountLink, UserLink } from "@/entities/user";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
@@ -166,10 +166,10 @@ function handleSortOrder(order: "asc" | "desc") {
 // Columns mirror /blogs (BlogsDataTable): same keys, order, widths and
 // cell formats.
 const columns: Column[] = [
-  { key: "title", label: "Название", width: "40%", align: "left" },
-  { key: "authors", label: "Ведущие", width: "25%", align: "left" },
-  { key: "status", label: "Статус блога", width: "25%", align: "left" },
-  { key: "readers", label: "Читатели", width: "10%", align: "center" },
+  { key: "title", label: "Название", align: "left" },
+  { key: "authors", label: "Ведущие", width: "23.7%", align: "left" },
+  { key: "status", label: "Статус блога", width: "23.7%", align: "left" },
+  { key: "readers", label: "Читатели", width: "10.6%", align: "center" },
 ];
 
 // aria-sort only announces columns the table actually renders: "created"
@@ -252,8 +252,11 @@ function pagingAnchor(): HTMLElement | null {
 
       <!-- Authors column (unified with games "Ведущие") -->
       <template #cell-authors="{ row }">
-        <UserLink v-if="row.author" :user="row.author" hide-badge /><template
-          v-if="row.assistants?.length"
+        <UserLink
+          v-if="row.author"
+          :user="row.author"
+          hide-badge
+        /><RemovedAccountLink v-else /><template v-if="row.assistants?.length"
           >{{ " "
           }}<Tooltip :text="buildAssistantTooltip(row.assistants)" focusable>
             <span class="assistant-count">[+{{ row.assistants.length }}]</span>
@@ -296,6 +299,8 @@ function pagingAnchor(): HTMLElement | null {
   flex-direction: column
   gap: $medium
 
+// As before 5 October 2026: the sort goes under the field whole where the
+// two do not fit one line.
 .controls
   display: flex
   flex-wrap: wrap
@@ -310,8 +315,6 @@ function pagingAnchor(): HTMLElement | null {
 
 .blog-link
   color: $link
-  word-wrap: break-word
-  overflow-wrap: break-word
   &:hover
     color: $link-hover
   &.new-item

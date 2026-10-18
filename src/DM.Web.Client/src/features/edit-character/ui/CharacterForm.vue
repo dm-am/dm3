@@ -21,7 +21,6 @@ import {
   gameApi,
   AttributeSpecificationType,
   CharacterSheetFields,
-  type AttributeSchema,
   type AttributeSpecification,
   type Character,
   type CharacterInput,
@@ -32,14 +31,14 @@ import { Form, FormField } from "@/shared/ui/Form";
 import { ContentText } from "@/shared/ui/Content";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
-import { describeFailure } from "@/shared/lib/errors";
+import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
 import { CHARACTER_NAME_MAX_LENGTH } from "@/shared/lib/constants/game";
 import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
 
 const props = withDefaults(
   defineProps<{
     /** Schema whose specifications drive the rendered controls */
-    schema: AttributeSchema;
+    schema: { specifications: AttributeSpecification[] };
     /** "edit" (default) renders inputs; "view" renders read-only values */
     mode?: "edit" | "view";
     /** Game id — required to create a new character */
@@ -112,25 +111,36 @@ const privacy = computed<CharacterPrivacySettings>(
     },
 );
 
-// The sheet as it was opened. Edit mode seeds itself from an existing
-// character, so "there is something to lose" is a comparison, not an
-// emptiness check.
-const pristineName = name.value;
-const pristineValues: Record<string, string> = { ...values };
-
 const submitted = ref(false);
-const saved = ref(false);
 const saving = ref(false);
 const errorMessage = ref<string | null>(null);
 
-const dirty = computed(
-  () =>
-    !saved.value &&
-    (name.value !== pristineName ||
-      specs.value.some(
-        (spec) => (values[spec.id] ?? "") !== (pristineValues[spec.id] ?? ""),
-      )),
-);
+/** Everything a save would send, as the comparison below sees it. */
+const asSent = () =>
+  JSON.stringify({
+    name: name.value,
+    values: Object.fromEntries(
+      specs.value.map((spec) => [spec.id, values[spec.id] ?? ""]),
+    ),
+  });
+
+/**
+ * The state the server has. It starts as what was loaded and moves forward on
+ * every save, which is what makes both answers below true at once: the guard
+ * knows there is unsaved work, and the button knows the sheet is saved.
+ *
+ * It used to be a latch - one boolean set on the first save and never cleared.
+ * That made the guard stop warning for the rest of the visit: a sheet edited
+ * again after a save could be navigated away from in silence, which is the
+ * very loss the guard was added for.
+ */
+const stored = ref(asSent());
+const everSaved = ref(false);
+
+const dirty = computed(() => stored.value !== asSent());
+
+/** The sheet on screen is the sheet the server has, and it got there by a save. */
+const saved = computed(() => everSaved.value && !dirty.value);
 
 // --- Validation -------------------------------------------------------------
 
@@ -174,6 +184,31 @@ function viewPlainValue(spec: AttributeSpecification): string {
 
 // --- Submit -----------------------------------------------------------------
 
+/**
+ * The save takes its own refusal over, because this form already answers one:
+ * the strip under the fields holds the sentence the server sent, and the
+ * interceptor's plate over it was the same refusal said a second time. What the
+ * server names here is worth reading where the sheet is — the master forbids
+ * edits, the character is not this player's, the name is taken — and the strip
+ * stays until the reader corrects something, while the plate fades.
+ *
+ * An expired session and a dead connection are the interceptor's alone, and
+ * the strip stays empty beside them. Neither flag reaches those two - the
+ * plate is raised for them whatever the request says - and the strip used to
+ * add its own sentence under the plate: "Сессия истекла, войдите снова" in the
+ * corner and "Не удалось сохранить персонажа" under the fields, one event told
+ * twice in two wordings. That the save did not happen is already on screen:
+ * the button still reads "Сохранить" and the sheet is still marked unsaved.
+ */
+const OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
+
+/**
+ * The statuses the interceptor announces no matter what the request claimed
+ * (client.ts: 401 and a response that never came are checked before the
+ * flags). A strip under the fields for these is the second sentence above.
+ */
+const SAID_BY_INTERCEPTOR = [0, 401];
+
 async function submit() {
   submitted.value = true;
   if (!isValid.value || saving.value) return;
@@ -192,30 +227,45 @@ async function submit() {
   errorMessage.value = null;
 
   const { data, error } = props.characterId
-    ? await gameApi.updateCharacter(props.characterId, payload)
-    : await gameApi.createCharacter(props.gameId ?? "", payload);
+    ? await gameApi.updateCharacter(props.characterId, payload, OWNS_REFUSAL)
+    : await gameApi.createCharacter(props.gameId ?? "", payload, OWNS_REFUSAL);
 
   saving.value = false;
 
   if (error) {
-    errorMessage.value = describeFailure(
-      error,
-      "Не удалось сохранить персонажа",
-    );
+    if (SAID_BY_INTERCEPTOR.includes(error.status)) return;
+
+    // A wait is said in the shared wording, the one the interceptor would have
+    // raised: it is the only one that names the seconds the server asked for.
+    errorMessage.value =
+      error.status === 429
+        ? describeRateLimit(error.retryAfterSeconds)
+        : describeFailure(error, "Не удалось сохранить персонажа");
     return;
   }
   // The answer is a single-resource envelope, and the listener is handed the
   // character rather than the wrapper it arrived in.
   const character = unwrapResource<Character>(data);
   if (character) {
-    saved.value = true;
+    stored.value = asSent();
+    everSaved.value = true;
     emit("saved", character);
   }
 }
 
-const actionLabel = computed(() =>
-  props.characterId ? "Сохранить" : "Создать персонажа",
-);
+/**
+ * The button answers for the save, because nothing else on this screen can:
+ * the sheet after a save holds the same values it held before, the form stays
+ * open, and the page does not move. It said "Сохранено" in a toast in the
+ * corner until 20 September 2026; see UI_STANDARDS, "Всплывающие сообщения".
+ *
+ * Only in edit mode. Creating a character leaves this form for the sheet that
+ * was created, and that page is the answer.
+ */
+const actionLabel = computed(() => {
+  if (!props.characterId) return "Создать персонажа";
+  return saved.value ? "Сохранено" : "Сохранить";
+});
 </script>
 
 <template>
@@ -250,7 +300,7 @@ const actionLabel = computed(() =>
   <!-- Edit mode: schema-driven controls -->
   <Form
     v-else
-    :valid="isValid"
+    :valid="isValid && !saved"
     :loading="saving"
     :action="actionLabel"
     cancel="Отмена"

@@ -8,6 +8,22 @@ import type {
 } from "@/shared/api/models/community";
 import { Api } from "@/shared/api";
 
+/**
+ * The refusal a caller takes over because its own screen carries it: the
+ * confirmation before a delete prints the refusal in itself, and the response
+ * interceptor has to stay quiet or the same sentence stands in two places.
+ *
+ * Declared here rather than imported: `shared/api` keeps its own copy of the
+ * type to itself, and the client reads the two fields off the request by name,
+ * so a structural twin carries them just as well.
+ */
+type RefusalFlags = {
+  /** The screen shows a 403 and a 5xx itself. */
+  ownsRefusal?: boolean;
+  /** The screen shows a 429 itself, the wait included. */
+  ownsRateLimit?: boolean;
+};
+
 /** Testimonials about the website itself (not endorsements about a user). */
 export default new (class TestimonialApi {
   /**
@@ -68,8 +84,9 @@ export default new (class TestimonialApi {
   /**
    * Delete a website testimonial
    * @param id Testimonial identifier
+   * @param options Set by the confirmation, which prints a refusal in itself
    */
-  public deleteTestimonial(id: WebsiteTestimonialId) {
-    return Api.delete(`testimonials/${id}`);
+  public deleteTestimonial(id: WebsiteTestimonialId, options?: RefusalFlags) {
+    return Api.delete(`testimonials/${id}`, undefined, options);
   }
 })();

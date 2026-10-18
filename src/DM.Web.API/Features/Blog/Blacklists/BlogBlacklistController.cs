@@ -16,7 +16,9 @@ namespace DM.Web.API.Features.Blog.Blacklists;
 /// Blog blacklist management
 /// </summary>
 /// <remarks>
-/// Allows blog owners to block users from commenting in their blogs.
+/// Allows blog owners to block users from commenting in their blogs and under
+/// their publications. Nothing else: blacklisted users read, follow and like
+/// like everybody else (BlogRoleExtensions.IsBlacklisted).
 /// </remarks>
 [ApiController]
 [Route("v1/blogs")]

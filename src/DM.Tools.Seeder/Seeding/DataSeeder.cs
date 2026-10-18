@@ -155,12 +155,14 @@ internal sealed partial class DataSeeder
         await AssignBoardModerators(users, result);
 
         // ═══════════════════════════════════════════════════════════════════
-        // 3. SEED SYSTEM ATTRIBUTE SCHEMA + CREATE GAMES
-        // The system "Классическая схема" must exist before games reference it
-        // via AttributeSchemaId (a real FK now). Idempotent upsert.
+        // 3. CREATE GAMES
+        // A game carries its own copy of the default sheet, written with it by
+        // the repository; the sheets below fill in the games this seed writes
+        // through the context instead. The default template itself ships with
+        // the migration (DefaultAttributeSchema), so it is not written here.
         // ═══════════════════════════════════════════════════════════════════
-        await SeedSystemAttributeSchemaAsync(result);
         var gameIds = await CreateGames(users, now, result);
+        await SeedGameAttributeSchemasAsync(result);
 
         // ═══════════════════════════════════════════════════════════════════
         // 4. CREATE BLOGS
@@ -252,12 +254,17 @@ internal sealed partial class DataSeeder
         await BoostSolohinLexMetrics(now, result);
 
         // ═══════════════════════════════════════════════════════════════════
-        // 15. SEED SOLOHIN-LEX BANS FOR "РЕЗИНОВАЯ УТОЧКА" DEMO
+        // 15. SEED THE BANS: SOLOHIN-LEX'S "РЕЗИНОВАЯ УТОЧКА" CHAIN AND THE
+        //     BAN LIST CASES
         // The BansReceived chain requires actual Ban records in the DB (not
-        // a denormalized counter), so we insert 10 of them — gold tier,
-        // gold/silver/bronze tiers are earned, platinum (T4=30) stays
+        // a denormalized counter), so SolohinLex gets 10 served bans: the
+        // bronze, silver and gold tiers are earned, platinum (T4=30) stays
         // locked. Together with game posts/rating this gives the full palette
-        // of tier plaques on the achievements page.
+        // of tier plaques on the achievements page. An eleventh, lifted early,
+        // stands beside them for the ban list and is not counted by the chain.
+        // The ban list gets one ban of every other kind it draws as well: a
+        // permanent full ban, a running one, the site's automatic ban and one
+        // lifted early by somebody other than its issuer.
         // ═══════════════════════════════════════════════════════════════════
         await SeedSolohinLexBans(users, now, result);
 
@@ -287,6 +294,24 @@ internal sealed partial class DataSeeder
         // moderation ticket pages have data for every role scope.
         // ═══════════════════════════════════════════════════════════════════
         await SeedTickets(users, now, result);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 19. SEED WARNINGS FOR THE OPEN LOG AND THE MODERATION LIST
+        // Nothing seeded a warning, so both screens came up empty on a fresh
+        // stand. Five of them over three readers and two moderators, two with
+        // their points corrected afterwards: the case the second signature
+        // and the original points exist for.
+        // ═══════════════════════════════════════════════════════════════════
+        await SeedWarnings(users, now, result);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 20. SEED A REMOVED ACCOUNT FOR THE "АККАУНТ УДАЛЕН" PROFILE
+        // Everything a removed account wrote stays where it was, signed by
+        // nobody, and the profile under that name gathers it. Last, because
+        // the step removes the account it writes and every step above reads
+        // live accounts only.
+        // ═══════════════════════════════════════════════════════════════════
+        await SeedRemovedAccount(users, now, result);
 
         result.Details.Add($"Comprehensive seed completed at {now:dd.MM.yyyy в HH:mm}");
         return result;

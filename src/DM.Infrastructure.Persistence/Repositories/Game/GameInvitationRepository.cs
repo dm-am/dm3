@@ -9,7 +9,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Invitations;
 using DM.Infrastructure.Persistence.Entities.Account;
-using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
 using DM.Infrastructure.Persistence.RelationalStorage;
@@ -119,34 +118,74 @@ internal class GameInvitationRepository : IGameInvitationRepository
     }
 
     /// <inheritdoc />
-    public async Task AcceptAssistantInvitation(
+    public async Task<bool> AcceptAssistantInvitation(
         AddAssistantEntity entity, Guid tokenId, CancellationToken ct = default)
     {
+        var spent = false;
+
         // Both rows or neither. Written separately, a refusal in between left the
         // invitation live next to an assistant who already has the rights it grants,
         // and accepting it a second time added the person twice.
         //
-        // The token is spent through the tracker rather than set-based, so one
-        // SaveChanges covers both and no explicit transaction is needed.
-        var token = await _dbContext.Tokens.FirstOrDefaultAsync(t => t.TokenId == tokenId, ct);
-        if (token == null) return;
-
-        var alreadyAssistant = await _dbContext.GameAssistants
-            .AnyAsync(ga => ga.GameId == entity.GameId && ga.UserId == entity.UserId, ct);
-
-        if (!alreadyAssistant)
+        // Through the strategy because the API host configures EnableRetryOnFailure and
+        // a retrying strategy refuses a transaction opened by hand.
+        await RetryableWrite.Run(_dbContext, async cancellation =>
         {
-            _dbContext.GameAssistants.Add(new GameAssistant
-            {
-                GameAssistantId = entity.GameAssistantId,
-                GameId = entity.GameId,
-                UserId = entity.UserId,
-                JoinedUtc = entity.JoinedUtc
-            });
-        }
+            // Reset rather than left as it stands: a retry replays the whole block
+            // after the first attempt rolled back, and an answer carried over from
+            // that attempt would name a link this transaction never spent.
+            spent = false;
 
-        token.IsRemoved = true;
-        await _dbContext.SaveChangesAsync(ct);
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellation);
+
+            // The invitation is what authorises the row below, so a link already
+            // spent grants nothing. The soft-delete filter is the "still live"
+            // half of the question.
+            var live = await _dbContext.Tokens.AnyAsync(t => t.TokenId == tokenId, cancellation);
+            if (!live) return;
+
+            // The pair is claimed by the statement rather than by a read taken
+            // before it: a read cannot see the accept running beside it, so two
+            // accepts of one link both passed it, both inserted, and the unique
+            // index on (GameId, UserId) refused the second with a 500 that left
+            // the invitation live next to the assistant the winner had created.
+            // Finding the pair already taken is the outcome this call wanted, so
+            // it carries on to the only thing still owed - spending the link.
+            //
+            // The assistant row before the token, and never the other way round:
+            // the insert takes the game row through its own foreign key, and
+            // issuing an invitation takes the same row before it writes tokens,
+            // so both paths reach the two tables in one order.
+            await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "GameAssistants" ("GameAssistantId", "GameId", "UserId", "JoinedUtc")
+                VALUES ({entity.GameAssistantId}, {entity.GameId}, {entity.UserId}, {entity.JoinedUtc})
+                ON CONFLICT ("GameId", "UserId") DO NOTHING
+                """, cancellation);
+
+            // The answer of the whole call: the soft-delete filter is part of this
+            // statement, so it matches the link once and once only. A second
+            // acceptance arriving together with this one waits on the row lock,
+            // re-tests the predicate against the committed state and touches
+            // nothing - and its caller then knows not to announce a seat somebody
+            // else granted.
+            var killed = await _dbContext.Tokens
+                .Where(t => t.TokenId == tokenId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.IsRemoved, true), cancellation);
+
+            // The seat stands on the link that grants it, so the two are written
+            // or neither is. Matching nothing here means the link went out between
+            // the check at the top of the block and this statement - the master
+            // revoked it, or issuing a new one replaced it - and committing the
+            // insert anyway would seat an assistant by a link that grants nothing,
+            // without so much as an event to say it happened. Leaving the block
+            // without committing takes the insert back with the transaction.
+            if (killed != 1) return;
+
+            await transaction.CommitAsync(cancellation);
+            spent = true;
+        }, ct);
+
+        return spent;
     }
 
     /// <inheritdoc />
@@ -309,6 +348,19 @@ internal class GameInvitationRepository : IGameInvitationRepository
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellation);
 
+            // Invalidating and then issuing is a read-modify-write of the set of
+            // live invitations of this game, and under READ COMMITTED the update
+            // of one transaction cannot see the row the other has inserted but not
+            // committed: two invitations sent to one person at the same moment
+            // both invalidated nothing and both issued a token, leaving two live
+            // links where the feature promises one - and cancelling the invitation
+            // afterwards only killed whichever of them was read back. Locking the
+            // game row first serializes staffing per game, which is the smallest
+            // scope that covers every invitation this method can collide with.
+            await _dbContext.Database.ExecuteSqlRawAsync(
+                """SELECT "GameId" FROM "Games" WHERE "GameId" = {0} FOR UPDATE""",
+                [entity.GameId], cancellation);
+
             // Invalidate existing invitations of same type for this user
             await _dbContext.Tokens
                 .Where(t => t.EntityId == entity.GameId &&
@@ -325,9 +377,12 @@ internal class GameInvitationRepository : IGameInvitationRepository
     }
 
     /// <inheritdoc />
-    public async Task RemoveInvitation(Guid tokenId, CancellationToken ct = default)
+    public async Task<int> RemoveInvitation(Guid tokenId, CancellationToken ct = default)
     {
-        await _dbContext.Tokens
+        // The soft-delete filter is part of the statement, so it matches a live
+        // link once and a spent one never: the count is what tells the caller
+        // whether this call is the one that spent it.
+        return await _dbContext.Tokens
             .Where(t => t.TokenId == tokenId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.IsRemoved, true), ct);
     }

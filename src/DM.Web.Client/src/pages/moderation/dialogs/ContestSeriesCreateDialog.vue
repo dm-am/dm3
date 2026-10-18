@@ -4,9 +4,15 @@
  * year / results topic). Dialog twin of the former hand-rolled modal
  * in ModerationAwards.vue. Suggests number = max + 1 within the chosen
  * contest type.
+ *
+ * The window runs the request (Dialog `action`): it waits for the answer,
+ * prints a refusal in itself - a series with this number and year already
+ * there as well as a refusal the interceptor used to say in a plate over it -
+ * and closes on success alone.
  */
 import { ref, computed, watch } from "vue";
 import { achievementApi } from "@/entities/achievement";
+import { siteTime } from "@/shared/lib/utils/datetime";
 import {
   ContestType,
   type ContestSeries,
@@ -16,7 +22,7 @@ import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select, type SelectOption } from "@/shared/ui/Select";
-import { describeFailure } from "@/shared/lib/errors";
+import { YearInput } from "@/shared/ui/DatePicker";
 
 const props = defineProps<{
   /** Existing series — used to suggest the next number per type. */
@@ -35,7 +41,9 @@ const typeOptions: SelectOption[] = [
 
 const contestType = ref<ContestType>(ContestType.Literary);
 const number = ref(1);
-const year = ref(new Date().getFullYear());
+const year = ref<number | null>(siteTime().year());
+/** What the year field says is wrong with it, shown under it. */
+const yearReason = ref<string | null>(null);
 const topicUrl = ref("");
 
 function suggestNumber(type: ContestType): number {
@@ -51,45 +59,51 @@ watch(contestType, (type) => {
   number.value = suggestNumber(type);
 });
 
-const saving = ref(false);
-const error = ref<string | null>(null);
-
+// The year field takes only a year of four digits from 2000 to 2100, and
+// says why it does not take anything else.
 const canSubmit = computed(
-  () => number.value >= 1 && year.value >= 2000 && year.value <= 2100,
+  () => number.value >= 1 && year.value !== null && !yearReason.value,
 );
 
-async function submit() {
-  if (!canSubmit.value || saving.value) return;
-  saving.value = true;
-  error.value = null;
-  const { error: e } = await achievementApi.createContestSeries({
-    contestType: contestType.value,
-    number: number.value,
-    year: year.value,
-    topicUrl: topicUrl.value.trim() || null,
-  });
-  saving.value = false;
-  if (e) {
-    error.value = describeFailure(e, "Не удалось создать серию");
-    return;
-  }
-  emit("success");
+/**
+ * Enter in a field sends the form as "Создать" does, and the window runs its
+ * action whatever the button says. While the button is shut, so is Enter: a
+ * year the field did not take would otherwise go out as the last one it did.
+ */
+function holdEnter(e: KeyboardEvent) {
+  if (!canSubmit.value) e.preventDefault();
+}
+
+async function send() {
+  const result = await achievementApi.createContestSeries(
+    {
+      contestType: contestType.value,
+      number: number.value,
+      year: year.value!,
+      topicUrl: topicUrl.value.trim() || null,
+    },
+    { ownsRefusal: true, ownsRateLimit: true },
+  );
+  if (!result.error) emit("success");
+  return result;
 }
 </script>
 
 <template>
-  <Dialog narrow>
+  <Dialog
+    :action="send"
+    failure="Не удалось создать серию"
+    @close="emit('cancel')"
+  >
     <DialogTitle>Новая серия конкурса</DialogTitle>
 
     <Form
       :valid="canSubmit"
-      :loading="saving"
       action="Создать"
       cancel="Отмена"
-      @submit="submit"
-      @cancel="emit('cancel')"
+      @keydown.enter="holdEnter"
     >
-      <FormField label="Тип" name="series-type" :errors="error ? [error] : []">
+      <FormField label="Тип" name="series-type" field="contestType">
         <Select
           id="series-type"
           :model-value="contestType"
@@ -98,7 +112,7 @@ async function submit() {
         />
       </FormField>
 
-      <FormField label="Номер" name="series-number">
+      <FormField label="Номер" name="series-number" field="number">
         <input
           id="series-number"
           v-model.number="number"
@@ -108,18 +122,27 @@ async function submit() {
         />
       </FormField>
 
-      <FormField label="Год" name="series-year">
-        <input
+      <FormField
+        label="Год"
+        name="series-year"
+        field="year"
+        :errors="yearReason ? [yearReason] : []"
+      >
+        <YearInput
           id="series-year"
-          v-model.number="year"
-          type="number"
-          min="2000"
-          max="2100"
-          required
+          v-model="year"
+          :min="2000"
+          :max="2100"
+          @reason="yearReason = $event"
         />
       </FormField>
 
-      <FormField label="Топик с итогами" name="series-topic" optional>
+      <FormField
+        label="Топик с итогами"
+        name="series-topic"
+        field="topicUrl"
+        optional
+      >
         <input
           id="series-topic"
           v-model="topicUrl"

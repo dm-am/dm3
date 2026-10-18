@@ -25,8 +25,7 @@ public class UpdateBlogValidatorShould : UnitTestBase
             BlogId = Guid.NewGuid(),
             Title = "Updated Blog",
             Description = "Updated description",
-            DraftVisibility = DraftVisibility.Private,
-            CommentsEnabled = false
+            DraftVisibility = DraftVisibility.Private
         };
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();

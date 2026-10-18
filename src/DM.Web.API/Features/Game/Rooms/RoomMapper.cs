@@ -1,5 +1,4 @@
 using System;
-using DM.Domain.Core.Dto;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Game.Characters;
 using Riok.Mapperly.Abstractions;
@@ -121,19 +120,11 @@ internal partial class RoomMapper
     public partial DomainUpdateRoomAccess ToUpdateRoomAccess(UpdateRoomAccessRequest request);
 
     /// <summary>
-    /// Pendency body to the write model. RoomId comes from the route, the
-    /// service overwrites whatever the body carried.
+    /// Pendency request to the write model, the room taken from the route.
     /// </summary>
-    public DomainCreatePostPendency ToCreatePostPendency(PostPendency pendency) => new()
+    public DomainCreatePostPendency ToCreatePostPendency(Guid roomId, CreatePostPendencyRequest request) => new()
     {
-        RoomId = pendency.RoomId,
-        CharacterId = pendency.CharacterId,
-        WaitingForUsername = pendency.WaitingFor?.Username!
+        RoomId = roomId,
+        CharacterId = request.CharacterId
     };
-
-    // Wire-compatible with the AutoMapper path: a room with no predecessor
-    // serializes to JSON null either way, so the bare null stays bare
-    // instead of being wrapped into Optional.WithValue(null).
-    private static Optional<Guid>? ToOptional(Guid? value) =>
-        value == null ? null : Optional<Guid>.WithValue(value);
 }

@@ -3,6 +3,7 @@ import { ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useMessagingStore } from "@/entities/message";
 import type { Username } from "@/shared/api/models/community";
+import { listPageQuery } from "./listPage";
 
 const route = useRoute();
 const router = useRouter();
@@ -21,7 +22,12 @@ async function loadDirectChat() {
   try {
     const chat = await messagingStore.selectDirectChat(username);
     if (chat) {
-      router.replace({ name: "chat", params: { id: chat.id } });
+      // The list beside it stays on its page (listPage.ts).
+      router.replace({
+        name: "chat",
+        params: { id: chat.id },
+        query: listPageQuery(route.query),
+      });
     } else {
       error.value = `Не удалось начать переписку с ${username}`;
     }

@@ -110,6 +110,13 @@ const PLURAL_RULE_OWNER = "shared/lib/utils/pluralize.ts";
 /** Two moderation labels held their own copy of it, keyed on the same moduli. */
 const PLURAL_RULE = /%\s*100\b/;
 
+/**
+ * The words after an interpolation the rule reads, at the least, in the
+ * components and in the modules: a reading that lost either kind of file
+ * would empty half the corpus and keep passing.
+ */
+const READ_AT_LEAST = { ".vue": 4, ".ts": 10 };
+
 function collectFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
@@ -145,8 +152,23 @@ function readable(file: string, raw: string): string[] {
 }
 
 describe("a counted noun agrees with its count", () => {
+  // A walk that came back short, or a reading of the files that found no text
+  // in them, would pass both rules below without a word.
+  it("reads the sources it is about, the owner of the plural rule among them", () => {
+    const files = collectFiles(CLIENT_SRC).map(where);
+    expect(files.length).toBeGreaterThan(500);
+    expect(files).toContain(PLURAL_RULE_OWNER);
+
+    const owner = join(CLIENT_SRC, PLURAL_RULE_OWNER);
+    const parts = readable(owner, readFileSync(owner, "utf8"));
+    expect(parts.some((part) => PLURAL_RULE.test(part))).toBe(true);
+  });
+
   it("never leaves a bare noun after a count", () => {
     const offenders: string[] = [];
+    // Every word read after an interpolation, counted or not: the corpus the
+    // rule is applied to, which a broken reading would empty.
+    const read = { ".vue": 0, ".ts": 0 };
 
     for (const file of collectFiles(CLIENT_SRC)) {
       const raw = readFileSync(file, "utf8");
@@ -160,6 +182,7 @@ describe("a counted noun agrees with its count", () => {
           pattern.lastIndex = 0;
           for (let hit = pattern.exec(part); hit; hit = pattern.exec(part)) {
             const [, run, word, abbreviated] = hit;
+            read[file.endsWith(".vue") ? ".vue" : ".ts"]++;
             const counted = expressionsOf(run).find((expression) => {
               const printed = expression.replace(/\.value$/, "");
               return COUNT_TAIL.test(printed) || local.has(printed);
@@ -177,6 +200,8 @@ describe("a counted noun agrees with its count", () => {
     }
 
     expect(offenders).toEqual([]);
+    expect(read[".vue"]).toBeGreaterThan(READ_AT_LEAST[".vue"]);
+    expect(read[".ts"]).toBeGreaterThan(READ_AT_LEAST[".ts"]);
   });
 
   it("keeps one implementation of the plural rule", () => {

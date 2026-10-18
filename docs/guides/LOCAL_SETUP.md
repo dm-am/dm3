@@ -120,6 +120,7 @@ powershell -File .\scripts\dm.ps1 seed   # Windows
 | Логин | Особенность |
 |-------|-------------|
 | `TestHonorary` | Обладатель награды "Почетный гоблин" |
+| `Ушедший Мастер` | Удаленный аккаунт (removed@test.local, войти нельзя). Его топик с комментарием, игра "Хроники старого маяка" с оцененным постом и персонаж "Смотритель Ион" в чужой игре подписаны "Аккаунт удален" и собраны в профиле `/users/Аккаунт удален` |
 
 **Pending Registrations (для тестирования активации):**
 
@@ -146,6 +147,7 @@ powershell -File .\scripts\dm.ps1 start    # Запуск всех сервис�
 powershell -File .\scripts\dm.ps1 stop     # Остановка
 powershell -File .\scripts\dm.ps1 reset    # Сброс БД и перезапуск
 powershell -File .\scripts\dm.ps1 seed     # Тестовые данные
+powershell -File .\scripts\dm.ps1 e2e      # API для e2e: лимит запросов выключен
 powershell -File .\scripts\dm.ps1 status   # Статус сервисов
 powershell -File .\scripts\dm.ps1 logs     # Логи (или logs dm-api)
 
@@ -154,9 +156,17 @@ powershell -File .\scripts\dm.ps1 logs     # Логи (или logs dm-api)
 ./scripts/dm.sh stop
 ./scripts/dm.sh reset
 ./scripts/dm.sh seed
+./scripts/dm.sh e2e
 ./scripts/dm.sh status
 ./scripts/dm.sh logs
 ```
+
+`e2e` пересобирает и пересоздает только API, с тем же выключателем лимита
+запросов, что ставит оверлей джобы e2e в CI. Под лимитом одна загрузка страницы
+тратит больше десятка запросов из сотни в минуту, и набор падает на ответах 429,
+неотличимых от устаревших локаторов. Лимит возвращается следующим `start`. Хук
+перед пушем проверяет стенд до всех гейтов и без выключателя отказывает, называя
+эту команду.
 
 ### Docker (ручные команды)
 

@@ -39,11 +39,10 @@ export const Noparse = Mark.create<NoparseOptions>({
     };
   },
 
-  // Noparse should be the outermost mark
-  priority: 1000,
-
-  // Exclude other marks from being applied inside noparse
-  excludes: "_",
+  // The innermost mark: what it holds is text, so every other mark on its
+  // text is written around it (see the order of the marks in
+  // editorExtensions.ts). No mark is excluded from its text for that reason.
+  priority: 50,
 
   addAttributes() {
     return {

@@ -5,8 +5,8 @@ using Xunit;
 namespace DM.Infrastructure.Core.Tests;
 
 /// <summary>
-/// Text an author writes inside a list but outside its items, on the three
-/// outputs that carry it.
+/// Text an author writes inside a list but outside its items, on the outputs
+/// that carry it.
 /// </summary>
 /// <remarks>
 /// It used to reach only two of them. The HTML path dropped the text children
@@ -28,13 +28,10 @@ public class BbListTextShould
     private readonly IBbParserProvider parserProvider = new BbParserProvider();
 
     private string ToHtml(string bbCode) =>
-        ((BbParserWrapper.WrappedNodeTree)parserProvider.GetForSurface(BbSurface.Comment).Parse(bbCode)).ToHtml();
+        parserProvider.GetForSurface(BbSurface.Comment).Parse(bbCode).ToHtml();
 
     private string ToText(string bbCode) =>
-        ((BbParserWrapper.WrappedNodeTree)parserProvider.GetForSurface(BbSurface.Comment).Parse(bbCode)).ToText();
-
-    private string ToBb(string bbCode) =>
-        ((BbParserWrapper.WrappedNodeTree)parserProvider.GetForSurface(BbSurface.Comment).Parse(bbCode)).ToBb();
+        parserProvider.GetForSurface(BbSurface.Comment).Parse(bbCode).ToText();
 
     /// <summary>
     /// The defect itself: this text reached the source and the text projection
@@ -147,16 +144,14 @@ public class BbListTextShould
     }
 
     /// <summary>
-    /// The two outputs that were already keeping this text keep it, in place
-    /// and untouched by the HTML rule. The source is what the author gets back
-    /// on the next edit, and the text projection is what search reads.
+    /// The text projection, which was already keeping this text, keeps it in
+    /// place and untouched by the HTML rule: it is what search reads.
     /// </summary>
     [Fact]
-    public void KeepTheTextInTheSource_AndInTheTextProjection()
+    public void KeepTheTextInTheTextProjection()
     {
         const string bbCode = "[ul]вступление[li]раз[/li]а вот и абзац[li]два[/li]послесловие[/ul]";
 
-        ToBb(bbCode).Should().Be(bbCode);
         ToText(bbCode).Should().Be("вступление" + "раз" + "а вот и абзац" + "два" + "послесловие");
     }
 }

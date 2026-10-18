@@ -14,9 +14,18 @@
  * shows the same two grids above its day grid. What stays here is the part a
  * grid has no business knowing: the trigger, the stepper pill, the popover
  * and when it is open.
+ *
+ * The popover stands in a fixed layer, as the date field's calendar and the
+ * panel of a subscription do: under the picker with the gap every dropdown
+ * keeps, above it when there is no room below, pushed back inside the window
+ * at either side, and read again on every scroll and resize while it is open
+ * and whenever it changes height. Positioned inside the picker it was cut by
+ * any box around the picker that clips, and a row that scrolls sideways on a
+ * phone (the period of the statistics page) clips what it scrolls.
  */
-import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from "vue";
 import { RU_MONTHS_CAPITALIZED } from "@/shared/lib/utils/months";
+import { POPOVER_GAP, VIEWPORT_EDGE } from "@/shared/lib/constants/geometry";
 import MonthYearGrid from "./MonthYearGrid.vue";
 
 const props = withDefaults(
@@ -83,11 +92,85 @@ const sizerLabel = computed(() =>
   props.mode === "year" ? label.value : `${LONGEST_MONTH} ${props.year}`,
 );
 
+// --- The popover's place, as fixed coordinates ---
+const popoverRef = ref<HTMLElement | null>(null);
+const popoverStyle = ref<Record<string, string>>({});
+
+// For the first frame, before the panel can be measured: its width (the
+// width of .myp-popover below) and about the height of the grid of months.
+const FALLBACK_WIDTH = 220;
+const FALLBACK_HEIGHT = 200;
+
+/**
+ * Under the picker, left edges together; above it when the window has no
+ * room below; pushed back inside the window at either side. The arithmetic of
+ * the date field's calendar (DateInput).
+ */
+function updatePosition() {
+  const anchor = rootRef.value;
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  const panel = popoverRef.value;
+  const width = panel?.offsetWidth || FALLBACK_WIDTH;
+  const height = panel?.offsetHeight || FALLBACK_HEIGHT;
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+
+  let top = rect.bottom + POPOVER_GAP;
+  if (top + height > vh - VIEWPORT_EDGE) {
+    const above = rect.top - POPOVER_GAP - height;
+    top =
+      above >= VIEWPORT_EDGE
+        ? above
+        : Math.max(VIEWPORT_EDGE, vh - VIEWPORT_EDGE - height);
+  }
+
+  let left = rect.left;
+  if (left + width > vw - VIEWPORT_EDGE) left = vw - VIEWPORT_EDGE - width;
+  if (left < VIEWPORT_EDGE) left = VIEWPORT_EDGE;
+
+  popoverStyle.value = { top: `${top}px`, left: `${left}px` };
+}
+
+// Paging the grid of years to the oldest block shortens it: placed above the
+// picker, a panel that shrank would float off it.
+let resizeObserver: ResizeObserver | null = null;
+
+watch(isOpen, (opened) => {
+  if (opened) {
+    // Passive: the listener only reads geometry, and a blocking one on the
+    // scroll path makes the browser wait for it before every frame.
+    document.addEventListener("scroll", updatePosition, {
+      passive: true,
+      capture: true,
+    });
+    window.addEventListener("resize", updatePosition);
+  } else {
+    document.removeEventListener("scroll", updatePosition, { capture: true });
+    window.removeEventListener("resize", updatePosition);
+  }
+});
+
+watch(
+  popoverRef,
+  (panel) => {
+    resizeObserver?.disconnect();
+    resizeObserver = null;
+    if (panel && typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => updatePosition());
+      resizeObserver.observe(panel);
+    }
+  },
+  { flush: "post" },
+);
+
 async function open() {
   isOpen.value = true;
+  updatePosition(); // an estimate before the first paint
   // Move keyboard focus into the dialog: the selected cell, or the first
   // enabled one. Without this, Tab from the trigger lands behind the popover.
   await nextTick();
+  updatePosition(); // the panel measured
   const target =
     rootRef.value?.querySelector<HTMLButtonElement>(".myp-cell.selected") ??
     rootRef.value?.querySelector<HTMLButtonElement>(".myp-cell:enabled");
@@ -175,6 +258,9 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener("click", onDocClick);
   document.removeEventListener("keydown", onKeydown);
+  document.removeEventListener("scroll", updatePosition, { capture: true });
+  window.removeEventListener("resize", updatePosition);
+  resizeObserver?.disconnect();
 });
 </script>
 
@@ -187,10 +273,10 @@ onUnmounted(() => {
     class="month-year-picker"
     :class="{ 'with-stepper': stepper }"
   >
-    <!-- The bordered box is this inner span, never the root: the root is
-         the popover's containing block, and clipping it (the stepper pill
-         clips its sections by radius) sliced the popover down to the height
-         of the field. Same split as DateInput: root positions, field draws. -->
+    <!-- The bordered box is this inner span, never the root: when the
+         popover stood inside the root, clipping it (the stepper pill clips
+         its sections by radius) sliced the popover down to the height of the
+         field. Same split as DateInput: root places, field draws. -->
     <span class="myp-field">
       <template v-if="stepper"
         ><button
@@ -232,7 +318,9 @@ onUnmounted(() => {
 
     <div
       v-if="isOpen"
+      ref="popoverRef"
       class="myp-popover"
+      :style="popoverStyle"
       role="dialog"
       aria-label="Выбор периода"
     >
@@ -253,12 +341,11 @@ onUnmounted(() => {
 <style scoped lang="sass">
 @use "@/assets/styles/ZIndex" as *
 @use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Filters" as *
 
-// Inline-block (not flex): a selection then copies in one line.
-// position: relative stays — the popover anchors to this box. Nothing that
-// clips may be declared here: this box is the popover's containing block.
+// Inline-block (not flex): a selection then copies in one line. The popover
+// is placed off this box's rectangle, in a fixed layer.
 .month-year-picker
-  position: relative
   display: inline-block
   white-space: nowrap
   vertical-align: middle
@@ -314,8 +401,10 @@ onUnmounted(() => {
   &:hover
     background-image: linear-gradient($hover-overlay, $hover-overlay)
 
+  // Inward: the section fills the pill, whose overflow: hidden would clip a
+  // ring drawn on its edge, and the arrow sections sit flush against it.
   &:focus-visible
-    outline: 2px solid $border-focus
+    outline: 2px solid $link
     outline-offset: -2px
 
 // Width reservation: an invisible ::before with the widest label occupies
@@ -356,19 +445,17 @@ onUnmounted(() => {
     color: $text-muted
     cursor: default
 
+  // Inward, for the same reason as the middle section.
   &:focus-visible
-    outline: 2px solid $border-focus
+    outline: 2px solid $link
     outline-offset: -2px
 
+// At the coordinates updatePosition reads off the picker (top and left inline).
 .myp-popover
-  position: absolute
-  left: 0
-  top: calc(100% + #{$tiny})
+  position: fixed
   z-index: $z-dropdown
   width: 220px
   padding: $small
-  border: 1px solid $border
-  border-radius: $border-radius
-  background-color: $bg-element
-  box-shadow: 0 4px 12px var(--shadow-color)
+  // The site's one floating panel: ground, frame, corners and shadow.
+  +dropdown-surface
 </style>

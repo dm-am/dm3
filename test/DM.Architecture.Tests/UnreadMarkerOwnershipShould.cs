@@ -51,7 +51,7 @@ public class UnreadMarkerOwnershipShould
         (Path.Combine("DM.Domain.Game", "Features", "Rooms", "RoomService.cs"), ["_repository.Create("]),
         (Path.Combine("DM.Domain.Blog", "Features", "Publications", "PublicationService.cs"), ["_repository.CreatePublication("]),
         (Path.Combine("DM.Domain.Messaging", "Features", "Chats", "ChatService.cs"),
-            ["_repository.Create(chat, chatLinks)", "_repository.Update(updateEntity)"]),
+            ["_repository.Create(chat, chatLinks)", "_repository.Update(updateEntity,"]),
     ];
 
     private static bool IsAuthored(string path) =>

@@ -40,35 +40,4 @@ public interface IUserBlacklistService
     /// <param name="dto">DTO with username to unblock</param>
     /// <param name="ct">Cancellation token</param>
     Task Unblock(OperateUserBlacklistLink dto, CancellationToken ct = default);
-
-    /// <summary>
-    /// Check if a user is blocked by current user
-    /// </summary>
-    Task<bool> IsBlocked(string username, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get detailed block status between current user and target user
-    /// </summary>
-    Task<BlockStatus> GetBlockStatus(Guid targetUserId, CancellationToken ct = default);
-}
-
-/// <summary>
-/// Detailed block status between two users
-/// </summary>
-public class BlockStatus
-{
-    /// <summary>
-    /// Whether conversation can proceed
-    /// </summary>
-    public bool CanCommunicate { get; set; }
-
-    /// <summary>
-    /// Block reason (null if can communicate)
-    /// </summary>
-    /// <remarks>
-    /// Possible values:
-    /// - YouBlockedThem: You have blocked the target user
-    /// - CannotCommunicate: Communication is not possible (privacy-protected)
-    /// </remarks>
-    public string? Reason { get; set; }
 }

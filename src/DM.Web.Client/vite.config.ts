@@ -6,6 +6,7 @@
 // and no script type-checks it.
 import { defineConfig } from "vitest/config";
 import vue from "@vitejs/plugin-vue";
+import { deprecations } from "sass";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -99,6 +100,17 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       sass: {
+        // Every deprecation the compiler reports is an error, not a line in
+        // the log. A warning scrolls past in the dev server and the build and
+        // fails nothing, so the one "/" division that slipped in sat there
+        // until someone read the terminal; the next major release of Sass
+        // removes the syntax, and the build that breaks then is the one that
+        // upgrades.
+        // Active ones only: an obsolete id makes the compiler warn about the
+        // option itself, and a future one is not reported until enabled.
+        fatalDeprecations: Object.values(deprecations).filter(
+          (deprecation) => deprecation.status === "active",
+        ),
         // The shared layer, in front of every stylesheet the project compiles:
         // a component asks for $text or +card without saying where they live.
         //

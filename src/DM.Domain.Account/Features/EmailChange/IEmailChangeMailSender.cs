@@ -12,7 +12,6 @@ internal interface IEmailChangeMailSender
     /// Sends the email change confirmation letter to the user
     /// </summary>
     /// <param name="email">User email</param>
-    /// <param name="username">Username</param>
     /// <param name="token">Confirmation token</param>
-    Task Send(string email, string username, Guid token);
+    Task Send(string email, Guid token);
 }

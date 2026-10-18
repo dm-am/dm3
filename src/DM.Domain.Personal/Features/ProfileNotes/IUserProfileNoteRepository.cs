@@ -15,22 +15,24 @@ public interface IUserProfileNoteRepository
     Task<UserProfileNote?> Get(Guid ownerId, Guid subjectUserId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get note by ID
+    /// Write the owner's note about the subject, whether or not the pair already
+    /// has one
     /// </summary>
-    Task<UserProfileNote?> GetById(Guid noteId, CancellationToken ct = default);
+    /// <remarks>
+    /// A pair with no note gets a new one under <c>Id</c>. A pair that has one
+    /// keeps it: the text is replaced and the modification dated with
+    /// <c>CreatedUtc</c>, the identifier and creation date stay. Decided by the
+    /// write and not by a read beforehand, so saves of one pair arriving together
+    /// all land and the last one wins.
+    ///
+    /// Null when a removal of the same pair landed between the write and the
+    /// read that answers it: the note is gone, and that is what the caller is
+    /// told.
+    /// </remarks>
+    Task<UserProfileNote?> Create(CreateUserProfileNoteEntity note, CancellationToken ct = default);
 
     /// <summary>
-    /// Create a new note
-    /// </summary>
-    Task<UserProfileNote> Create(CreateUserProfileNoteEntity note, CancellationToken ct = default);
-
-    /// <summary>
-    /// Update an existing note
-    /// </summary>
-    Task<UserProfileNote> Update(UpdateUserProfileNoteEntity note, CancellationToken ct = default);
-
-    /// <summary>
-    /// Delete a note
+    /// Delete a note; a note already gone is not an error
     /// </summary>
     Task Delete(Guid noteId, CancellationToken ct = default);
 }

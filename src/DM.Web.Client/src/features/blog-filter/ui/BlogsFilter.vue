@@ -361,11 +361,13 @@ function handleSearchKeydown(event: KeyboardEvent) {
             @select="handleStatusSelect"
           />
 
-          <!-- Hosts multi-select -->
+          <!-- Hosts multi-select: include-inactive, so the host of a blog
+               who has not been here for 30 days stays findable -->
           <UserMultiSelect
             v-if="navPath?.filter === 'host'"
             :selected-users="filterState.hostUsernames"
             placeholder="Поиск ведущего"
+            include-inactive
             @add="handleAddHost"
             @remove="handleRemoveHost"
           />

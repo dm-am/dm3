@@ -4,6 +4,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Authorization;
 using FluentValidation;
@@ -19,6 +20,7 @@ internal class TagManagementService : ITagManagementService
     private readonly IValidator<UpdateTagGroup> _updateGroupValidator;
     private readonly IValidator<CreateTag> _createTagValidator;
     private readonly IValidator<UpdateTag> _updateTagValidator;
+    private readonly IBbTagNameCase _tagNames;
 
     public TagManagementService(
         IIntentionManager intentionManager,
@@ -26,7 +28,8 @@ internal class TagManagementService : ITagManagementService
         IValidator<CreateTagGroup> createGroupValidator,
         IValidator<UpdateTagGroup> updateGroupValidator,
         IValidator<CreateTag> createTagValidator,
-        IValidator<UpdateTag> updateTagValidator)
+        IValidator<UpdateTag> updateTagValidator,
+        IBbTagNameCase tagNames)
     {
         _intentionManager = intentionManager;
         _repository = repository;
@@ -34,6 +37,7 @@ internal class TagManagementService : ITagManagementService
         _updateGroupValidator = updateGroupValidator;
         _createTagValidator = createTagValidator;
         _updateTagValidator = updateTagValidator;
+        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
@@ -140,7 +144,13 @@ internal class TagManagementService : ITagManagementService
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.TagTitleTaken(createTag.Title, group.Title));
         }
 
-        return await _repository.CreateTag(createTag, ct);
+        return await _repository.CreateTag(new CreateTag
+        {
+            GroupId = createTag.GroupId,
+            Title = createTag.Title,
+            Description = DescriptionAsWritten(createTag.Description),
+            SortOrder = createTag.SortOrder
+        }, ct);
     }
 
     /// <inheritdoc />
@@ -160,8 +170,24 @@ internal class TagManagementService : ITagManagementService
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.TagTitleTaken(updateTag.Title, group.Title));
         }
 
-        return await _repository.UpdateTag(updateTag, ct);
+        return await _repository.UpdateTag(new UpdateTag
+        {
+            Id = updateTag.Id,
+            GroupId = updateTag.GroupId,
+            Title = updateTag.Title,
+            Description = DescriptionAsWritten(updateTag.Description),
+            SortOrder = updateTag.SortOrder
+        }, ct);
     }
+
+    /// <summary>
+    /// The description with the names of its tags in lower case, as the site
+    /// writes every name (IBbTagNameCase). It is read with the tags of the
+    /// hint, [tip] above all: a name that is no tag there is text and keeps
+    /// its case.
+    /// </summary>
+    private string? DescriptionAsWritten(string? description) =>
+        _tagNames.ToLowerCase(description, BbTagSet.Hint);
 
     /// <inheritdoc />
     public async Task DeleteTag(Guid tagId, CancellationToken ct = default)

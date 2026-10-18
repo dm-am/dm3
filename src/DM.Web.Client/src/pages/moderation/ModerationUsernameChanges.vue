@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, reactive, type Ref } from "vue";
 import { useModal } from "vue-final-modal";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { notifyFailure } from "@/shared/lib/errors";
+import { refusalHere } from "@/shared/lib/errors";
 import {
   moderationApi,
   UsernameChangeRequestStatus,
@@ -19,44 +18,31 @@ import { sectionRole } from "./lib/sections";
 const { hasAccess, deniedText } = useRoleGate(
   sectionRole("moderation-username-changes"),
 );
-const toast = useToast();
 const requests = ref<UsernameChangeRequest[]>([]);
 const loading = ref(false);
 const processing = ref<string | null>(null);
 
-const getStatusLabel = (status: UsernameChangeRequestStatus): string => {
-  switch (status) {
-    case UsernameChangeRequestStatus.Pending:
-      return "Ожидает";
-    case UsernameChangeRequestStatus.Approved:
-      return "Одобрено";
-    case UsernameChangeRequestStatus.Rejected:
-      return "Отклонено";
-    case UsernameChangeRequestStatus.Completed:
-      return "Завершено";
-    case UsernameChangeRequestStatus.Expired:
-      return "Истекло";
-    default:
-      return "Неизвестно";
-  }
-};
+const LOAD_FAILED = "Не удалось загрузить запросы на смену имени";
 
-const getStatusClass = (status: UsernameChangeRequestStatus): string => {
-  switch (status) {
-    case UsernameChangeRequestStatus.Pending:
-      return "pending";
-    case UsernameChangeRequestStatus.Approved:
-      return "approved";
-    case UsernameChangeRequestStatus.Rejected:
-      return "rejected";
-    case UsernameChangeRequestStatus.Completed:
-      return "completed";
-    case UsernameChangeRequestStatus.Expired:
-      return "expired";
-    default:
-      return "";
-  }
-};
+/**
+ * Why the list did not arrive, printed where the list would stand.
+ *
+ * A failed load is the state of the page and not a plate over it: there is no
+ * list underneath to go back to, and a plate in the corner over an empty
+ * section explains nothing (UI_STANDARDS, "Всплывающие сообщения"). The api
+ * method has no seam for `ownsRefusal`, so the refusal is taken over from the
+ * interceptor (refusalHere): it stands here in the server's words and the
+ * plate held for it is taken down. An expired session and a dead connection
+ * stay with the plate. Cleared by the next read.
+ */
+const loadRefusal = ref("");
+
+/**
+ * Whether the last read was refused. "Нет активных запросов" is a claim about
+ * the queue, and a refused read makes none: without this a dead server read
+ * as an empty queue.
+ */
+const loadFailed = ref(false);
 
 const pendingRequests = computed(() =>
   requests.value.filter(
@@ -66,11 +52,17 @@ const pendingRequests = computed(() =>
 
 const fetchRequests = async () => {
   loading.value = true;
+  loadRefusal.value = "";
+  loadFailed.value = false;
   try {
     const { data, error } =
       await moderationApi.getPendingUsernameChangeRequests();
     if (error) {
-      notifyFailure(error, "Не удалось загрузить запросы");
+      // The rows of an earlier read are not this answer, and a re-read after
+      // a resolved request would otherwise keep showing the row it resolved.
+      requests.value = [];
+      loadFailed.value = true;
+      loadRefusal.value = refusalHere(error, LOAD_FAILED) ?? "";
       return;
     }
     requests.value = data?.resources || [];
@@ -81,31 +73,28 @@ const fetchRequests = async () => {
 
 // --- Approve (ConfirmDialog) ---
 const approveTarget = ref<UsernameChangeRequest | null>(null);
-const approving = ref(false);
 
+// The request of the confirmation. The window waits for it, prints a refusal in
+// itself and closes on success alone, so the interceptor keeps quiet about it.
+// The row stays shut until the queue is read again without it.
 const confirmApprove = async () => {
-  if (!approveTarget.value || approving.value) return;
-  approving.value = true;
-  processing.value = approveTarget.value.id;
-  try {
-    const resolve: ResolveUsernameChangeRequest = {
-      status: UsernameChangeRequestStatus.Approved,
-    };
-    const { error } = await moderationApi.resolveUsernameChangeRequest(
-      approveTarget.value.id,
-      resolve,
-    );
-    if (error) {
-      notifyFailure(error, "Не удалось одобрить запрос");
-      return;
-    }
-    toast.success(`Запрос от ${approveTarget.value.currentUsername} одобрен`);
-    approveTarget.value = null;
-    await fetchRequests();
-  } finally {
-    approving.value = false;
+  const target = approveTarget.value;
+  if (!target) return;
+  processing.value = target.id;
+  const resolve: ResolveUsernameChangeRequest = {
+    status: UsernameChangeRequestStatus.Approved,
+  };
+  const result = await moderationApi.resolveUsernameChangeRequest(
+    target.id,
+    resolve,
+    { ownsRefusal: true, ownsRateLimit: true },
+  );
+  if (result.error) {
     processing.value = null;
+    return result;
   }
+  void fetchRequests().finally(() => (processing.value = null));
+  return result;
 };
 
 // --- Reject dialog (shared Dialog idiom) ---
@@ -117,8 +106,7 @@ const { open: openRejectDialog, close: closeRejectDialog } = useModal({
   component: UsernameChangeRejectDialog,
   attrs: reactive({
     request: rejectingRequest as Ref<UsernameChangeRequest>,
-    onSuccess: async (request: UsernameChangeRequest) => {
-      toast.success(`Запрос от ${request.currentUsername} отклонен`);
+    onSuccess: async () => {
       closeRejectDialog();
       await fetchRequests();
     },
@@ -135,36 +123,39 @@ onMounted(() => fetchRequests());
 </script>
 
 <template>
+  <page-title>Запросы на смену имени</page-title>
+
   <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
   <div v-else class="username-changes">
-    <h3>Запросы на смену имени пользователя</h3>
-
     <secondary-text v-if="loading">Загрузка...</secondary-text>
 
-    <template v-else-if="pendingRequests.length === 0">
+    <!-- Why the list did not arrive, in its place. A plate in the corner
+         used to say this over an empty section. -->
+    <p v-else-if="loadRefusal" class="form-error" role="alert">
+      {{ loadRefusal }}
+    </p>
+
+    <template v-else-if="pendingRequests.length === 0 && !loadFailed">
       <secondary-text>Нет активных запросов</secondary-text>
     </template>
 
-    <div v-else class="requests-list">
+    <div v-else-if="pendingRequests.length > 0" class="requests-list">
       <div
         v-for="request in pendingRequests"
         :key="request.id"
         class="request-card"
       >
+        <!-- No word of the state: the queue holds the waiting requests
+             alone, and a word the same on every row says nothing. -->
         <div class="request-header">
-          <div class="user-info">
-            <router-link
-              :to="{
-                name: 'profile',
-                params: { username: request.currentUsername },
-              }"
-              >{{ request.currentUsername }}</router-link
-            >
-            <span class="status-badge" :class="getStatusClass(request.status)">
-              {{ getStatusLabel(request.status) }}
-            </span>
-          </div>
+          <router-link
+            :to="{
+              name: 'profile',
+              params: { username: request.currentUsername },
+            }"
+            >{{ request.currentUsername }}</router-link
+          >
           <div class="request-date">
             <human-date :date="request.createdUtc" />
           </div>
@@ -201,12 +192,12 @@ onMounted(() => fetchRequests());
     <!-- Approve confirmation -->
     <ConfirmDialog
       :show="approveTarget !== null"
-      title="Одобрение запроса"
-      :message="`Одобрить запрос на смену имени от ${approveTarget?.currentUsername ?? ''}?`"
+      title="Одобрить смену имени?"
+      :message="`&quot;${approveTarget?.currentUsername ?? ''}&quot; сможет занять новое имя`"
       confirm-label="Одобрить"
-      :loading="approving"
+      failure="Не удалось одобрить запрос"
+      :action="confirmApprove"
       @update:show="(v) => !v && (approveTarget = null)"
-      @confirm="confirmApprove"
     />
   </div>
 </template>
@@ -214,60 +205,36 @@ onMounted(() => fetchRequests());
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
 
-.username-changes
-  h3
-    color: $text
-    margin-bottom: $medium
-
 .requests-list
   display: flex
   flex-direction: column
   gap: $medium
 
+// The refusal line of a form, in place of the list: the same red and the same
+// secondary size as .form-error in the character form and the grant form.
+.form-error
+  margin: $small 0 0
+  color: $accent-red
+  font-size: $secondary-font-size
+
 .request-card
   +card()
 
+// The name on the left, the date level with it on the right while the list is
+// wide.
 .request-header
   display: flex
   justify-content: space-between
   align-items: center
+  gap: $medium
   margin-bottom: $small
 
-.user-info
-  display: flex
-  align-items: center
-  gap: $small
-
-.status-badge
-  font-size: 0.75rem
-  padding: 2px 8px
-  border-radius: $border-radius
-  text-transform: uppercase
-  font-weight: 500
-
-  &.pending
-    +tint($accent-yellow, 20%)
-    color: $accent-yellow
-
-  &.approved
-    +tint($accent-green, 20%)
-    color: $accent-green
-
-  &.rejected
-    +tint($accent-red, 20%)
-    color: $accent-red
-
-  &.completed
-    +tint($link, 20%)
-    color: $link
-
-  &.expired
-    +tint($text-muted, 20%)
-    color: $text-muted
-
+// A date is not broken: "04.10.2026" and "в 18:20" on two lines read as two
+// facts.
 .request-date
   font-size: 0.85rem
   color: $text-muted
+  white-space: nowrap
 
 .request-reason
   margin-bottom: $small

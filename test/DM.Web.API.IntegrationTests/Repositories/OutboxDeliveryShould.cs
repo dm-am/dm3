@@ -23,13 +23,13 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// exists for.
 /// </summary>
 /// <remarks>
-/// The main acceptance of the wave is the restart test (AC-1): before the
-/// outbox, every event of the window was lost in silence; now SendAsync keeps
+/// The main acceptance of the wave is the restart test: before the outbox,
+/// every event of the window was lost in silence; now SendAsync keeps
 /// answering success, the rows keep accumulating, and the backlog leaves in
 /// order once the broker is back - with the lag metric rising while it waits
-/// and returning to zero without anybody restarting the API (AC-5). The happy
-/// path pins the latency the design promises: one relay tick plus the batch
-/// (AC-4, bounded at five seconds in a test).
+/// and returning to zero without anybody restarting the API. The happy path
+/// pins the latency the design promises: one relay tick plus the batch,
+/// bounded at five seconds in a test.
 /// </remarks>
 public class OutboxDeliveryShould : IntegrationTestBase
 {
@@ -64,7 +64,7 @@ public class OutboxDeliveryShould : IntegrationTestBase
 
             delivered.Should().Contain(eventId, "the stored event is what the relay publishes");
             watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5),
-                "the happy-path latency is one relay tick plus the batch (AC-4)");
+                "the happy-path latency is one relay tick plus the batch");
 
             using var check = DatabaseFixture.Factory.Services.CreateScope();
             Context(check).OutboxEvents.Single(row => row.EventId == eventId)
@@ -111,7 +111,7 @@ public class OutboxDeliveryShould : IntegrationTestBase
                     await producer.SendAsync([EventType.ChangedGame, EventType.NewPublication], entityId);
                 };
                 await send.Should().NotThrowAsync(
-                    "a dead broker must not fail the requests whose work is already done (AC-1)");
+                    "a dead broker must not fail the requests whose work is already done");
             }
 
             Guid[] stored;
@@ -130,14 +130,14 @@ public class OutboxDeliveryShould : IntegrationTestBase
 
             await WaitUntil(() => Interlocked.Read(ref publishFailures) > 0,
                 TimeSpan.FromSeconds(60),
-                "the relay keeps trying against the dead broker and counts every refusal (AC-5)");
+                "the relay keeps trying against the dead broker and counts every refusal");
 
             await DatabaseFixture.StartBrokerAsync();
 
             var delivered = await Consume(queue, stored, TimeSpan.FromSeconds(120));
             delivered.Should().Contain(stored,
                 "everything said while the broker was down arrives after it is back - the " +
-                "loss this wave closes (AC-1)");
+                "loss this wave closes");
 
             using (var scope = DatabaseFixture.Factory.Services.CreateScope())
             {
@@ -160,7 +160,7 @@ public class OutboxDeliveryShould : IntegrationTestBase
                     }
                 },
                 TimeSpan.FromSeconds(30),
-                "the lag returns to zero without anybody restarting the API (AC-5)");
+                "the lag returns to zero without anybody restarting the API");
         }
         finally
         {

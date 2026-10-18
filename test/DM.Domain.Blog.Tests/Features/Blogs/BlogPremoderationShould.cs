@@ -11,6 +11,7 @@ using DM.Domain.Blog.Features.Subscriptions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
@@ -21,6 +22,7 @@ using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Testing;
 using DM.Testing.Dsl;
+using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
@@ -112,6 +114,7 @@ public class BlogPremoderationShould : UnitTestBase
         _service = new BlogService(
             _repository,
             blacklistRepository,
+            Mock<IUserBlacklistChecker>(),
             userLookupService,
             subscriptionService,
             unreadCountersRepository,
@@ -123,7 +126,8 @@ public class BlogPremoderationShould : UnitTestBase
             updateRubricValidator,
             guidFactory,
             dateTimeProvider,
-            _eventProducer);
+            _eventProducer,
+            new TagNamesAsTyped());
     }
 
     private Guid SetupBlog(PremoderationStatus premoderationStatus, Guid? ownerId = null)

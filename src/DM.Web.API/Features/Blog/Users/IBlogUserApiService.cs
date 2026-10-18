@@ -43,8 +43,8 @@ public interface IBlogUserApiService
     /// </summary>
     Task Unsubscribe(Guid blogId);
 
-    // Note: RemoveReader is not provided - readers can only unsubscribe themselves
-    // Use blacklist to prevent problematic users from commenting
+    // Note: RemoveReader is not provided - readers can only unsubscribe themselves.
+    // The blacklist does not remove one either: it closes writing, not reading.
 
     #endregion
 

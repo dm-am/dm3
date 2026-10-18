@@ -173,12 +173,19 @@ public interface IUnreadCountersRepository
     Task FlushAllAsync(Guid userId, UnreadEntryType entryType, Guid parentId);
 
     /// <summary>
-    /// Move unread counters to new parent
+    /// Re-parent the markers of one entity
     /// </summary>
-    /// <param name="parentId">Parent Id</param>
+    /// <remarks>
+    /// One entity, not one parent: a marker names the entity it belongs to and
+    /// the container it is counted under, and a topic moved to another board
+    /// takes only its own markers with it. Selecting by the old container moved
+    /// every topic of that board instead, and the board a reader was on stopped
+    /// counting anything.
+    /// </remarks>
+    /// <param name="entityId">Entity whose markers move</param>
     /// <param name="entryType">Entry type</param>
     /// <param name="newParentId">New parent Id</param>
-    Task ChangeParentAsync(Guid parentId, UnreadEntryType entryType, Guid newParentId);
+    Task ChangeParentAsync(Guid entityId, UnreadEntryType entryType, Guid newParentId);
 
     /// <summary>
     /// Get the last read time for a specific entity

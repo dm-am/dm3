@@ -88,7 +88,6 @@ public class RegistrationServiceShould : UnitTestBase
         _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
         _securityManager.GeneratePassword(registration.Password).Returns(("hash", "salt"));
         _guidFactory.Create().Returns(pendingId, tokenId);
-        _repository.PendingExists(registration.Email, Arg.Any<CancellationToken>()).Returns(false);
 
         await _service.Register(registration);
 
@@ -102,8 +101,20 @@ public class RegistrationServiceShould : UnitTestBase
         await _mailSender.Received(1).Send(registration.Email, tokenId);
     }
 
+    /// <summary>
+    /// Registering again on an address that already has a pending row is the same
+    /// write, and the service asks nothing first.
+    /// </summary>
+    /// <remarks>
+    /// It used to ask whether the address had a pending registration and branch on
+    /// the answer, which stops being true the moment it is given: two submissions
+    /// of the form arriving together both heard "nothing pending" and both
+    /// inserted, and the loser was answered with a failure of the storage engine.
+    /// AddPending replaces whatever the address has, so there is nothing left to
+    /// decide here.
+    /// </remarks>
     [Fact]
-    public async Task ReplacePendingRegistrationForExistingEmail()
+    public async Task WriteThePendingRegistrationOfAnAddressThatAlreadyHasOne()
     {
         var registration = new UserRegistration
         {
@@ -117,15 +128,17 @@ public class RegistrationServiceShould : UnitTestBase
         _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
         _securityManager.GeneratePassword(registration.Password).Returns(("newhash", "newsalt"));
         _guidFactory.Create().Returns(pendingId, tokenId);
-        _repository.PendingExists(registration.Email, Arg.Any<CancellationToken>()).Returns(true);
 
         await _service.Register(registration);
 
-        await _repository.Received(1).ReplacePending(Arg.Is<PendingRegistration>(p =>
+        await _repository.Received(1).AddPending(Arg.Is<PendingRegistration>(p =>
             p.Email == registration.Email.ToLowerInvariant() &&
             p.PasswordHash == "newhash" &&
             p.Salt == "newsalt"
         ));
+        await _repository.DidNotReceive().PendingExists(
+            Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _repository.DidNotReceive().ReplacePending(Arg.Any<PendingRegistration>());
         await _mailSender.Received(1).Send(registration.Email, tokenId);
     }
 
@@ -142,7 +155,6 @@ public class RegistrationServiceShould : UnitTestBase
         _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
         _securityManager.GeneratePassword(registration.Password).Returns(("hash", "salt"));
         _guidFactory.Create().Returns(Guid.NewGuid());
-        _repository.PendingExists(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
 
         await _service.Register(registration);
 

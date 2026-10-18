@@ -1,0 +1,111 @@
+// =============================================================================
+// MESSAGE TOOLBAR STYLES
+// =============================================================================
+// The hover toolbar over a chat message. One source for both chats that draw
+// it: the messenger (pages/messenger/ChatView.vue) and the global chat
+// (pages/global-chat/GlobalChatPage.vue). The two templates spell the same
+// class names, so the two toolbars have to look the same, and the only way to
+// keep that true is to keep the rules in one file. While they lived in one
+// page's scoped block they reached that page only, and the other toolbar drew
+// with no rules at all.
+//
+// Emitted through a mixin rather than as bare selectors, because both pages
+// are scoped: each one emits its own copy under its own scope id, which is
+// what makes the rules reach a toolbar that is teleported out of the page.
+//
+// Color rules:
+//   - Theme tokens only. The wrapper is $bg-element, a button is transparent
+//     over it and takes $bg-element-accent on hover, $hover-overlay while
+//     pressed; the icon brightens by $hover-brightness instead of switching
+//     to a second color token
+//   - The destructive confirmation is the site's shared $accent-red. The
+//     liked state is not a colour: the heart is filled and stays the colour of
+//     every other icon, because a like is never red (sharedLike.spec.ts)
+// =============================================================================
+
+@use "Themes" as *
+@use "Variables" as *
+@use "ZIndex" as *
+
+// How a toolbar icon answers the pointer: it brightens and grows under the
+// cursor and gives under the press. A mixin of its own because the corner
+// icons of a speech bubble (shared/ui/SpeechBubble/BubbleAction.vue) are the
+// same pencil and trash, and they have to answer the same way.
+=toolbar-icon-motion
+  svg
+    transition: transform 0.15s ease
+
+  &:hover svg
+    filter: brightness($hover-brightness)
+    transform: scale(1.15)
+
+  &:active svg
+    transform: scale(0.9)
+
+=message-toolbar
+  // Wrapper. The default is the global chat's: positioned inside the scroll
+  // container that clips it, so it travels with the feed.
+  .msg-toolbar
+    position: absolute
+    display: flex
+    align-items: center
+    gap: 0
+    padding: 0
+    background-color: $bg-element
+    box-shadow: 0 0 0 1px $hover-overlay, 0 2px 8px $shadow-color
+    border-radius: $border-radius
+    z-index: $z-dropdown
+    pointer-events: auto
+
+  // The messenger teleports its toolbar to the body and positions it in
+  // viewport coordinates (see useMessageToolbar), so it needs the other
+  // position and a layer that stands above the page it left.
+  .msg-toolbar-fixed
+    position: fixed
+    z-index: $z-toast
+
+  .toolbar-btn-delete-confirm
+    color: $accent-red !important
+    &:hover
+      color: $accent-red-hover !important
+
+  .toolbar-btn-cancel
+    color: $text-muted !important
+    &:hover
+      color: $heading-alt !important
+
+  // Warn action renders the warning text glyph (no dedicated SVG icon) — size
+  // it to match the SVG icons' visual weight and keep it monochrome via
+  // inherited color (same treatment as StatusIcon's warning symbol).
+  .toolbar-btn-warn
+    font-size: 18px
+    line-height: 1
+
+  .toolbar-btn
+    display: flex
+    align-items: center
+    justify-content: center
+    width: 36px
+    height: 32px
+    padding: 0
+    border: none
+    border-radius: 0
+    background: transparent
+    cursor: pointer
+    color: $text-muted
+    +toolbar-icon-motion
+
+    &:hover
+      background-color: $bg-element-accent
+
+    &:active
+      background-color: $hover-overlay
+
+    // Liked: the template swaps the hollow heart for the filled one and the
+    // colour stays the toolbar's. Pressing a liked heart keeps the hover
+    // surface rather than the press one.
+    &.active
+      &:hover
+        background-color: $bg-element-accent
+        svg
+          filter: brightness($hover-brightness)

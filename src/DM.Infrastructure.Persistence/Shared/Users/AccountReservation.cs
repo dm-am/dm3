@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Users;
 using DM.Infrastructure.Persistence.Entities.Account;
 using Microsoft.EntityFrameworkCore;
 
@@ -46,12 +47,24 @@ internal static class AccountReservation
     /// <paramref name="exceptUserId" /> leaves one account out, for the caller asking whether
     /// that account may take the login back.
     /// </summary>
+    /// <remarks>
+    /// "Аккаунт удален" and every spelling a reader would take for it are held too, by
+    /// nobody: that is the signature of what removed accounts wrote and the address of
+    /// the profile that gathers it (<see cref="RemovedAccount" />). Answered as the same
+    /// "taken" bit a held login gets, so registration, the availability check and a
+    /// change of name refuse it the way they refuse any name, and say nothing more.
+    /// </remarks>
     public static Task<bool> UsernameTaken(
         DbSet<User> users,
         string username,
         Guid? exceptUserId = null,
         CancellationToken ct = default)
     {
+        if (RemovedAccount.IsReserved(username))
+        {
+            return Task.FromResult(true);
+        }
+
         IQueryable<User> query = users.IgnoreQueryFilters();
         if (exceptUserId.HasValue)
         {

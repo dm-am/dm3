@@ -1,8 +1,12 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Game.Features.Comments;
+using DM.Domain.Game.Features.GameAttributeSchemas;
+using DM.Domain.Game.Features.GameReviews;
 using DM.Domain.Game.Features.Games;
 using DM.Web.API.Shared.Dto;
+using DomainGameDetails = DM.Domain.Game.Features.Games.GameDetails;
 
 namespace DM.Web.API.Features.Game.Games;
 
@@ -10,14 +14,23 @@ namespace DM.Web.API.Features.Game.Games;
 internal class GameApiService : IGameApiService
 {
     private readonly IGameService _gameService;
+    private readonly IGameAttributeSchemaService _gameSchemaService;
+    private readonly IGameCommentService _commentService;
+    private readonly IGameReviewService _reviewService;
     private readonly GameMapper _mapper;
 
     /// <inheritdoc />
     public GameApiService(
         IGameService gameService,
+        IGameAttributeSchemaService gameSchemaService,
+        IGameCommentService commentService,
+        IGameReviewService reviewService,
         GameMapper mapper)
     {
         _gameService = gameService;
+        _gameSchemaService = gameSchemaService;
+        _commentService = commentService;
+        _reviewService = reviewService;
         _mapper = mapper;
     }
 
@@ -64,14 +77,31 @@ internal class GameApiService : IGameApiService
     public async Task<Envelope<GameDetails>> GetDetails(Guid gameId)
     {
         var game = await _gameService.GetDetailsAsync(gameId);
-        return new Envelope<GameDetails>(_mapper.ToGameDetails(game));
+        return new Envelope<GameDetails>(await DetailsForViewer(game));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<GameDetails>> GetDetailsByPublicId(string publicId)
     {
         var game = await _gameService.GetDetailsByPublicIdAsync(publicId);
-        return new Envelope<GameDetails>(_mapper.ToGameDetails(game));
+        return new Envelope<GameDetails>(await DetailsForViewer(game));
+    }
+
+    /// <summary>
+    /// The details of a game as the viewer gets them: the game, and what he may
+    /// do in it. Every answer that carries the details goes through here, the
+    /// writes included, because a page replaces the game it holds with the one
+    /// a write returns.
+    /// </summary>
+    private async Task<GameDetails> DetailsForViewer(DomainGameDetails game)
+    {
+        var details = _mapper.ToGameDetails(game);
+        details.Viewer = new GameViewer
+        {
+            CanComment = _commentService.MayCreate(game),
+            CanReview = await _reviewService.MayCreateAsync(game.Id)
+        };
+        return details;
     }
 
     /// <inheritdoc />
@@ -85,7 +115,7 @@ internal class GameApiService : IGameApiService
     {
         var createGame = _mapper.ToCreateGame(request);
         var createdGame = await _gameService.CreateAsync(createGame);
-        return new Envelope<GameDetails>(_mapper.ToGameDetails(createdGame));
+        return new Envelope<GameDetails>(await DetailsForViewer(createdGame));
     }
 
     /// <inheritdoc />
@@ -94,28 +124,38 @@ internal class GameApiService : IGameApiService
         var updateGame = _mapper.ToUpdateGame(request);
         updateGame.GameId = gameId;
         var updatedGame = await _gameService.UpdateAsync(updateGame);
-        return new Envelope<GameDetails>(_mapper.ToGameDetails(updatedGame));
+        return new Envelope<GameDetails>(await DetailsForViewer(updatedGame));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<GameDetails>> ChangeStatus(Guid gameId, GameStatusChangeRequest request)
     {
         var updatedGame = await _gameService.ChangeStatusAsync(gameId, request.Transition);
-        return new Envelope<GameDetails>(_mapper.ToGameDetails(updatedGame));
+        return new Envelope<GameDetails>(await DetailsForViewer(updatedGame));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<GameDetails>> ChangePremoderation(string id, GamePremoderationChangeRequest request)
     {
         var updatedGame = await _gameService.ChangePremoderationAsync(id, request.Transition);
-        return new Envelope<GameDetails>(_mapper.ToGameDetails(updatedGame));
+        return new Envelope<GameDetails>(await DetailsForViewer(updatedGame));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<GameDetails>> ResetRecruitmentDate(Guid gameId)
     {
         var updatedGame = await _gameService.ResetRecruitmentDateAsync(gameId);
-        return new Envelope<GameDetails>(_mapper.ToGameDetails(updatedGame));
+        return new Envelope<GameDetails>(await DetailsForViewer(updatedGame));
+    }
+
+    /// <inheritdoc />
+    public async Task<Envelope<GameAttributeSchema>> ReplaceAttributeSchema(
+        Guid gameId, ReplaceGameAttributeSchemaRequest request)
+    {
+        var replace = _mapper.ToReplaceGameAttributeSchema(request);
+        replace.GameId = gameId;
+        var replaced = await _gameSchemaService.ReplaceAsync(replace);
+        return new Envelope<GameAttributeSchema>(_mapper.ToGameAttributeSchema(replaced));
     }
 
     /// <inheritdoc />

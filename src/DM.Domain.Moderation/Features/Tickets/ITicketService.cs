@@ -51,12 +51,14 @@ public class CreateTicketIntake
     public TicketSubtype Subtype { get; set; }
 
     /// <summary>
-    /// Short subject line
+    /// Optional short subject line. The intake forms do not ask for one; the
+    /// screens that read a ticket back name it by its category instead.
     /// </summary>
-    public string Subject { get; set; } = "";
+    public string? Subject { get; set; }
 
     /// <summary>
-    /// Ticket text (plain text, no markup)
+    /// Ticket text in the site markup, the tag set of profile texts: neither
+    /// [mod] nor [private]
     /// </summary>
     public string Text { get; set; } = "";
 
@@ -71,55 +73,10 @@ public class CreateTicketIntake
     public string? ViolationUrl { get; set; }
 
     /// <summary>
-    /// Optional username of the user the complaint is about
+    /// Optional username of the user the complaint is about. Written into the text
+    /// of the ticket as a line of its own, the way the link is
     /// </summary>
     public string? TargetUsername { get; set; }
-}
-
-/// <summary>
-/// DTO for resolving a ticket
-/// </summary>
-public class ResolveTicket
-{
-    /// <summary>
-    /// Resolution status
-    /// </summary>
-    public TicketStatus Status { get; set; }
-
-    /// <summary>
-    /// Moderator's response
-    /// </summary>
-    public string Answer { get; set; } = "";
-
-    /// <summary>
-    /// Issue a warning
-    /// </summary>
-    public bool IssueWarning { get; set; }
-
-    /// <summary>
-    /// Warning message (if issuing warning)
-    /// </summary>
-    public string? WarningText { get; set; }
-
-    /// <summary>
-    /// Warning points (if issuing warning)
-    /// </summary>
-    public int WarningPoints { get; set; }
-
-    /// <summary>
-    /// Issue a ban
-    /// </summary>
-    public bool IssueBan { get; set; }
-
-    /// <summary>
-    /// Ban duration in hours (if issuing ban)
-    /// </summary>
-    public int? BanDurationHours { get; set; }
-
-    /// <summary>
-    /// Ban comment (if issuing ban)
-    /// </summary>
-    public string? BanComment { get; set; }
 }
 
 /// <summary>
@@ -128,21 +85,16 @@ public class ResolveTicket
 public interface ITicketService
 {
     /// <summary>
-    /// Get tickets with optional status and subtype filters.
-    /// Visible subtypes are derived from the caller role: Moderator sees user
-    /// complaints and suggestions, SeniorModerator additionally sees complaints
-    /// about junior moderator decisions, Admin sees everything.
+    /// Get the queue: tickets with optional status and subtype filters, the ones
+    /// waiting for moderation first, then those waiting for their author, then
+    /// the closed and the spam, each group newest first. Visible subtypes are
+    /// derived from the caller role: Moderator sees user complaints and
+    /// suggestions, SeniorModerator additionally sees complaints about junior
+    /// moderator decisions, Admin sees everything. A complaint that names the
+    /// caller is not in his queue (TicketVisibility).
     /// </summary>
     Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetTickets(PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get a page of tickets assigned to the current moderator. The roster grows
-    /// with everything the moderator ever took in hand, so the page is the
-    /// caller's, exactly as on the intake queue
-    /// </summary>
-    Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetMyAssignedTickets(PagingQuery query,
-        CancellationToken ct = default);
 
     /// <summary>
     /// Get a page of tickets filed by the current user, with optional status and
@@ -152,14 +104,16 @@ public interface ITicketService
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Get ticket by ID with the conversation thread
+    /// Get a ticket with its conversation: for its author, and for a moderator who
+    /// moderates it (TicketVisibility). Anybody else is answered 404, the same as
+    /// for a ticket that does not exist
     /// </summary>
-    Task<TicketDetails?> GetTicket(Guid ticketId, CancellationToken ct = default);
+    Task<TicketDetails> GetTicket(Guid ticketId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get a ticket with its conversation thread by its public tracking token
-    /// (guest tracking path, no authentication — the token is the credential).
-    /// Returns null for an empty or unknown token
+    /// Get a ticket with its conversation by its public tracking token (guest
+    /// tracking path, no authentication — the token is the credential). Returns
+    /// null for an empty or unknown token
     /// </summary>
     Task<TicketDetails?> GetTicketByTrackingToken(string token, CancellationToken ct = default);
 
@@ -175,17 +129,27 @@ public interface ITicketService
     Task<Ticket> CreateIntakeTicket(CreateTicketIntake createTicketIntake, CancellationToken ct = default);
 
     /// <summary>
-    /// Assign a ticket to the current moderator
+    /// Answer in the conversation of a ticket, as its author or as moderation, and
+    /// read the ticket back as it stands after the answer. The author's answer
+    /// leaves the ticket waiting for moderation. A moderator's answer moves it to
+    /// the status he chose with it: waiting for the author unless he chose to
+    /// close it or to mark it as spam, and for those two the text may stay empty,
+    /// the change of the status being the whole answer. A ticket closed as
+    /// resolved is announced to its author when the author has an account; one
+    /// marked as spam is not
     /// </summary>
-    Task<Ticket> AssignToMe(Guid ticketId, CancellationToken ct = default);
+    Task<TicketDetails> CreateComment(Guid ticketId, CreateTicketComment createComment,
+        CancellationToken ct = default);
 
     /// <summary>
-    /// Resolve a ticket
+    /// Write in the conversation of a guest ticket by its tracking token: the
+    /// comment of the guest who filed it, signed by nobody
     /// </summary>
-    Task<Ticket> ResolveTicket(Guid ticketId, ResolveTicket resolveTicket, CancellationToken ct = default);
+    Task<TicketComment> CreateTrackedComment(string token, CreateTicketComment createComment,
+        CancellationToken ct = default);
 
     /// <summary>
-    /// Get ticket statistics
+    /// Get ticket statistics: the counts of the caller's queue by status
     /// </summary>
     Task<Dictionary<TicketStatus, int>> GetTicketStats(CancellationToken ct = default);
 }

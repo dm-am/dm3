@@ -1,12 +1,13 @@
 using System;
-using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Exceptions;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
+using DM.Web.API.Shared.RateLimiting;
+using DM.Web.API.Swagger;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Moderation.Tickets;
@@ -15,8 +16,10 @@ namespace DM.Web.API.Features.Moderation.Tickets;
 /// API controller for moderation tickets (user reports)
 /// </summary>
 /// <remarks>
-/// Tickets allow users to report content violations to moderators.
-/// Moderators can review, assign, and resolve tickets with optional warnings/bans.
+/// Tickets allow users to report content violations to moderators. A ticket is a
+/// conversation between its author and moderation, and moderation closes it with
+/// an answer. Warnings and bans are issued from the profile of the violator, not
+/// from a ticket.
 /// </remarks>
 [ApiController]
 [Route("v1/moderation/tickets")]
@@ -36,10 +39,13 @@ public class TicketController : ControllerBase
     /// Get all tickets
     /// </summary>
     /// <remarks>
-    /// Returns moderation tickets visible to the caller role. Requires Moderator
+    /// Returns the queue: the moderation tickets visible to the caller role, the
+    /// ones waiting for moderation first, then those waiting for their author,
+    /// then the closed and the spam, each group newest first. Requires Moderator
     /// role or higher. Moderator sees user complaints and suggestions,
     /// SeniorModerator additionally sees complaints about junior moderator
-    /// decisions, Admin sees all categories. Can be filtered by status and subtype.
+    /// decisions, Admin sees all categories. A complaint that names the caller as
+    /// the violator is not in his queue. Can be filtered by status and subtype.
     /// </remarks>
     /// <param name="status">Optional status filter</param>
     /// <param name="subtype">Optional subtype filter (within the caller visibility scope)</param>
@@ -75,26 +81,6 @@ public class TicketController : ControllerBase
         Ok(await _ticketApiService.GetStats());
 
     /// <summary>
-    /// Get my assigned tickets
-    /// </summary>
-    /// <remarks>
-    /// Returns tickets assigned to the current moderator. The roster grows with
-    /// everything the moderator ever took in hand, so it takes a page like the
-    /// intake queue next to it.
-    /// </remarks>
-    /// <param name="q">Paging parameters</param>
-    /// <response code="200">List of assigned tickets</response>
-    /// <response code="401">User must be authenticated</response>
-    /// <response code="403">Moderator role required</response>
-    [HttpGet("assigned", Name = nameof(GetMyAssignedTickets))]
-    [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(ListEnvelope<Ticket>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetMyAssignedTickets([FromQuery] PagingQuery q) =>
-        Ok(await _ticketApiService.GetMyAssignedTickets(q));
-
-    /// <summary>
     /// Get my filed tickets
     /// </summary>
     /// <remarks>
@@ -119,8 +105,10 @@ public class TicketController : ControllerBase
     /// Get ticket by ID
     /// </summary>
     /// <remarks>
-    /// Returns a specific ticket with the conversation thread (responses).
-    /// Moderators see full details, reporters see their own tickets.
+    /// Returns a ticket with its conversation, and what the caller may do in it.
+    /// The author reads his own ticket; a moderator reads a ticket of a category
+    /// his role sees, unless the ticket names him as the violator. Anybody else is
+    /// answered 404, the same as for a ticket that does not exist.
     /// </remarks>
     /// <param name="ticketId">Ticket ID</param>
     /// <response code="200">Ticket details</response>
@@ -131,16 +119,8 @@ public class TicketController : ControllerBase
     [ProducesResponseType(typeof(Envelope<TicketDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetTicket(Guid ticketId)
-    {
-        var ticket = await _ticketApiService.GetTicket(ticketId);
-        if (ticket == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.TicketNotFound);
-        }
-
-        return Ok(ticket);
-    }
+    public async Task<IActionResult> GetTicket(Guid ticketId) =>
+        Ok(await _ticketApiService.GetTicket(ticketId));
 
     /// <summary>
     /// Create a ticket (report content)
@@ -167,47 +147,36 @@ public class TicketController : ControllerBase
     }
 
     /// <summary>
-    /// Assign ticket to me
+    /// Answer in the conversation of a ticket
     /// </summary>
     /// <remarks>
-    /// Assigns an open ticket to the current moderator and changes status to InProgress.
+    /// The author of the ticket and the moderators who read it answer in it while
+    /// it is open. The answer of the author leaves the ticket waiting for
+    /// moderation, and he sends no status (403 if he does, whatever his role). A
+    /// moderator chooses with his answer the status the ticket moves to: waiting
+    /// for the author when left out, closed, or spam; for the last two the text
+    /// may stay empty, and the answer then only changes the status. The text and
+    /// the status are written together or not at all. An answer is not edited or
+    /// deleted afterwards. The conversation takes a hundred answers. The ticket
+    /// comes back as it stands after the answer.
     /// </remarks>
     /// <param name="ticketId">Ticket ID</param>
-    /// <response code="200">Ticket assigned</response>
-    /// <response code="400">Ticket is not in Open status</response>
+    /// <param name="request">The answer</param>
+    /// <response code="200">The ticket with its conversation, after the answer</response>
+    /// <response code="400">The ticket is closed or full, or the text or the status is refused</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">Moderator role required</response>
+    /// <response code="403">The author of the ticket sent a status</response>
     /// <response code="404">Ticket not found</response>
-    [HttpPost("{ticketId:guid}/assign", Name = nameof(AssignTicketToMe))]
-    [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(Envelope<Ticket>), StatusCodes.Status200OK)]
+    /// <response code="429">Too many requests. Try again later.</response>
+    [HttpPost("{ticketId}/comments", Name = nameof(CreateTicketComment))]
+    [AuthenticationRequired]
+    [EnableRateLimiting(RateLimitPolicies.Default)]
+    [ProducesResponseType(typeof(Envelope<TicketDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> AssignTicketToMe(Guid ticketId) =>
-        Ok(await _ticketApiService.AssignToMe(ticketId));
-
-    /// <summary>
-    /// Resolve ticket
-    /// </summary>
-    /// <remarks>
-    /// Resolves a ticket with optional warning and/or ban.
-    /// </remarks>
-    /// <param name="ticketId">Ticket ID</param>
-    /// <param name="request">Resolution request</param>
-    /// <response code="200">Ticket resolved</response>
-    /// <response code="400">Ticket is already closed</response>
-    /// <response code="401">User must be authenticated</response>
-    /// <response code="403">Moderator role required</response>
-    /// <response code="404">Ticket not found</response>
-    [HttpPost("{ticketId:guid}/resolve", Name = nameof(ResolveTicket))]
-    [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(Envelope<Ticket>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ResolveTicket(Guid ticketId, [FromBody] ResolveTicketRequest request) =>
-        Ok(await _ticketApiService.ResolveTicket(ticketId, request));
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> CreateTicketComment(Guid ticketId, [FromBody] AnswerTicketRequest request) =>
+        Ok(await _ticketApiService.CreateComment(ticketId, request));
 }

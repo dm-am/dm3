@@ -179,15 +179,12 @@ internal partial class UsernameChangeService : IUsernameChangeService
             if (resolve.Status == UsernameChangeRequestStatus.Approved && request.ApprovalToken.HasValue)
             {
                 await _notificationSender.SendApprovalAsync(
-                    request.UserEmail,
-                    request.UserUsername!,
-                    request.ApprovalToken.Value);
+                    request.UserEmail, request.ApprovalToken.Value);
             }
             else if (resolve.Status == UsernameChangeRequestStatus.Rejected)
             {
                 await _notificationSender.SendRejectionAsync(
                     request.UserEmail,
-                    request.UserUsername!,
                     resolve.Comment);
             }
         }
@@ -261,7 +258,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         // Approval and choice are days apart, so the name can be gone by the time
         // it is asked for. The reader keeps the form and picks another one.
         if (!usernameAvailable || usernameReserved)
-            throw new HttpException(HttpStatusCode.Conflict, "Это имя уже занято");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UsernameTaken);
 
         // The history row, the new name and the resolved request go in together.
         // Written one at a time, a refusal in between left a rename half applied -
@@ -285,7 +282,18 @@ internal partial class UsernameChangeService : IUsernameChangeService
         request.Status = UsernameChangeRequestStatus.Completed;
         request.UserUsername = newUsername; // Update the local copy for MapToEntry
 
-        await _repository.ApplyRename(request, history);
+        try
+        {
+            await _repository.ApplyRename(request, history);
+        }
+        catch (DuplicateEntityException)
+        {
+            // The checks above are reads, and a name can be taken between them and
+            // this write; the history of the name being left behind can refuse it
+            // outright. Either way the reader keeps the form and picks another
+            // name, so the answer is the one the pre-check gives.
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UsernameTaken);
+        }
 
         return MapToEntry(request);
     }
@@ -317,7 +325,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         var usernameAvailable = await _repository.IsUsernameAvailable(previousUsername, request.UserId);
         if (!usernameAvailable)
             throw new HttpException(HttpStatusCode.Conflict,
-                $"Откат невозможен: имя {previousUsername} уже занято");
+                RefusalMessage.UsernameRollbackBlocked(previousUsername));
 
         var now = _dateTimeProvider.Now;
 
@@ -339,7 +347,18 @@ internal partial class UsernameChangeService : IUsernameChangeService
             $"Откат модератором {currentUser.Username}: имя '{currentUsername}' отменено");
         request.UserUsername = previousUsername; // Update local copy for MapToEntry
 
-        await _repository.ApplyRename(request, rollback);
+        try
+        {
+            await _repository.ApplyRename(request, rollback);
+        }
+        catch (DuplicateEntityException)
+        {
+            // Same two structures as the rename above, and the same answer the
+            // check a few lines up gives: the name the rollback aims at is not
+            // free to take.
+            throw new HttpException(HttpStatusCode.Conflict,
+                RefusalMessage.UsernameRollbackBlocked(previousUsername));
+        }
 
         return MapToEntry(request);
     }

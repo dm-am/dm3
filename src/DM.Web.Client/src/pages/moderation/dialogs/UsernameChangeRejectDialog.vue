@@ -3,6 +3,10 @@
  * UsernameChangeRejectDialog — reject a username change request with a
  * required reason. Dialog twin of the former hand-rolled modal in
  * ModerationUsernameChanges.vue.
+ *
+ * The window runs the request (Dialog `action`): it waits for the answer,
+ * prints a refusal in itself and closes on success alone. The reason is typed
+ * text, so the window asks before it is dropped.
  */
 import { ref, computed } from "vue";
 import {
@@ -25,31 +29,31 @@ const emit = defineEmits<{
 }>();
 
 const comment = ref("");
-const sending = ref(false);
-const error = ref<string | null>(null);
 
 const canSubmit = computed(() => comment.value.trim().length > 0);
 
-async function submit() {
-  if (!canSubmit.value || sending.value) return;
-  sending.value = true;
-  error.value = null;
-  try {
-    await moderationApi.resolveUsernameChangeRequest(props.request.id, {
+async function send() {
+  const result = await moderationApi.resolveUsernameChangeRequest(
+    props.request.id,
+    {
       status: UsernameChangeRequestStatus.Rejected,
       comment: comment.value,
-    });
-    emit("success", props.request);
-  } catch {
-    error.value = "Не удалось отклонить запрос";
-  } finally {
-    sending.value = false;
-  }
+    },
+    { ownsRefusal: true, ownsRateLimit: true },
+  );
+  if (!result.error) emit("success", props.request);
+  return result;
 }
 </script>
 
 <template>
-  <Dialog narrow>
+  <Dialog
+    :action="send"
+    failure="Не удалось отклонить запрос"
+    :dirty="comment.trim().length > 0"
+    discard-text="Набранная причина пропадет"
+    @close="emit('cancel')"
+  >
     <DialogTitle>Отклонение запроса</DialogTitle>
 
     <p class="reject-context">
@@ -58,18 +62,11 @@ async function submit() {
       >?
     </p>
 
-    <Form
-      :valid="canSubmit"
-      :loading="sending"
-      action="Отклонить"
-      cancel="Отмена"
-      @submit="submit"
-      @cancel="emit('cancel')"
-    >
+    <Form :valid="canSubmit" action="Отклонить" cancel="Отмена">
       <FormField
         label="Причина отклонения"
         name="reject-reason"
-        :errors="error ? [error] : []"
+        field="comment"
       >
         <textarea
           id="reject-reason"
@@ -83,6 +80,7 @@ async function submit() {
 </template>
 
 <style scoped lang="sass">
+// One field step down to the field, as between two fields.
 .reject-context
-  margin: 0 0 $small
+  margin: 0 0 $medium
 </style>

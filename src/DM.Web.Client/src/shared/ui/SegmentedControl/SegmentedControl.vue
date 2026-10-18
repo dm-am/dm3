@@ -13,7 +13,7 @@
  *
  * Accessibility: aria-pressed marks the active option; the keyboard focus
  * ring is inset (outline-offset: -2px) because the pill's overflow: hidden
- * would clip the default outside ring. Pass the group name as `ariaLabel`,
+ * would clip a ring drawn on the segment's edge. Pass the group name as `ariaLabel`,
  * NOT `aria-label` — the kebab spelling type-checks as a native ARIA
  * attribute instead of this prop, which both drops the required-prop check
  * and defeats the generic inference of V at the call site.
@@ -54,6 +54,8 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 // Bordered pill — inline-block (NOT flex) so a selection copies in one line;
 // nowrap keeps the segments from ever breaking mid-pill.
 .segmented-control
@@ -79,7 +81,7 @@ const emit = defineEmits<{
   cursor: pointer
   transition: color $transition-fast, background-color $transition-fast
 
-  &:hover
+  &:hover:not(:disabled)
     color: $text
 
   &.active
@@ -92,8 +94,13 @@ const emit = defineEmits<{
   & ~ &
     border-left: 1px solid $border
 
-  // Inset ring — the pill's overflow: hidden clips the default +2px ring.
+  // Inward: the pill's overflow: hidden would clip a ring drawn on the
+  // segment's edge, and the segments sit flush against each other.
   &:focus-visible
-    outline: 2px solid $border-focus
+    outline: 2px solid $link
     outline-offset: -2px
+
+  // Out of reach the way every control with a box is: half its opacity under
+  // the site's hatch.
+  +disabled-hatch
 </style>

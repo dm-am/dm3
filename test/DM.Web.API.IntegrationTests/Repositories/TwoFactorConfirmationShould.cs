@@ -36,10 +36,10 @@ public class TwoFactorConfirmationShould : IntegrationTestBase
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<ITwoFactorRepository>();
-        var userId = await SeedUnconfirmedFactor(scope);
+        var (userId, createdUtc) = await SeedUnconfirmedFactor(scope);
         var confirmedUtc = DateTimeOffset.UtcNow;
 
-        (await repository.Confirm(userId, confirmedUtc, Hashes(10)))
+        (await repository.Confirm(userId, createdUtc, confirmedUtc, Hashes(10)))
             .Should().BeTrue("the factor was off and this call is what switched it on");
 
         await using var db = DatabaseFixture.CreateDbContext();
@@ -64,13 +64,13 @@ public class TwoFactorConfirmationShould : IntegrationTestBase
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<ITwoFactorRepository>();
-        var userId = await SeedUnconfirmedFactor(scope);
+        var (userId, createdUtc) = await SeedUnconfirmedFactor(scope);
 
         var poisoned = Hashes(10);
         poisoned[4] = null!;
 
         await Assert.ThrowsAnyAsync<Exception>(
-            () => repository.Confirm(userId, DateTimeOffset.UtcNow, poisoned));
+            () => repository.Confirm(userId, createdUtc, DateTimeOffset.UtcNow, poisoned));
 
         await using var db = DatabaseFixture.CreateDbContext();
         var state = await db.Set<UserTwoFactor>().FirstAsync(f => f.UserId == userId);
@@ -87,10 +87,11 @@ public class TwoFactorConfirmationShould : IntegrationTestBase
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<ITwoFactorRepository>();
-        var userId = await SeedUnconfirmedFactor(scope);
+        var (userId, createdUtc) = await SeedUnconfirmedFactor(scope);
 
-        (await repository.Confirm(userId, DateTimeOffset.UtcNow, Hashes(10))).Should().BeTrue();
-        (await repository.Confirm(userId, DateTimeOffset.UtcNow, Hashes(10)))
+        (await repository.Confirm(userId, createdUtc, DateTimeOffset.UtcNow, Hashes(10)))
+            .Should().BeTrue();
+        (await repository.Confirm(userId, createdUtc, DateTimeOffset.UtcNow, Hashes(10)))
             .Should().BeFalse("the stamp is a conditional update and only one caller writes it");
 
         await using var db = DatabaseFixture.CreateDbContext();
@@ -101,10 +102,19 @@ public class TwoFactorConfirmationShould : IntegrationTestBase
     private static List<byte[]> Hashes(int count) =>
         Enumerable.Range(0, count).Select(_ => RandomNumberGenerator.GetBytes(32)).ToList();
 
-    private static async Task<Guid> SeedUnconfirmedFactor(IServiceScope scope)
+    /// <summary>
+    /// An account with a secret issued and not yet confirmed, and the moment it
+    /// was issued at - which the confirmation has to name to be accepted.
+    /// </summary>
+    private static async Task<(Guid UserId, DateTimeOffset CreatedUtc)> SeedUnconfirmedFactor(
+        IServiceScope scope)
     {
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
         var userId = Guid.NewGuid();
+        // Whole seconds. The column keeps microseconds and a confirmation names
+        // the issue moment it read back from the row, so a seed carrying finer
+        // ticks would be compared against a value the database had rounded.
+        var createdUtc = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         dbContext.Users.Add(new DbUser
         {
             UserId = userId,
@@ -112,17 +122,17 @@ public class TwoFactorConfirmationShould : IntegrationTestBase
             Email = $"{userId:N}@example.com",
             PasswordHash = "hash",
             Salt = "salt",
-            LastActivityUtc = DateTimeOffset.UtcNow
+            LastActivityUtc = createdUtc
         });
         dbContext.Set<UserTwoFactor>().Add(new UserTwoFactor
         {
             UserId = userId,
             Secret = "envelope",
-            CreatedUtc = DateTimeOffset.UtcNow,
+            CreatedUtc = createdUtc,
             LastAcceptedStep = 0
         });
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
-        return userId;
+        return (userId, createdUtc);
     }
 }

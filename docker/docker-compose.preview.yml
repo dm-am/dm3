@@ -9,6 +9,9 @@ networks:
   default:
     name: 'dm-full-app'
 
+volumes:
+  geodata:
+
 services:
   nginx:
     container_name: 'dm-nginx'
@@ -85,6 +88,20 @@ services:
       # фреймворковый дефолт здесь не подходит, nginx приходит из своего контейнера.
       DM_ReverseProxyConfiguration__TrustedNetworks__0: '172.28.0.0/16'
       DM_ReverseProxyConfiguration__ProxyCount: '1'
+
+      # The country table the sign-in letter names a country by (user-country of
+      # sapics/ip-location-db, CONFIGURATION.md). The API downloads it itself when
+      # the file is missing and then once a week, and puts each new copy in use
+      # without a restart; nobody on the server touches it. A named volume and not
+      # a directory of the host: the image creates /data/geo owned by its own
+      # user, docker hands that ownership to a new volume, and so the API can
+      # write there whatever the uid of the operator is. The volume outlives the
+      # container, so a recreated API reads the table it already has. The name
+      # says what the file is, not who publishes it, so a change of publisher
+      # leaves this line alone.
+      DM_GeoLocationConfiguration__CountryDatabasePath: '/data/geo/ip-country.csv'
+    volumes:
+      - geodata:/data/geo
 
   dmfront:
     container_name: 'dm-front'

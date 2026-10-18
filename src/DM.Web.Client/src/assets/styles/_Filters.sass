@@ -9,16 +9,19 @@
 //     $selected-overlay (persistent selection indicator — sort, etc.)
 //     Exception: apply buttons (FilterApplyButton) follow the +button state
 //     model (relative $control-bg-overlay base)
-//   - All dropdowns use $bg-element background (=dropdown-panel)
-//   - Focus borders use $border-focus (gray, NOT $link)
-//   - $link only for actual links and link-styled buttons ("Сбросить")
+//   - All dropdowns use $bg-element background (=dropdown-surface, which
+//     =dropdown-panel and every other floating panel include)
+//   - Focus is the site's one ring: the frame turns $link with a 1px ring of
+//     $link against it (see Reset.sass); a wrapper that draws the frame for the
+//     field inside it takes the ring on :focus-within
+//   - $link otherwise only for actual links and link-styled buttons ("Сбросить")
 //   - Disabled uses $disabled-opacity, muted icons use $muted-opacity
 // =============================================================================
 
 @use "Themes" as *
 @use "Variables" as *
-@use "Breakpoints" as *
 @use "ZIndex" as *
+@use "Inputs" as *
 
 // -----------------------------------------------------------------------------
 // Variables
@@ -28,25 +31,28 @@ $filter-dropdown-min-width: 260px
 $filter-dropdown-max-height: 300px
 $filter-avatar-size: 24px
 
+/// Height of the bubble of an applied filter, its frame included: one height
+/// for every bubble of a row, the ones with names and "и еще N" too.
+$bubble-height: 28px
+
 // -----------------------------------------------------------------------------
 // Remove/Clear Icon Button (shared across all filter/bubble X buttons)
 // Unified size, color, alignment, and hover behavior.
 // -----------------------------------------------------------------------------
 
+// The cross is drawn 14 wide, and taken by the pointer at the site's floor for
+// a target (+icon-button): 14 by 14 was a mark the finger missed more often
+// than it hit. The target grows round the cross and moves nothing on screen.
 =remove-icon-btn
-  display: inline-flex
-  align-items: center
-  justify-content: center
-  width: 14px
-  height: 14px
-  padding: 0
-  flex-shrink: 0
-  cursor: pointer
-  border: none
-  background: none
-  color: $text-muted
-  opacity: $muted-opacity
-  transition: opacity $transition-fast
+  +icon-button(14px)
+
+  // Wrapped in "&": the mixin ends with a nested rule, and a plain declaration
+  // after one is what Sass is changing the meaning of.
+  &
+    flex-shrink: 0
+    color: $text-muted
+    opacity: $muted-opacity
+    transition: opacity $transition-fast
 
   &:hover
     color: $text
@@ -60,9 +66,14 @@ $filter-avatar-size: 24px
 // Filter Bar Container
 // -----------------------------------------------------------------------------
 
+// The search and then the buttons with their words, in one line at every
+// width, as on the full version: a phone shows the bar of 1366. Only a column
+// too narrow for the buttons beside the search (the middle column of 1024)
+// sends what does not fit to the next line, so the bar never runs past it.
 =filter-bar
   .filter-bar
     display: flex
+    flex-wrap: wrap
     align-items: center
     gap: $small
 
@@ -70,6 +81,12 @@ $filter-avatar-size: 24px
 // Search Container
 // -----------------------------------------------------------------------------
 
+// The search of a filter bar is the measure of every field of one line on a
+// page (owner's standard, 28 September 2026): $control-height high, the 14
+// of $control-font-size, $field-inset in from the frame, the field's ground
+// ($input-bg-overlay, which over the page is exactly $bg-element, the solid
+// ground this search stood on before) and the site's radius. The wrapper
+// draws the frame, so the field inside it takes no geometry of its own.
 =filter-search-container
   .search-container
     display: flex
@@ -77,15 +94,16 @@ $filter-avatar-size: 24px
     flex: 1
     height: $control-height
     box-sizing: border-box
-    padding: 0 $small
-    font-size: $secondary-font-size
+    padding: 0 $field-inset
+    font-size: $control-font-size
     border: 1px solid $border
     border-radius: $border-radius
-    background-color: $bg-element
+    background-color: $input-bg-overlay
     cursor: text
 
     &:focus-within
-      border-color: $border-focus
+      border-color: $link
+      box-shadow: 0 0 0 1px $link
 
   .search-icon
     width: 16px
@@ -100,12 +118,17 @@ $filter-avatar-size: 24px
     height: 100%
     padding: 0
     margin: 0
-    font-size: $secondary-font-size
+    font-size: $control-font-size
     font-family: inherit
     line-height: $control-height - 2px
     border: none
     background: none
     color: $text
+    // The frame is drawn by the wrapper, which takes the ring on :focus-within;
+    // a second ring here would sit inside the first.
+    &:focus
+      box-shadow: none
+
     // Only for the pointer. The keyboard ring comes from Reset.sass, and
     // this field draws no frame of its own to stand in for it.
     &:focus:not(:focus-visible)
@@ -154,21 +177,37 @@ $filter-avatar-size: 24px
 // Dropdown Base
 // -----------------------------------------------------------------------------
 
-/// Shared dropdown panel styles — used by FilterDropdown.vue and =filter-dropdown-base.
+/// The look of every floating panel: ground, frame, corners and shadow. Written
+/// once, so a dropdown, the calendar and the month grid cannot drift apart. A
+/// panel that places and sizes itself (CalendarGrid, MonthYearPicker, the owners
+/// list below, the site's menu of _Menu.sass) takes this alone; a dropdown of a
+/// filter takes the whole of =dropdown-panel.
+=dropdown-surface
+  background-color: $bg-element
+  border: 1px solid $border
+  border-radius: $border-radius
+  box-shadow: 0 4px 12px $shadow-color
+
+/// Shared dropdown panel styles — used by FilterDropdown.vue and =filter-dropdown-base,
+/// and by the other panels hung from their button (MessageSearchBar, InsertPanel).
 /// Single source of truth for dropdown positioning, sizing, and visuals.
+///
+/// Never wider than the window less the page's margins. Where it hangs is its
+/// button's right edge, and a panel that would still run off an edge is moved
+/// back inside by the component that opens it (useKeepInWindow): a panel of
+/// the games list hung from a button at the left of a phone and stood 114px
+/// off the screen.
 =dropdown-panel
   position: absolute
   top: calc(100% + $tiny)
   left: auto
   right: 0
   min-width: $filter-dropdown-min-width
+  max-width: calc(100vw - #{$medium * 2})
   z-index: $z-dropdown
   max-height: $filter-dropdown-max-height
   overflow-y: auto
-  background-color: $bg-element
-  border: 1px solid $border
-  border-radius: $border-radius
-  box-shadow: 0 4px 12px $shadow-color
+  +dropdown-surface
 
 =filter-dropdown-base
   .dropdown
@@ -225,6 +264,15 @@ $filter-avatar-size: 24px
     font-size: $secondary-font-size
     color: $text-muted
 
+  // The panel closes itself with the frame of =dropdown-panel. A field block
+  // that ends the panel lays its own separator directly on that frame, and the
+  // two hairlines read as one thick line (DateRangePicker, NumericRangePicker
+  // — both are the last child of the panel they open in). Only the last
+  // separator goes: the ones between blocks are what tells them apart.
+  .dropdown > *:last-child,
+  .filter-dropdown-container > *:last-child
+    border-bottom: none
+
 // -----------------------------------------------------------------------------
 // Dropdown Search Input
 // -----------------------------------------------------------------------------
@@ -234,10 +282,16 @@ $filter-avatar-size: 24px
     padding: $small
     border-bottom: 1px solid $border
 
+  // A field of the page (owner's standard, 28 September 2026: every field of
+  // one line off a window is the page's): $control-height high, level with the
+  // buttons of the panel, its text $field-inset in from the frame as in the
+  // search of the bar. It kept a measure of the panel's own, 36 beside the 38
+  // of "Применить".
   .dropdown-search-input
     width: 100%
-    padding: $small
-    font-size: $secondary-font-size
+    height: $control-height
+    padding: 0 $field-inset
+    font-size: $control-font-size
     font-family: inherit
     border: 1px solid $border
     border-radius: $border-radius
@@ -251,7 +305,7 @@ $filter-avatar-size: 24px
       outline: none
 
     &:focus
-      border-color: $border-focus
+      border-color: $link
 
     &::placeholder
       color: $text-muted
@@ -299,9 +353,16 @@ $filter-avatar-size: 24px
   // ("Статус: Активные", not each part on its own line) — Chrome
   // serializes flex items with newlines. The former 2px gap is folded
   // into the children's margins below.
+  //
+  // $bubble-height, its line of 14 set in the middle of the 26 between the
+  // frames, so the crosses, the pills of names and the chevron, which stand in
+  // the line, are centred with the text and add nothing to the height.
   .bubble
     display: inline-block
-    padding: 4px $small
+    box-sizing: border-box
+    min-height: $bubble-height
+    padding: 0 $small
+    line-height: $bubble-height - 2px
     font-size: $secondary-font-size
     font-family: inherit
     border: 1px solid $border
@@ -320,6 +381,12 @@ $filter-avatar-size: 24px
     &.bubble-single-owner .bubble-owner-item:hover
       background-color: transparent
 
+    // The space that makes the bubble copy as one line is a character of no
+    // size, and it would still take the line of 26: centred on the baseline,
+    // its box hung under the text and grew the bubble past its height.
+    .copy-space
+      line-height: 0
+
   // Gaps now come from real space text nodes (which also make the copy
   // read "Статус: Активные ×"); only the remove button keeps a margin
   // (its space node is zero-width so the × never wraps apart).
@@ -332,28 +399,49 @@ $filter-avatar-size: 24px
   .bubble-value-text
     color: $text
 
+  // The cross of a bubble stands as far from the value before it as from
+  // what follows it, the edge of the bubble or "и еще N", and in the size of
+  // the cross of the search beside the bubbles ($font-size, .clear-input-btn).
+  // The glyph is centred in its box, so the same step on either side of the
+  // box is the same gap on either side of the glyph.
   .bubble-remove-btn
-    margin-left: 6px
+    margin-left: $small
     vertical-align: middle
+    font-size: $font-size
     +remove-icon-btn
 
+  // "Сбросить": a <button> that reads as a link, and answers the pointer the
+  // way every link does (+inline-link-button). The recipe resets the font,
+  // so the size and the padding come after it. No taller than a bubble, so
+  // the row keeps the bubbles' height and does not stretch them to its own.
   .clear-all-link
     align-self: center
-    padding: 4px 0
-    font-size: $secondary-font-size
-    color: $link
-    cursor: pointer
     white-space: nowrap
+    +inline-link-button
+    &
+      padding: $tiny 0
+      font-size: $secondary-font-size
 
-    &:hover
-      color: $link-hover
-      text-decoration: underline
-
-  // Owner/Author items with inline remove buttons
+  // Owner/Author items with inline remove buttons.
+  //
+  // The negative margin gives the vertical padding back to the line box. The
+  // bubble is inline flow, so an inline-block child taller than the 14px text
+  // raises the whole line: the name bubble came out 4px taller than its
+  // neighbours, and the flex row stretched them to it with their text left at
+  // the top, so the name sat off the line the rest of the row stood on. The
+  // pill keeps its size and overflows into the bubble's own padding.
+  //
+  // Inline-block and not inline-flex, for the reason the bubble is: the name
+  // and the cross were flex items, and copied as "Ведущий: \nTestUser\n \n×".
+  // The cross keeps its place, on the line of the name.
+  //
+  // Its own line is the bubble's less its padding, so the light of a name
+  // fills the bubble between its frames, as high as the bubble's inside.
   .bubble-owner-item
-    display: inline-flex
-    align-items: center
-    padding: 2px 4px
+    display: inline-block
+    padding: $tiny $minor
+    margin: (-$tiny) 0
+    line-height: $bubble-height - 2px - 2 * $tiny
     border-radius: $border-radius
     transition: background-color $transition-fast
 
@@ -363,31 +451,61 @@ $filter-avatar-size: 24px
       .bubble-owner-remove
         opacity: 1
 
+  // The space after the colon is the prefix's own, as in every bubble; the
+  // pill's side stood beside the space and doubled it ("Ведущий:  TestUser").
+  // The side toward the colon is $tiny here, and the pill steps back over the
+  // space by as much, so the name stands one space after the colon. Not the
+  // whole $minor taken back: the light of a name under the pointer in a bubble
+  // of several then began on the colon itself; with $tiny it begins inside the
+  // space.
+  .bubble-prefix + .bubble-owner-item
+    padding-left: $tiny
+    margin-left: -$tiny
+
+  // The cross of a name, as the cross of a bubble: the step before it is the
+  // bubble's side, and the side of the name's pill and the step before
+  // "и еще N" add up to it after it.
   .bubble-owner-remove
-    margin-left: 2px
+    margin-left: $small
+    vertical-align: middle
+    font-size: $font-size
     +remove-icon-btn
+
+  // The pill of the one name of a bubble lights with the whole bubble and not
+  // by itself: no side of its own after the cross, which then stands the
+  // bubble's side from its edge.
+  .bubble-single-owner .bubble-owner-item
+    padding-right: 0
 
   // Expandable bubble (for owners/authors with multiple values)
   .bubble-expandable
     position: relative
 
+  // "и еще N" opens with the space it copies with ("× и еще 1"): that space
+  // and the side of the name's pill before it are the step after the cross,
+  // as long as the step before it.
   .bubble-remaining
     color: $text-muted
-    margin-left: 2px
 
+  // The chevron is a control on a line of text: taller than the text, and with
+  // nothing to put a baseline on, so left to itself it hangs the line from the
+  // bottom of its own box. Centred on the text and pulled in vertically by the
+  // same trick as the owner pill above, it draws over the bubble's padding
+  // instead of growing the bubble.
   .bubble-expand-btn
     display: inline-flex
     align-items: center
     justify-content: center
+    vertical-align: middle
     width: 18px
     height: 18px
-    margin-left: 2px
+    margin: (-$tiny) 0 (-$tiny) $tiny
     padding: 0
     cursor: pointer
     border: none
     background: none
     color: $text-muted
-    border-radius: 2px
+    border-radius: $border-radius
     transition: background-color $transition-fast, color $transition-fast
 
     &:hover,
@@ -411,10 +529,7 @@ $filter-avatar-size: 24px
     min-width: 200px
     max-height: 200px
     overflow-y: auto
-    background-color: $bg-element
-    border: 1px solid $border
-    border-radius: $border-radius
-    box-shadow: 0 4px 12px $shadow-color
+    +dropdown-surface
 
   .owners-dropdown-item
     display: flex
@@ -437,98 +552,24 @@ $filter-avatar-size: 24px
       .owner-remove
         opacity: 1
 
+  // A name is whole: the list is as wide as its longest name (the bubble's
+  // line does not wrap, and the list takes its width), so nothing cuts it.
   .owner-name
     flex: 1
-    white-space: nowrap
-    overflow: hidden
-    text-overflow: ellipsis
 
   .owner-remove
+    font-size: $font-size
     +remove-icon-btn
-
-// -----------------------------------------------------------------------------
-// Sort Control
-// -----------------------------------------------------------------------------
-
-=sort-control
-  .sort-section
-    position: relative
-    flex-shrink: 0
-
-  // .sort-btn visual comes from the unified +button mixin — see SortButton.vue
-
-  .sort-icon
-    width: 24px
-    height: 24px
-    flex-shrink: 0
-
-  .sort-dropdown
-    position: absolute
-    top: calc(100% + $tiny)
-    right: 0
-    z-index: $z-dropdown
-    min-width: $filter-dropdown-min-width
-    padding: $small 0
-    background-color: $bg-element
-    border: 1px solid $border
-    border-radius: $border-radius
-    box-shadow: 0 4px 12px $shadow-color
-
-  .sort-option
-    display: block
-    width: 100%
-    padding: $small $medium
-    font-size: $secondary-font-size
-    font-family: inherit
-    text-align: left
-    cursor: pointer
-    border: none
-    background: none
-    color: $text
-    transition: background-color $transition-fast
-
-    &:hover:not(.selected)
-      background-color: $hover-overlay
-
-    &.selected
-      background-color: $selected-overlay
-
-    &.sort-direction
-      display: flex
-      align-items: center
-      gap: $small
-
-  .sort-option-content
-    display: flex
-    flex-direction: column
-    gap: 1px
-
-  .sort-option-label
-    color: $text
-
-  .sort-option-hint
-    font-size: $tertiary-font-size
-    color: $text-muted
-
-  .sort-direction-icon
-    width: 18px
-    height: 18px
-    flex-shrink: 0
-
-  .sort-divider
-    height: 1px
-    margin: $small 0
-    background-color: $border
 
 // -----------------------------------------------------------------------------
 // Responsive
 // -----------------------------------------------------------------------------
 
+// The search gives way to what stands beside it rather than push it past the
+// column: a search held at the width of its placeholder pushed the sort 6 past
+// the middle column of a 1024 window (285). A row that scrolled would hide the
+// sort behind the edge, and a button that kept only its icon would be a
+// shortening.
 =filter-responsive
-  @media (max-width: $bp-mobile)
-    .filter-bar
-      flex-wrap: wrap
-
-    .search-container
-      flex: 1 1 100%
-      order: -1
+  .search-container
+    min-width: 0

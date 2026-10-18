@@ -18,18 +18,31 @@
           :class="eventClass(event.eventType)"
         >
           <div class="event-info">
-            <div class="event-title">{{ eventTitle(event.eventType) }}</div>
-            <div class="event-details">
-              <span v-if="event.deviceInfo" class="event-device">
-                {{ event.deviceInfo }}
-              </span>
-              <span v-if="event.ipAddress" class="event-ip">
-                {{ event.ipAddress }}
-              </span>
-              <span class="event-time">{{
-                formatDateFull(event.timestampUtc)
-              }}</span>
+            <!-- What happened and when, as one sentence: "Успешный вход,
+                 05.10.2026 в 21:42". A long name breaks between its words,
+                 as a heading does, and the date after the comma is never
+                 broken. -->
+            <div class="event-heading">
+              <span class="event-title">{{ eventTitle(event.eventType) }}</span
+              ><span class="event-time"
+                >, <span class="event-date">{{ dateOf(event) }}</span></span
+              >
             </div>
+            <!-- From where, under it: a caption line, the bar of a caption
+                 between the parts, wrapping between them where it is short.
+            -->
+            <CaptionLine
+              v-if="event.deviceInfo || event.ipAddress"
+              size="secondary"
+              class="event-details"
+            >
+              <span v-if="event.deviceInfo" class="event-device">{{
+                event.deviceInfo
+              }}</span>
+              <span v-if="event.ipAddress" class="event-ip">{{
+                event.ipAddress
+              }}</span>
+            </CaptionLine>
             <div v-if="event.details" class="event-extra">
               {{ event.details }}
             </div>
@@ -48,6 +61,7 @@
 import { computed, ref, onMounted } from "vue";
 import { accountApi } from "@/entities/user";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { CaptionLine } from "@/shared/ui/CaptionLine";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { pluralize } from "@/shared/lib/utils/pluralize";
 import type {
@@ -83,6 +97,9 @@ async function loadEvents() {
   }
 }
 
+/** When the entry was written, as the journal heading says it. */
+const dateOf = (event: SecurityEvent) => formatDateFull(event.timestampUtc);
+
 function eventTitle(type: SecurityEventType): string {
   switch (type) {
     case "LoginSuccess":
@@ -93,8 +110,14 @@ function eventTitle(type: SecurityEventType): string {
       return "Выход из системы";
     case "PasswordChange":
       return "Изменение пароля";
+    // Written when the new address is asked for, not when it moves: the server
+    // logs it in EmailChangeService.Change, beside the warning letter to the
+    // old address, and the confirmation step that actually moves the address
+    // writes no journal entry at all. "Изменение почты" claimed a move that
+    // had not happened yet, on the one screen a person opens to learn what
+    // somebody else may have done to the account.
     case "EmailChange":
-      return "Изменение почты";
+      return "Запрос смены почты";
     case "SessionTerminated":
       return "Сессия завершена";
     case "LogoutElsewhere":
@@ -108,23 +131,21 @@ function eventTitle(type: SecurityEventType): string {
     case "SuspiciousLogin":
       return "Подозрительный вход";
     case "TwoFactorEnabled":
-      return "Второй фактор включен";
+      return "Двухфакторная аутентификация включена";
     case "TwoFactorDisabled":
-      return "Второй фактор отключен";
+      return "Двухфакторная аутентификация отключена";
     case "TwoFactorRecoveryCodeUsed":
       return "Использован резервный код";
     case "TwoFactorRecoveryCodesReissued":
       return "Резервные коды перевыпущены";
     case "TwoFactorRemovalScheduled":
-      return "Назначено снятие второго фактора";
-    case "TwoFactorRemovalRefused":
-      return "Снятие второго фактора отклонено";
+      return "Назначено отключение двухфакторной аутентификации";
     case "TwoFactorRemovalCancelled":
-      return "Снятие второго фактора отменено";
+      return "Отключение двухфакторной аутентификации отменено";
     case "TwoFactorRemovedByAdmin":
-      return "Второй фактор снят администратором";
+      return "Двухфакторная аутентификация отключена администратором";
     case "TwoFactorSetupFailure":
-      return "Неверный код при настройке второго фактора";
+      return "Неверный код при настройке двухфакторной аутентификации";
     default:
       return "Событие безопасности";
   }
@@ -141,20 +162,19 @@ function eventClass(type: SecurityEventType): string {
     case "TwoFactorEnabled":
     case "TwoFactorRecoveryCodesReissued":
       return "event-item--success";
-    // A spent recovery code, a mistyped setup code and the three turns of a
-    // removal are not failures. They are the entries a person scanning this
-    // journal for somebody else's hand in their account is looking for.
+    // A spent recovery code and a mistyped setup code are not failures. They
+    // are the entries a person scanning this journal for somebody else's hand
+    // in their account is looking for.
     case "LoginFailure":
     case "AccountLocked":
     case "SuspiciousLogin":
     case "TwoFactorRecoveryCodeUsed":
     case "TwoFactorSetupFailure":
     case "TwoFactorRemovalScheduled":
-    case "TwoFactorRemovalRefused":
     case "TwoFactorRemovedByAdmin":
       return "event-item--warning";
-    // Switching the factor off and calling a removal off are the owner's own
-    // doing, and neither leaves anything to look into.
+    // Switching the factor off is the owner's own doing, and it leaves nothing
+    // to look into.
     case "SessionTerminated":
     case "Logout":
     case "LogoutElsewhere":
@@ -165,6 +185,11 @@ function eventClass(type: SecurityEventType): string {
       return "";
   }
 }
+
+// Read once on mount, while the security block above writes entries into this
+// journal through the server: a password change and a request for a new address
+// each add one. The page re-reads the block through this door.
+defineExpose({ reload: loadEvents });
 </script>
 
 <style scoped lang="sass">
@@ -173,11 +198,12 @@ function eventClass(type: SecurityEventType): string {
 .security-history-content
   padding: $medium
   background-color: $bg-element
-  border-radius: $border-radius
 
 .loading-state
   padding: $medium
 
+// A tile of its own, its text 16 in, as the text of a row of "Сессии"
+// above stands inside its frame, 8 to the next.
 .events-list
   display: flex
   flex-direction: column
@@ -188,17 +214,6 @@ function eventClass(type: SecurityEventType): string {
   gap: $small
   padding: $small $medium
   background-color: $bg
-  border-radius: $border-radius
-  border-left: 3px solid $border
-
-  &--success
-    border-left-color: $accent-green
-
-  &--warning
-    border-left-color: $accent-yellow
-
-  &--neutral
-    border-left-color: $text-muted
 
 .event-icon
   flex-shrink: 0
@@ -225,26 +240,19 @@ function eventClass(type: SecurityEventType): string {
   flex-direction: column
   gap: $tiny
 
-.event-title
-  font-weight: 500
+.event-heading
   color: $text
 
-.event-details
-  display: flex
-  flex-wrap: wrap
-  gap: $small
+.event-title
+  font-weight: 500
+
+// The date in the grey of the caption under it, at its size.
+.event-time
   font-size: $secondary-font-size
   color: $text-muted
 
-.event-device
-  &::after
-    content: "\2022"
-    margin-left: $small
-
-.event-ip
-  &::after
-    content: "\2022"
-    margin-left: $small
+.event-date
+  white-space: nowrap
 
 .event-extra
   font-size: $secondary-font-size

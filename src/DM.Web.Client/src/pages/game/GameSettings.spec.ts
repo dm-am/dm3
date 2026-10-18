@@ -15,43 +15,70 @@
  *  - GameIntention.EditSettings (the information form, the invitation list,
  *    and admission to the page itself): leads, the mentor curating THIS game,
  *    senior moderation;
- *  - GameIntention.Edit (rooms, the blacklist including its read): leads and
- *    senior moderation, no curator;
+ *  - GameIntention.Edit (rooms, the character sheet of the game, the blacklist
+ *    including its read): leads and senior moderation, no curator;
  *  - InvitePlayer / InviteReader / CancelInvitation (the invitation writes):
  *    the game roles alone, without a rank clause, so a senior moderator reads
  *    that list without writing it;
  *  - InviteAssistant / RemoveUser (the roster writes): the master alone, while
  *    the roster itself costs a plain Read, so that section is drawn for
- *    everyone the page admits and only its controls narrow;
- *  - AttributeSchemaIntention.Edit: the schema's author and nobody else,
- *    because one public schema backs many games. A game with no schema gets no
- *    editor at all: nothing on this page can attach one.
+ *    everyone the page admits and only its controls narrow.
  *
  * Every flag is read from the sources the neighbouring management screens read
  * (useGameDetailsStore.isMaster / isAssistant / isMentor plus the viewer's site
  * role) — never a check invented here.
+ *
+ * A viewer the page admits to nothing has no page: the address opens the
+ * site's own "not found", decided once the session is settled and the game is
+ * not being read again for a new viewer.
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
-import { mount, type VueWrapper } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import {
   GameParticipation,
   useGameDetailsStore,
-  type AttributeSchema,
-  type Character,
   type Game,
 } from "@/entities/game";
 import { useAuthStore, UserRole, type User } from "@/entities/user";
+import { useToast } from "@/shared/lib/composables/useToast";
+import type { GeneralError } from "@/shared/api/models/common";
 import GameSettings from "./GameSettings.vue";
 
-// Only the route param and the navigation the delete action holds; the rest
-// of the router stays real, as in the sibling roster spec.
+const { push, replace, session } = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  session: { settled: Promise.resolve() as Promise<void> },
+}));
+
+// Only the route and the navigations the page holds: the delete action and
+// the way out for a viewer it refuses. The rest of the router stays real, as in
+// the sibling roster spec.
 vi.mock("vue-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({ params: { id: "the-game" } }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRoute: () => ({
+    params: { id: "the-game" },
+    path: "/game/the-game/settings",
+    query: {},
+    hash: "",
+  }),
+  useRouter: () => ({ push, replace }),
 }));
+
+// The answer about the session the start of the page asks for, held by the
+// test: settled at once unless a test keeps it out.
+vi.mock("@/entities/user", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/entities/user")>()),
+  restoreSession: () => session.settled,
+}));
+
+const NOT_FOUND = {
+  name: "not-found",
+  params: { pathMatch: ["game", "the-game", "settings"] },
+  query: {},
+  hash: "",
+};
 
 /**
  * A section stands in as one marker div: this spec asks only whether it is
@@ -91,32 +118,19 @@ const rolesStub = defineComponent({
 
 const stubs = {
   GameInfoSection: marker("info-section-stub"),
-  AttributeSchemaEditor: marker("schema-editor-stub"),
+  AttributeSchemaSection: marker("schema-section-stub"),
   RoomsSection: marker("rooms-section-stub"),
   RolesSection: rolesStub,
   BlacklistSection: marker("blacklist-section-stub"),
   InvitationsSection: invitationsStub,
-  UserLink: { template: "<span class='user-link-stub'><slot /></span>" },
-  ConfirmDialog: true,
+  // The confirmation of the delete is the real window, drawn in place.
+  Teleport: true,
   RouterLink: { template: "<a><slot /></a>" },
 };
 
 const THE_VIEWER = "the-viewer";
 
-/** A saved schema authored by `author`; null id means the game has none yet. */
-const schemaBy = (author: string): AttributeSchema =>
-  ({
-    id: "the-schema",
-    title: "Базовая",
-    author: { username: author },
-    specifications: [],
-  }) as unknown as AttributeSchema;
-
-function render(
-  participation: GameParticipation[],
-  viewer?: UserRole,
-  schema: AttributeSchema | null = null,
-) {
+function render(participation: GameParticipation[], viewer?: UserRole) {
   const pinia = createPinia();
   setActivePinia(pinia);
   // The viewer's session: participation carries the game roles, the site role
@@ -129,13 +143,7 @@ function render(
     id: "the-game-guid",
     publicId: "the-game",
     participation,
-    schema,
   } as unknown as Game;
-  // Seeded, so mounting the page does not reach for the endpoint.
-  store.characters = [
-    { id: "char-1", name: "Ронин", status: "Active" },
-  ] as unknown as Character[];
-
   return mount(GameSettings, { global: { plugins: [pinia], stubs } });
 }
 
@@ -145,7 +153,7 @@ const sectionsOf = (wrapper: VueWrapper) => {
   const roles = wrapper.find(".roles-section-stub");
   return {
     info: wrapper.find(".info-section-stub").exists(),
-    schemaEditor: wrapper.find(".schema-editor-stub").exists(),
+    schema: wrapper.find(".schema-section-stub").exists(),
     rooms: wrapper.find(".rooms-section-stub").exists(),
     roles: roles.exists(),
     roleWrites:
@@ -162,10 +170,14 @@ const sectionsOf = (wrapper: VueWrapper) => {
 const seenBy = (
   participation: GameParticipation[],
   viewer: UserRole = UserRole.RegularUser,
-  schema: AttributeSchema | null = null,
-) => sectionsOf(render(participation, viewer, schema));
+) => sectionsOf(render(participation, viewer));
 
 describe("GameSettings admission", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    session.settled = Promise.resolve();
+  });
+
   it("keeps the page away from a player of the game", () => {
     expect(seenBy([GameParticipation.Player]).info).toBe(false);
   });
@@ -188,33 +200,85 @@ describe("GameSettings admission", () => {
     expect(seenBy([], UserRole.Mentor).info).toBe(false);
   });
 
-  it("names everyone who may enter when it refuses", () => {
-    expect(
-      render([GameParticipation.Player], UserRole.RegularUser).text(),
-    ).toBe("Настройки игры доступны мастеру, ассистенту и наставнику игры.");
+  it("opens the site's not found for a viewer it refuses, with no refusal drawn", async () => {
+    const wrapper = render([GameParticipation.Player], UserRole.RegularUser);
+    await flushPromises();
+
+    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(wrapper.text()).toBe("");
   });
 
-  it("invites a guest to sign in instead of refusing an identity it never saw", () => {
+  it("opens it for a guest too, with no invitation to sign in", async () => {
     const wrapper = render([]);
+    await flushPromises();
 
-    expect(wrapper.find(".login-prompt").exists()).toBe(true);
-    expect(sectionsOf(wrapper).rooms).toBe(false);
+    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(wrapper.find(".login-prompt").exists()).toBe(false);
+    expect(wrapper.text()).toBe("");
+  });
+
+  it("opens it for a guest whatever role his read of the game carries", async () => {
+    // No arm of EditSettings admits a guest, so a role the guest's read of the
+    // game names is no admission.
+    const wrapper = render([GameParticipation.Moderator]);
+    await flushPromises();
+
+    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(sectionsOf(wrapper).info).toBe(false);
+  });
+
+  it("keeps the master on his page", async () => {
+    render([GameParticipation.Owner], UserRole.RegularUser);
+    await flushPromises();
+
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("waits for the answer about the session before sending anybody away", async () => {
+    // A session the browser kept no copy of: the store holds nobody until the
+    // server names the viewer.
+    let answer = () => {};
+    session.settled = new Promise((resolve) => (answer = resolve));
+    render([]);
+    await flushPromises();
+
+    expect(replace).not.toHaveBeenCalled();
+
+    answer();
+    await flushPromises();
+    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+  });
+
+  it("waits for the game read again for a new viewer", async () => {
+    // The server names the master only now: the game was read for a guest, and
+    // the shell reads it again for him. Until that answer lands the roles are
+    // the guest's.
+    let answer = () => {};
+    session.settled = new Promise((resolve) => (answer = resolve));
+    render([]);
+    useAuthStore().user = { username: THE_VIEWER } as User;
+    const store = useGameDetailsStore();
+    store.gameLoading = true;
+    answer();
+    await flushPromises();
+
+    expect(replace).not.toHaveBeenCalled();
+
+    store.game = {
+      ...store.game,
+      participation: [GameParticipation.Owner],
+    } as Game;
+    store.gameLoading = false;
+    await flushPromises();
+    expect(replace).not.toHaveBeenCalled();
   });
 });
 
 describe("GameSettings sections", () => {
-  // Each viewer below authors the game's schema, so the `schemaEditor` cell
-  // reports the page's own gate rather than the absence of a schema (that case
-  // has its own test further down).
-  const withOwnSchema = (
-    participation: GameParticipation[],
-    viewer: UserRole = UserRole.RegularUser,
-  ) => seenBy(participation, viewer, schemaBy(THE_VIEWER));
-
   it("gives the master every section", () => {
-    expect(withOwnSchema([GameParticipation.Owner])).toEqual({
+    expect(seenBy([GameParticipation.Owner])).toEqual({
       info: true,
-      schemaEditor: true,
+      schema: true,
       rooms: true,
       roles: true,
       roleWrites: true,
@@ -228,9 +292,9 @@ describe("GameSettings sections", () => {
   it("gives the assistant the roster to read but not its controls", () => {
     // InviteAssistant and RemoveUser ask for GameRole.Master and admit nobody
     // else, so the section is drawn and its two controls are not.
-    expect(withOwnSchema([GameParticipation.Authority])).toEqual({
+    expect(seenBy([GameParticipation.Authority])).toEqual({
       info: true,
-      schemaEditor: true,
+      schema: true,
       rooms: true,
       roles: true,
       roleWrites: false,
@@ -245,9 +309,9 @@ describe("GameSettings sections", () => {
     // Rooms and the blacklist answer to Edit; the blacklist READ demands Edit
     // too, so that section goes away entirely rather than turning read-only.
     // The roster is a plain Read on the game, so the curator keeps it.
-    expect(withOwnSchema([GameParticipation.Moderator])).toEqual({
+    expect(seenBy([GameParticipation.Moderator])).toEqual({
       info: true,
-      schemaEditor: true,
+      schema: false,
       rooms: false,
       roles: true,
       roleWrites: false,
@@ -259,9 +323,9 @@ describe("GameSettings sections", () => {
   });
 
   it("gives a senior moderator the Edit sections but no roster or invitation writes", () => {
-    expect(withOwnSchema([], UserRole.SeniorModerator)).toEqual({
+    expect(seenBy([], UserRole.SeniorModerator)).toEqual({
       info: true,
-      schemaEditor: true,
+      schema: true,
       rooms: true,
       roles: true,
       roleWrites: false,
@@ -273,51 +337,53 @@ describe("GameSettings sections", () => {
   });
 });
 
-describe("GameSettings attribute schema", () => {
-  it("gives the editor to the schema's author", () => {
-    expect(
-      seenBy(
-        [GameParticipation.Owner],
-        UserRole.RegularUser,
-        schemaBy(THE_VIEWER),
-      ).schemaEditor,
-    ).toBe(true);
+/**
+ * Deleting the game. The confirmation runs the request itself: it waits for
+ * the answer, prints a refusal in itself and closes on success alone, and the
+ * request carries the flags that keep the interceptor quiet about it.
+ */
+describe("GameSettings — deleting the game", () => {
+  const toast = useToast();
+  const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    [...toast.toasts.value].forEach((t) => toast.dismiss(t.id));
   });
 
-  it("withholds it from a master who is not the author", () => {
-    // AttributeSchemaIntention.Edit knows nothing of game roles: one public
-    // schema backs many games, so its author is the only editor.
-    expect(
-      seenBy(
-        [GameParticipation.Owner],
-        UserRole.RegularUser,
-        schemaBy("someone-else"),
-      ).schemaEditor,
-    ).toBe(false);
-  });
-
-  it("says whose the schema is instead of drawing a form that would 403", () => {
-    const wrapper = render(
-      [GameParticipation.Owner],
-      UserRole.RegularUser,
-      schemaBy("someone-else"),
-    );
-
-    expect(wrapper.text()).toContain("Систему атрибутов правит ее автор");
-    expect(wrapper.find(".user-link-stub").exists()).toBe(true);
-  });
-
-  it("withholds the editor from the master of a game that has no schema", () => {
-    // POST /v1/schemas would be accepted, and nothing would attach the result
-    // to this game: the update contract carries no schema field. Offering the
-    // form here reported a save that changed nothing.
-    expect(seenBy([GameParticipation.Owner]).schemaEditor).toBe(false);
-  });
-
-  it("says a schema-less game has none instead of offering a form that saves nothing", () => {
+  async function deleteGame(answer: GeneralError | null) {
     const wrapper = render([GameParticipation.Owner], UserRole.RegularUser);
+    const remove = vi
+      .spyOn(useGameDetailsStore(), "deleteGame")
+      .mockResolvedValue(answer);
+    await wrapper.find(".delete-game").trigger("click");
+    await wrapper.find(".dialog-btn-submit").trigger("click");
+    await flushPromises();
+    return { wrapper, remove };
+  }
 
-    expect(wrapper.text()).toContain("У игры нет системы атрибутов");
-    expect(wrapper.find(".user-link-stub").exists()).toBe(false);
+  it("leaves for the list of games once the server agreed", async () => {
+    const { wrapper, remove } = await deleteGame(null);
+
+    expect(remove).toHaveBeenCalledWith({
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
+    expect(push).toHaveBeenCalledWith({ name: "games" });
+    expect(wrapper.find(".dialog-container").exists()).toBe(false);
+  });
+
+  it("keeps the master on the settings and names the refusal in the window", async () => {
+    const { wrapper } = await deleteGame({
+      status: 400,
+      title: "",
+    } as GeneralError);
+
+    expect(push).not.toHaveBeenCalled();
+    expect(wrapper.get(".dialog-refusal").text()).toBe(
+      "Не удалось удалить игру",
+    );
+    expect(wrapper.find(".dialog-container").exists()).toBe(true);
+    expect(saidOutLoud()).toEqual([]);
   });
 });

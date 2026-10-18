@@ -24,7 +24,7 @@ internal class GameIntentionResolver :
 
     public bool IsAllowed(IAuthorizationSubject user, GameIntention intention, GameDto target)
     {
-        if (intention != GameIntention.Read && intention != GameIntention.ReadComments && !user.IsAuthenticated)
+        if (intention != GameIntention.Read && !user.IsAuthenticated)
         {
             return false;
         }
@@ -86,7 +86,7 @@ internal class GameIntentionResolver :
                                                                     roles.Contains(GameRole.Mentor),
             // only the master itself is allowed to remove the game
             GameIntention.Delete when user.IsAuthenticated => userIsSeniorModerator ||
-                                                              user.UserId == target.Master.UserId,
+                                                              user.UserId == target.Master?.UserId,
 
             // Premoderation, the author's half: the master asks a mentor to look
             // at the game. Only the master — an assistant fills the form in, the
@@ -103,7 +103,7 @@ internal class GameIntentionResolver :
             // arms used to sit here for it, one keyed on AwaitingApproval and one
             // on the SetStatusDraft vocabulary, and nothing ever asked either.
             GameIntention.SubmitForApproval when user.IsAuthenticated =>
-                user.UserId == target.Master.UserId,
+                user.UserId == target.Master?.UserId,
 
             // Draft -> Active (publish)
             GameIntention.SetStatusActive when target.Status == ModuleStatus.Draft =>
@@ -120,12 +120,19 @@ internal class GameIntentionResolver :
                                                target.Status == ModuleStatus.Closed =>
                 roles.HasEditAccess(),
 
-            GameIntention.ReadComments =>
-                target.CommentsAccessMode != CommentsAccessMode.Private ||
-                roles.HasAnyRole(),
+            // The discussion has no reading intention of its own: whoever may
+            // Read the game reads its discussion, guests included, whatever the
+            // mode, the list or the ban. Everything below is about writing.
+            //
             // An ordinary ban silences discussion of games the user is not part
             // of; a game they lead or were accepted into stays open. Posts in
             // rooms are a different intention and are not affected.
+            //
+            // The blacklist closes writing in the discussion, one of its two
+            // closures. It is asked here so that this answer does not lie to
+            // anybody who asks IsAllowed; the services ask ThrowIfBlacklisted
+            // before this gate, so the refusal the user reads names the list
+            // rather than a lack of rights (GameRoleExtensions.IsBlacklisted).
             GameIntention.CreateComment when user.IsAuthenticated =>
                 !target.IsBlacklisted(user.UserId) &&
                 (target.CommentsAccessMode == CommentsAccessMode.Public ||
@@ -135,7 +142,11 @@ internal class GameIntentionResolver :
             // Character creation when:
             // - game is active AND recruitment is open, OR
             // - user has a pending player invitation (allows bypassing closed recruitment)
+            // and never for a user the game blacklisted: the application is the
+            // other of the list's two closures, whichever door it comes
+            // through. The service asks ThrowIfBlacklisted first, for the words.
             GameIntention.CreateCharacter when user.IsAuthenticated =>
+                !target.IsBlacklisted(user.UserId) &&
                 target.Status == ModuleStatus.Active &&
                 (target.Recruitment?.IsOpen == true || target.HasPendingPlayerInvitation(user.UserId)),
 

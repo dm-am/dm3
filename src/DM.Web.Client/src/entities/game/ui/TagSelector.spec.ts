@@ -14,10 +14,21 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
+import {
+  compileSass,
+  componentCss,
+  ruleMap,
+  styleRules,
+} from "@/shared/lib/testing/styles";
 import TagSelector from "./TagSelector.vue";
 import type { Tag } from "../model/types";
 import { gameApi } from "../api";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 const FAILURE_MESSAGE = "Не удалось загрузить теги";
 
@@ -237,5 +248,257 @@ describe("TagSelector group limits", () => {
     for (const title of ["Без мата", "Без насилия", "Для своих"]) {
       expect(button(wrapper, title).attributes("disabled")).toBeUndefined();
     }
+  });
+});
+
+// --- paint of a rule, from the palettes of ThemeVariables.css ---------------
+
+type Rgb = [number, number, number];
+
+const THEMES = readFileSync(
+  resolve(HERE, "../../../assets/styles/ThemeVariables.css"),
+  "utf8",
+).replace(/\/\*[\s\S]*?\*\//g, "");
+
+function palette(header: string): Record<string, string> {
+  const at = THEMES.indexOf(header);
+  if (at < 0) throw new Error(`ThemeVariables.css has no "${header}" block`);
+  const body = THEMES.slice(at + header.length);
+  const tokens: Record<string, string> = {};
+  for (const [, name, value] of body
+    .slice(0, body.indexOf("}"))
+    .matchAll(/^\s*--([\w-]+):\s*([^;]+);/gm)) {
+    tokens[name] = value.trim();
+  }
+  return tokens;
+}
+
+/** The value of the first `var(--x)` a declaration names. */
+function token(value: string | undefined, tokens: Record<string, string>) {
+  const name = /var\(--([\w-]+)\)/.exec(value ?? "")?.[1];
+  const found = name ? tokens[name] : undefined;
+  if (!found) throw new Error(`no palette token in "${value}"`);
+  return found;
+}
+
+/** A solid fill, `var(--x)` down to its channels. */
+function solid(value: string | undefined, tokens: Record<string, string>): Rgb {
+  let hex = token(value, tokens);
+  if (/^#[0-9a-f]{3}$/i.test(hex)) {
+    hex = hex.replace(/[0-9a-f]/gi, (digit) => digit + digit);
+  }
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) throw new Error(`${hex} is not solid`);
+  return [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16)) as Rgb;
+}
+
+/** `base` under the translucent gradient of a background-image, if any. */
+function wash(
+  base: Rgb,
+  image: string | undefined,
+  tokens: Record<string, string>,
+): Rgb {
+  if (image === undefined) return base;
+  const overlay = /^rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\s*\)$/.exec(
+    token(image, tokens),
+  );
+  if (!overlay) throw new Error(`no translucent overlay in "${image}"`);
+  const alpha = Number(overlay[4]);
+  return base.map(
+    (channel, at) => channel * (1 - alpha) + Number(overlay[at + 1]) * alpha,
+  ) as Rgb;
+}
+
+/** One number for a grey of the palette: the mean of its channels. */
+const level = ([r, g, b]: Rgb) => (r + g + b) / 3;
+
+/**
+ * A tag of the creation form wears the bubble of an applied filter.
+ *
+ * The same tags stand as bubbles under the filter bar of /games ("Тег: D&D
+ * 5e"), and the form is to draw them the same way, not as a grey chip a
+ * shade deeper than its ground whose frame darkens under the pointer. The
+ * filter is the reference here and the tag is what
+ * changes: the bubble's fill, frame, corners and size, and its hover, which
+ * lays the site's wash over the fill and leaves the frame alone. A chosen tag
+ * is a pressed button and not a bold word: the fill of the active segment of a
+ * SegmentedControl under the press wash, a shade the hover never reaches, and
+ * aria-pressed says it to a screen reader. It carries no cross: it is taken
+ * off by a second press, not by a mark of its own.
+ */
+describe("TagSelector look", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const bubbleCss = compileSass(
+    '@use "@/assets/styles/Filters" as *\n.probe\n  +filter-bubbles',
+  );
+  const bubbles = styleRules(bubbleCss);
+  const bubble = ruleMap(bubbleCss).get(".probe .bubble");
+  const sheet = ruleMap(componentCss(resolve(HERE, "TagSelector.vue")));
+  const tagRule = sheet.get(".tag-button");
+
+  it("takes the fill, frame, corners and size of a filter's bubble", () => {
+    for (const property of [
+      "background-color",
+      "border",
+      "border-radius",
+      "padding",
+      "font-size",
+      "box-sizing",
+      "min-height",
+      "line-height",
+    ]) {
+      expect(tagRule?.[property], property).toBe(bubble?.[property]);
+    }
+  });
+
+  it("answers the pointer the way a bubble does, with the frame left alone", () => {
+    const bubbleHover = bubbles.find((rule) =>
+      rule.selector.includes(
+        ".probe .bubble:not(.bubble-owners):not(.bubble-expandable):hover",
+      ),
+    )?.declarations;
+    const tagHover = sheet.get(
+      ".tag-button:hover:not(:disabled):not(.selected)",
+    );
+
+    expect(bubbleHover?.["background-image"]).toBeDefined();
+    expect(tagHover?.["background-image"]).toBe(
+      bubbleHover?.["background-image"],
+    );
+    expect(tagHover?.["border-color"]).toBeUndefined();
+  });
+
+  it("draws the chosen tag pressed, as the active segment, and not bold", () => {
+    const chosen = sheet.get(".tag-button.selected");
+    const segment = ruleMap(
+      componentCss(
+        resolve(
+          HERE,
+          "../../../shared/ui/SegmentedControl/SegmentedControl.vue",
+        ),
+      ),
+    ).get(".segment.active");
+
+    expect(segment?.["background-color"]).toBeDefined();
+    expect(chosen?.["background-color"]).toBe(segment?.["background-color"]);
+    expect(chosen?.["font-weight"]).toBeUndefined();
+    expect(tagRule?.["font-weight"]).toBeUndefined();
+  });
+
+  // The pointer resting on a tag that is not chosen must not draw it chosen:
+  // the tag just taken off stays under the pointer, and on a touch screen the
+  // hover stays on it until the next touch. Measured as paint, in both
+  // palettes, because the two rules name different tokens and only their
+  // composition says whether they meet. Ten points is the least step the
+  // palette gives a control fill over its ground (ThemeVariables.css).
+  it("keeps the chosen fill out of the hover's reach, in both palettes", () => {
+    const hover = sheet.get(".tag-button:hover:not(:disabled):not(.selected)");
+    const chosen = sheet.get(".tag-button.selected");
+    const hoverRules = [...sheet.keys()].filter((s) => s.includes(":hover"));
+    expect(hoverRules).toEqual([
+      ".tag-button:hover:not(:disabled):not(.selected)",
+    ]);
+
+    for (const header of ["html.theme_Light {", "html.theme_Dark {"]) {
+      const tokens = palette(header);
+      const rest = solid(tagRule?.["background-color"], tokens);
+      const underPointer = wash(rest, hover?.["background-image"], tokens);
+      const pressed = wash(
+        solid(chosen?.["background-color"], tokens),
+        chosen?.["background-image"],
+        tokens,
+      );
+
+      expect(
+        Math.abs(level(pressed) - level(underPointer)),
+        header,
+      ).toBeGreaterThanOrEqual(10);
+      expect(Math.abs(level(pressed) - level(rest)), header).toBeGreaterThan(
+        Math.abs(level(underPointer) - level(rest)),
+      );
+    }
+  });
+
+  // A touch screen keeps :hover on the tag last touched, so a tag just taken
+  // off would stand washed until the next touch. The wash answers only a
+  // pointer that hovers, and nowhere else.
+  it("lays the hover wash under a pointer that hovers only", () => {
+    const css = componentCss(resolve(HERE, "TagSelector.vue"));
+    expect(
+      styleRules(css).filter((rule) => rule.selector.includes(":hover")),
+    ).toHaveLength(1);
+    expect(css.replace(/\s+/g, " ")).toContain(
+      "@media (hover: hover) { .tag-button:hover:not(:disabled):not(.selected) {",
+    );
+  });
+
+  it("says which tags are pressed with aria-pressed", async () => {
+    vi.spyOn(gameApi, "getTags").mockResolvedValue({
+      data: {
+        resources: [
+          {
+            id: 3,
+            title: "D&D 5e",
+            groupTitle: "Система",
+            groupSortOrder: 0,
+            groupMaxTagsPerGame: null,
+            sortOrder: 3,
+            gamesCount: 0,
+          },
+          {
+            id: 4,
+            title: "GURPS",
+            groupTitle: "Система",
+            groupSortOrder: 0,
+            groupMaxTagsPerGame: null,
+            sortOrder: 4,
+            gamesCount: 0,
+          },
+        ],
+        paging: null,
+      },
+      error: null,
+    });
+
+    const wrapper = mount(TagSelector, { props: { modelValue: [3] } });
+    await flushPromises();
+
+    expect(
+      wrapper
+        .findAll("button.tag-button")
+        .map((b) => [b.text(), b.attributes("aria-pressed")]),
+    ).toEqual([
+      ["D&D 5e", "true"],
+      ["GURPS", "false"],
+    ]);
+  });
+
+  it("puts no cross on a chosen tag", async () => {
+    vi.spyOn(gameApi, "getTags").mockResolvedValue({
+      data: {
+        resources: [
+          {
+            id: 3,
+            title: "D&D 5e",
+            groupTitle: "Система",
+            groupSortOrder: 0,
+            groupMaxTagsPerGame: null,
+            sortOrder: 3,
+            gamesCount: 0,
+          },
+        ],
+        paging: null,
+      },
+      error: null,
+    });
+
+    const wrapper = mount(TagSelector, { props: { modelValue: [3] } });
+    await flushPromises();
+
+    const chosen = wrapper.get("button.tag-button.selected");
+    expect(chosen.text()).toBe("D&D 5e");
+    expect(chosen.find("button, svg, .bubble-remove-btn").exists()).toBe(false);
   });
 });

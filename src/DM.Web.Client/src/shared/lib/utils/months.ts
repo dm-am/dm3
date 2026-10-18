@@ -1,6 +1,6 @@
 /**
  * Russian month names — SSOT for every month-picking control (MonthYearPicker,
- * DatePicker calendar). Previously copy-pasted per component.
+ * CalendarGrid). Previously copy-pasted per component.
  */
 
 // Lowercase nominative ("январь") — the mid-sentence form. Not exported:

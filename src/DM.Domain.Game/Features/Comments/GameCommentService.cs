@@ -31,6 +31,7 @@ internal class GameCommentService : IGameCommentService
     private readonly IGameCommentRepository _repository;
     private readonly IUnreadCountersRepository _countersRepository;
     private readonly IEventProducer _invokedEventProducer;
+    private readonly IBbTagNameCase _tagNames;
 
     public GameCommentService(
         IValidator<CreateComment> createValidator,
@@ -42,7 +43,8 @@ internal class GameCommentService : IGameCommentService
         IGuidFactory guidFactory,
         IGameCommentRepository repository,
         IUnreadCountersRepository countersRepository,
-        IEventProducer invokedEventProducer)
+        IEventProducer invokedEventProducer,
+        IBbTagNameCase tagNames)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -54,6 +56,7 @@ internal class GameCommentService : IGameCommentService
         _repository = repository;
         _countersRepository = countersRepository;
         _invokedEventProducer = invokedEventProducer;
+        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
@@ -62,12 +65,15 @@ internal class GameCommentService : IGameCommentService
         await _createValidator.ValidateAndThrowAsync(createComment);
 
         var game = await _gameService.GetAsync(createComment.EntityId);
-        // The blacklist closes writing: reading this game is open to the user it
-        // blacklisted, commenting in it is not. The rule is part of the intention
-        // and is asked here, once.
-        _intentionManager.ThrowIfForbidden(GameIntention.CreateComment, game);
-
         var currentUser = _identityProvider.Current.User;
+
+        // The blacklist closes writing: reading this game is open to the user it
+        // blacklisted, commenting in it is not. The intention carries the same
+        // rule; asked first here, it answers with the reason instead of the
+        // generic refusal of the gate below. The gate is MayCreate's question,
+        // so the form the page offers and this refusal cannot part.
+        game.ThrowIfBlacklisted(currentUser.UserId);
+        _intentionManager.ThrowIfForbidden(GameIntention.CreateComment, game);
 
         var entity = new CreateGameCommentEntity
         {
@@ -76,8 +82,7 @@ internal class GameCommentService : IGameCommentService
             AuthorId = currentUser.UserId,
             // Strip [mod] authored by a non-moderator (it renders as a green
             // mod block on the Comment surface); Moderator+ may author it.
-            Text = ModBlockSanitizer.SanitizeForAuthor(createComment.Text.Trim(), currentUser.Role),
-            NewCommentCount = game.CommentCount + 1,
+            Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createComment.Text.Trim(), currentUser.Role), BbTagSet.WithModBlock),
             CreatedUtc = _dateTimeProvider.Now
         };
 
@@ -90,11 +95,22 @@ internal class GameCommentService : IGameCommentService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The intention CreateAsync is refused by, and nothing beside it: the
+    /// blacklist CreateAsync asks first is one of the intention's own arms,
+    /// asked there for the words only. The mode of the discussion, the roles
+    /// and the ban are all in it (GameIntentionResolver.CreateComment).
+    /// </remarks>
+    public bool MayCreate(Games.Game game) =>
+        _intentionManager.IsAllowed(GameIntention.CreateComment, game);
+
+    /// <inheritdoc />
     public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid gameId, CommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
-        var game = await _gameService.GetAsync(gameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.ReadComments, game);
+        // The discussion is read by whoever may read the game, and the read of
+        // the game below is that whole question: no mode, list or ban narrows it.
+        await _gameService.GetAsync(gameId);
 
         var totalCount = await _repository.Count(gameId, query, excludeUserIds);
         var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.CommentsPerPage, totalCount);
@@ -107,37 +123,67 @@ internal class GameCommentService : IGameCommentService
     /// <inheritdoc />
     public async Task<Comment> GetAsync(Guid commentId)
     {
-        return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
+        var comment = await FindAsync(commentId);
+
+        // The four discussions share one table and the row above is read by its
+        // id alone, so the discussion is asked here exactly as the listing asks it.
+        // A discussion that is not there to the reader - hidden, removed, or of
+        // another kind, which this route has nothing to check by - answers exactly
+        // as a comment that is not there: a different answer would tell a
+        // stranger that the id resolves, and to what.
+        await DiscussionRefusal.AsCommentNotFound(commentId,
+            () => _gameService.GetAsync(comment.EntityId));
+
+        return comment;
     }
+
+    /// <summary>
+    /// The comment by its identifier, among the comments of games only. The edit
+    /// keeps to this lookup: who may edit is CommentIntention.Edit's answer on
+    /// the row, and reading the discussion is not one of its conditions.
+    /// </summary>
+    /// <remarks>
+    /// Narrowed to games by the repository. The four discussions share one table,
+    /// and a lookup by id alone let this route edit a comment of a blog or a
+    /// topic: the rules of that other discussion, its blacklist among them, were
+    /// never asked, so a user blacklisted in a blog rewrote his comment there
+    /// through this address.
+    /// </remarks>
+    private async Task<Comment> FindAsync(Guid commentId) =>
+        await _repository.Get(commentId) ??
+        throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
 
     /// <inheritdoc />
     public async Task<Comment> UpdateAsync(UpdateComment updateComment)
     {
         await _updateValidator.ValidateAndThrowAsync(updateComment);
-        var comment = await GetAsync(updateComment.CommentId);
+        var comment = await FindAsync(updateComment.CommentId);
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
         // Rewriting a comment publishes text exactly as writing one does, so the
-        // ban is asked here too, on the terms GameIntention.CreateComment sets:
-        // a game the user leads or was accepted into stays open. Only the author
-        // is asked, a moderator editing somebody else's comment is moderating
-        // and a ban takes no moderator tool away. The game is read inside the
-        // condition because whose game it is only matters to somebody the ban
-        // actually restricts.
+        // blacklist and the ban are asked here too, on the terms
+        // GameIntention.CreateComment sets: a game the user leads or was
+        // accepted into stays open to the ban. Only the author is asked, a
+        // moderator editing somebody else's comment is moderating and neither
+        // list takes a moderator tool away.
         var currentUser = _identityProvider.Current.User;
-        if (comment.Author?.UserId == currentUser.UserId && !currentUser.MaySpeak())
+        if (comment.Author?.UserId == currentUser.UserId)
         {
-            var game = await _gameService.GetAsync(comment.EntityId);
-            currentUser.ThrowIfMayNotComment(inOwnSpace: game.GetRoles(currentUser.UserId).IsOwnGame());
+            var game = await DiscussionRefusal.AsCommentNotFound(updateComment.CommentId,
+                () => _gameService.GetAsync(comment.EntityId));
+            game.ThrowIfBlacklisted(currentUser.UserId);
+            if (!currentUser.MaySpeak())
+            {
+                currentUser.ThrowIfMayNotComment(inOwnSpace: game.GetRoles(currentUser.UserId).IsOwnGame());
+            }
         }
 
         var text = updateComment.Text?.Trim();
         if (!string.IsNullOrEmpty(text))
         {
             // Strip [mod] authored by a non-moderator before comparing/saving.
-            text = ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role);
+            text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role), BbTagSet.WithModBlock);
         }
         if (string.IsNullOrWhiteSpace(text) || text == comment.Text)
         {
@@ -168,23 +214,27 @@ internal class GameCommentService : IGameCommentService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Delete, comment);
 
-        Guid? newLastCommentId = null;
-        if (comment.IsLastComment)
-        {
-            newLastCommentId = await _repository.GetNewestCommentIdExcept(comment.GameId, commentId);
-        }
-
         var entity = new DeleteGameCommentEntity
         {
             CommentId = commentId,
             GameId = comment.GameId,
-            NewCommentCount = Math.Max(0, comment.GameCommentCount - 1),
-            NewLastCommentId = newLastCommentId,
             DeletedByUserId = _identityProvider.Current.User.UserId,
             DeletedUtc = _dateTimeProvider.Now
         };
 
-        await _repository.Delete(entity);
+        // The game's comment count and its last-comment pointer move inside
+        // Delete, in the transaction that marks the comment.
+        var removed = await _repository.Delete(entity);
+        if (!removed)
+        {
+            // Somebody else removed this comment between the read above and the
+            // write. The game's unread counter and the event belong to the removal
+            // that happened, and repeating them here takes the counter down twice
+            // for one comment. The caller is answered the same either way: the
+            // comment is gone, which is what they asked for.
+            return;
+        }
+
         await _countersRepository.DecrementAsync(comment.GameId, UnreadEntryType.Message, comment.CreatedUtc);
 
         await _invokedEventProducer.SendAsync(EventType.DeletedGameComment, commentId);
@@ -193,8 +243,7 @@ internal class GameCommentService : IGameCommentService
     /// <inheritdoc />
     public async Task MarkAsReadAsync(Guid gameId)
     {
-        var game = await _gameService.GetAsync(gameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.ReadComments, game);
+        await _gameService.GetAsync(gameId);
         await _countersRepository.FlushAsync(_identityProvider.Current.User.UserId,
             UnreadEntryType.Message, gameId);
     }

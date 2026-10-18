@@ -3,7 +3,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { GeneralError, ListEnvelope } from "@/shared/api/models/common";
-import type { User, Username } from "./types";
+import type { User, Username, UserPicture } from "./types";
 import { UserActivityFilter } from "./types";
 import { unwrapResource } from "@/shared/api";
 import { userApi } from "../api";
@@ -249,10 +249,35 @@ export const useCommunityStore = defineStore("community", () => {
     return null;
   }
 
+  /**
+   * Writes a new picture onto the profile the page is currently drawing.
+   *
+   * `selectedUser` is filled in one place only — `trySelectProfile`, on a
+   * change of route — so anything that changes the profile afterwards has to
+   * be written here or the reader sees it at the next reload and not before.
+   * The avatar overlay is the caller, and it already holds the answer: an
+   * upload gets the re-read profile back from the PATCH, and a reset leaves no
+   * picture at all. Re-reading the profile from the server would spend a
+   * request on what the client has in hand.
+   *
+   * Guarded by id, because an upload can outlive the profile it started on:
+   * the answer for the profile the reader left must not repaint the one they
+   * are looking at now.
+   */
+  function applySelectedUserPicture(
+    userId: string,
+    picture: UserPicture,
+  ): void {
+    const current = selectedUser.value;
+    if (!current || current.id !== userId) return;
+    selectedUser.value = { ...current, picture };
+  }
+
   return {
     selectedUser,
     loadingProfile,
     trySelectProfile,
+    applySelectedUserPicture,
     // Search API
     searchResult,
     searchLoading,

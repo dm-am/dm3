@@ -659,6 +659,40 @@ public class DeploymentConfigurationShould
     }
 
     /// <summary>
+    /// The stand gives the API a place of its own for the country table, at the
+    /// path the setting names, that the API can write and that outlives the
+    /// container.
+    /// </summary>
+    /// <remarks>
+    /// The API downloads the table itself, so the directory has to be writable by
+    /// the user the image runs as. A directory of the host belongs to whoever
+    /// cloned the repository, and the uid of the image user is whatever useradd
+    /// picked; a named volume takes the owner of the directory the image has at
+    /// that path, so the image creates it and hands it to its user. In the
+    /// container layer instead, the table would be downloaded again on every
+    /// update that recreates the container.
+    /// </remarks>
+    [Fact]
+    public void GiveTheApiAWritableVolumeForTheCountryTableOnTheStand()
+    {
+        var preview = Read(PreviewCompose);
+        var dockerfile = Read("app.Dockerfile");
+
+        preview.Should().Contain(
+            "DM_GeoLocationConfiguration__CountryDatabasePath: '/data/geo/ip-country.csv'",
+            "the table is read from and written to the path the setting names, inside the container");
+        preview.Should().Contain("- geodata:/data/geo",
+            "a named volume keeps the downloaded table across a recreated container");
+        preview.Should().NotContain("/data/geo:ro",
+            "the API writes each new copy of the table there itself");
+        preview.Should().MatchRegex(@"(?m)^volumes:\s*\n(\s+\w+:\s*\n)*\s+geodata:",
+            "a named volume the file does not declare stops compose before any container starts");
+        dockerfile.Should().Contain("chown dmuser /data/geo",
+            "a new volume takes the owner of the directory it is mounted over, and a root-owned " +
+            "one leaves the download nowhere to be written");
+    }
+
+    /// <summary>
     /// The broker holds work nothing else records, so its state needs a volume like
     /// every other store.
     /// </summary>

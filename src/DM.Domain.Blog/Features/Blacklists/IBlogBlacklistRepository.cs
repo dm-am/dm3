@@ -20,21 +20,18 @@ public interface IBlogBlacklistRepository
     Task<IEnumerable<GeneralUser>> GetBlacklist(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
-    /// Check if user is already blacklisted
-    /// </summary>
-    /// <param name="blogId">Blog identifier</param>
-    /// <param name="userId">User identifier</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>True if user is blacklisted</returns>
-    Task<bool> IsBlocked(Guid blogId, Guid userId, CancellationToken ct = default);
-
-    /// <summary>
     /// Add user to blog blacklist
     /// </summary>
     /// <param name="blogId">Blog identifier</param>
     /// <param name="blockedUserId">User identifier to blacklist</param>
     /// <param name="blockedByUserId">User identifier who is blocking</param>
     /// <param name="ct">Cancellation token</param>
+    /// <remarks>
+    /// Throws <see cref="DM.Domain.Core.Exceptions.DuplicateEntityException" /> when the
+    /// pair is already on the list: the caller checks first, and this is the race
+    /// where two requests both pass that check. The unique index on the pair is
+    /// what holds it in the meantime, as it does for the game's list.
+    /// </remarks>
     Task Add(Guid blogId, Guid blockedUserId, Guid blockedByUserId, CancellationToken ct = default);
 
     /// <summary>

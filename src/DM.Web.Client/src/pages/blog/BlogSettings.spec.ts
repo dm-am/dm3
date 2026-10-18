@@ -18,22 +18,54 @@
  *
  * The roles are read from useBlogDetailsStore (derived from the blog's author
  * and assistants) plus the viewer's site role — never a check invented here.
+ *
+ * A viewer the page admits to nothing has no page: the address opens the
+ * site's own "not found", decided once the session is settled.
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
-import { mount, type VueWrapper } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useBlogDetailsStore, type Blog } from "@/entities/blog";
 import { useAuthStore, UserRole, type User } from "@/entities/user";
+import { useToast } from "@/shared/lib/composables/useToast";
+import type { GeneralError } from "@/shared/api/models/common";
 import BlogSettings from "./BlogSettings.vue";
 
-// Only the navigation the delete action holds; the rest of the router stays
-// real, as in the game settings spec.
+const { push, replace, session } = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  session: { settled: Promise.resolve() as Promise<void> },
+}));
+
+// Only the navigations the page holds: the delete action and the way out for
+// a viewer it refuses. The rest of the router stays real, as in the game
+// settings spec. One spy across the file, so the delete tests below can read
+// the address the page left for.
 vi.mock("vue-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({ params: { id: "the-blog" }, query: {} }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRoute: () => ({
+    params: { id: "the-blog" },
+    path: "/blogs/the-blog/settings",
+    query: {},
+    hash: "",
+  }),
+  useRouter: () => ({ push, replace }),
 }));
+
+// The answer about the session the start of the page asks for, held by the
+// test: settled at once unless a test keeps it out.
+vi.mock("@/entities/user", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/entities/user")>()),
+  restoreSession: () => session.settled,
+}));
+
+const NOT_FOUND = {
+  name: "not-found",
+  params: { pathMatch: ["blogs", "the-blog", "settings"] },
+  query: {},
+  hash: "",
+};
 
 /** A section that is either drawn or not; nothing else is asked of it. */
 const marker = (className: string) => ({
@@ -73,7 +105,9 @@ const stubs = {
     "canInvite",
     "canCancel",
   ),
-  ConfirmDialog: true,
+  // The confirmation is the real window, drawn in place: the deletion is its
+  // request, and a refusal is printed in it.
+  Teleport: true,
   RouterLink: { template: "<a><slot /></a>" },
 };
 
@@ -125,6 +159,11 @@ const seenBy = (standing: Standing, viewer: UserRole = UserRole.RegularUser) =>
   sectionsOf(render(standing, viewer));
 
 describe("BlogSettings admission", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    session.settled = Promise.resolve();
+  });
+
   it("keeps the page away from a stranger", () => {
     expect(seenBy("stranger").info).toBe(false);
   });
@@ -133,17 +172,44 @@ describe("BlogSettings admission", () => {
     expect(seenBy("stranger", UserRole.Moderator).info).toBe(false);
   });
 
-  it("invites a guest to sign in instead of refusing an identity it never saw", () => {
-    const wrapper = render("stranger");
+  it("opens the site's not found for a viewer it refuses, with no refusal drawn", async () => {
+    const wrapper = render("stranger", UserRole.RegularUser);
+    await flushPromises();
 
-    expect(wrapper.find(".login-prompt").exists()).toBe(true);
-    expect(sectionsOf(wrapper).info).toBe(false);
+    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(wrapper.text()).toBe("");
   });
 
-  it("names the blog roles when it refuses", () => {
-    expect(render("stranger", UserRole.RegularUser).text()).toBe(
-      "Настройки блога доступны мастеру блога и ассистентам.",
-    );
+  it("opens it for a guest too, with no invitation to sign in", async () => {
+    const wrapper = render("stranger");
+    await flushPromises();
+
+    expect(replace).toHaveBeenCalledWith(NOT_FOUND);
+    expect(wrapper.find(".login-prompt").exists()).toBe(false);
+    expect(wrapper.text()).toBe("");
+  });
+
+  it("keeps the assistant on his page", async () => {
+    render("assistant", UserRole.RegularUser);
+    await flushPromises();
+
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("waits for the answer about the session before sending anybody away", async () => {
+    // A session the browser kept no copy of: the store holds nobody until the
+    // server names the viewer, and the owner then stays.
+    let answer = () => {};
+    session.settled = new Promise((resolve) => (answer = resolve));
+    render("owner");
+    await flushPromises();
+
+    expect(replace).not.toHaveBeenCalled();
+
+    useAuthStore().user = { username: THE_VIEWER } as User;
+    answer();
+    await flushPromises();
+    expect(replace).not.toHaveBeenCalled();
   });
 });
 
@@ -211,5 +277,74 @@ describe("BlogSettings sections", () => {
       cancelInvitation: false,
       danger: false,
     });
+  });
+});
+
+/**
+ * Where the author is put down once the blog is gone.
+ *
+ * The page left for "blogs" — the site-wide catalogue, with its filters and
+ * its pages, where one blog missing from among all of them is nothing anybody
+ * can see. The author's own list of blogs is on their profile, and there the
+ * absence is the whole of it. The toast that used to carry the news is gone
+ * with the change: the list is the news.
+ */
+describe("BlogSettings — after the blog is deleted", () => {
+  const toast = useToast();
+  const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    [...toast.toasts.value].forEach((t) => toast.dismiss(t.id));
+  });
+
+  /** Runs the whole gesture: the danger button, then the confirmation. */
+  async function deleteBlog(answer: GeneralError | null) {
+    const wrapper = render("owner", UserRole.RegularUser);
+    const remove = vi
+      .spyOn(useBlogDetailsStore(), "deleteBlog")
+      .mockResolvedValue(answer);
+
+    await wrapper.find(".delete-blog").trigger("click");
+    await wrapper.find(".dialog-btn-submit").trigger("click");
+    await flushPromises();
+    return { wrapper, remove };
+  }
+
+  it("leaves for the author's own list of blogs", async () => {
+    const { wrapper, remove } = await deleteBlog(null);
+
+    // The window prints a refusal in itself, so the interceptor keeps quiet.
+    expect(remove).toHaveBeenCalledWith({
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
+    expect(wrapper.find(".dialog-container").exists()).toBe(false);
+    expect(push).toHaveBeenCalledWith({
+      name: "profile",
+      params: { username: THE_VIEWER },
+      query: { tab: "blogs" },
+    });
+  });
+
+  it("says nothing on top of it: the missing blog is the answer", async () => {
+    await deleteBlog(null);
+
+    expect(saidOutLoud()).toEqual([]);
+  });
+
+  it("keeps the author on the settings and names the refusal in the window", async () => {
+    const { wrapper } = await deleteBlog({
+      status: 400,
+      title: "",
+    } as GeneralError);
+
+    expect(push).not.toHaveBeenCalled();
+    expect(wrapper.get(".dialog-refusal").text()).toBe(
+      "Не удалось удалить блог",
+    );
+    expect(wrapper.find(".dialog-container").exists()).toBe(true);
+    expect(saidOutLoud()).toEqual([]);
+    expect(wrapper.find(".delete-blog").exists()).toBe(true);
   });
 });

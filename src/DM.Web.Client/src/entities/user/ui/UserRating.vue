@@ -63,13 +63,17 @@ const target = computed(() => ({
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 .user-rating
   white-space: nowrap
 
+// A bold link that rests in the colour of the sum and, under the pointer,
+// turns the hover blue with the underline, whatever colour it rested in: the
+// way every link of DM2 answered.
 .review-sum
   font-weight: bold
-  color: $link
-  text-decoration: none
+  +link-tone($link)
 
   &.positive
     color: $accent-green
@@ -79,9 +83,6 @@ const target = computed(() => ({
 
   &.muted
     color: $text-muted
-
-  &:hover
-    text-decoration: underline
 
 .sep
   color: $text-muted
@@ -93,9 +94,5 @@ const target = computed(() => ({
 
 .user-rating-na
   font-weight: bold
-  color: $text-muted
-  text-decoration: none
-
-  &:hover
-    text-decoration: underline
+  +muted-link
 </style>

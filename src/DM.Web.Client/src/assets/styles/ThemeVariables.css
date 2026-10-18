@@ -7,6 +7,11 @@ html.theme_Light {
      #737373 — минимальный шаг, проходящий оба фона (4.74 / 4.50). */
   --text-muted: #737373;
   --text-meta: #7b532b;
+  /* Green text of DM2 (.greenText of its default theme): the hidden text of
+     [private] is set in it and in nothing else, no fill, no frame. Kept as DM2
+     has it, so the text reads as the same thing it was there; it measures 3.33
+     on the page, under the 4.5 of AA, as it does on DM2. */
+  --text-green: #696;
   /* AA как цвет текста: #393 давал 3.66 на странице. #267326 — тот же
      зеленый, минимально темнее (5.89 / 5.60 / 4.55 на собственном тинте). */
   --accent-green: #267326;
@@ -47,13 +52,22 @@ html.theme_Light {
   --border-accent-blue: #b0c4de;
   --border-accent-green: #696;
   --border-accent-red: #b33;
+  /* Рамка предупреждения в светлой теме - тот же тон, что и раньше: 2.38 к
+     фону страницы, между синей рамкой (1.78) и зеленой (3.33). */
+  --border-accent-yellow: #d4a000;
   --input-bg: #f9f9f9;
-  /* Relative input fill — same calibration rationale as --control-bg-overlay:
-     inputs sit on --bg-page (forms) AND on --bg-element (dropdown panels),
-     so the alpha must keep the fill distinguishable from BOTH surfaces.
-     Light: #fff + 0.04 = #f5f5f5 (delta ~10 vs page and vs element) */
-  --input-bg-overlay: rgba(0, 0, 0, 0.04);
-  --input-bg-disabled: #ddd;
+  /* Relative input fill. Over the page it composes to exactly --bg-element,
+     the solid ground the search of the filter bar stood on, which every field
+     is drawn after (owner's standard, 28 September 2026); and being an overlay
+     it still parts from a --bg-element card or dropdown panel it stands on,
+     where a solid --bg-element would vanish into the surface.
+     Light: #fff + 0.024 = #f9f9f9 (= --bg-element); on #f9f9f9 = #f3f3f3 */
+  --input-bg-overlay: rgba(0, 0, 0, 0.024);
+  /* Solid twin of --input-bg-overlay composed over --bg-page. Chrome paints
+     autofilled fields with its own opaque background that ignores the theme;
+     the only override that works is an inset shadow, and a shadow cannot
+     carry an alpha overlay - it needs the flattened color. */
+  --input-bg-autofill: #f9f9f9;
   --shade-bg: rgba(0, 0, 0, 0.6);
   --shade-text: #fff;
   --tooltip-bg: #333;
@@ -88,6 +102,27 @@ html.theme_Light {
   /* Composed over --bg-page equals the legacy solid --bg-element-accent:
      #fff + rgba(0,0,0,0.082) = #eaeaea */
   --control-bg-hover-overlay: rgba(0, 0, 0, 0.082);
+  /* The button scale. One step of the palette — black in the light theme,
+     white in the dark one — at four alphas, so a button reads the same way on
+     every surface the site sanctions and carries no colour of its own.
+     The frame is constant and the fill carries the state, which is the model
+     the site's checkbox already uses.
+     The four numbers are the same in both themes: the step flips with the
+     palette, the weights do not. Measured on the eight surfaces a button
+     stands on, in both themes. */
+  --control-border-overlay: rgba(0, 0, 0, 0.25);
+  --control-fill-overlay: rgba(0, 0, 0, 0.05);
+  --control-fill-hover-overlay: rgba(0, 0, 0, 0.1);
+  --control-fill-press-overlay: rgba(0, 0, 0, 0.16);
+  /* The states of a FILLED button (the primary action) lighten its fill with
+     white instead of stepping the scale above: --link is the fill, and a
+     darkening step drops the caption to 4.44 in the dark theme, under the 4.5
+     of WCAG 1.4.3.
+     Unlike the scale above, these two alphas differ by theme, because --link
+     does: #304060 is dark enough that a ninth of white is already a visible
+     step, #7cb0e0 is not. */
+  --primary-hover-overlay: rgba(255, 255, 255, 0.09);
+  --primary-press-overlay: rgba(255, 255, 255, 0.17);
   --shadow-color: rgba(0, 0, 0, 0.12);
   --nsfw-overlay: rgba(230, 98, 126, 0.2);
   --highlight-overlay-green: rgba(122, 108, 8, 0.15);
@@ -103,26 +138,30 @@ html.theme_Light {
   /* Search highlight - marker pen effect (preserves text color) */
   --search-highlight-bg: rgba(255, 176, 32, 0.38);
 
-  /* Tier badges (awards/achievements) - metals are not theme-dependent, same in both themes */
+  /* The four metals of awards and achievements, the only colours their tiles
+     carry besides neutral text (entities/achievement/lib/tierMetal.ts maps a
+     tier to one of them). Not theme-dependent, same in both themes. */
   --award-gold: #d4af37;
   --award-silver: #c0c0c0;
   --award-bronze: #cd7f32;
   --achievement-platinum: #7fcfd4;
-  --award-diamond: var(
-    --achievement-platinum
-  ); /* diamond award tier = achievement platinum */
-  /* Заливка плашки тира. Металл красит сам глиф, а не фон под ним: контраст
-     симметричен, поэтому AA держится на всех четырех металлах (бронза 4.57,
-     платина 8.06), а черного текста на золоте не остается. От страницы плашку
-     держит контур цветом металла. Металлы тема-независимы, поэтому значение
-     одно на обе темы. */
-  --tier-badge-bg: #2a2a2a;
+  /* The numeral on a tier badge. The badge is filled with its metal, like the
+     icon it sits on, so the tile stays in that metal: a dark fill under a metal
+     numeral was a dark patch on the light page, and a dark numeral on the metal
+     read as black. Light ink on the metals measures 1.78 (platinum) to 3.14
+     (bronze), under the 4.5 of AA; the badge only repeats the tier the popover
+     states in text, and the halo keeps the strokes apart from the fill. Same in
+     both themes, like the metals under it. */
+  --tier-badge-text: #fff;
+  --tier-badge-halo: rgba(0, 0, 0, 0.4);
 }
 
 html.theme_Dark {
   --text: #e0e0e0;
   --text-muted: #a0a0a0;
   --text-meta: #d4a574;
+  /* Green text of DM2's dark theme (.greenText there). */
+  --text-green: #7dd17d;
   --accent-green: #8fbc8f;
   /* AA как цвет текста в темной теме: #cd5c5c давал 4.00 на странице.
      #de9292 — тот же красный, минимально светлее (6.54 / 5.90). */
@@ -159,9 +198,15 @@ html.theme_Dark {
   --border-accent-blue: #5a7a9a;
   --border-accent-green: #5a8a5a;
   --border-accent-red: #a44;
+  /* Приглушен относительно --accent-yellow (#e0b040): тот давал 7.92 к фону
+     страницы и звучал громче рамки ошибки (2.74). Этот дает 3.46 и встает в
+     один ряд с зеленой (3.95) и синей (3.55). */
+  --border-accent-yellow: #946f2a;
   --input-bg: #222;
+  /* #222 + 0.035 = #2a2a2a, --bg-element of this theme; rationale in the
+     light theme block. */
   --input-bg-overlay: rgba(255, 255, 255, 0.035);
-  --input-bg-disabled: #444;
+  --input-bg-autofill: #2a2a2a;
   --shade-bg: rgba(0, 0, 0, 0.7);
   --shade-text: #fff;
   --tooltip-bg: #444;
@@ -190,6 +235,17 @@ html.theme_Dark {
      the dark alpha keeps the original page-calibrated value. */
   --control-bg-overlay: rgba(255, 255, 255, 0.036);
   --control-bg-hover-overlay: rgba(255, 255, 255, 0.077);
+  /* The button scale, rationale in the light theme block. Same weights, the
+     step flipped to white. */
+  --control-border-overlay: rgba(255, 255, 255, 0.25);
+  --control-fill-overlay: rgba(255, 255, 255, 0.05);
+  --control-fill-hover-overlay: rgba(255, 255, 255, 0.1);
+  --control-fill-press-overlay: rgba(255, 255, 255, 0.16);
+  /* Lightening steps for the filled button, rationale in the light theme
+     block. Bigger here because --link is #7cb0e0: a ninth of white over it is
+     not a step anyone sees. */
+  --primary-hover-overlay: rgba(255, 255, 255, 0.24);
+  --primary-press-overlay: rgba(255, 255, 255, 0.46);
   --shadow-color: rgba(0, 0, 0, 0.3);
   --nsfw-overlay: rgba(230, 98, 126, 0.25);
   --highlight-overlay-green: rgba(115, 165, 115, 0.18);
@@ -205,20 +261,22 @@ html.theme_Dark {
   /* Search highlight - marker pen effect (brighter for dark backgrounds) */
   --search-highlight-bg: rgba(255, 193, 7, 0.32);
 
-  /* Tier badges (awards/achievements) - metals are not theme-dependent, same in both themes */
+  /* The four metals of awards and achievements, the only colours their tiles
+     carry besides neutral text (entities/achievement/lib/tierMetal.ts maps a
+     tier to one of them). Not theme-dependent, same in both themes. */
   --award-gold: #d4af37;
   --award-silver: #c0c0c0;
   --award-bronze: #cd7f32;
   --achievement-platinum: #7fcfd4;
-  --award-diamond: var(
-    --achievement-platinum
-  ); /* diamond award tier = achievement platinum */
-  /* Заливка плашки тира. Металл красит сам глиф, а не фон под ним: контраст
-     симметричен, поэтому AA держится на всех четырех металлах (бронза 4.57,
-     платина 8.06), а черного текста на золоте не остается. От страницы плашку
-     держит контур цветом металла. Металлы тема-независимы, поэтому значение
-     одно на обе темы. */
-  --tier-badge-bg: #2a2a2a;
+  /* The numeral on a tier badge. The badge is filled with its metal, like the
+     icon it sits on, so the tile stays in that metal: a dark fill under a metal
+     numeral was a dark patch on the light page, and a dark numeral on the metal
+     read as black. Light ink on the metals measures 1.78 (platinum) to 3.14
+     (bronze), under the 4.5 of AA; the badge only repeats the tier the popover
+     states in text, and the halo keeps the strokes apart from the fill. Same in
+     both themes, like the metals under it. */
+  --tier-badge-text: #fff;
+  --tier-badge-halo: rgba(0, 0, 0, 0.4);
 }
 
 /* Suppress all transitions during theme switch — toggled synchronously in App.vue */

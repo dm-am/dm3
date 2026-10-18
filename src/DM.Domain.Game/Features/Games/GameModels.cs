@@ -49,7 +49,8 @@ public class GameTag
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// Tag description (may contain [tipimg:URL]text[/tipimg] for inline image tooltips)
+    /// Tag description as typed: the hint surface, whose one tag is
+    /// [tip text="..."]word[/tip] or [tip img="address"]word[/tip]
     /// </summary>
     public string? Description { get; set; }
 
@@ -261,11 +262,6 @@ public class Game
     public DateTimeOffset? ActivatedUtc { get; set; }
 
     /// <summary>
-    /// Attribute schema identifier
-    /// </summary>
-    public Guid? AttributeSchemaId { get; set; }
-
-    /// <summary>
     /// Game master (GM)
     /// </summary>
     public GeneralUser Master { get; set; } = null!;
@@ -370,7 +366,7 @@ public class Game
     public string NarrativeSetting { get; set; } = null!;
 
     /// <summary>
-    /// comments access mode
+    /// Who may write in the discussion; everybody who sees the game reads it
     /// </summary>
     public CommentsAccessMode CommentsAccessMode { get; set; }
 
@@ -609,7 +605,8 @@ public class Room
     public IEnumerable<PostPendency> Pendencies { get; set; } = [];
 
     /// <summary>
-    /// Total room posts count
+    /// Number of messages in the room, removed ones left out: the posts of a
+    /// room of posts, the messages of the chat of a room of chat
     /// </summary>
     public int TotalPostsCount { get; set; }
 
@@ -624,9 +621,12 @@ public class Room
     public double OrderNumber { get; set; }
 
     /// <summary>
-    /// Previous room identifier
+    /// Names of the characters let in to write in a room the reader may not
+    /// open, a dead or departed one included, for the line the game menu
+    /// writes it with. Empty on every room the reader may open: there the
+    /// accesses say it, and say more.
     /// </summary>
-    public Guid? PreviousRoomId { get; set; }
+    public IEnumerable<string> CharacterNames { get; set; } = [];
 
     /// <summary>
     /// Room settings
@@ -934,6 +934,13 @@ public class Post
     public int ReviewCount { get; set; }
 
     /// <summary>
+    /// 1-based place of the post in its room, in the order the room is written in
+    /// (creation moment, then identifier). Null where the read does not number
+    /// posts: the rated feed, which lists posts of many rooms.
+    /// </summary>
+    public int? Number { get; set; }
+
+    /// <summary>
     /// Author role in game context (DungeonMaster/Assistant/null for player)
     /// </summary>
     public string? AuthorGameRole { get; set; }
@@ -1116,39 +1123,21 @@ public class AttributeSpecification
 }
 
 /// <summary>
-/// Attribute schema
+/// The character sheet of one game: its specifications and the token that
+/// decides whether a replacement is written or refused.
 /// </summary>
-public class AttributeSchema
+public class GameAttributeSchema
 {
-    /// <summary>
-    /// Identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Title
-    /// </summary>
-    public string Title { get; set; } = null!;
-
-    /// <summary>
-    /// Tag description
-    /// </summary>
-    public string? Description { get; set; }
-
-    /// <summary>
-    /// Type
-    /// </summary>
-    public SchemaType Type { get; set; }
-
-    /// <summary>
-    /// Author (null for system schemas)
-    /// </summary>
-    public GeneralUser? Author { get; set; }
-
     /// <summary>
     /// Attribute specifications
     /// </summary>
     public IEnumerable<AttributeSpecification> Specifications { get; set; } = [];
+
+    /// <summary>
+    /// Version of the stored document. Opaque to the caller, which only ever
+    /// returns the number it was given.
+    /// </summary>
+    public int Version { get; set; }
 }
 
 /// <summary>
@@ -1197,9 +1186,10 @@ public class GameDetails : Game
     public bool HidePostStats { get; set; }
 
     /// <summary>
-    /// Attribute schema details
+    /// The character sheet of this game. Every game has one, so a details read
+    /// that cannot find it fails instead of answering with an empty sheet.
     /// </summary>
-    public AttributeSchema AttributeSchema { get; set; } = null!;
+    public GameAttributeSchema AttributeSchema { get; set; } = null!;
 
     /// <summary>
     /// Total number of posts across all rooms of the game ("Постов всего").
@@ -1374,32 +1364,6 @@ public class GameCommentToDelete : Comment
     /// nothing else ever set it.
     /// </remarks>
     public Guid GameId => EntityId;
-
-    /// <summary>
-    /// Current game comment count
-    /// </summary>
-    public int GameCommentCount { get; set; }
-
-    /// <summary>
-    /// Whether this is the last comment
-    /// </summary>
-    public bool IsLastComment { get; set; }
-}
-
-/// <summary>
-/// Room info for reordering
-/// </summary>
-public class RoomOrderInfo
-{
-    /// <summary>
-    /// Room identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Order number
-    /// </summary>
-    public double OrderNumber { get; set; }
 }
 
 /// <summary>
@@ -1482,6 +1446,11 @@ public class CharacterToUpdate
     /// Player has voluntarily left the game
     /// </summary>
     public bool IsPlayerLeft { get; set; }
+
+    /// <summary>
+    /// The lead has thrown the character out of the game
+    /// </summary>
+    public bool IsPlayerExiled { get; set; }
 
     /// <summary>
     /// Created timestamp

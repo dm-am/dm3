@@ -24,9 +24,10 @@
  */
 import { describe, it, expect, vi } from "vitest";
 
-// A whole-tree AST scan legitimately outruns the 5s default when the suite
-// saturates every core, which is what a coverage run does.
-vi.setConfig({ testTimeout: 30_000 });
+// A whole-tree AST scan outruns the 5s default when the suite saturates every
+// core, which is what a coverage run does. Five seconds alone, it passed 30s
+// under the gate run once the tree grew, so it gets the ceiling sharedLike has.
+vi.setConfig({ testTimeout: 60_000 });
 import { readdirSync, readFileSync, statSync } from "fs";
 import { dirname, join, relative } from "path";
 import { fileURLToPath } from "url";

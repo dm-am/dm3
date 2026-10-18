@@ -58,7 +58,15 @@ internal class PreferencesApiService : IPreferencesApiService
                 TopicsPerPage = request.Paging?.TopicsPerPage ?? current.Paging.TopicsPerPage,
                 MessagesPerPage = request.Paging?.MessagesPerPage ?? current.Paging.MessagesPerPage,
                 EntitiesPerPage = request.Paging?.EntitiesPerPage ?? current.Paging.EntitiesPerPage,
-            }
+            },
+            // Omitted keeps what the account has, blank clears it to UTC. The
+            // two cannot share a spelling: a zone once set would then be one
+            // the reader could change and never take off.
+            TimeZoneId = request.TimeZoneId is null
+                ? current.TimeZoneId
+                : string.IsNullOrWhiteSpace(request.TimeZoneId)
+                    ? null
+                    : request.TimeZoneId.Trim()
         };
 
         var updateUser = new UpdateUser

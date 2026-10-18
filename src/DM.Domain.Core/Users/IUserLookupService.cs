@@ -60,4 +60,11 @@ public interface IUserLookupService
     /// <param name="userIds">User identifiers</param>
     /// <returns>References of the users that exist</returns>
     Task<IEnumerable<UserReference>> GetReferencesAsync(IEnumerable<Guid> userIds);
+
+    /// <summary>
+    /// Identifiers of every removed account, for a list asked by host or author for
+    /// "Аккаунт удален" (<see cref="RemovedAccount" />). They narrow the list on the
+    /// server and are never part of an answer.
+    /// </summary>
+    Task<IReadOnlyCollection<Guid>> GetRemovedAccountIdsAsync();
 }

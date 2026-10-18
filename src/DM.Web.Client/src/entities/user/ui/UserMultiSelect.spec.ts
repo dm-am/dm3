@@ -5,7 +5,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import UserMultiSelect from "./UserMultiSelect.vue";
+
+const FEATURES = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../features",
+);
 
 // Mock userApi
 const mockSearchUsers = vi.fn();
@@ -107,6 +115,16 @@ describe("UserMultiSelect", () => {
       await vi.advanceTimersByTimeAsync(150);
 
       expect(mockSearchUsers).toHaveBeenCalledWith("test", 10);
+    });
+
+    it("looks among everyone, the long absent too, when asked", async () => {
+      mockSearchUsers.mockResolvedValue({ data: { resources: [] } });
+
+      const wrapper = mountComponent({ includeInactive: true });
+      await wrapper.find("input").setValue("test");
+      await vi.advanceTimersByTimeAsync(150);
+
+      expect(mockSearchUsers).toHaveBeenCalledWith("test", 10, "All");
     });
 
     it("clears suggestions when input is cleared", async () => {
@@ -261,5 +279,34 @@ describe("UserMultiSelect", () => {
       const wrapper = mountComponent({ debounceMs: 300 });
       expect(wrapper.props().debounceMs).toBe(300);
     });
+  });
+});
+
+/**
+ * The people of a filter are the authors or the hosts of what the list holds,
+ * and a list holds the old as well: the master of a frozen game, the author of
+ * a topic of years ago. The server's default finds only the people active in
+ * the last 30 days, so every list of the site that picks people asks for
+ * everyone. The games and the room did before 5 October 2026; the pulse, the
+ * topics, the comments and the blogs since.
+ */
+describe("the people of every filter of the site", () => {
+  it("are looked for among everyone", () => {
+    const pickers: string[] = [];
+    const offenders: string[] = [];
+    for (const file of readdirSync(FEATURES, {
+      recursive: true,
+      encoding: "utf8",
+    })) {
+      if (!file.endsWith(".vue")) continue;
+      const source = readFileSync(join(FEATURES, file), "utf8");
+      for (const [tag] of source.matchAll(/<UserMultiSelect\b[^>]*>/g)) {
+        const name = file.split("\\").join("/");
+        pickers.push(name);
+        if (!/\sinclude-inactive\b/.test(tag)) offenders.push(name);
+      }
+    }
+    expect(pickers.length).toBeGreaterThanOrEqual(6);
+    expect(offenders).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Users;
+using DM.Domain.Game.Features.AttributeSchemas;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.Games;
@@ -40,6 +41,15 @@ internal class CreateGameValidator : AbstractValidator<CreateGame>
 
         RuleFor(g => g.CommentsAccessMode)
             .IsInEnum().WithMessage(ValidationError.Invalid);
+
+        // The character sheet is created with the game, so its rules are part of
+        // creating one: a set the sheet cannot hold refuses the whole request,
+        // and no game is written for it.
+        RuleForEach(g => g.AttributeSpecifications)
+            .ChildRules(AttributeSpecificationRules.Apply);
+
+        RuleFor(g => g.AttributeSpecifications)
+            .Custom(AttributeSpecificationRules.AddFailures);
 
         When(g => !string.IsNullOrEmpty(g.AssistantUsername), () =>
             RuleFor(g => g.AssistantUsername)

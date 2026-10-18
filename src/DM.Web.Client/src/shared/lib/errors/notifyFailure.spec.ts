@@ -87,13 +87,57 @@ describe("notifyFailure", () => {
     expect(useToast().toasts.value[0].message).not.toBe("не удалось создать");
   });
 
-  it("says the fallback when the request never reached the server", () => {
-    // send() maps a missing response to status 0 with an empty title, so the
-    // fallback is all there is.
+  /**
+   * A plate is not under a field, and "Обязательное поле" on it left the
+   * reader to find which field it meant. The call knows the fields it sent,
+   * by the server's names for them, and hands their labels over.
+   */
+  it("names the refused fields it was given labels for", () => {
+    const rejected = {
+      ...problem(400, "Некорректные данные"),
+      errors: {
+        SystemName: ["Empty"],
+        NarrativeSetting: ["Empty"],
+        Title: ["Long"],
+      },
+    };
+
+    notifyFailure(rejected, "Не удалось сохранить информацию игры", {
+      title: "Название",
+      systemName: "Система",
+      narrativeSetting: "Сеттинг",
+    });
+
+    expect(useToast().toasts.value.map((t) => t.message)).toEqual([
+      "Система, Сеттинг: не заполнено. Название: слишком длинное значение",
+    ]);
+  });
+
+  it("reads a field without a label, or a sentence of the server's, as it stands", () => {
+    const rejected = {
+      ...problem(400),
+      errors: {
+        Tags: ["TooMany"],
+        Text: ["Тег [private] здесь не разрешен"],
+      },
+    };
+
+    notifyFailure(rejected, "Не удалось сохранить комментарий", {
+      text: "Текст комментария",
+    });
+
+    expect(useToast().toasts.value.map((t) => t.message)).toEqual([
+      "Слишком много значений. Тег [private] здесь не разрешен",
+    ]);
+  });
+
+  // send() maps a missing response to status 0, and the interceptor always
+  // speaks for that one: it is the only sentence that knows the other address
+  // of the site and offers the press that goes there. A second one from the
+  // call site was the same event said twice, in words that offer nothing.
+  it("stays quiet when the request never reached the server", () => {
     notifyFailure(problem(0), "нет соединения с сервером");
 
-    expect(useToast().toasts.value[0].message).toBe(
-      "нет соединения с сервером",
-    );
+    expect(useToast().toasts.value).toHaveLength(0);
   });
 });

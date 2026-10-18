@@ -46,7 +46,6 @@ public class AuthorizedActionsShould
         "AuthenticationController.CompleteTwoFactorLogin",
         "RegistrationController.Register",
         "RegistrationController.Activate",
-        "RegistrationController.ResendActivation",
         "RecoveryController.RequestRecovery",
         "RecoveryController.CompletePasswordReset",
         // Asked from the registration form, before there is anybody to ask as. They
@@ -56,6 +55,9 @@ public class AuthorizedActionsShould
         "AvailabilityController.CheckUsername",
         // Reaching support has to be possible when reaching an account is not.
         "TicketIntakeController.CreateTicketIntake",
+        // The guest's answer in his own ticket. The tracking token in the header is
+        // the credential, as on the tracking page, and an unknown one writes nothing.
+        "TicketIntakeController.CreateTrackedTicketComment",
         // Called by another machine, which carries a signature rather than a session.
         "WebhookController.HandleWebhook",
     ];

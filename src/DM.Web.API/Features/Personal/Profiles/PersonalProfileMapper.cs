@@ -87,7 +87,8 @@ internal partial class PersonalProfileMapper
     };
 
     // Rating, birthday, contacts, visibility and info are composed in the
-    // wrapper; the history and the personal note belong to other endpoints.
+    // wrapper; the history, the personal note and what a viewer may do with
+    // the user belong to other endpoints.
     [MapProperty(nameof(UserDetails.UserId), nameof(PersonalProfile.Id))]
     [MapProperty(nameof(UserDetails.CreatedUtc), nameof(PersonalProfile.RegisteredUtc))]
     [MapProperty(nameof(UserDetails.PostReviewsGivenCount), nameof(PersonalProfile.ReviewsGiven))]
@@ -112,10 +113,8 @@ internal partial class PersonalProfileMapper
     [MapperIgnoreTarget(nameof(PersonalProfile.Info))]
     [MapperIgnoreTarget(nameof(PersonalProfile.UsernameHistory))]
     [MapperIgnoreTarget(nameof(PersonalProfile.PersonalNote))]
-    // Read off the identity of the request by the API service, not off the row:
-    // the profile comes from the database and therefore carries the recorded
-    // role, which is exactly why the withheld flag has to come from elsewhere.
-    [MapperIgnoreTarget(nameof(PersonalProfile.PrivilegeWithheld))]
+    [MapperIgnoreTarget(nameof(PersonalProfile.BlockedByViewer))]
+    [MapperIgnoreTarget(nameof(PersonalProfile.Viewer))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial PersonalProfile ToPersonalProfileCore(UserDetails user);
 

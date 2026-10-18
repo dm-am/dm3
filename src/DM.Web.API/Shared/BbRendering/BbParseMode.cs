@@ -18,5 +18,10 @@ public enum BbParseMode
     /// <summary>
     /// Game post parse mode
     /// </summary>
-    Post = 3
+    Post = 3,
+
+    /// <summary>
+    /// Tag description parse mode: [tip] alone
+    /// </summary>
+    Hint = 4
 }

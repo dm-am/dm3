@@ -129,9 +129,11 @@ export function useBlogDisplay() {
   /**
    * Check if blog was activated less than 7 days ago
    * Used to highlight "new" blogs with green color
-   * Optimized: uses cached timestamp instead of creating Date per call
+   * Optimized: uses cached timestamp instead of creating Date per call.
+   * Reads the activation alone, so a row that carries only that (a
+   * subscription to the blog) is asked by the same rule.
    */
-  function isNew(blog: Blog | BlogRef): boolean {
+  function isNew(blog: Pick<Blog | BlogRef, "activatedUtc">): boolean {
     if (!blog.activatedUtc) return false;
     const activatedMs = new Date(blog.activatedUtc).getTime();
     const diffMs = nowTimestamp.value - activatedMs;

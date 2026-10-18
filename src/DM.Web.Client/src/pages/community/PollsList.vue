@@ -146,12 +146,6 @@ function pagingAnchor(): HTMLElement | null {
   grid-template-columns: repeat(3, 1fr)
   gap: $medium
 
-  @media (max-width: $bp-shell)
-    grid-template-columns: repeat(2, 1fr)
-
-  @media (max-width: $bp-mobile)
-    grid-template-columns: 1fr
-
 .poll-card
   padding: $medium
   border: 1px dashed $border

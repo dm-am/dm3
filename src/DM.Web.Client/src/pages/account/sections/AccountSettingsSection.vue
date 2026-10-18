@@ -12,8 +12,17 @@
         />
       </FormField>
 
+      <FormField label="Часовой пояс">
+        <Select
+          id="account-time-zone"
+          :model-value="settingsForm.timeZoneId"
+          :options="timeZoneOptions"
+          @update:model-value="(v) => (settingsForm.timeZoneId = v)"
+        />
+      </FormField>
+
       <div class="pagination-group">
-        <div class="pagination-group-label">Pagination настройки</div>
+        <div class="pagination-group-label">Размер страниц</div>
         <div class="pagination-grid">
           <FormField label="Постов на странице">
             <Select
@@ -37,7 +46,7 @@
             />
           </FormField>
 
-          <FormField label="Тем на странице">
+          <FormField label="Топиков на странице">
             <Select
               id="account-topics-per-page"
               :model-value="String(settingsForm.paging.topicsPerPage)"
@@ -72,28 +81,29 @@
         </div>
       </div>
 
-      <span v-if="saveSettingsAction.error.value" class="error-text">
-        {{ saveSettingsAction.error.value }}
-      </span>
       <Button
+        variant="primary"
         :loading="saveSettingsAction.loading.value"
+        :disabled="saved"
         @click="saveSettings"
         class="save-button"
       >
-        Сохранить настройки
+        {{ label }}
       </Button>
+      <ActionResult :text="saveSettingsAction.error.value" class="error-text" />
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { nextTick, onMounted, ref, watch } from "vue";
 import { personalApi, fetchUser } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
+import { ActionResult } from "@/shared/ui/ActionResult";
 import { FormField } from "@/shared/ui/Form";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
-import { useToast } from "@/shared/lib/composables/useToast";
+import { useSavedState } from "@/shared/lib/composables/useSavedState";
 import { DEFAULT_PAGE_SIZES } from "@/shared/lib/composables/usePaging";
 import {
   Theme,
@@ -102,18 +112,44 @@ import {
 } from "@/shared/api/models/personal";
 import type { User } from "@/shared/api/models/community/users";
 import { useUiStore } from "@/shared/stores/ui";
-import { describeFailure } from "@/shared/lib/errors";
+import { unwrapResource } from "@/shared/api/envelope";
+import {
+  deviceTimeZone,
+  knownTimeZones,
+  labelOf,
+  setAccountTimeZone,
+} from "@/shared/lib/utils/timeZone";
+import { refusalHere } from "@/shared/lib/errors";
 
 const props = defineProps<{
   user: User;
 }>();
 
 const uiStore = useUiStore();
-const toast = useToast();
 
 const themeOptions: SelectOption[] = [
   { value: Theme.Light, label: "Светлая" },
   { value: Theme.Dark, label: "Темная" },
+];
+
+/**
+ * The zones, with the one this device is in at the head.
+ *
+ * Standing first and named for what it is, it is the answer for nearly every
+ * reader who opens this field: they are here because their letters carry the
+ * hours of a city they left. The rest of the list is for the reader who lives
+ * between two of them. The device zone is not repeated below — one value, one
+ * row, or the field shows the same zone selected in two places.
+ */
+const device = deviceTimeZone();
+const timeZoneOptions: SelectOption[] = [
+  ...(device
+    ? [{ value: device, label: `Как на этом устройстве (${labelOf(device)})` }]
+    : []),
+  { value: "", label: "UTC" },
+  ...knownTimeZones()
+    .filter((zone) => zone !== device)
+    .map((zone) => ({ value: zone, label: labelOf(zone) })),
 ];
 
 // Backend-allowed paging values
@@ -148,6 +184,9 @@ function defaultPaging(): Paging {
 const settingsForm = ref({
   theme: uiStore.theme,
   paging: defaultPaging(),
+  // Blank until the server answers: the zone lives on the account and not on
+  // the user this page carries, so it is read by a request of its own.
+  timeZoneId: "",
 });
 
 // Initialize form from user data
@@ -158,31 +197,90 @@ watch(
       settingsForm.value = {
         theme: uiStore.theme,
         paging: currentUser.settings?.paging || defaultPaging(),
+        timeZoneId: settingsForm.value.timeZoneId,
       };
     }
   },
   { immediate: true },
 );
 
+// The zone comes from the account preferences rather than with the user: the
+// user document does not carry it, and one form is the only thing that asks.
+onMounted(async () => {
+  const { data } = await personalApi.getMyPreferences();
+  // A single resource arrives in an envelope, and the answer is inside it.
+  const preferences = unwrapResource<Preferences>(data);
+  if (preferences) settingsForm.value.timeZoneId = preferences.timeZoneId ?? "";
+});
+
+/**
+ * What a save sends - and, because the button compares the form through this
+ * same function, what the button calls a saved form.
+ *
+ * The fields are written out instead of spread from the form for two reasons.
+ * A value the request does not carry would otherwise turn the button back to
+ * "Сохранить" over a form the server already agrees with. And the saved copy
+ * is compared as JSON against a form the server refills through `fetchUser`,
+ * where the five paging numbers arrive in whatever order the answer spells
+ * them: written out here, they are always in one.
+ */
+function currentSettings(): Preferences {
+  return {
+    theme: settingsForm.value.theme,
+    paging: {
+      postsPerPage: settingsForm.value.paging.postsPerPage,
+      commentsPerPage: settingsForm.value.paging.commentsPerPage,
+      topicsPerPage: settingsForm.value.paging.topicsPerPage,
+      messagesPerPage: settingsForm.value.paging.messagesPerPage,
+      entitiesPerPage: settingsForm.value.paging.entitiesPerPage,
+    },
+    // A blank is a request for UTC, and the server tells it from an omitted
+    // field: sharing a spelling, a zone once set could never be taken off.
+    timeZoneId: settingsForm.value.timeZoneId,
+  };
+}
+
+/**
+ * The form's own answer about the save. Nothing else on this screen changes
+ * when the settings are stored - the fields hold the values the reader typed
+ * before and after - so the button is where the reader reads the outcome.
+ */
+const { saved, label, remember } = useSavedState(currentSettings);
+
 // Save settings
 const saveSettingsAction = useAsyncAction();
 
 const saveSettings = () => {
   saveSettingsAction.execute(async () => {
-    const preferences: Partial<Preferences> = {
-      theme: settingsForm.value.theme,
-      paging: settingsForm.value.paging,
-    };
-
-    const { error } = await personalApi.updateMyPreferences(preferences);
-    if (error)
-      throw new Error(describeFailure(error, "Не удалось сохранить настройки"));
+    const { error } = await personalApi.updateMyPreferences(currentSettings());
+    if (error) {
+      // Nothing is applied either way - the theme, the account refresh and the
+      // saved copy are all below this line, so the button goes back to offering
+      // the save. The line above the button says why, the refusals the
+      // interceptor speaks for included, and its plate is taken down: the form
+      // is still on screen, and the line is where the reader looks.
+      const text = refusalHere(
+        error,
+        "Не удалось сохранить настройки аккаунта",
+      );
+      if (text) throw new Error(text);
+      return;
+    }
 
     // Apply theme immediately
     uiStore.updateTheme(settingsForm.value.theme);
+    // And the zone: every date on the site is drawn by it for a signed-in
+    // reader (siteTime), and it is held for the page only as the account
+    // stood when the page read it. A blank is UTC there as well.
+    setAccountTimeZone(settingsForm.value.timeZoneId);
 
     await fetchUser();
-    toast.success("Настройки успешно сохранены");
+    // The copy is taken after the refreshed user has reached the form: that
+    // call moves the store the watcher above is on, and the watcher refills
+    // the fields on the next tick. Taken before it, the copy would be of the
+    // form as it stood a moment before the server's own answer landed in it.
+    await nextTick();
+    remember();
   });
 };
 </script>
@@ -194,7 +292,6 @@ const saveSettings = () => {
 .settings-content
   padding: $medium
   background-color: $bg-element
-  border-radius: $border-radius
 
 .pagination-group
   margin: $small 0
@@ -204,12 +301,18 @@ const saveSettings = () => {
   color: $text-muted
   font-size: $secondary-font-size
 
+// The fields of the grid a step of 8 apart, the step of the fields over them
+// ("Цветовая схема" to "Часовой пояс") and of every page form of the site
+// (FormField: 8 above and 8 below, folded into one 8 in a block flow). A grid
+// does not fold margins, it adds them: its rows stood 24 apart. So its fields
+// put their margins off, and the grid keeps 8 at its own top and bottom, where
+// the caption over it and the button under it stand as they did.
 .pagination-grid
   display: grid
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))
   gap: $small
+  padding: $small 0
 
-@media (max-width: $bp-tablet)
-  .pagination-grid
-    grid-template-columns: 1fr
+  :deep(.form-field__labeled)
+    margin: 0
 </style>

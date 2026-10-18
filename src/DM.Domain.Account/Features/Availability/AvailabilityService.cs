@@ -43,6 +43,12 @@ internal partial class AvailabilityService : IAvailabilityService
         // on an address the insert then refused.
         if (!await _registrationRepository.EmailFreeForNewRegistration(normalizedEmail, cancellationToken))
         {
+            // A removed account holds its address as firmly as a live one, and
+            // answers exactly like one. Whether the account behind the address
+            // is live or removed is a decision about the account, and a guest
+            // who has proven nothing is not told it (SECURITY.md, "Что остается
+            // закрытым"); the owner of a removed account hears it after a proven
+            // password on the way in, or in a letter to the address itself.
             return EmailAvailabilityResult.Unavailable(EmailUnavailableReason.Taken);
         }
 
@@ -74,10 +80,13 @@ internal partial class AvailabilityService : IAvailabilityService
         if (!isAvailableInUsers)
             return UsernameAvailabilityResult.Taken();
 
-        // Check if reserved (used by former user)
+        // A name a former user left behind, or a live user once wore, is held
+        // as firmly as one in use, and answers the same way: "taken" is the one
+        // bit the guest surface gives out, and telling reserved from in-use is
+        // telling him somebody was here and left (SECURITY.md).
         var isReserved = await _usernameHistoryRepository.IsUsernameReserved(username, cancellationToken);
         if (isReserved)
-            return UsernameAvailabilityResult.Reserved();
+            return UsernameAvailabilityResult.Taken();
 
         return UsernameAvailabilityResult.Available();
     }

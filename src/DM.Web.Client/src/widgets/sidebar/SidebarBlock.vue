@@ -1,10 +1,6 @@
 <template>
   <li>
-    <h4
-      class="sidebar-title"
-      @mouseenter="hovered = true"
-      @mouseleave="hovered = false"
-    >
+    <h4 class="sidebar-title">
       <span ref="titleSlot"
         ><slot name="title">{{ title }}</slot></span
       ><button
@@ -19,10 +15,7 @@
         <span
           class="icon"
           aria-hidden="true"
-          :style="{
-            transform: `rotate(${rotation}deg)`,
-            opacity: hovered ? 1 : 0,
-          }"
+          :style="{ transform: `rotate(${rotation}deg)` }"
         ></span>
       </button>
     </h4>
@@ -68,7 +61,6 @@ const resolvedTitle = computed(() => props.title ?? slotTitleText.value);
 
 const show = ref(localStorage.getItem(storageKey.value) !== false.toString());
 const rotation = ref(show.value ? 45 : 0);
-const hovered = ref(false);
 
 // Computed in script rather than inline in the template: an inline template
 // literal cannot carry straight quotes around the title (v-bind does not
@@ -114,17 +106,6 @@ const toggle = () => {
   border: none
   background: none
 
-  // Keyboard parity with hover: reveal the +/- icon on keyboard focus
-  // (!important overrides the inline hover-driven opacity binding)
-  &:focus-visible .icon
-    opacity: 1 !important
-
-  // Touch devices have no hover — keep the affordance faintly visible so
-  // it can be discovered without accidental taps everywhere.
-  @media (pointer: coarse)
-    .icon
-      opacity: 0.4
-
 .icon
   position: relative
   display: inline-block
@@ -153,6 +134,26 @@ const toggle = () => {
     width: 2px
     height: 10px
     transform: translate(-50%, -50%)
+
+// When the +/- shows is the stylesheet's alone, and these rules stand after
+// the one above that hides it. It was an inline binding on the hover of the
+// title row, and an inline opacity outranks every rule: the one for a touch
+// screen below never applied, and a phone had no sign at all.
+//
+// Under a pointer that hovers, on the whole title row; on keyboard focus of
+// the toggle, as the pointer would.
+@media (hover: hover)
+  .sidebar-title:hover .icon
+    opacity: 1
+
+.toggle:focus-visible .icon
+  opacity: 1
+
+// A touch screen has no hover: the sign stays faintly visible there, so it
+// can be found without lighting up every heading of the column.
+@media (pointer: coarse)
+  .icon
+    opacity: 0.4
 
 .list
   list-style: none

@@ -21,11 +21,4 @@ public interface IActivationService
     /// <param name="tokenId">Token from activation link</param>
     /// <returns>Pending info (status, email) or null if not found</returns>
     Task<PendingInfoResult?> GetPendingInfo(Guid tokenId);
-
-    /// <summary>
-    /// Resend activation email for pending registration
-    /// </summary>
-    /// <param name="email">Email address</param>
-    /// <returns>True if request was processed (always true to prevent enumeration)</returns>
-    Task<bool> ResendActivation(string email);
 }

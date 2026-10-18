@@ -169,11 +169,11 @@ public class PasswordChangeServiceShould : UnitTestBase
         await _authenticationService.Received(1).LogoutElsewhere();
         await _authenticationService.DidNotReceive().LogoutAll(Arg.Any<Guid>());
         await _eventProducer.Received(1).SendAsync(EventType.PasswordChanged, userId);
-        await _notificationSender.Received(1).Send("test@example.com", "testuser");
-        // AC-18 and INV-8: a login begun with the old password does not outlive
-        // it. Changing a password is a statement that the account may be
-        // compromised, and a half-finished sign-in that survives the statement is
-        // one the statement did not cover.
+        await _notificationSender.Received(1).Send("test@example.com");
+        // A login begun with the old password does not outlive it. Changing a
+        // password is a statement that the account may be compromised, and a
+        // half-finished sign-in that survives the statement is one the
+        // statement did not cover.
         await _twoFactorRepository.Received(1).RemoveChallengesOf(
             userId, Arg.Any<CancellationToken>());
     }
@@ -212,8 +212,8 @@ public class PasswordChangeServiceShould : UnitTestBase
         await _authenticationService.Received(1).LogoutAll(userId);
         await _authenticationService.DidNotReceive().LogoutElsewhere();
         await _eventProducer.Received(1).SendAsync(EventType.PasswordChanged, userId);
-        // AC-18 by the other road: a reset from the mailbox kills the unfinished
-        // logins of the account just as the form inside a session does.
+        // A reset from the mailbox kills the unfinished logins of the account
+        // just as the form inside a session does.
         await _twoFactorRepository.Received(1).RemoveChallengesOf(
             userId, Arg.Any<CancellationToken>());
     }

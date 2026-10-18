@@ -84,6 +84,19 @@ internal partial class UserMapper
     }
 
     /// <summary>
+    /// The profile of "Аккаунт удален" out of the summed counters of every removed
+    /// account: the profile shape of any user, with the name, the ratings and the game
+    /// and blog counts filled, no username history, and nothing personal - no status,
+    /// no dates, no picture of anybody's, a zero identifier.
+    /// </summary>
+    public UserProfile ToRemovedAccountProfile(GeneralUser summary)
+    {
+        var result = ToUserProfile(summary);
+        result.UsernameHistory = [];
+        return result;
+    }
+
+    /// <summary>
     /// General user to the moderated view of the profile. The same member
     /// block as <see cref="ToUserProfile"/>; the moderation-specific fields
     /// come from repositories of their own and are filled by the service.
@@ -163,7 +176,6 @@ internal partial class UserMapper
     // so no projection here can fill it. The endpoints that answer about the
     // caller set it after the map; for everybody else it stays absent, which is
     // what tells a reader "this response is not about you".
-    [MapperIgnoreTarget(nameof(User.PrivilegeWithheld))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial User ToUserCore(GeneralUser user);
 
@@ -190,10 +202,11 @@ internal partial class UserMapper
     // Filled by the endpoints that fetch them, not by this projection.
     [MapperIgnoreTarget(nameof(UserProfile.UsernameHistory))]
     [MapperIgnoreTarget(nameof(UserProfile.PersonalNote))]
+    [MapperIgnoreTarget(nameof(UserProfile.BlockedByViewer))]
+    [MapperIgnoreTarget(nameof(UserProfile.Viewer))]
     [MapperIgnoreTarget(nameof(UserProfile.Contacts))]
     [MapperIgnoreTarget(nameof(UserProfile.Info))]
     // A property of the caller's identity; see ToUserCore.
-    [MapperIgnoreTarget(nameof(UserProfile.PrivilegeWithheld))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial UserProfile ToUserProfileCore(GeneralUser user);
 
@@ -217,6 +230,8 @@ internal partial class UserMapper
     [MapperIgnoreTarget(nameof(UserProfile.Birthday))]
     [MapperIgnoreTarget(nameof(UserProfile.UsernameHistory))]
     [MapperIgnoreTarget(nameof(UserProfile.PersonalNote))]
+    [MapperIgnoreTarget(nameof(UserProfile.BlockedByViewer))]
+    [MapperIgnoreTarget(nameof(UserProfile.Viewer))]
     [MapperIgnoreTarget(nameof(UserProfile.Contacts))]
     [MapperIgnoreTarget(nameof(UserProfile.Info))]
     // Filled by ModeratedProfileApiService after the map: each comes from a
@@ -230,7 +245,6 @@ internal partial class UserMapper
     [MapperIgnoreTarget(nameof(ModeratedProfile.Permissions))]
     // Never filled on this projection at all: a moderated profile is about
     // somebody else, and whether their rank is withheld is theirs to know.
-    [MapperIgnoreTarget(nameof(ModeratedProfile.PrivilegeWithheld))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial ModeratedProfile ToModeratedProfileCore(GeneralUser user);
 

@@ -10,25 +10,25 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import { ContentText } from "@/shared/ui/Content";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import type { BBCodeContext } from "@/shared/lib/utils/bbcode";
 import {
   initBbcodeInteractive,
   trimHtmlWhitespace,
 } from "@/shared/lib/utils/bbcodeInteractive";
-import {
-  formatChatTime,
-  getLikesTooltip as getLikesTooltipUtil,
-} from "@/shared/lib/utils/chat";
+import { formatChatTime, openImageGates } from "@/shared/lib/utils/chat";
 import type { MessageWithContinuation } from "@/shared/lib/utils/chat";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { SvgIcon } from "@/shared/ui/Icon";
-import dayjs from "dayjs";
-import { DATE_TIME_FORMAT } from "@/shared/lib/utils/datetime";
+import { LikeBadge } from "@/shared/ui/LikeBadge";
+import { DATE_TIME_FORMAT, formatSiteTime } from "@/shared/lib/utils/datetime";
+import { REMOVED_ACCOUNT_NAME, removedAccountRoute } from "@/entities/user";
 
 const props = withDefaults(
   defineProps<{
     message: MessageWithContinuation;
     compact?: boolean;
-    /** Parent wrapper is hovered — affects time gutter opacity */
+    /** Parent wrapper is hovered — affects time gutter opacity and the
+     * surface the like badge's ring is drawn in */
     hovered?: boolean;
     isOnline?: boolean;
     isLikedByMe?: boolean;
@@ -44,6 +44,9 @@ const props = withDefaults(
     editText?: string;
     isDeletedExpanded?: boolean;
     maxHeight?: number;
+    /** The tag set of the edit box: "direct" in private messages, which do
+     * not render [mod], "message" in the global chat. */
+    context?: BBCodeContext;
   }>(),
   {
     compact: false,
@@ -58,6 +61,7 @@ const props = withDefaults(
     editText: "",
     isDeletedExpanded: false,
     maxHeight: 500,
+    context: "message",
   },
 );
 
@@ -82,19 +86,41 @@ watch(
   },
 );
 
+// An image of the global chat stands behind a spoiler of the server's only in
+// the compact layout; the full one shows it in place. Decided here, by the
+// layout this message is drawn in, so a change of layout redraws the messages
+// already shown (see openImageGates).
+const shownText = computed(() =>
+  props.compact ? props.message.text : openImageGates(props.message.text),
+);
+
 // Pre-trimmed BBCode HTML. Pure computed, no DOM mutation.
 // TruncatedContent handles overflow, collapsed media shrinkage, link.
-const messageHtml = computed(() => trimHtmlWhitespace(props.message.text));
+const messageHtml = computed(() => trimHtmlWhitespace(shownText.value));
+
+// The author of a message whose account was removed since arrives as null:
+// the server hides the account and keeps what it wrote. Such a message is
+// signed the way every other surface signs it, "Аккаунт удален", and the name
+// leads to the profile of that name, which gathers what removed accounts left.
+const author = computed(() => props.message.author ?? null);
+const authorName = computed(
+  () => author.value?.username ?? REMOVED_ACCOUNT_NAME,
+);
+const authorTo = computed(() =>
+  author.value
+    ? { name: "profile", params: { username: author.value.username } }
+    : removedAccountRoute,
+);
 
 const formattedTime = computed(() => formatChatTime(props.message.createdUtc));
 
 const hasEdits = computed(() => (props.message.edits?.length ?? 0) > 0);
 
 const fullDateTooltip = computed(() => {
-  let result = `Отправлено: ${dayjs(props.message.createdUtc).format(DATE_TIME_FORMAT)}`;
+  let result = `Отправлено: ${formatSiteTime(props.message.createdUtc, DATE_TIME_FORMAT)}`;
   if (props.message.edits?.length) {
     for (const edit of props.message.edits) {
-      result += `\nРедактирование: ${dayjs(edit.modifiedUtc).format(DATE_TIME_FORMAT)}`;
+      result += `\nРедактирование: ${formatSiteTime(edit.modifiedUtc, DATE_TIME_FORMAT)}`;
     }
   }
   return result;
@@ -105,7 +131,7 @@ const deletedDateTooltip = computed(() => {
   const msg = props.message;
   const deleterName = msg.deletedBy?.username || "неизвестно";
   const deletedUtcStr = msg.deletedUtc
-    ? dayjs(msg.deletedUtc).format(DATE_TIME_FORMAT)
+    ? formatSiteTime(msg.deletedUtc, DATE_TIME_FORMAT)
     : "";
   result += deletedUtcStr
     ? `\nУдалено: ${deletedUtcStr} (${deleterName})`
@@ -113,16 +139,7 @@ const deletedDateTooltip = computed(() => {
   return result;
 });
 
-const likesTooltip = computed(() =>
-  getLikesTooltipUtil(props.message.likes ?? []),
-);
 const likesCount = computed(() => props.message.likes?.length ?? 0);
-
-const reactionAriaLabel = computed(() =>
-  props.isLikedByMe
-    ? `Убрать лайк, нравится ${likesCount.value}`
-    : `Нравится ${likesCount.value}`,
-);
 
 function handleEditSubmit() {
   emit("save-edit", localEditText.value);
@@ -186,40 +203,30 @@ function initMessageBbcode(el: HTMLElement) {
     <!-- Deleted message (expanded — show content) -->
     <template v-else-if="message.isRemoved && isDeletedExpanded">
       <div class="msg-layout" :class="{ 'msg-layout-compact': compact }">
-        <router-link
-          v-if="!compact"
-          :to="{
-            name: 'profile',
-            params: { username: message.author.username },
-          }"
-          class="msg-avatar-link"
-        >
+        <router-link v-if="!compact" :to="authorTo" class="msg-avatar-link">
           <AvatarImg
-            :picture="message.author.picture"
-            :alt="message.author.username"
+            :picture="author?.picture"
+            :alt="authorName"
             :size="72"
             img-class="msg-avatar"
           />
         </router-link>
         <div class="msg-body">
+          <!-- A line of text: where it has no room, it wraps between its
+               parts, and "(скрыть)" stays a part of it. -->
           <div class="msg-header" :class="{ 'msg-header-compact': compact }">
             <template v-if="compact">
               <Tooltip :text="deletedDateTooltip">
                 <span class="msg-time-group">
                   <span class="msg-time">{{ formattedTime }}</span>
                   <SvgIcon name="trash" class="msg-deleted-icon" />
-                </span>
-              </Tooltip>
-              <span class="msg-gap">{{ " " }}</span>
-              <router-link
-                :to="{
-                  name: 'profile',
-                  params: { username: message.author.username },
-                }"
-                class="msg-author"
-                >{{ message.author.username }}</router-link
-              >
-              <button
+                </span> </Tooltip
+              ><span class="msg-gap">{{ " " }}</span
+              ><router-link :to="authorTo" class="msg-author">{{
+                authorName
+              }}</router-link
+              ><span class="msg-gap">{{ " " }}</span
+              ><button
                 type="button"
                 class="msg-hide-link"
                 @click="$emit('toggle-deleted')"
@@ -228,22 +235,17 @@ function initMessageBbcode(el: HTMLElement) {
               </button>
             </template>
             <template v-else>
-              <router-link
-                :to="{
-                  name: 'profile',
-                  params: { username: message.author.username },
-                }"
-                class="msg-author"
-                >{{ message.author.username }}</router-link
-              >
-              <span class="msg-gap">{{ " " }}</span>
-              <Tooltip :text="deletedDateTooltip">
+              <router-link :to="authorTo" class="msg-author">{{
+                authorName
+              }}</router-link
+              ><span class="msg-gap">{{ " " }}</span
+              ><Tooltip :text="deletedDateTooltip">
                 <span class="msg-time-group">
                   <span class="msg-time">{{ formattedTime }}</span>
                   <SvgIcon name="trash" class="msg-deleted-icon" />
-                </span>
-              </Tooltip>
-              <button
+                </span> </Tooltip
+              ><span class="msg-gap">{{ " " }}</span
+              ><button
                 type="button"
                 class="msg-hide-link"
                 @click="$emit('toggle-deleted')"
@@ -256,7 +258,7 @@ function initMessageBbcode(el: HTMLElement) {
             <!-- The SSOT component, not a hand-rolled div: this body appears on
                  "показать удаленное", long after the container-wide interactive
                  init ran, so spoilers inside it would never bind. -->
-            <ContentText class="msg-text" :html="message.text" />
+            <ContentText class="msg-text" :html="shownText" />
           </div>
         </div>
       </div>
@@ -290,39 +292,18 @@ function initMessageBbcode(el: HTMLElement) {
               <div class="msg-text bbcode-content" v-html="messageHtml" />
             </TruncatedContent>
             <div v-if="!compact && likesCount > 0" class="msg-reactions">
-              <Tooltip :text="likesTooltip">
-                <button
-                  v-if="canLike"
-                  class="reaction-badge"
-                  :class="{ 'my-reaction': isLikedByMe }"
-                  :aria-label="reactionAriaLabel"
-                  @click="$emit('like')"
-                >
-                  <SvgIcon
-                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
-                    class="reaction-heart"
-                  />
-                  <span class="reaction-count">{{ likesCount }}</span>
-                </button>
-                <span
-                  v-else
-                  class="reaction-badge reaction-badge-static"
-                  :class="{ 'my-reaction': isLikedByMe }"
-                  :aria-label="reactionAriaLabel"
-                >
-                  <SvgIcon
-                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
-                    class="reaction-heart"
-                  />
-                  <span class="reaction-count">{{ likesCount }}</span>
-                </span>
-              </Tooltip>
+              <LikeBadge
+                :likes="message.likes ?? []"
+                :liked="isLikedByMe"
+                :interactive="canLike"
+                @toggle="$emit('like')"
+              />
             </div>
           </template>
           <div v-else class="msg-edit">
             <BBCodeEditor
               v-model="localEditText"
-              context="message"
+              :context="context"
               placeholder="Редактирование сообщения..."
               :min-height="60"
               :max-height="200"
@@ -332,17 +313,17 @@ function initMessageBbcode(el: HTMLElement) {
             <div class="msg-edit-actions">
               <button
                 type="button"
-                class="msg-edit-btn"
-                @click="$emit('cancel-edit')"
+                class="msg-edit-btn msg-edit-save"
+                @click="handleEditSubmit"
               >
-                Отмена
+                Сохранить
               </button>
               <button
                 type="button"
                 class="msg-edit-btn"
-                @click="handleEditSubmit"
+                @click="$emit('cancel-edit')"
               >
-                Сохранить
+                Отмена
               </button>
             </div>
           </div>
@@ -351,22 +332,18 @@ function initMessageBbcode(el: HTMLElement) {
 
       <!-- Full message (with avatar and header) -->
       <div v-else class="msg-layout" :class="{ 'msg-layout-compact': compact }">
-        <router-link
-          v-if="!compact"
-          :to="{
-            name: 'profile',
-            params: { username: message.author.username },
-          }"
-          class="msg-avatar-link"
-        >
+        <router-link v-if="!compact" :to="authorTo" class="msg-avatar-link">
           <AvatarImg
-            :picture="message.author.picture"
-            :alt="message.author.username"
+            :picture="author?.picture"
+            :alt="authorName"
             :size="72"
             img-class="msg-avatar"
           />
         </router-link>
         <div class="msg-body">
+          <!-- A line of text: where it has no room, it wraps between the name
+               and the time, and a name longer than the line breaks as any
+               word of the site does. Nothing of it is cut or put away. -->
           <div class="msg-header" :class="{ 'msg-header-compact': compact }">
             <!-- Compact: time first, then name -->
             <template v-if="compact">
@@ -379,55 +356,31 @@ function initMessageBbcode(el: HTMLElement) {
                     class="msg-edited-icon"
                   />
                   <span v-else class="msg-icon-placeholder" />
-                </span>
-              </Tooltip>
-              <span class="msg-gap">{{ " " }}</span>
-              <router-link
-                :to="{
-                  name: 'profile',
-                  params: { username: message.author.username },
-                }"
+                </span> </Tooltip
+              ><span class="msg-gap">{{ " " }}</span
+              ><router-link
+                :to="authorTo"
                 class="msg-author"
                 :class="{ online: isOnline }"
-                >{{ message.author.username }}</router-link
-              >
-              <Tooltip v-if="likesCount > 0" :text="likesTooltip">
-                <button
-                  v-if="canLike"
-                  class="msg-likes-inline"
-                  :class="{ 'my-like': isLikedByMe }"
-                  :aria-label="reactionAriaLabel"
-                  @click="$emit('like')"
-                >
-                  <SvgIcon
-                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
-                  />{{ likesCount }}
-                </button>
-                <span
-                  v-else
-                  class="msg-likes-inline msg-likes-inline-static"
-                  :class="{ 'my-like': isLikedByMe }"
-                  :aria-label="reactionAriaLabel"
-                >
-                  <SvgIcon
-                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
-                  />{{ likesCount }}
-                </span>
-              </Tooltip>
+                >{{ authorName }}</router-link
+              ><span v-if="likesCount > 0" class="msg-likes"
+                ><LikeBadge
+                  :likes="message.likes ?? []"
+                  :liked="isLikedByMe"
+                  :interactive="canLike"
+                  @toggle="$emit('like')"
+              /></span>
             </template>
-            <!-- Normal: name first, then time -->
+            <!-- Normal: name first, then time. Nothing stands after the time
+                 unless the message was edited. -->
             <template v-else>
               <router-link
-                :to="{
-                  name: 'profile',
-                  params: { username: message.author.username },
-                }"
+                :to="authorTo"
                 class="msg-author"
                 :class="{ online: isOnline }"
-                >{{ message.author.username }}</router-link
-              >
-              <span class="msg-gap">{{ " " }}</span>
-              <Tooltip :text="fullDateTooltip">
+                >{{ authorName }}</router-link
+              ><span class="msg-gap">{{ " " }}</span
+              ><Tooltip :text="fullDateTooltip">
                 <span class="msg-time-group">
                   <span class="msg-time">{{ formattedTime }}</span>
                   <SvgIcon
@@ -435,7 +388,6 @@ function initMessageBbcode(el: HTMLElement) {
                     name="pencil"
                     class="msg-edited-icon"
                   />
-                  <span v-else class="msg-icon-placeholder" />
                 </span>
               </Tooltip>
             </template>
@@ -452,39 +404,18 @@ function initMessageBbcode(el: HTMLElement) {
               <div class="msg-text bbcode-content" v-html="messageHtml" />
             </TruncatedContent>
             <div v-if="!compact && likesCount > 0" class="msg-reactions">
-              <Tooltip :text="likesTooltip">
-                <button
-                  v-if="canLike"
-                  class="reaction-badge"
-                  :class="{ 'my-reaction': isLikedByMe }"
-                  :aria-label="reactionAriaLabel"
-                  @click="$emit('like')"
-                >
-                  <SvgIcon
-                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
-                    class="reaction-heart"
-                  />
-                  <span class="reaction-count">{{ likesCount }}</span>
-                </button>
-                <span
-                  v-else
-                  class="reaction-badge reaction-badge-static"
-                  :class="{ 'my-reaction': isLikedByMe }"
-                  :aria-label="reactionAriaLabel"
-                >
-                  <SvgIcon
-                    :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
-                    class="reaction-heart"
-                  />
-                  <span class="reaction-count">{{ likesCount }}</span>
-                </span>
-              </Tooltip>
+              <LikeBadge
+                :likes="message.likes ?? []"
+                :liked="isLikedByMe"
+                :interactive="canLike"
+                @toggle="$emit('like')"
+              />
             </div>
           </template>
           <div v-else class="msg-edit">
             <BBCodeEditor
               v-model="localEditText"
-              context="message"
+              :context="context"
               placeholder="Редактирование сообщения..."
               :min-height="60"
               :max-height="200"
@@ -494,17 +425,17 @@ function initMessageBbcode(el: HTMLElement) {
             <div class="msg-edit-actions">
               <button
                 type="button"
-                class="msg-edit-btn"
-                @click="$emit('cancel-edit')"
+                class="msg-edit-btn msg-edit-save"
+                @click="handleEditSubmit"
               >
-                Отмена
+                Сохранить
               </button>
               <button
                 type="button"
                 class="msg-edit-btn"
-                @click="handleEditSubmit"
+                @click="$emit('cancel-edit')"
               >
-                Сохранить
+                Отмена
               </button>
             </div>
           </div>
@@ -574,18 +505,12 @@ function initMessageBbcode(el: HTMLElement) {
   height: 72px
   color: $border
 
+// A grey link, and a green one while its author is online: each answers the
+// pointer the way every link of its colour on the site does.
 .msg-author
-  text-decoration: none
-  font-weight: 500
-  color: $text-muted
-  &:hover
-    color: $link-nav-hover
-    text-decoration: underline
+  +muted-link
   &.online
-    color: $accent-green
-    &:hover
-      color: $accent-green-hover
-      text-decoration: underline
+    +link-tone($accent-green, $accent-green-hover)
 
 .msg-time
   font-size: $secondary-font-size
@@ -666,18 +591,11 @@ function initMessageBbcode(el: HTMLElement) {
     &:hover
       text-decoration: underline
 
+// Spaced from the time by the .msg-gap before it, which is copied with it.
 .msg-hide-link
-  padding: 0
-  border: none
-  background: none
-  color: $link
-  font-family: inherit
-  font-size: $secondary-font-size
-  cursor: pointer
-  margin-left: $small
-  &:hover
-    color: $link-hover
-    text-decoration: underline
+  +inline-link-button
+  &
+    font-size: $secondary-font-size
 
 .msg-edit
   margin-top: 0
@@ -691,79 +609,25 @@ function initMessageBbcode(el: HTMLElement) {
 .msg-edit-btn
   +button
 
+// Saving the edit is the main action of the little form: the filled button.
+.msg-edit-save
+  +button-primary
+
+// The like of a message is the site's badge (shared/ui/LikeBadge), drawn in
+// the size of the message's own meta text, the time. It takes the colour of
+// the muted text around it in every state: no red, nothing under the pointer.
 .msg-reactions
   display: flex
   align-items: center
-  gap: $tiny
   margin-top: $small
-
-.reaction-badge
-  display: inline-flex
-  align-items: center
-  gap: 6px
-  padding: 6px 10px
-  border: none
-  background-color: $hover-overlay
   color: $text-muted
-  cursor: pointer
-  transition: transform 0.1s ease
-  border-radius: $border-radius
-  svg
-    width: 22px
-    height: 22px
-    transition: transform 0.15s ease
-  &:hover
-    background-color: $active-overlay
-    svg
-      filter: brightness($hover-brightness)
-      transform: scale(1.15)
-  &:active
-    background-color: $hover-overlay
-    transform: scale(0.95)
-  // Liked: the heart icon switches to the filled variant (see template);
-  // the accent-red matches the forum like token so all surfaces agree.
-  &.my-reaction
-    color: $accent-red
-
-// Non-interactive variant (guests / message author): count only, no actions
-.reaction-badge-static
-  cursor: default
-  &:hover
-    background-color: $hover-overlay
-    svg
-      filter: none
-      transform: none
-  &:active
-    transform: none
-
-.reaction-count
   font-size: $secondary-font-size
 
-.msg-likes-inline
-  display: inline-flex
-  align-items: center
-  gap: 4px
+// Compact: the badge follows the author's name on the header line.
+.msg-likes
   margin-left: $small
-  padding: 0
-  border: none
-  background: transparent
   color: $text-muted
-  cursor: pointer
   font-size: $secondary-font-size
-  svg
-    width: 16px
-    height: 16px
-  // Liked: filled heart (see template) tinted with the shared accent-red.
-  &.my-like
-    color: $accent-red
-  &:hover
-    filter: brightness($hover-brightness)
-
-// Non-interactive variant (guests / message author): count only, no actions
-.msg-likes-inline-static
-  cursor: default
-  &:hover
-    filter: none
 
 // Continuation — time gutter
 .msg-continuation
@@ -786,6 +650,15 @@ function initMessageBbcode(el: HTMLElement) {
 .chat-message.hovered
   .msg-time-gutter .msg-time-hover
     opacity: 1
+
+// The ring round the like badge's plate is the colour of the surface under it.
+// The chats lay a message on $bg-page and lighten its row to $bg-element while
+// it is hovered or focused, which is what `hovered` reports.
+.chat-message
+  --like-badge-surface: #{$bg-page}
+
+  &.hovered
+    --like-badge-surface: #{$bg-element}
 
 // ============================================================================
 // Compact layout — controlled by `compact` prop
@@ -815,9 +688,6 @@ $compact-time-gutter: 80px
   .msg-time-group
     width: $compact-time-gutter
     text-align: left
-  .msg-author
-    display: inline-flex
-    align-items: baseline
   .msg-content
     display: block
     margin-left: calc(#{$compact-time-gutter} + #{$small})

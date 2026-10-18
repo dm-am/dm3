@@ -2,7 +2,7 @@ import { ref, computed, type Ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "@/shared/stores";
 import { personalApi, type UpdateProfilePayload } from "../api";
-import { describeFailure } from "@/shared/lib/errors";
+import { refusalHere } from "@/shared/lib/errors";
 
 /**
  * Composable for managing profile edit mode with centralized pending changes.
@@ -59,10 +59,13 @@ export function useProfileEdit(targetUsername: Ref<string>) {
       // Shown next to the form rather than as a toast, so the reader keeps the
       // fields in view. The server's own sentence wins: it names the field and
       // the rule, where the fallback only says that something went wrong.
-      saveError.value = describeFailure(
-        error,
-        "Не удалось сохранить изменения",
-      );
+      //
+      // A refused action, a rate limit and a dead server are said here too,
+      // and the plate the interceptor held for them is taken down: the fields
+      // stay on screen, and the line is where the reader looks. Blank for an
+      // expired session and a request that never left, which stay with the
+      // plate.
+      saveError.value = refusalHere(error, "Не удалось сохранить профиль");
       return false;
     }
 

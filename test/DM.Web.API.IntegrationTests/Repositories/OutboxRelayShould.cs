@@ -17,11 +17,10 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// </summary>
 /// <remarks>
 /// The delegate here is a recorder or a saboteur, never a broker: what these
-/// tests hold is the storage half of at-least-once delivery - the order
-/// (INV-3, AC-3), the stop on the first refusal with only the confirmed prefix
-/// marked (INV-1, INV-2), the identity a republication carries (INV-8, AC-2)
-/// and the lock that keeps two concurrent relays off one row (D9). The broker
-/// half lives in OutboxDeliveryShould.
+/// tests hold is the storage half of at-least-once delivery - the order, the
+/// stop on the first refusal with only the confirmed prefix marked, the
+/// identity a republication carries and the lock that keeps two concurrent
+/// relays off one row (D9). The broker half lives in OutboxDeliveryShould.
 /// </remarks>
 public class OutboxRelayShould : IntegrationTestBase
 {
@@ -64,7 +63,7 @@ public class OutboxRelayShould : IntegrationTestBase
             "the overflow row waits for the next pass");
         published.Take(3).Select(e => e.EventId).Should().Equal(
             [first.EventId, second.EventId, third.EventId],
-            "the consumer is sequential, so the relay publishes oldest first (AC-3)");
+            "the consumer is sequential, so the relay publishes oldest first");
         result.OldestPendingAge.Should().BePositive(
             "the age of the leftover row is what the backlog alert is calibrated on");
 
@@ -106,7 +105,7 @@ public class OutboxRelayShould : IntegrationTestBase
             "the prefix the broker confirmed is done");
         stored.Skip(2).Should().OnlyContain(row => row.PublishedUtc == null,
             "a mark without a confirm would record delivered about a message the broker " +
-            "may not have taken (INV-2)");
+            "may not have taken");
         stored[2].Attempts.Should().Be(1, "the refused row carries its diagnostics");
         stored[2].LastError.Should().Contain("TimeoutException",
             "the human the backlog alert calls reads the reason off the row");
@@ -153,11 +152,11 @@ public class OutboxRelayShould : IntegrationTestBase
         retry.Published.Should().BeGreaterThanOrEqualTo(1);
         seen.Should().Equal([row.EventId, row.EventId],
             "a republication of one row is a replay of one event, and the consumer can " +
-            "only know that if both publications carry the stored id (INV-8)");
+            "only know that if both publications carry the stored id");
     }
 
     /// <summary>
-    /// AC-2, the far end: the unique index of W1.4 is what turns the relay's
+    /// The far end of at-least-once: the unique index of W1.4 is what turns the relay's
     /// at-least-once into the reader's exactly-one notification, so a duplicate
     /// write under one (EventId, EventType) has to be refused by the schema.
     /// </summary>

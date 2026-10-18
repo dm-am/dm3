@@ -1,3 +1,4 @@
+using DM.Domain.Core.Content;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,6 +30,7 @@ internal class UserService : IUserService
     private readonly IUploadGarbageCollector _uploadsCleanup;
     private readonly IGuidFactory _guidFactory;
     private readonly IRealtimeAvatarBroadcaster _avatarBroadcaster;
+    private readonly IBbTagNameCase _tagNames;
 
     /// <inheritdoc />
     public UserService(
@@ -39,7 +41,8 @@ internal class UserService : IUserService
         IValidator<UpdateUser> validator,
         IUploadGarbageCollector uploadsCleanup,
         IGuidFactory guidFactory,
-        IRealtimeAvatarBroadcaster avatarBroadcaster)
+        IRealtimeAvatarBroadcaster avatarBroadcaster,
+        IBbTagNameCase tagNames)
     {
         _identityProvider = identityProvider;
         _repository = repository;
@@ -49,6 +52,7 @@ internal class UserService : IUserService
         _uploadsCleanup = uploadsCleanup;
         _guidFactory = guidFactory;
         _avatarBroadcaster = avatarBroadcaster;
+        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
@@ -152,7 +156,7 @@ internal class UserService : IUserService
             UpdateName = updateUser.Name != null,
             Location = updateUser.Location?.Trim(),
             UpdateLocation = updateUser.Location != null,
-            Info = updateUser.Info?.Trim(),
+            Info = _tagNames.ToLowerCase(updateUser.Info?.Trim(), BbTagSet.Common),
             UpdateInfo = updateUser.Info != null,
             RatingDisabled = updateUser.RatingDisabled.HasValue
                 ? Optional<bool>.WithValue(updateUser.RatingDisabled.Value)
@@ -212,6 +216,8 @@ internal class UserService : IUserService
         if (updateUser.Settings != null)
         {
             settingsEntityUpdate.Theme = Optional<Theme>.WithValue(updateUser.Settings.Theme);
+            settingsEntityUpdate.UpdateTimeZone = true;
+            settingsEntityUpdate.TimeZoneId = updateUser.Settings.TimeZoneId;
 
             if (updateUser.Settings.Paging != null)
             {
@@ -267,4 +273,8 @@ internal class UserService : IUserService
     /// <inheritdoc />
     public Task<IEnumerable<UserReference>> GetReferencesAsync(IEnumerable<Guid> userIds) =>
         _repository.GetUserReferencesAsync(userIds);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyCollection<Guid>> GetRemovedAccountIdsAsync() =>
+        _repository.GetRemovedAccountIdsAsync();
 }

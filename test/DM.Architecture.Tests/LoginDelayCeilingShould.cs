@@ -30,7 +30,7 @@ public class LoginDelayCeilingShould
         var client = File.ReadAllText(Path.Combine(DM.Testing.RepositoryLayout.Root,
             "src", "DM.Web.Client", "src", "shared", "api", "client.ts"));
 
-        var timeout = Regex.Match(client, @"timeout:\s*(\d+)");
+        var timeout = Regex.Match(client, @"(?:timeout:|REQUEST_TIMEOUT_MS\s*=)\s*(\d+)");
         timeout.Success.Should().BeTrue("the client declares how long it waits");
 
         return int.Parse(timeout.Groups[1].Value) / 1000d;

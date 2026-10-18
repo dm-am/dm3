@@ -19,8 +19,9 @@ internal static class CommentProjections
     /// <summary>
     /// The comment members, written once. The edit history is the
     /// modification time: the entity keeps every edit instead of overwriting
-    /// one column, so "edited at" is the most recent of them. Likes are
-    /// fetched separately via the EntityType+EntityId pattern.
+    /// one column, so "edited at" is the most recent of them. Likes have no
+    /// navigation to project through: <see cref="CommentQueries.FillLikes" />
+    /// fills them after the read.
     /// </summary>
     private static readonly Expression<Func<DbComment, Comment>> RowFields =
         c => new Comment
@@ -37,10 +38,11 @@ internal static class CommentProjections
         };
 
     /// <summary>
-    /// EF projection to the domain comment.
+    /// EF projection to the domain comment. Keeps the comments of removed
+    /// accounts, signed by nobody (<see cref="RemovedAuthors"/>).
     /// </summary>
     public static IQueryable<Comment> ProjectToComment(this IQueryable<DbComment> query) =>
-        query.Select(ExpressionSplicer.Expand(RowFields));
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(RowFields));
 
     /// <summary>
     /// The same members over a delete-path DTO of one module: every one of

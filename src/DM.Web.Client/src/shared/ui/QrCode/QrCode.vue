@@ -4,8 +4,7 @@
  *
  * The drawing is done here and not asked of anybody: the one value this
  * component is used for is the otpauth URI of a second factor, and handing that
- * to an outside image service would hand a stranger the secret (INV-15 of the
- * second-factor decision).
+ * to an outside image service would hand a stranger the secret.
  *
  * `uqr` arrives through a dynamic import, so the package is a chunk of its own
  * and downloads for the reader who opens the second-factor setup and for nobody
@@ -130,7 +129,6 @@ watch(() => props.value, draw, { immediate: true });
   box-sizing: border-box
   padding: $small
   border: 1px solid $border
-  border-radius: $border-radius
   // The white field the camera needs, and the only surface on the site that
   // does not follow the theme. See the note in the template.
   background-color: white
@@ -151,5 +149,5 @@ watch(() => props.value, draw, { immediate: true });
 .qr-code-pending
   width: 100%
   height: 100%
-  +skeleton-shimmer
+  +skeleton-shimmer($square: true)
 </style>

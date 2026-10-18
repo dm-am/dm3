@@ -2,6 +2,7 @@
   <div
     :class="[
       'form-field',
+      inDialog ? 'form-field--dialog' : null,
       label || $slots.label ? 'form-field__labeled' : null,
       displayErrors.length ? 'error' : null,
     ]"
@@ -37,17 +38,35 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onMounted, onUpdated, ref, useSlots } from "vue";
+import {
+  computed,
+  inject,
+  onBeforeUnmount,
+  onMounted,
+  onUpdated,
+  ref,
+  useSlots,
+} from "vue";
 import { VALIDATION_MESSAGES } from "@/shared/lib/errors/validationErrors";
+import { useDialogForm, useInDialog } from "@/shared/ui/Layout/dialogContext";
 
 const props = defineProps<{
   label?: string;
   name?: string;
   errors?: string[];
   optional?: boolean;
+  /**
+   * The name the server gives this field in a validation answer ("reason").
+   * In a window that runs an action, what the server says about it stands
+   * under this field and not in the window's refusal line.
+   */
+  field?: string;
 }>();
 
 const slots = useSlots();
+
+/** A field in a window takes the window's recipe (see the styles). */
+const inDialog = useInDialog();
 
 // `name` reads the ids in the inspector, the suffix keeps them apart: the same
 // field can be on screen twice — a dialog over the page it covers — and `name`
@@ -57,10 +76,24 @@ const labelId = `${uid}-label`;
 const hintId = `${uid}-hint`;
 const errorId = (index: number) => `${uid}-error-${index}`;
 
-// Filter out empty errors (from .required("") validation)
-const displayErrors = computed(
-  () => props.errors?.filter((e) => e?.trim()) || [],
-);
+// The window's side of the field: it takes the server's word about the field
+// only when told which field it is, and says so to the window, which then
+// keeps that word out of its refusal line.
+const dialog = useDialogForm();
+let release: (() => void) | undefined;
+onMounted(() => {
+  if (props.field && dialog) release = dialog.claim(props.field);
+});
+onBeforeUnmount(() => release?.());
+
+// Filter out empty errors (from .required("") validation), then the server's
+// word about the field, when the window has one and the caller does not say
+// the same thing already.
+const displayErrors = computed(() => {
+  const own = props.errors?.filter((e) => e?.trim()) || [];
+  const server = props.field ? dialog?.fieldError(props.field) : undefined;
+  return server && !own.includes(server) ? [...own, server] : own;
+});
 
 /** Everything that describes the field, in reading order: errors, then hint. */
 const describedBy = computed(() => {
@@ -170,45 +203,34 @@ const translateError = (error: string): string => {
 </script>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/DialogSurface" as *
+
 .form-field__labeled
   display: flex
   flex-direction: column
   margin: $small 0
   gap: $minor
 
-// A field that failed validation looks different from one that did not. The
-// rule sits on `.form-field` and not on the labelled variant: a field rendered
-// without a label could not show the state at all, and the state does not
-// depend on whether the field has a label. All three control elements are
-// named, because a textarea and a select fail validation the same way an input
-// does and used to be left out even of the intent.
-//
-// No shake: the rule referenced @keyframes shake-error, which is defined
-// nowhere in the project and never was, so the two references to it are gone
-// rather than given a body.
-//
-// Reached through :deep(), because the control is not this component's markup:
-// it arrives through the slot, carrying the scope id of the page that wrote it.
-// Without this the selector matched nothing at all, on every form of the site,
-// for as long as it has existed — the state was declared and never drawn.
-//
-// Colour is not the only carrier: .form-field-error prints the reason under the
-// field, so a reader who cannot tell the border apart still gets the sentence.
-.form-field.error
-  :deep(input),
-  :deep(textarea),
-  :deep(select)
-    border-color: $border-accent-red
+// A field that failed validation says so in words and in nothing else: the
+// red line of .form-field-error under it. The frame stays neutral in every
+// state, on a page as in a window and on the guest surface (owner's standard,
+// 27 September 2026). A frame that also turned red said the same thing twice,
+// in a colour a third of readers cannot tell from the resting one, and it was
+// drawn on a page and not in a window, so the same field refused looked two
+// ways depending on where it stood. `.error` stays on the root as the state's
+// name for the markup.
 
-    &:focus
-      box-shadow: inset 0 0 $minor $border-accent-red
-
+// The caption over a field of a page, +field-caption (Inputs.sass): 14 and
+// bold, one look for every form of a page (owner's standard, 28 September
+// 2026). A window sets its own 15 below, bold as well. It is set on the row
+// and not on the <label>, so a caption the caller put into the label slot
+// takes it too.
 .form-field-label
   display: flex
   justify-content: space-between
   align-items: center
-  color: $text
-  font-size: $secondary-font-size
+  +field-caption
 
   label
     color: inherit
@@ -216,12 +238,30 @@ const translateError = (error: string): string => {
   & input, & textarea, & select
     box-sizing: border-box
 
+// "необязательно" beside a caption is a note and not the caption: the regular
+// weight, on a page and in a window.
 .form-field-optional
   flex-shrink: 0
   color: $text-muted
+  font-weight: 400
 
 .form-field-row
-  :deep(input), :deep(textarea), :deep(select)
+  // A field the reader types into takes the width of the row. A checkbox and a
+  // radio do not: they are boxes of a fixed side, drawn by +checkbox() over
+  // $checkbox-size. This selector carries the scope attribute, which outranks
+  // the site-wide `input[type="checkbox"]` rule, so without the guard the box
+  // won and stretched across the whole row, pushing the text of its own label
+  // out of sight at every call site that puts a checkbox in a field. :where()
+  // has no specificity of its own, so the guard costs the rule nothing; the
+  // reset spares the same two types from the text-field focus ring in the same
+  // shape.
+  //
+  // box-sizing rides along inside the same guard instead of getting a rule of
+  // its own: for a checkbox and a radio the browser already sizes the box
+  // border-box, so leaving those two out of it changes nothing they draw.
+  :deep(input:where(:not([type="checkbox"]):not([type="radio"]))),
+  :deep(textarea),
+  :deep(select)
     width: 100%
     box-sizing: border-box
 
@@ -235,5 +275,64 @@ const translateError = (error: string): string => {
   margin-top: $minor
   color: $text-muted
   font-size: $secondary-font-size
+  line-height: 1.4
+
+// ─────────────────────────────────────────────────────────── in a window ──
+//
+// A field in a window follows the guest recipe (AuthSurface.sass), with the
+// numbers of _DialogSurface.sass: the caption bold over the field and 8px
+// above it, the field at the window's control height, one field step to the
+// next. A refusal or a hint stands 6px under the field and holds no place in
+// advance, so a line that arrives moves what is under it. On a page none of
+// this applies: the class comes from the window (IN_DIALOG), never from a
+// caller.
+
+.form-field--dialog,
+.form-field--dialog.form-field__labeled
+  gap: 0
+  margin: 0 0 $dialog-field-step
+
+// The caption is set on the row and not on the <label>, so a caption the
+// caller put into the label slot takes it too. "необязательно" beside it
+// keeps the secondary size and the regular weight, and the two share a
+// baseline.
+.form-field--dialog .form-field-label
+  align-items: baseline
+  margin-bottom: $small
+  font-size: $dialog-field-font-size
+  font-weight: 700
+
+.form-field--dialog .form-field-optional
+  font-size: $secondary-font-size
+  font-weight: 400
+
+// The controls the row holds as its own children, and the list inside Select.
+// A child combinator for the field and the text area: the BBCode editor
+// carries a textarea of its own deep inside, and the editor stays as it is.
+// The list keeps the right padding Select gives it, which is the chevron's.
+.form-field--dialog .form-field-row
+  > :deep(input:where(:not([type="checkbox"]):not([type="radio"])))
+    height: $dialog-control-height
+    padding: 0 $dialog-field-inset
+    font-size: $dialog-field-font-size
+
+  :deep(select)
+    height: $dialog-control-height
+    padding-top: 0
+    padding-bottom: 0
+    padding-left: $dialog-field-inset
+    font-size: $dialog-field-font-size
+
+  // A block and not the inline box a textarea is by default: an inline one
+  // leaves the descent of the line under it, and the line under the field
+  // stood 11px below it instead of 6.
+  > :deep(textarea)
+    display: block
+    padding: $dialog-textarea-padding $dialog-field-inset
+    font-size: $dialog-field-font-size
+
+.form-field--dialog .form-field-error,
+.form-field--dialog .form-field-hint
+  margin-top: $dialog-message-gap
   line-height: 1.4
 </style>

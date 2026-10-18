@@ -79,8 +79,26 @@ public interface IChatRepository
     /// Update chat
     /// </summary>
     /// <param name="update">Update data including links to add/remove</param>
+    /// <param name="viewerId">User the updated chat is read back for</param>
     /// <returns>Updated chat</returns>
-    Task<Chat> Update(UpdateChatEntity update);
+    Task<Chat> Update(UpdateChatEntity update, Guid viewerId);
+
+    /// <summary>
+    /// Take the participant out of the chat, by his own will
+    /// </summary>
+    /// <param name="chatId">Chat identifier</param>
+    /// <param name="userId">Participant who leaves</param>
+    /// <param name="leftUtc">Moment he left</param>
+    Task Leave(Guid chatId, Guid userId, DateTimeOffset leftUtc);
+
+    /// <summary>
+    /// Mark the history of the chat cleared for one participant: messages created
+    /// at or before the moment are no longer given to him
+    /// </summary>
+    /// <param name="chatId">Chat identifier</param>
+    /// <param name="userId">Participant who clears his history</param>
+    /// <param name="clearedUtc">Moment of clearing</param>
+    Task ClearHistory(Guid chatId, Guid userId, DateTimeOffset clearedUtc);
 
     /// <summary>
     /// Create game room chat (no user links)

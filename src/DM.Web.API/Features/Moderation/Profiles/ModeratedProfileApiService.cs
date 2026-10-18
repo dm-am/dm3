@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
+using DM.Domain.Account.Features.Deactivation;
+using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Moderation.Features.Profiles;
@@ -14,6 +16,8 @@ using ApiLinkedProfile = DM.Web.API.Features.Moderation.Profiles.LinkedProfile;
 using ServiceUserIpInfo = DM.Domain.Account.Features.Authentication.UserIpInfo;
 using ServiceLinkedProfile = DM.Domain.Account.Features.Authentication.LinkedProfile;
 using ServiceUserLoginRecord = DM.Domain.Account.Features.Authentication.UserLoginRecord;
+using ServiceRemovedAccount = DM.Domain.Account.Features.Deactivation.RemovedAccount;
+using ServiceRemovedAccountsQuery = DM.Domain.Account.Features.Deactivation.RemovedAccountsQuery;
 using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Moderation.Profiles;
@@ -30,6 +34,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
     private readonly DM.Web.API.Features.Moderation.Bans.IBanApiService _banApiService;
     private readonly IModeratedProfileNoteApiService _moderatorNoteApiService;
     private readonly IUserProfileNoteService _personalNoteService;
+    private readonly IDeactivationService _deactivationService;
     private readonly UserMapper _mapper;
 
     /// <inheritdoc />
@@ -41,6 +46,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
         DM.Web.API.Features.Moderation.Bans.IBanApiService banApiService,
         IModeratedProfileNoteApiService moderatorNoteApiService,
         IUserProfileNoteService personalNoteService,
+        IDeactivationService deactivationService,
         UserMapper mapper)
     {
         _identityProvider = identityProvider;
@@ -50,6 +56,7 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
         _banApiService = banApiService;
         _moderatorNoteApiService = moderatorNoteApiService;
         _personalNoteService = personalNoteService;
+        _deactivationService = deactivationService;
         _mapper = mapper;
     }
 
@@ -112,8 +119,15 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
             TotalBans = banStatus.History?.Count() ?? 0,
             IsCurrentlyBanned = banStatus.IsBanned,
             CurrentBanEndUtc = banStatus.ActiveBan?.ExpiresUtc,
-            CurrentBanReason = banStatus.ActiveBan?.Comment
+            // The reason as it was written: the panel prints it as text.
+            CurrentBanReason = banStatus.ActiveBan?.Comment.Value
         };
+
+        // A warning and a ban reach only a rank below the caller's, and never an
+        // administrator (ModerationRank): the buttons are offered by the formula
+        // the two services refuse by, so neither is drawn on a profile where the
+        // write would come back forbidden.
+        var reachesByRank = ModerationRank.Reaches(callerRole, user.Role);
 
         profile.Permissions = new ModerationPermissions
         {
@@ -123,8 +137,8 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
             CanViewLinkedProfiles = true, // Controller already requires Moderator+
             CanViewModNotes = true,
             CanCreateModNote = true,
-            CanIssueWarning = true,
-            CanIssueBan = isSeniorMod,
+            CanIssueWarning = reachesByRank,
+            CanIssueBan = isSeniorMod && reachesByRank,
             CanLiftBan = isSeniorMod,
             CanSetModerationWatch = true // Controller already requires Moderator+
         };
@@ -160,6 +174,46 @@ internal class ModeratedProfileApiService : IModeratedProfileApiService
         var user = await _moderatedProfileService.GetProfile(username);
         return _mapper.ToUserProfile(user);
     }
+
+    /// <inheritdoc />
+    public Task RemoveAccount(string username, RemoveAccountRequest request) =>
+        _deactivationService.DeactivateByModeration(username, request.Reason);
+
+    /// <inheritdoc />
+    public Task RestoreAccount(string username) =>
+        _deactivationService.RestoreByModeration(username);
+
+    /// <inheritdoc />
+    public async Task<ListEnvelope<RemovedAccount>> GetRemovedAccounts(RemovedAccountsQuery query)
+    {
+        var (accounts, paging) = await _deactivationService.GetRemovedAccounts(new ServiceRemovedAccountsQuery
+        {
+            Search = query.Search,
+            Skip = query.Skip,
+            Take = query.Take
+        });
+
+        return new ListEnvelope<RemovedAccount>(accounts.Select(Map).ToList(), new PagingInfo(paging));
+    }
+
+    /// <summary>
+    /// A removed account on the wire.
+    /// </summary>
+    /// <remarks>
+    /// The address is carried across exactly as the service handed it over and is
+    /// never filled from anywhere else: below an administrator it arrives empty,
+    /// and reading it off another source here would hand every address on the page
+    /// to a moderator the moderated profile shows none to.
+    /// </remarks>
+    private static RemovedAccount Map(ServiceRemovedAccount account) => new()
+    {
+        Id = account.UserId,
+        Username = account.Username,
+        Email = account.Email,
+        Role = account.Role,
+        RegisteredUtc = account.RegisteredUtc,
+        LastActivityUtc = account.LastActivityUtc
+    };
 
     private static IReadOnlyList<ApiUserIpInfo> MapIpAddresses(IReadOnlyList<ServiceUserIpInfo> ips)
     {

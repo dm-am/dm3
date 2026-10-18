@@ -38,9 +38,11 @@ internal partial class MessagingMapper
     /// <summary>
     /// Domain chat to the API one. The last message goes through
     /// <see cref="ToMessage"/> so it carries the same envelope a message
-    /// listing does.
+    /// listing does. What the viewer may do in it is the domain's answer,
+    /// composed by MessagingApiService on the reads of one chat.
     /// </summary>
     [MapProperty(nameof(DtoChat.LastMessage), nameof(ApiChat.LastMessage), Use = nameof(ToMessage))]
+    [MapperIgnoreTarget(nameof(ApiChat.Viewer))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     public partial ApiChat ToChat(DtoChat chat);
 

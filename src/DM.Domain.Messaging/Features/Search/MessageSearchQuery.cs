@@ -60,6 +60,15 @@ public class MessageSearchQuery
     /// </summary>
     public IReadOnlyList<SearchScope> Scopes { get; set; } = new List<SearchScope>();
 
+    /// <summary>
+    /// Authors whose general chat messages are left out of the results. Not a
+    /// filter the caller chooses: the service fills it from the reader's personal
+    /// blacklist when the reader switched on "Скрывать сообщения в чате"
+    /// (HideMessages), the same set the general chat itself leaves out
+    /// (CursorQuery.HiddenAuthorIds). Null when nothing is hidden.
+    /// </summary>
+    public IReadOnlyCollection<Guid>? HiddenAuthorIds { get; set; }
+
     /// <summary>Opaque keyset cursor for the next (older) page.</summary>
     public string? Cursor { get; set; }
 

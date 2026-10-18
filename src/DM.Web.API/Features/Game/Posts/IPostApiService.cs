@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Game.Features.Posts;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Posts;
@@ -16,9 +15,9 @@ public interface IPostApiService
     /// Get room posts
     /// </summary>
     /// <param name="roomId">Room identifier</param>
-    /// <param name="query">Search query</param>
+    /// <param name="query">Filters, sort and paging</param>
     /// <returns>List envelope containing room posts</returns>
-    Task<ListEnvelope<Post>> Get(Guid roomId, PagingQuery query);
+    Task<ListEnvelope<Post>> Get(Guid roomId, RoomPostsQuery query);
 
     /// <summary>
     /// Get single post
@@ -26,13 +25,6 @@ public interface IPostApiService
     /// <param name="postId">Post identifier</param>
     /// <returns>Envelope containing the post</returns>
     Task<Envelope<Post>> Get(Guid postId);
-
-    /// <summary>
-    /// Get the markup of a quotation of a post
-    /// </summary>
-    /// <param name="postId">Post identifier</param>
-    /// <returns>Envelope containing the quotation source</returns>
-    Task<Envelope<QuoteSource>> GetQuote(Guid postId);
 
     /// <summary>
     /// Create new post

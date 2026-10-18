@@ -113,7 +113,10 @@ internal partial class PostMapper
     // Texts and their envelopes are composed in the wrapper. The author maps
     // by convention: a post is written by exactly one user, the column is not
     // nullable, and a null-tolerant hop into a non-nullable field would only
-    // move the failure from the query to the response.
+    // move the failure from the query to the response. What the viewer may do
+    // is the domain's answer, composed by PostApiService for a page of posts at
+    // once.
+    [MapperIgnoreTarget(nameof(Post.Viewer))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial Post ToPostCore(DomainPost post);
 
@@ -122,13 +125,14 @@ internal partial class PostMapper
     // the rated-posts response deliberately does not carry room-level
     // administrative data, and a room reached through a post is a room the
     // reader already reads, so CanView keeps its default of true.
-    [MapperIgnoreTarget(nameof(ApiRoom.PreviousRoomId))]
     [MapperIgnoreTarget(nameof(ApiRoom.Access))]
     [MapperIgnoreTarget(nameof(ApiRoom.Type))]
     [MapperIgnoreTarget(nameof(ApiRoom.Accesses))]
     [MapperIgnoreTarget(nameof(ApiRoom.IsArchived))]
     [MapperIgnoreTarget(nameof(ApiRoom.Pendencies))]
     [MapperIgnoreTarget(nameof(ApiRoom.UnreadPostsCount))]
+    [MapperIgnoreTarget(nameof(ApiRoom.TotalPostsCount))]
+    [MapperIgnoreTarget(nameof(ApiRoom.CharacterNames))]
     [MapperIgnoreTarget(nameof(ApiRoom.CanView))]
     [MapperIgnoreTarget(nameof(ApiRoom.Settings))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]

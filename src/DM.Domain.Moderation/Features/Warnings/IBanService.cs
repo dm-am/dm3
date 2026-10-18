@@ -27,9 +27,28 @@ public interface IBanService
     Task<IEnumerable<Ban>> GetAllActiveBans(CancellationToken ct = default);
 
     /// <summary>
-    /// Get full ban history - active, expired and lifted - newest first, paged (for moderators)
+    /// Get a page of the ban list (for moderators): every issue and every lift as
+    /// an entry of its own, newest first, each ban marked with whether the reader
+    /// may lift it
     /// </summary>
-    Task<(IEnumerable<Ban> Bans, int TotalCount)> GetBanHistory(int skip, int take, CancellationToken ct = default);
+    /// <param name="username">Whose bans, or everybody's when empty; a name nobody
+    /// carries is an empty page</param>
+    /// <param name="skip">Entries to skip</param>
+    /// <param name="take">Entries to take</param>
+    /// <param name="entry">The number of an entry (<see cref="BanLogEntry.Number" />)
+    /// whose page is asked for instead of the one <paramref name="skip" /> names;
+    /// an entry this list does not have leaves the page to <paramref name="skip" /></param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The entries of the page, how many entries the list has, and how
+    /// many it skipped, which is the page an entry was asked for on</returns>
+    Task<(IReadOnlyList<BanLogEntry> Entries, int TotalCount, int Skip)> GetBanHistory(
+        string? username, int skip, int take, int? entry = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether the current reader may lift the ban: the same rule
+    /// <see cref="LiftBan" /> refuses by, read without the write
+    /// </summary>
+    bool MayLift(Ban ban);
 
     /// <summary>
     /// Create a ban (senior moderators; users can create voluntary self-bans)
@@ -37,9 +56,31 @@ public interface IBanService
     Task<Ban> CreateBan(CreateBan createBan, CancellationToken ct = default);
 
     /// <summary>
+    /// Issue the automatic ban the warning points call for: the ordinary scope,
+    /// <see cref="WarningPolicy.AutoBanDurationHours" /> hours, filed under the
+    /// system account.
+    /// </summary>
+    /// <remarks>
+    /// Not a decision and not a sanction of its own: it holds the reader at arm's
+    /// length for two days so that a senior moderator or an administrator has time
+    /// to come and settle the case. It answers to nobody's role - the moderator
+    /// whose warning tipped the scale need not be able to ban - and it refuses
+    /// itself when a ban is already running, so it never stacks on one.
+    /// </remarks>
+    /// <param name="targetUserId">Who the points belong to</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The ban that was issued, or null when none was</returns>
+    Task<Ban?> IssueAutomaticBan(Guid targetUserId, CancellationToken ct = default);
+
+    /// <summary>
     /// Lift (cancel) a ban early (senior moderators; permanent bans - admins only)
     /// </summary>
-    Task LiftBan(Guid banId, string? reason = null, CancellationToken ct = default);
+    /// <remarks>
+    /// The reason is required: the lift is drawn in the ban list as a decision of
+    /// its own under the ban, and one without words would be the only decision in
+    /// the list nobody explained.
+    /// </remarks>
+    Task LiftBan(Guid banId, string reason, CancellationToken ct = default);
 }
 
 /// <summary>

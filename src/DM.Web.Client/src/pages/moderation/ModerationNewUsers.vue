@@ -34,8 +34,8 @@ const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
 const columns: Column[] = [
   { key: "user", label: "Пользователь" },
-  { key: "registered", label: "Регистрация", width: "25%" },
-  { key: "posts", label: "Игровых постов", width: "25%", align: "center" },
+  { key: "registered", label: "Регистрация", width: "27%" },
+  { key: "posts", label: "Игровых постов", width: "27%", align: "center" },
 ];
 
 // Doc: registered no more than 3 months ago

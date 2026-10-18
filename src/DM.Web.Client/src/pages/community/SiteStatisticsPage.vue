@@ -31,16 +31,18 @@ import { StatBoard, LEADERBOARD_BOARDS } from "@/features/leaderboard";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 import { SITE_FOUNDED_YEAR } from "@/shared/config/site";
 import { createKeyedCache } from "@/shared/lib/utils/keyedCache";
-import { describeFailure } from "@/shared/lib/errors";
+import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
+import { siteTime } from "@/shared/lib/utils/datetime";
 
 type Granularity = "month" | "year" | "all";
 
 const route = useRoute();
 const router = useRouter();
 
-const now = new Date();
-const curYear = now.getFullYear();
-const curMonth = now.getMonth() + 1;
+// The current month by the site's clock, the one every date on it keeps.
+const now = siteTime();
+const curYear = now.year();
+const curMonth = now.month() + 1;
 
 // --- Period selection, initialized from the URL query ---
 const granularity = ref<Granularity>("month");
@@ -141,6 +143,25 @@ const openPeriod = createKeyedCache<Leaderboards>({ ttlMs: 60_000 });
 
 const boards = ref<Leaderboards | null>(null);
 
+const LOAD_FAILURE = "Не удалось загрузить статистику";
+
+/**
+ * The read answers for itself, because the banner below is the only place this
+ * page can answer from.
+ *
+ * Drop a status from the banner and the page draws eight empty boards under
+ * "Данных за период пока нет" — a statement about the period, made about a
+ * period the server never answered for. So the banner speaks for every status,
+ * and the read takes the refusal over: the interceptor stops putting the same
+ * sentence on a plate over a banner that already carries it.
+ *
+ * An expired session and a dead connection stay with the interceptor. Neither
+ * is about this period — one is about the reader's session, the other about the
+ * road to the site — and only the interceptor knows the other address. The
+ * banner beside them says a different thing: that these boards are not there.
+ */
+const OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
+
 // clearErrorOnStart: what this page did before the composable — the banner goes
 // away while the next period loads.
 const {
@@ -149,7 +170,13 @@ const {
   clearError,
   run,
 } = useGuardedRequest({
-  message: (error) => describeFailure(error, "Не удалось загрузить статистику"),
+  // A wait is said in the shared wording, the one the interceptor would have
+  // raised: it is the only one that names the seconds the server asked for, and
+  // the title sent with a 429 carries no number at all.
+  message: (error) =>
+    error.status === 429
+      ? describeRateLimit(error.retryAfterSeconds)
+      : describeFailure(error, LOAD_FAILURE),
   clearErrorOnStart: true,
 });
 
@@ -183,7 +210,7 @@ function fetchStats(): Promise<void> {
   const month = granularity.value === "month" ? selMonth.value : undefined;
 
   return run(
-    () => statisticsApi.getLeaderboards(year, month),
+    () => statisticsApi.getLeaderboards(year, month, OWNS_REFUSAL),
     (data) => {
       const resource = unwrapResource<Leaderboards>(data);
       if (resource) {
@@ -234,28 +261,34 @@ const allEmpty = computed(
       >Найдите себя, свою игру или любимый блог в топах вебсайта</LeadText
     >
 
-    <!-- Period: granularity toggle + the month/year picker. Block container
-         with inline children + a zero-width space (not flex) so a selection
-         copies as one line: "Месяц Год Все время ‹ Июль 2026 ›". -->
+    <!-- Period: granularity toggle + the month/year picker, one line where
+         the row has room for both, a phone's too. Where it has not (the
+         middle column of 1024), the picker goes down a line of its own under
+         the toggle, level with it: no row of the site scrolls sideways. One
+         run of inline children with a zero-width space (not flex items) so a
+         selection copies as one line:
+         "Месяц Год Все время ‹ Июль 2026 ›". The picker opens its panel in a
+         fixed layer, which the row does not cut. -->
     <div class="controls">
-      <SegmentedControl
-        v-model="granularity"
-        :options="granularityOptions"
-        ariaLabel="Период"
-      /><template v-if="granularity !== 'all'"
-        ><span class="copy-space">{{ " " }}</span
-        ><MonthYearPicker
-          class="period-picker"
-          :year="selYear"
-          :month="selMonth"
-          :mode="granularity === 'year' ? 'year' : 'month'"
-          :min-year="SITE_FOUNDED_YEAR"
-          :max-year="curYear"
-          :max-month="curMonth"
-          stepper
-          @update:year="selYear = $event"
-          @update:month="selMonth = $event"
-      /></template>
+      <span class="period-line"
+        ><SegmentedControl
+          v-model="granularity"
+          class="period-segments"
+          :options="granularityOptions"
+          ariaLabel="Период" /><template v-if="granularity !== 'all'"
+          ><span class="copy-space">{{ " " }}</span
+          ><MonthYearPicker
+            class="period-picker"
+            :year="selYear"
+            :month="selMonth"
+            :mode="granularity === 'year' ? 'year' : 'month'"
+            :min-year="SITE_FOUNDED_YEAR"
+            :max-year="curYear"
+            :max-month="curMonth"
+            stepper
+            @update:year="selYear = $event"
+            @update:month="selMonth = $event" /></template
+      ></span>
     </div>
 
     <ErrorState
@@ -299,37 +332,71 @@ const allEmpty = computed(
 .site-statistics-page
   width: 100%
 
-// Block (not flex) so a cross-selection copies as one clean line; the
-// segmented control and the picker are inline-blocks separated by a
-// zero-width .copy-space, the visible gap comes from the picker's margin.
 .controls
   margin-bottom: $medium
 
+// One run (not flex items) so a cross-selection copies as one clean line;
+// the segmented control and the picker are inline-blocks separated by a
+// zero-width .copy-space. The gap beside them is the segments' margin on the
+// right, and the gap under them a margin on the top of each part, with the
+// run standing that far up: a part that opens a line stands at the left edge
+// of the column, whether it is the toggle or the picker gone down under it,
+// and the picker under the toggle stands $small below it. No margin pulls the
+// run out to the left: its own box would then stand past the column, and
+// page-width.spec names any box that does. A part is never cut and the row
+// never scrolls.
+.period-line
+  display: block
+  margin-top: (-$small)
+
+.period-segments,
 .period-picker
-  margin-left: $small
+  margin-top: $small
+  vertical-align: top
+
+.period-segments
+  margin-right: $small
 
 .error-banner
   margin-bottom: $medium
 
-// Leaderboard cards in three columns; the card visuals live in StatBoard.
+// The leaderboard cards; the card visuals live in StatBoard. How many stand
+// side by side is decided by the width of the zone they stand in, and the
+// same way in the digest topic of a period (PeriodDigestBoards.vue,
+// .boards-grid; the spec holds the two equal). A window of 1024 leaves the
+// middle column 285 between two sidebars, and three cards sized by their own
+// longest names stood 206 into the right column there.
+//
+// The narrowest card holds a login of twenty letters on one line of it
+// ("LongestLoginPossible", 147 in the site's face at 16) inside its own 16
+// on either side: 11.5em. One card under two of those and their gap; two up
+// to three; three from there, as before on a wide window. The columns are
+// equal and never wider than the grid, whatever the names in them.
+$board-min: 11.5em
+$board-gap: 1em
+
 .boards-grid
   display: grid
-  grid-template-columns: repeat(3, 1fr)
+  grid-template-columns: minmax(0, 1fr)
   gap: $medium
+
+@container stat-boards (min-width: #{2 * $board-min + $board-gap})
+  .boards-grid
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+
+@container stat-boards (min-width: #{3 * $board-min + 2 * $board-gap})
+  .boards-grid
+    grid-template-columns: repeat(3, minmax(0, 1fr))
 
 // A new period is loading: the previous period's boards stay in place but
 // visibly recede (no layout jump); aria-busy on the same wrapper carries
 // the signal to assistive tech.
 .boards-zone
+  // The box the grid above asks; its own width, not the window's.
+  container: stat-boards / inline-size
   transition: opacity $transition-fast
 
   &.refreshing
     opacity: 0.5
     pointer-events: none
-
-// 3 columns is the target; collapse to a single column only when genuinely
-// too narrow for it (mobile / very narrow content area).
-@media (max-width: $bp-mobile)
-  .boards-grid
-    grid-template-columns: 1fr
 </style>

@@ -31,7 +31,6 @@ internal class RegistrationRepository : IRegistrationRepository
         // Email in PendingRegistrations is OK - we'll replace it
         return true;
     }
-
     /// <inheritdoc />
     public async Task<bool> UsernameFree(string username, CancellationToken cancellationToken) =>
         !await AccountReservation.UsernameTaken(_dbContext.Users, username, ct: cancellationToken) &&
@@ -43,23 +42,33 @@ internal class RegistrationRepository : IRegistrationRepository
             .AnyAsync(p => p.Email.ToLower() == email.ToLower(), cancellationToken);
 
     /// <inheritdoc />
-    public async Task AddPending(PendingRegistration pending)
-    {
-        var entity = new DbPendingRegistration
-        {
-            PendingRegistrationId = pending.PendingRegistrationId,
-            SecretHash = pending.SecretHash,
-            Email = pending.Email,
-            PasswordHash = pending.PasswordHash,
-            Salt = pending.Salt,
-            PasswordHashVersion = pending.PasswordHashVersion,
-            CreatedUtc = pending.CreatedUtc,
-            TokenCreatedUtc = pending.TokenCreatedUtc,
-            AcceptedRules = pending.AcceptedRules
-        };
-        _dbContext.PendingRegistrations.Add(entity);
-        await _dbContext.SaveChangesAsync();
-    }
+    public Task AddPending(PendingRegistration pending) =>
+        // One statement, because the caller's check that no row exists stops being
+        // true the moment it returns: two submissions of the form arriving
+        // together both found nothing and both inserted the same address, and the
+        // one that lost the unique index answered the person with a failure of the
+        // storage engine instead of a letter.
+        //
+        // CreatedUtc is left alone on the update. It dates the registration rather
+        // than this letter, and the sweep that returns an abandoned address counts
+        // from it: refreshed on every resend, an address could be held forever by
+        // pressing the button once a week.
+        _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "PendingRegistrations" (
+                "PendingRegistrationId", "SecretHash", "Email", "PasswordHash", "Salt",
+                "PasswordHashVersion", "CreatedUtc", "TokenCreatedUtc", "AcceptedRules")
+            VALUES (
+                {pending.PendingRegistrationId}, {pending.SecretHash}, {pending.Email},
+                {pending.PasswordHash}, {pending.Salt}, {pending.PasswordHashVersion},
+                {pending.CreatedUtc}, {pending.TokenCreatedUtc}, {pending.AcceptedRules})
+            ON CONFLICT ("Email") DO UPDATE SET
+                "SecretHash" = {pending.SecretHash},
+                "PasswordHash" = {pending.PasswordHash},
+                "Salt" = {pending.Salt},
+                "PasswordHashVersion" = {pending.PasswordHashVersion},
+                "TokenCreatedUtc" = {pending.TokenCreatedUtc},
+                "AcceptedRules" = {pending.AcceptedRules}
+            """);
 
     /// <inheritdoc />
     public async Task ReplacePending(PendingRegistration pending)

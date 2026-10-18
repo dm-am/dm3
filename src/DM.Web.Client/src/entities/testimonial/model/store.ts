@@ -77,8 +77,12 @@ export const useTestimonialStore = defineStore("testimonials", () => {
     return true;
   }
 
-  async function removeTestimonial(id: WebsiteTestimonialId) {
-    const { error } = await testimonialApi.deleteTestimonial(id);
+  /** `options` rides to the request: the confirmation that asks prints a refusal. */
+  async function removeTestimonial(
+    id: WebsiteTestimonialId,
+    options?: Parameters<typeof testimonialApi.deleteTestimonial>[1],
+  ) {
+    const { error } = await testimonialApi.deleteTestimonial(id, options);
     if (!error && testimonials.value) {
       testimonials.value.resources = testimonials.value.resources.filter(
         (r) => r.id !== id,

@@ -3,7 +3,6 @@ import type {
   Envelope,
   ListEnvelope,
   PagingQuery,
-  QuoteSource,
   User,
 } from "@/shared/api/models/common";
 import type {
@@ -34,6 +33,26 @@ import {
 import { RENDER_AUDIENCE } from "@/shared/api/audience";
 
 /**
+ * Who says the refusal out loud, passed through to the HTTP client untouched.
+ *
+ * A screen that answers a failure where the reader is looking — a card standing
+ * in place of the text it could not load — is the one carrier of that failure,
+ * and the response interceptor has to stay quiet or the same sentence stands in
+ * two places at once. Every call that leaves these out is unchanged: the client
+ * then sees nothing and the interceptor speaks as it always did.
+ *
+ * Declared here rather than imported: `shared/api` keeps its own copy of the
+ * type to itself, and the client reads the two fields off the request by name,
+ * so a structural twin carries them just as well.
+ */
+type RefusalOptions = {
+  /** The screen shows a 403 and a 5xx itself. */
+  ownsRefusal?: boolean;
+  /** The screen shows a 429 itself, the wait included. */
+  ownsRateLimit?: boolean;
+};
+
+/**
  * Convert a 1-based page number to skip/take (backend paginates with
  * skip/take; the client works with page numbers). Mirrors gameApi.
  */
@@ -49,6 +68,11 @@ function toSkipTake(paging?: PagingQuery): Record<string, number | undefined> {
   }
 
   return queryParams;
+}
+
+/** The calls of one blog's notepad. */
+function notepadOf(blogId: string) {
+  return notepadEndpoints(`blogs/${blogId}/notepad`);
 }
 
 export default new (class {
@@ -164,8 +188,8 @@ export default new (class {
     return Api.patch<Envelope<Blog>>(`blogs/${id}`, patch);
   }
 
-  public deleteBlog(id: string) {
-    return Api.delete(`blogs/${id}`);
+  public deleteBlog(id: string, options?: RefusalOptions) {
+    return Api.delete(`blogs/${id}`, undefined, options);
   }
 
   /**
@@ -174,8 +198,16 @@ export default new (class {
    * (ModuleStatusPolicy); the blog half is gated by BlogIntention
    * .SetStatusActive / .SetStatusClosed — owner or assistant.
    */
-  public transitionStatus(id: string, transition: BlogStatusTransition) {
-    return Api.post<Envelope<Blog>>(`blogs/${id}/status`, { transition });
+  public transitionStatus(
+    id: string,
+    transition: BlogStatusTransition,
+    options?: RefusalOptions,
+  ) {
+    return Api.post<Envelope<Blog>>(
+      `blogs/${id}/status`,
+      { transition },
+      options,
+    );
   }
 
   /**
@@ -186,10 +218,13 @@ export default new (class {
   public changePremoderation(
     id: string,
     transition: BlogPremoderationTransition,
+    options?: RefusalOptions,
   ) {
-    return Api.post<Envelope<Blog>>(`blogs/${id}/premoderation`, {
-      transition,
-    });
+    return Api.post<Envelope<Blog>>(
+      `blogs/${id}/premoderation`,
+      { transition },
+      options,
+    );
   }
 
   // === Rubrics (BlogController) ===
@@ -198,8 +233,16 @@ export default new (class {
     return Api.post<Envelope<Rubric>>(`blogs/${blogId}/rubrics`, input);
   }
 
-  public deleteRubric(blogId: string, rubricId: string) {
-    return Api.delete(`blogs/${blogId}/rubrics/${rubricId}`);
+  public deleteRubric(
+    blogId: string,
+    rubricId: string,
+    options?: RefusalOptions,
+  ) {
+    return Api.delete(
+      `blogs/${blogId}/rubrics/${rubricId}`,
+      undefined,
+      options,
+    );
   }
 
   // === Publications (PublicationController) ===
@@ -218,8 +261,21 @@ export default new (class {
     );
   }
 
-  public getPublication(id: string) {
-    return Api.get<Envelope<Publication>>(`publications/${id}`);
+  /**
+   * One publication.
+   *
+   * `options` is empty unless a caller says otherwise, so the redirect and the
+   * editor keep the behaviour they had; the publication page, which puts the
+   * failure in a card instead of the text, takes the refusal over. The audience
+   * is the default one, spelled out because the options sit behind it.
+   */
+  public getPublication(id: string, options?: RefusalOptions) {
+    return Api.get<Envelope<Publication>>(
+      `publications/${id}`,
+      undefined,
+      RENDER_AUDIENCE.Display,
+      options,
+    );
   }
 
   public createPublication(blogId: string, input: CreatePublicationInput) {
@@ -233,8 +289,8 @@ export default new (class {
     return Api.patch<Envelope<Publication>>(`publications/${id}`, input);
   }
 
-  public deletePublication(id: string) {
-    return Api.delete(`publications/${id}`);
+  public deletePublication(id: string, options?: RefusalOptions) {
+    return Api.delete(`publications/${id}`, undefined, options);
   }
 
   public likePublication(id: string) {
@@ -266,8 +322,8 @@ export default new (class {
     return Api.patch<Envelope<Comment>>(`blogs/comments/${id}`, comment);
   }
 
-  public deleteBlogComment(id: string) {
-    return Api.delete(`blogs/comments/${id}`);
+  public deleteBlogComment(id: string, options?: RefusalOptions) {
+    return Api.delete(`blogs/comments/${id}`, undefined, options);
   }
 
   /**
@@ -280,18 +336,6 @@ export default new (class {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
-  }
-
-  /**
-   * Fetch the markup of a quotation of a blog comment.
-   *
-   * The server composes the whole tag, author included, already filtered for
-   * whoever is asking. The client does not build one out of the rendered page:
-   * that conversion is lossy, and the source of somebody else's message is not
-   * something the browser holds.
-   */
-  public getBlogCommentQuote(id: string) {
-    return Api.get<Envelope<QuoteSource>>(`blogs/comments/${id}/quote`);
   }
 
   public likeBlogComment(id: string) {
@@ -329,8 +373,8 @@ export default new (class {
     return Api.patch<Envelope<Comment>>(`publications/comments/${id}`, comment);
   }
 
-  public deletePublicationComment(id: string) {
-    return Api.delete(`publications/comments/${id}`);
+  public deletePublicationComment(id: string, options?: RefusalOptions) {
+    return Api.delete(`publications/comments/${id}`, undefined, options);
   }
 
   /**
@@ -344,18 +388,6 @@ export default new (class {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
-  }
-
-  /**
-   * Fetch the markup of a quotation of a publication comment.
-   *
-   * The server composes the whole tag, author included, already filtered for
-   * whoever is asking. The client does not build one out of the rendered page:
-   * that conversion is lossy, and the source of somebody else's message is not
-   * something the browser holds.
-   */
-  public getPublicationCommentQuote(id: string) {
-    return Api.get<Envelope<QuoteSource>>(`publications/comments/${id}/quote`);
   }
 
   public likePublicationComment(id: string) {
@@ -396,24 +428,26 @@ export default new (class {
     return Api.get<ListEnvelope<BlogUser>>(`blogs/${id}/users/assistants`);
   }
 
-  public removeAssistant(id: string, username: string) {
+  public removeAssistant(
+    id: string,
+    username: string,
+    options?: RefusalOptions,
+  ) {
     return Api.delete(
       `blogs/${id}/users/assistants/${encodeURIComponent(username)}`,
+      undefined,
+      options,
     );
   }
 
   // === Blog notepad (BlogNotepadController) ===
 
-  private notepadOf(blogId: string) {
-    return notepadEndpoints(`blogs/${blogId}/notepad`);
-  }
-
   public getNotepad(blogId: string) {
-    return this.notepadOf(blogId).list();
+    return notepadOf(blogId).list();
   }
 
   public createNote(blogId: string, input: CreateNotepadEntryRequest) {
-    return this.notepadOf(blogId).create(input);
+    return notepadOf(blogId).create(input);
   }
 
   public updateNote(
@@ -421,11 +455,11 @@ export default new (class {
     entryId: string,
     input: UpdateNotepadEntryRequest,
   ) {
-    return this.notepadOf(blogId).update(entryId, input);
+    return notepadOf(blogId).update(entryId, input);
   }
 
-  public deleteNote(blogId: string, entryId: string) {
-    return this.notepadOf(blogId).remove(entryId);
+  public deleteNote(blogId: string, entryId: string, options?: RefusalOptions) {
+    return notepadOf(blogId).remove(entryId, options);
   }
 
   // === Blog blacklist (BlogBlacklistController) ===

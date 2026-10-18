@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using DM.Testing;
 using DM.Web.API.Features.Game.AttributeSchemas;
 using AwesomeAssertions;
@@ -8,58 +7,27 @@ using Xunit;
 namespace DM.Web.API.Tests.Features.Game;
 
 /// <summary>
-/// PATCH carries "not sent" as null, and the write model must keep saying it.
-/// AutoMapper said it through AllowNullCollections; a mapper that turns the
-/// null into an empty list re-introduces the bug where updating a title alone
-/// wiped every specification, because the domain guard reads "empty" as
-/// "replace all with nothing".
+/// A specification the caller has never saved carries no identifier, and the
+/// write path has to keep saying so. On the wire an unsent identifier is a zero
+/// Guid; the domain reads null as "hand me a new one" and an identifier as "keep
+/// this one if the stored set still holds it", so a zero arriving as an
+/// identifier would ask the server to preserve a specification nobody stored.
 /// </summary>
 public class AttributeSchemaMapperShould : UnitTestBase
 {
     private static readonly AttributeSchemaMapper Mapper = new();
 
     [Fact]
-    public void KeepAnUnsentSpecificationListNull()
-    {
-        var update = Mapper.ToUpdateSchema(new UpdateAttributeSchemaRequest
-        {
-            Title = "Только имя"
-        });
-
-        update.Specifications.Should().BeNull(
-            "null means the field was not sent, not \"clear the list\"");
-    }
+    public void TranslateAZeroSpecificationIdIntoNull() =>
+        Mapper.ToUpdateSpecification(new AttributeSpecification { Id = Guid.Empty, Title = "Новый" })
+            .Id.Should().BeNull();
 
     [Fact]
-    public void CarryASentSpecificationListThrough()
+    public void KeepAStoredSpecificationId()
     {
-        var update = Mapper.ToUpdateSchema(new UpdateAttributeSchemaRequest
-        {
-            Specifications = new[] { new AttributeSpecification { Title = "Сила" } }
-        });
+        var stored = Guid.Parse("d10a2b3c-0000-4000-8000-000000000001");
 
-        update.Specifications.Should().ContainSingle()
-            .Which.Title.Should().Be("Сила");
-    }
-
-    /// <summary>
-    /// A zero Guid denotes a brand new specification - no persisted id yet -
-    /// and the domain reads null as "create", an id as "update in place".
-    /// </summary>
-    [Fact]
-    public void TranslateAZeroSpecificationIdIntoNull()
-    {
-        var update = Mapper.ToUpdateSchema(new UpdateAttributeSchemaRequest
-        {
-            Specifications = new[]
-            {
-                new AttributeSpecification { Id = Guid.Empty, Title = "Новый" },
-                new AttributeSpecification { Id = Guid.Parse("d10a2b3c-0000-4000-8000-000000000001"), Title = "Старый" }
-            }
-        });
-
-        var specs = update.Specifications!.ToArray();
-        specs[0].Id.Should().BeNull();
-        specs[1].Id.Should().Be(Guid.Parse("d10a2b3c-0000-4000-8000-000000000001"));
+        Mapper.ToUpdateSpecification(new AttributeSpecification { Id = stored, Title = "Старый" })
+            .Id.Should().Be(stored);
     }
 }

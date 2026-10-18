@@ -19,6 +19,7 @@ const EVERY_ENTITY: Record<DraftEntity, true> = {
   game: true,
   room: true,
   chat: true,
+  ticket: true,
 };
 
 const EVERY_PLACE: Record<DraftPlace, true> = {

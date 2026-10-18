@@ -77,11 +77,6 @@ public class Blog
     public DraftVisibility DraftVisibility { get; set; }
 
     /// <summary>
-    /// Whether comments are enabled
-    /// </summary>
-    public bool CommentsEnabled { get; set; }
-
-    /// <summary>
     /// Total publication count
     /// </summary>
     public int PublicationCount { get; set; }
@@ -155,9 +150,18 @@ public class Blog
     public IEnumerable<Guid> PendingInvitedUserIds { get; set; } = [];
 
     /// <summary>
-    /// User IDs who are blacklisted from commenting
+    /// The users on the blog's blacklist. Asked only through
+    /// BlogRoleExtensions.IsBlacklisted.
     /// </summary>
-    public IReadOnlySet<Guid> BlacklistedUserIds { get; set; } = new HashSet<Guid>();
+    /// <remarks>
+    /// Filled by the projection of every blog read, the way a game carries its
+    /// own list. It used to be filled by nothing at all - the projection left it
+    /// to the repository and the repository never did - so every check written
+    /// over it answered "not on the list": the blog's list refused a
+    /// subscription (through a query of its own) and nothing else, and a
+    /// blacklisted reader commented and liked as before.
+    /// </remarks>
+    public IReadOnlyCollection<Guid> BlacklistedUserIds { get; set; } = [];
 }
 
 /// <summary>

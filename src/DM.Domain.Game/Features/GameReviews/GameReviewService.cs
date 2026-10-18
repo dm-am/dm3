@@ -9,7 +9,6 @@ using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
@@ -21,6 +20,7 @@ namespace DM.Domain.Game.Features.GameReviews;
 internal class GameReviewService : IGameReviewService
 {
     private static readonly TimeSpan EditWindow = TimeSpan.FromDays(1);
+    private const string ReviewNotFound = "Рецензия не найдена";
 
     private readonly IValidator<CreateGameReview> _createValidator;
     private readonly IValidator<UpdateGameReview> _updateValidator;
@@ -29,7 +29,8 @@ internal class GameReviewService : IGameReviewService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IGameBlacklistRepository _blacklistRepository;
+    private readonly IBbTagNameCase _tagNames;
+    private readonly IGameService _gameService;
 
     public GameReviewService(
         IValidator<CreateGameReview> createValidator,
@@ -39,7 +40,8 @@ internal class GameReviewService : IGameReviewService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IGameBlacklistRepository blacklistRepository)
+        IBbTagNameCase tagNames,
+        IGameService gameService)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -48,7 +50,8 @@ internal class GameReviewService : IGameReviewService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _blacklistRepository = blacklistRepository;
+        _tagNames = tagNames;
+        _gameService = gameService;
     }
 
     /// <inheritdoc />
@@ -61,34 +64,12 @@ internal class GameReviewService : IGameReviewService
         var authorId = author.UserId;
         var gameId = createReview.GameId;
 
-        // The blacklist closes writing, and a review is writing. Reading the game
-        // is open to a blacklisted user, so they reach the review form, and the
-        // eligibility below (a post in the game) survives being removed from it,
-        // which is the exact sequence a blacklist is put up for.
-        if (await _blacklistRepository.IsBlocked(gameId, authorId))
+        // MayCreateAsync asks the same, so the form the page offers and this
+        // refusal cannot part.
+        var refusal = await RefusalAsync(authorId, gameId);
+        if (refusal != null)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
-        }
-
-        // Newbies cannot create game reviews
-        if (await IsNewbieAsync(authorId))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden,
-                $"Писать рецензии можно после {ProbationPolicy.NewbiePostThreshold} постов в играх");
-        }
-
-        // Check if user can review this game (has at least one post in the game)
-        var canReview = await CanReviewAsync(authorId, gameId);
-        if (!canReview)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden,
-                "Рецензию можно написать только на игру, где у вас есть хотя бы один пост");
-        }
-
-        // Check if already reviewed
-        if (await ExistsAsync(authorId, gameId))
-        {
-            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedGame);
+            throw refusal;
         }
 
         var entity = new CreateGameReviewEntity
@@ -99,7 +80,7 @@ internal class GameReviewService : IGameReviewService
             CreatedUtc = _dateTimeProvider.Now,
             // Review bodies render on the Comment surface where [mod] is a green
             // mod block; strip it when authored by a non-moderator.
-            Text = ModBlockSanitizer.SanitizeForAuthor(createReview.Text.Trim(), author.Role)
+            Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createReview.Text.Trim(), author.Role), BbTagSet.WithModBlock)
         };
 
         try
@@ -113,21 +94,85 @@ internal class GameReviewService : IGameReviewService
     }
 
     /// <inheritdoc />
-    public async Task<GameReview> GetAsync(Guid id)
+    /// <remarks>
+    /// The intention, then the three refusals CreateAsync throws, through the
+    /// one method both call. A guest stops at the intention and costs no query.
+    /// </remarks>
+    public async Task<bool> MayCreateAsync(Guid gameId)
     {
-        var review = await _repository.GetAsync(id);
-        if (review == null)
+        if (!_intentionManager.IsAllowed(GameReviewIntention.Create))
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Рецензия не найдена");
+            return false;
+        }
+
+        return await RefusalAsync(_identityProvider.Current.User.UserId, gameId) == null;
+    }
+
+    /// <summary>
+    /// Why this author may not review this game, or null when he may: the
+    /// probation, a post of his in the game, a review of his already there. In
+    /// that order, which is the order the reader is told them in.
+    /// </summary>
+    private async Task<HttpException?> RefusalAsync(Guid authorId, Guid gameId)
+    {
+        // Newbies cannot create game reviews
+        if (await IsNewbieAsync(authorId))
+        {
+            return new HttpException(HttpStatusCode.Forbidden,
+                $"Писать рецензии можно после {ProbationPolicy.NewbiePostThreshold} постов в играх");
+        }
+
+        // Check if user can review this game (has at least one post in the game)
+        if (!await CanReviewAsync(authorId, gameId))
+        {
+            return new HttpException(HttpStatusCode.Forbidden,
+                "Рецензию можно написать только на игру, где у вас есть хотя бы один пост");
+        }
+
+        // Check if already reviewed
+        if (await ExistsAsync(authorId, gameId))
+        {
+            return new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedGame);
+        }
+
+        return null;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The route names both, and the game is read first under the reader's
+    /// scope, so a review of a game hidden from the reader answers as a game
+    /// that is not there. A review of another game reached through this game's
+    /// address is not this game's review.
+    /// </remarks>
+    public async Task<GameReview> GetAsync(Guid gameId, Guid reviewId)
+    {
+        await _gameService.GetAsync(gameId);
+
+        var review = await FindAsync(reviewId);
+        if (review.GameId != gameId)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, ReviewNotFound);
         }
 
         return review;
     }
 
+    /// <summary>
+    /// The review itself, with no scope of its own: editing and removal carry
+    /// their own gates, the author and the moderator, and are not reads.
+    /// </summary>
+    private async Task<GameReview> FindAsync(Guid id) =>
+        await _repository.GetAsync(id) ?? throw new HttpException(HttpStatusCode.NotFound, ReviewNotFound);
+
     /// <inheritdoc />
     public async Task<(IEnumerable<GameReview> Reviews, PagingResult Paging)> GetListAsync(
         Guid gameId, PagingQuery query)
     {
+        // A game the reader may not open has no reviews to show: the read answers
+        // as a game that is not there, the same 404 its address alone would.
+        await _gameService.GetAsync(gameId);
+
         var totalCount = await _repository.CountAsync(gameId);
         var pagingData = new PagingData(
             query,
@@ -142,13 +187,16 @@ internal class GameReviewService : IGameReviewService
     public async Task<(IEnumerable<GameReview> Reviews, PagingResult Paging)> GetAllAsync(
         PagingQuery query, GameReviewFilter? filter = null)
     {
-        var totalCount = await _repository.CountAllAsync(filter);
+        // Only the reviews of games the reader may open: the list names the game
+        // and quotes the text, and a hidden game does not surface through it.
+        var viewerId = _identityProvider.Current.User.UserId;
+        var totalCount = await _repository.CountAllAsync(viewerId, filter);
         var pagingData = new PagingData(
             query,
             _identityProvider.Current.Settings.Paging.EntitiesPerPage,
             totalCount);
 
-        var reviews = await _repository.GetAllAsync(pagingData, filter);
+        var reviews = await _repository.GetAllAsync(viewerId, pagingData, filter);
         return (reviews, pagingData.Result);
     }
 
@@ -160,7 +208,7 @@ internal class GameReviewService : IGameReviewService
     public async Task<GameReview> UpdateAsync(UpdateGameReview updateReview)
     {
         await _updateValidator.ValidateAndThrowAsync(updateReview);
-        var review = await GetAsync(updateReview.ReviewId);
+        var review = await FindAsync(updateReview.ReviewId);
 
         _intentionManager.ThrowIfForbidden(GameReviewIntention.Edit, review);
 
@@ -181,7 +229,7 @@ internal class GameReviewService : IGameReviewService
             review.Id,
             // Review bodies render on the Comment surface where [mod] is a green
             // mod block; strip it when the editor is a non-moderator.
-            Text: ModBlockSanitizer.SanitizeForAuthor(updateReview.Text.Trim(), currentUser.Role),
+            Text: _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(updateReview.Text.Trim(), currentUser.Role), BbTagSet.WithModBlock),
             ModifiedUtc: _dateTimeProvider.Now,
             ModifiedByUserId: currentUser.UserId);
 
@@ -191,10 +239,17 @@ internal class GameReviewService : IGameReviewService
     /// <inheritdoc />
     public async Task DeleteAsync(Guid id)
     {
-        var review = await GetAsync(id);
+        var review = await FindAsync(id);
         _intentionManager.ThrowIfForbidden(GameReviewIntention.Delete, review);
 
-        var entity = new UpdateGameReviewEntity(id, IsRemoved: true);
+        // Who removed it and when: a senior moderator may remove somebody
+        // else's review, and a removal with no hand behind it cannot be
+        // reviewed afterwards.
+        var entity = new UpdateGameReviewEntity(
+            id,
+            IsRemoved: true,
+            DeletedUtc: _dateTimeProvider.Now,
+            DeletedByUserId: _identityProvider.Current.User.UserId);
         await _repository.UpdateAsync(entity);
     }
 

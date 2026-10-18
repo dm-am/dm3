@@ -49,6 +49,7 @@ public class ListBoundsShould : IntegrationTestBase
     {
         "GET /v1/account/sessions",
         "GET /v1/achievement-categories",
+        "GET /v1/attribute-schema-templates",
         "GET /v1/achievement-types",
         "GET /v1/award-types",
         "GET /v1/bans",
@@ -81,7 +82,6 @@ public class ListBoundsShould : IntegrationTestBase
         "GET /v1/moderation/username-changes",
         "GET /v1/moderation/users/{username}/notes",
         "GET /v1/moderation/violators",
-        "GET /v1/schemas",
         "GET /v1/users/me/invitations",
         "GET /v1/users/me/subscriptions",
         "GET /v1/users/{username}/achievements",
@@ -102,13 +102,8 @@ public class ListBoundsShould : IntegrationTestBase
     /// runs. Writing them down as "bounded by what they are" turned an open debt into
     /// a decision nobody made.
     ///
-    /// Sitewide warnings joined them for the same reason and a plainer one: the
-    /// repository reads every warning ever issued, ordered newest first, with no
-    /// Skip and no Take, while the screen above it is titled "latest warnings".
-    /// Nothing about a warning bounds how many there are.
-    ///
-    /// What closing them takes, and why it is not done here: paging a roster, a
-    /// notepad or a moderation log is not only a query change. All of those screens
+    /// What closing them takes, and why it is not done here: paging a roster or a
+    /// notepad is not only a query change. All of those screens
     /// render the whole collection today, so a page size takes rows off the screen —
     /// a visible change, and this project approves those one by one. The server half
     /// without the client half is worse than either: the roster would silently lose
@@ -121,7 +116,6 @@ public class ListBoundsShould : IntegrationTestBase
         "GET /v1/characters/{id}/notepad",
         "GET /v1/games/{id}/characters",
         "GET /v1/games/{id}/notepad",
-        "GET /v1/moderation/warnings",
         "GET /v1/users/me/notepad",
     };
 
@@ -230,8 +224,8 @@ public class ListBoundsShould : IntegrationTestBase
     /// <remarks>
     /// Nothing else stops the debt from being quietly reclassified: moving a line
     /// from the growing list up into the bounded one is a one-word edit that makes
-    /// an open finding look closed, which is how these five got there the first
-    /// time.
+    /// an open finding look closed, which is how the lines below got there the
+    /// first time.
     /// </remarks>
     [Fact]
     public void KeepTheDebtApartFromTheDecision() =>

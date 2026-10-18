@@ -11,7 +11,8 @@ public enum ForumIntention
     CreateTopic = 0,
 
     /// <summary>
-    /// Close, attach, delete and move any topic of the forum
+    /// Close, attach, delete and move any topic of the forum. The author closes
+    /// and reopens their own topic through <see cref="TopicIntention.Close"/>.
     /// </summary>
     AdministrateTopics = 1
 }

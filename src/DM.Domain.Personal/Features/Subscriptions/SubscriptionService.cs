@@ -23,27 +23,18 @@ internal class SubscriptionService : ISubscriptionService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <summary>
-    /// One guard per target type that has a rule about being subscribed to.
-    /// Types without a rule contribute none, which is why the lookup is a find
-    /// and not a required resolve.
-    /// </summary>
-    private readonly IReadOnlyCollection<ISubscriptionTargetGuard> _guards;
-
     public SubscriptionService(
         ISubscriptionRepository repository,
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider,
-        IEnumerable<ISubscriptionTargetGuard> guards)
+        IDateTimeProvider dateTimeProvider)
     {
         _repository = repository;
         _userLookupService = userLookupService;
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _guards = guards.ToArray();
     }
 
     /// <inheritdoc />
@@ -70,16 +61,10 @@ internal class SubscriptionService : ISubscriptionService
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Нельзя подписаться на себя");
         }
-        // The rule the target itself puts on being subscribed to. This endpoint
-        // takes a type and an identifier and belongs to no module, so it wrote
-        // the row knowing nothing: a game's blacklist refuses a join, and a
-        // request naming that game here walked past the refusal and put the
-        // reader on the roster with the private thread open.
-        var refusal = await Refusal(targetType, targetId, userId, ct);
-        if (refusal is not null)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, refusal);
-        }
+        // No target puts a rule on being subscribed to. The one that did, the
+        // blacklist of a game or a blog, closes writing and not following: a
+        // subscription delivers what its holder may read anyway, and every write
+        // the list guards asks the list itself.
 
         // Check if already subscribed
         var existing = await _repository.FindAsync(userId, targetType, targetId, ct);
@@ -218,14 +203,4 @@ internal class SubscriptionService : ISubscriptionService
         SubscriptionTargetType.User => SubscriptionSettings.UserSubscriptionDefault,
         _ => SubscriptionSettings.InApp
     };
-
-    /// <summary>
-    /// Why the target refuses this subscription, or null when it allows it.
-    /// </summary>
-    private async Task<string?> Refusal(
-        SubscriptionTargetType targetType, Guid targetId, Guid subscriberId, CancellationToken ct)
-    {
-        var guard = _guards.FirstOrDefault(g => g.TargetType == targetType);
-        return guard is null ? null : await guard.Refusal(targetId, subscriberId, ct);
-    }
 }

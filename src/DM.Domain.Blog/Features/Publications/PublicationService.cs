@@ -40,6 +40,7 @@ internal class PublicationService : IPublicationService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IEventProducer _eventProducer;
+    private readonly IBbTagNameCase _tagNames;
 
     /// <inheritdoc />
     public PublicationService(
@@ -53,7 +54,8 @@ internal class PublicationService : IPublicationService
         IValidator<UpdatePublication> updatePublicationValidator,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IEventProducer eventProducer)
+        IEventProducer eventProducer,
+        IBbTagNameCase tagNames)
     {
         _repository = repository;
         _blogService = blogService;
@@ -66,19 +68,30 @@ internal class PublicationService : IPublicationService
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _eventProducer = eventProducer;
+        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
     public async Task<(IEnumerable<Publication> publications, PagingResult paging)> GetPublications(
         Guid blogId, Guid? rubricId, PagingQuery query, CancellationToken ct = default)
     {
-        var blog = await _blogService.GetAsync(blogId, ct);
-        var includeUnpublished = _intentionManager.IsAllowed(BlogIntention.ViewDraft, blog);
+        await _blogService.GetAsync(blogId, ct);
 
-        var totalCount = await _repository.CountPublications(blogId, rubricId, includeUnpublished, ct);
+        // An unpublished publication is its author's draft, and the list shows it
+        // to whoever may open it on its own (PublicationIntention.ViewDraft): its
+        // author, and the rank that reads every draft. Asked of a draft written by
+        // nobody, the intention answers for the rank alone; the author's own drafts
+        // are the repository's to add. The blog's draft visibility is another
+        // question, whether the blog itself may be opened, and opens no draft.
+        var viewerId = _identityProvider.Current.User.UserId;
+        var everyUnpublished = _intentionManager.IsAllowed(
+            PublicationIntention.ViewDraft, new Publication { BlogId = blogId, IsPublished = false });
+
+        var totalCount = await _repository.CountPublications(blogId, rubricId, viewerId, everyUnpublished, ct);
         var pagingData = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
 
-        var publications = (await _repository.GetPublications(blogId, rubricId, includeUnpublished, pagingData, ct)).ToArray();
+        var publications = (await _repository.GetPublications(
+            blogId, rubricId, viewerId, everyUnpublished, pagingData, ct)).ToArray();
         await FillPublicationUnreadCounters(publications);
         return (publications, pagingData.Result);
     }
@@ -122,9 +135,15 @@ internal class PublicationService : IPublicationService
         // take usernames directly. An unknown name throws HttpException(410),
         // and 410 is what the caller receives: the error middleware passes an
         // HttpException status through untouched.
-        var user = await _userLookupService.GetAsync(username);
+        //
+        // "Аккаунт удален" is no account: its best publication is the best of
+        // everything removed accounts published, and the identifiers it is
+        // chosen among stay here.
+        IReadOnlyCollection<Guid> authorIds = RemovedAccount.Is(username)
+            ? await _userLookupService.GetRemovedAccountIdsAsync()
+            : [(await _userLookupService.GetAsync(username)).UserId];
 
-        var publication = await _repository.GetBestUserPublication(user.UserId, ct);
+        var publication = await _repository.GetBestUserPublication(authorIds, ct);
 
         // The widget names one publication and links to it, so the one it names
         // has to be one the reader could open. The repository filters removals and
@@ -166,9 +185,8 @@ internal class PublicationService : IPublicationService
             Title = createPublication.Title,
             // Publication bodies render on the Comment surface where [mod] is a
             // green mod block; strip it when authored by a non-moderator.
-            Content = ModBlockSanitizer.SanitizeForAuthor(createPublication.Content, user.Role),
+            Content = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createPublication.Content, user.Role), BbTagSet.WithModBlock),
             Preview = createPublication.Preview,
-            CommentsEnabled = createPublication.CommentsEnabled,
             PublishImmediately = createPublication.PublishImmediately,
             CreatedUtc = now
         };
@@ -205,10 +223,9 @@ internal class PublicationService : IPublicationService
             Title = updatePublication.Title,
             // Publication bodies render on the Comment surface where [mod] is a
             // green mod block; strip it when the editor is a non-moderator.
-            Content = ModBlockSanitizer.SanitizeForAuthor(
-                updatePublication.Content, _identityProvider.Current.User.Role),
+            Content = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(
+                updatePublication.Content, _identityProvider.Current.User.Role), BbTagSet.WithModBlock),
             Preview = updatePublication.Preview,
-            CommentsEnabled = updatePublication.CommentsEnabled,
             IsPublished = updatePublication.IsPublished,
             UpdatedUtc = _dateTimeProvider.Now,
             ModifiedByUserId = _identityProvider.Current.User.UserId
@@ -227,7 +244,7 @@ internal class PublicationService : IPublicationService
         var userId = _identityProvider.Current.User.UserId;
         await _repository.DeletePublication(publicationId, userId, ct);
         // Sequential: the counter tombstone is a DmDbContext write now, and a
-        // context refuses to share the scope with a parallel operation (INV-7).
+        // context refuses to share the scope with a parallel operation.
         await _unreadCountersRepository.DeleteAsync(publicationId, UnreadEntryType.Message);
         await _eventProducer.SendAsync(EventType.DeletedPublication, publicationId);
     }

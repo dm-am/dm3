@@ -1,9 +1,4 @@
-import type {
-  Envelope,
-  ListEnvelope,
-  QuoteSource,
-  User,
-} from "@/shared/api/models/common";
+import type { Envelope, ListEnvelope, User } from "@/shared/api/models/common";
 import type {
   Comment,
   CommentId,
@@ -30,13 +25,91 @@ const NEWS_BOARD_ALIAS = "news";
  */
 export const NEWS_WIDGET_LIMIT = 2;
 
+/**
+ * The refusal a caller takes over because its own screen carries it.
+ *
+ * A screen that answers a failure where the reader is looking — the strip in
+ * place of the rows, the card in place of the content — is the one carrier of
+ * that failure, and the response interceptor has to stay quiet or the same
+ * sentence stands in two places at once. The methods below pass this through
+ * untouched; every call that leaves it out is unchanged, because the client
+ * then sees nothing and the interceptor speaks as it always did.
+ *
+ * Declared here rather than imported: `shared/api` keeps its own copy of the
+ * type to itself, and the client reads the two fields off the request by name,
+ * so a structural twin carries them just as well.
+ */
+type RefusalFlags = {
+  /** The screen shows a 403 and a 5xx itself. */
+  ownsRefusal?: boolean;
+  /** The screen shows a 429 itself, the wait included. */
+  ownsRateLimit?: boolean;
+};
+
+/**
+ * One place — and one place only — where TopicsQuery becomes
+ * query-string parameters. The per-board and cross-board endpoints
+ * share this builder so a new filter automatically propagates to both
+ * without diverging.
+ */
+function buildTopicsParams(q: TopicsQuery) {
+  const pageSize = q.size ?? 20;
+  const queryParams: Record<
+    string,
+    string | number | boolean | string[] | undefined
+  > = {
+    take: pageSize,
+  };
+
+  if (q.number && q.number > 1) {
+    queryParams.skip = (q.number - 1) * pageSize;
+  }
+  if (q.isAttached !== undefined) {
+    queryParams.isAttached = q.isAttached;
+  }
+  if (q.search) {
+    queryParams.search = q.search;
+  }
+  // `authorUsernames` on the wire, per the API query vocabulary; `authors`
+  // is the name this query type and the route use.
+  if (q.authors && q.authors.length > 0) {
+    queryParams.authorUsernames = q.authors;
+  }
+  if (q.createdFromUtc) {
+    queryParams.createdFromUtc = q.createdFromUtc;
+  }
+  if (q.createdToUtc) {
+    queryParams.createdToUtc = q.createdToUtc;
+  }
+  if (q.sortBy) {
+    queryParams.sortBy = q.sortBy;
+  }
+  if (q.sortOrder) {
+    queryParams.sortOrder = q.sortOrder;
+  }
+  return queryParams;
+}
+
 export default new (class ForumApi {
   public getBoards() {
     return Api.get<ListEnvelope<Board>>("boards");
   }
 
-  public getBoard(id: BoardId) {
-    return Api.get<Envelope<Board>>(`boards/${id}`);
+  /**
+   * @param options For the read that opens a board's page: a failure there
+   * stands as the error page of the status in place of the board, so that read
+   * is the one carrier and the interceptor has nothing to add over it. The
+   * board is read again after a sign-in and as the board of a topic, and
+   * neither of those shows a word about a failure: the interceptor is their
+   * only voice. Hence the caller sets it, per read, as for getTopics.
+   */
+  public getBoard(id: BoardId, options?: RefusalFlags) {
+    return Api.get<Envelope<Board>>(
+      `boards/${id}`,
+      undefined,
+      undefined,
+      options,
+    );
   }
 
   public getNews() {
@@ -56,10 +129,21 @@ export default new (class ForumApi {
     return Api.get<ListEnvelope<User>>(`boards/${id}/moderators`);
   }
 
-  public getTopics(id: BoardId, q: TopicsQuery) {
+  /**
+   * @param options For the read that fills a board listing: a failure there
+   * stands as a strip where the rows would be, so that read is the one carrier
+   * and the interceptor has nothing to add over it. The other reads of this
+   * endpoint refresh the pinned block after a pin or a reorder and show nothing
+   * at all about a failure — the interceptor is the only voice they have, and a
+   * flag pinned inside this method would take it away. Hence the caller sets
+   * it, per read, and this method only carries it.
+   */
+  public getTopics(id: BoardId, q: TopicsQuery, options?: RefusalFlags) {
     return Api.get<ListEnvelope<Topic>>(
       `boards/${id}/topics`,
-      this.buildTopicsParams(q),
+      buildTopicsParams(q),
+      undefined,
+      options,
     );
   }
 
@@ -73,51 +157,7 @@ export default new (class ForumApi {
    * both call sites stay in lock-step when a new filter is added.
    */
   public getAllTopics(q: TopicsQuery) {
-    return Api.get<ListEnvelope<Topic>>("topics", this.buildTopicsParams(q));
-  }
-
-  /**
-   * One place — and one place only — where TopicsQuery becomes
-   * query-string parameters. The per-board and cross-board endpoints
-   * share this builder so a new filter automatically propagates to both
-   * without diverging.
-   */
-  private buildTopicsParams(q: TopicsQuery) {
-    const pageSize = q.size ?? 20;
-    const queryParams: Record<
-      string,
-      string | number | boolean | string[] | undefined
-    > = {
-      take: pageSize,
-    };
-
-    if (q.number && q.number > 1) {
-      queryParams.skip = (q.number - 1) * pageSize;
-    }
-    if (q.isAttached !== undefined) {
-      queryParams.isAttached = q.isAttached;
-    }
-    if (q.search) {
-      queryParams.search = q.search;
-    }
-    // `authorUsernames` on the wire, per the API query vocabulary; `authors`
-    // is the name this query type and the route use.
-    if (q.authors && q.authors.length > 0) {
-      queryParams.authorUsernames = q.authors;
-    }
-    if (q.createdFromUtc) {
-      queryParams.createdFromUtc = q.createdFromUtc;
-    }
-    if (q.createdToUtc) {
-      queryParams.createdToUtc = q.createdToUtc;
-    }
-    if (q.sortBy) {
-      queryParams.sortBy = q.sortBy;
-    }
-    if (q.sortOrder) {
-      queryParams.sortOrder = q.sortOrder;
-    }
-    return queryParams;
+    return Api.get<ListEnvelope<Topic>>("topics", buildTopicsParams(q));
   }
 
   /**
@@ -134,8 +174,8 @@ export default new (class ForumApi {
   }
 
   /** Delete a topic (author or moderator; backend DELETE v1/topics/{id}). */
-  public deleteTopic(id: TopicId) {
-    return Api.delete(`topics/${id}`);
+  public deleteTopic(id: TopicId, options?: RefusalFlags) {
+    return Api.delete(`topics/${id}`, undefined, options);
   }
 
   /**
@@ -148,18 +188,6 @@ export default new (class ForumApi {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
-  }
-
-  /**
-   * Fetch the markup of a quotation of the opening message of a topic.
-   *
-   * The server composes the whole tag, author included, already filtered for
-   * whoever is asking. The client does not build one out of the rendered page:
-   * that conversion is lossy, and the source of somebody else's message is not
-   * something the browser holds.
-   */
-  public getTopicQuote(id: TopicId) {
-    return Api.get<Envelope<QuoteSource>>(`topics/${id}/quote`);
   }
 
   /**
@@ -223,8 +251,8 @@ export default new (class ForumApi {
     return Api.patch<Envelope<Comment>>(`forum/comments/${id}`, comment);
   }
 
-  public deleteComment(id: CommentId) {
-    return Api.delete(`forum/comments/${id}`);
+  public deleteComment(id: CommentId, options?: RefusalFlags) {
+    return Api.delete(`forum/comments/${id}`, undefined, options);
   }
 
   public getCommentForUpdate(id: CommentId) {
@@ -233,18 +261,6 @@ export default new (class ForumApi {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
-  }
-
-  /**
-   * Fetch the markup of a quotation of a topic comment.
-   *
-   * The server composes the whole tag, author included, already filtered for
-   * whoever is asking. The client does not build one out of the rendered page:
-   * that conversion is lossy, and the source of somebody else's message is not
-   * something the browser holds.
-   */
-  public getCommentQuote(id: CommentId) {
-    return Api.get<Envelope<QuoteSource>>(`forum/comments/${id}/quote`);
   }
 
   public postCommentLike(id: CommentId) {

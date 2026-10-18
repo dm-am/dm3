@@ -44,6 +44,66 @@ internal static class SchemaSources
         }
         .Select(path => (Path.GetFileName(path), File.ReadAllText(path)));
 
+    private static string PersistenceDirectory => Path.Combine(
+        DM.Testing.RepositoryLayout.Root, "src", "DM.Infrastructure.Persistence");
+
+    /// <summary>
+    /// The authored files the model is declared in: the one that overrides
+    /// OnModelCreating, and every file of the folder the model is cut into by
+    /// module.
+    /// </summary>
+    /// <remarks>
+    /// Found by what they are rather than by the name of the context: a rule that
+    /// reads the model by one file name fails the day the context is cut into a
+    /// file per module, and the failure names a missing declaration instead of
+    /// the rule it holds.
+    ///
+    /// Narrow on purpose, because two rules let these files spell what no other
+    /// file may (the newbie threshold and the ticket conversation). A file
+    /// elsewhere that merely takes a model builder is not the model and does not
+    /// get that licence, and neither do the catalogues of initial data, which
+    /// hand rows to the model rather than declare it. The generated migration
+    /// files are read through <see cref="Migration"/> and <see cref="Snapshots"/>.
+    /// </remarks>
+    internal static IReadOnlyList<string> ModelFiles
+    {
+        get
+        {
+            var files = Directory
+                .EnumerateFiles(PersistenceDirectory, "*.cs", SearchOption.AllDirectories)
+                .Select(Path.GetFullPath)
+                .Where(path => !Segments(path).Any(segment => segment is "bin" or "obj" or "Migrations"))
+                .Where(path => IsModelFile(Path.GetRelativePath(PersistenceDirectory, path), SourceText.ReadCode(path)))
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToList();
+
+            files.Should().Contain(path => SourceText.ReadCode(path).Contains(ModelEntry, StringComparison.Ordinal),
+                "the model is declared somewhere in the persistence layer, and a walk that finds " +
+                "no declaration hands every rule reading it an empty text to pass over");
+
+            return files;
+        }
+    }
+
+    /// <summary>The authored model, every file of it, as one text.</summary>
+    internal static string ModelText => string.Join("\n", ModelFiles.Select(File.ReadAllText));
+
+    /// <summary>The folder the model is cut into, a file per module.</summary>
+    internal const string ModelFolder = "ModelConfiguration";
+
+    private const string ModelEntry = "override void OnModelCreating(";
+
+    /// <summary>
+    /// Whether a file of the persistence project, by its path inside the project
+    /// and its code without comments, is part of the model.
+    /// </summary>
+    internal static bool IsModelFile(string relativePath, string code) =>
+        Segments(relativePath).Contains(ModelFolder, StringComparer.Ordinal) ||
+        code.Contains(ModelEntry, StringComparison.Ordinal);
+
+    private static string[] Segments(string path) =>
+        path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
     /// <summary>Where the generated description of the model starts in both files.</summary>
     internal const string ModelStart = "#pragma warning disable 612, 618";
 

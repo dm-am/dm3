@@ -9,6 +9,9 @@ using DM.Web.API.Shared.RateLimiting;
 using System.Net;
 using DM.Web.API.Swagger;
 using DM.Domain.Core.Exceptions;
+using System.Linq;
+using FluentValidation;
+using Microsoft.Extensions.Logging;
 
 namespace DM.Web.API.Features.Account.Registration;
 
@@ -38,14 +41,17 @@ public class RegistrationController : ControllerBase
 {
     private readonly IRegistrationApiService _registrationApiService;
     private readonly IActivationApiService _activationApiService;
+    private readonly ILogger<RegistrationController> _logger;
 
     /// <inheritdoc />
     public RegistrationController(
         IRegistrationApiService registrationApiService,
-        IActivationApiService activationApiService)
+        IActivationApiService activationApiService,
+        ILogger<RegistrationController> logger)
     {
         _registrationApiService = registrationApiService;
         _activationApiService = activationApiService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -79,7 +85,19 @@ public class RegistrationController : ControllerBase
             }, RefusalMessage.InvalidData);
         }
 
-        await _registrationApiService.Register(registration);
+        try
+        {
+            await _registrationApiService.Register(registration);
+        }
+        catch (ValidationException refusal) when (Discloses(refusal, "Email"))
+        {
+            // The same bit the availability check gives out, recorded the same
+            // way: a taken address learned on submit is a disclosing answer of
+            // the recorded table (SECURITY.md).
+            _logger.IdentifierDisclosed(HttpContext, "register", ValidationError.Taken);
+            throw;
+        }
+
         return StatusCode(StatusCodes.Status201Created);
     }
 
@@ -125,44 +143,59 @@ public class RegistrationController : ControllerBase
     /// - No leading/trailing/consecutive whitespace
     /// - Must be unique (not used by active users or in login history)
     ///
-    /// The activation is idempotent: if RetryEmail matches an existing user
-    /// with the same Login, returns success without error.
+    /// A click that lands twice is answered as success only while the pending
+    /// link is still found and the write collides with this same account; a
+    /// spent link answers 410 whatever the body says.
     /// </remarks>
     /// <param name="token">Activation token from the mailed link, in the X-Dm-Account-Token header</param>
     /// <param name="request">Chosen Login</param>
     /// <response code="200">User created and authenticated</response>
     /// <response code="400">Login validation failed (invalid format, already taken, etc.)</response>
     /// <response code="404">Token missing or malformed</response>
+    /// <response code="409">Pending registration already used by another account</response>
     /// <response code="410">Token expired or not found</response>
     [HttpPost("activation", Name = nameof(Activate))]
     [ProducesResponseType(typeof(Envelope<DM.Web.API.Features.Community.Users.User>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status410Gone)]
     public async Task<IActionResult> Activate(
         [FromHeader(Name = TokenHeaders.Account)] string? token,
-        [FromBody] ActivationRequest request) =>
-        Ok(await _activationApiService.Activate(TokenHeaders.ParseAccountToken(token), request, HttpContext));
+        [FromBody] ActivationRequest request)
+    {
+        try
+        {
+            return Ok(await _activationApiService.Activate(TokenHeaders.ParseAccountToken(token), request, HttpContext));
+        }
+        catch (ValidationException refusal) when (Discloses(refusal, "Username"))
+        {
+            // Reached only by the holder of a live link: the service reads the
+            // link before it looks at the name. Still a disclosing answer, and
+            // still recorded (SECURITY.md).
+            _logger.IdentifierDisclosed(HttpContext, "activation", ValidationError.Taken);
+            throw;
+        }
+        catch (HttpBadRequestException refusal) when (Discloses(refusal, "Username"))
+        {
+            // The same answer by the other door: the name was free when the
+            // validator looked and taken by the time the row was written.
+            _logger.IdentifierDisclosed(HttpContext, "activation", ValidationError.Taken);
+            throw;
+        }
+    }
 
     /// <summary>
-    /// Resend activation email
+    /// Whether a refused request told the caller that the field's value is
+    /// somebody else's
     /// </summary>
-    /// <remarks>
-    /// Resends the activation email if a pending registration exists for the email.
-    /// Always returns 200 OK regardless of whether the pending registration exists
-    /// (to prevent email enumeration).
-    ///
-    /// This will generate a new token, invalidating any previous activation links.
-    /// </remarks>
-    /// <param name="resendActivation">Email address</param>
-    /// <response code="200">Request processed (email sent if pending registration exists)</response>
-    /// <response code="429">Too many requests. Try again later.</response>
-    [HttpPost("activation/resend", Name = nameof(ResendActivation))]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
-    public async Task<IActionResult> ResendActivation([FromBody] ResendActivation resendActivation)
-    {
-        await _activationApiService.ResendActivation(resendActivation);
-        return Ok();
-    }
+    private static bool Discloses(ValidationException refusal, string field) =>
+        refusal.Errors.Any(e => e.PropertyName == field && e.ErrorMessage == ValidationError.Taken);
+
+    /// <summary>
+    /// The same question for a refusal raised past the validator, by the write
+    /// that lost the race for the value
+    /// </summary>
+    private static bool Discloses(HttpBadRequestException refusal, string field) =>
+        refusal.ValidationErrors.TryGetValue(field, out var error) && error == ValidationError.Taken;
 }

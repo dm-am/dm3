@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,11 +12,11 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
-using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostReviews;
 using DM.Testing.Dsl;
 using DM.Testing;
+using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
@@ -32,7 +34,6 @@ public class PostReviewServiceShould : UnitTestBase
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IGameBlacklistRepository _blacklistRepository;
     private readonly PostReviewService _service;
     private readonly Guid _currentUserId;
 
@@ -57,6 +58,10 @@ public class PostReviewServiceShould : UnitTestBase
         // probation rule fire in cases that are not about it at all.
         _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
 
+        // Nothing reviewed by default, as the posts and games of a fresh case are.
+        Reviewed();
+        RecentlyReviewedGames();
+
         _identityProvider = Mock<IIdentityProvider>();
         _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
 
@@ -66,8 +71,6 @@ public class PostReviewServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _blacklistRepository = Mock<IGameBlacklistRepository>();
-
         _service = new PostReviewService(
             _createValidator,
             _updateValidator,
@@ -76,27 +79,7 @@ public class PostReviewServiceShould : UnitTestBase
             _identityProvider,
             _guidFactory,
             _dateTimeProvider,
-            _blacklistRepository);
-    }
-
-    [Fact]
-    public async Task ThrowForbiddenWhenBlacklistedFromTheGame()
-    {
-        var postId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-
-        SetupSuccessfulCreate(postId, postAuthorId, gameId);
-        _blacklistRepository
-            .IsBlocked(gameId, _currentUserId, Arg.Any<CancellationToken>()).Returns(true);
-
-        var act = async () => await _service.CreateAsync(
-            new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
-
-        // The game's posts are open to a blacklisted reader and stay open, so the
-        // refusal has to sit on rating them rather than on seeing them
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+            new TagNamesAsTyped());
     }
 
     #region Create Tests
@@ -172,8 +155,8 @@ public class PostReviewServiceShould : UnitTestBase
 
         _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
         _repository.GetUserPostCountAsync(_currentUserId).Returns(50); // Newbie
-        _repository.ExistsAsync(_currentUserId, postId).Returns(false);
-        _repository.HasRecentReviewInGameAsync(_currentUserId, gameId, Arg.Any<DateTimeOffset>()).Returns(false);
+        Reviewed();
+        RecentlyReviewedGames();
         _repository.CreateAsync(Arg.Any<CreatePostReviewEntity>(), Arg.Any<int>()).Returns(expectedReview);
 
         var result = await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Neutral });
@@ -191,7 +174,8 @@ public class PostReviewServiceShould : UnitTestBase
 
         _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
         _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
-        _repository.ExistsAsync(_currentUserId, postId).Returns(true);
+        Reviewed(postId);
+        RecentlyReviewedGames();
 
         var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
@@ -199,8 +183,13 @@ public class PostReviewServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
     }
 
+    /// <summary>
+    /// The three-day window is a conflict with what the rater did in the game,
+    /// not a rate limit: the page that offered the form did not know of the
+    /// review written since, and the reader is told the rule in its own words.
+    /// </summary>
     [Fact]
-    public async Task ThrowTooManyRequestsWhenCooldownNotExpired()
+    public async Task ThrowConflictWithTheRuleWhenCooldownNotExpired()
     {
         var postId = Guid.NewGuid();
         var postAuthorId = Guid.NewGuid();
@@ -209,13 +198,14 @@ public class PostReviewServiceShould : UnitTestBase
 
         _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
         _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
-        _repository.ExistsAsync(_currentUserId, postId).Returns(false);
-        _repository.HasRecentReviewInGameAsync(_currentUserId, gameId, Arg.Any<DateTimeOffset>()).Returns(true);
+        Reviewed();
+        RecentlyReviewedGames(gameId);
 
         var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.TooManyRequests);
+            .Where(e => e.StatusCode == HttpStatusCode.Conflict &&
+                        e.Message == "Оценивать посты в одной игре можно раз в три дня");
     }
 
     /// <summary>
@@ -291,6 +281,52 @@ public class PostReviewServiceShould : UnitTestBase
         await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Neutral });
 
         await _repository.Received(1).CreateAsync(Arg.Any<CreatePostReviewEntity>(), 0);
+    }
+
+    #endregion
+
+    #region Reviewable Tests
+
+    /// <summary>
+    /// The flag rides on every page of posts, so a guest, whom the intention
+    /// already refuses, costs no query at all.
+    /// </summary>
+    [Fact]
+    public async Task AnswerAGuestWithoutAskingTheDatabase()
+    {
+        _intentionManager.IsAllowed(PostReviewIntention.Create).Returns(false);
+
+        var result = await _service.ReviewableAsync([new ReviewCandidate(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())]);
+
+        result.Should().BeEmpty();
+        await _repository.DidNotReceiveWithAnyArgs().SelectReviewedPostIdsAsync(default, default!);
+        await _repository.DidNotReceiveWithAnyArgs().SelectGamesReviewedSinceAsync(default, default!, default);
+    }
+
+    /// <summary>
+    /// One page, every rule of the write, and two queries for all of it: the
+    /// rater's own post, a post he rated, a post of a game he rated in during the
+    /// window, and the one post left that he may rate.
+    /// </summary>
+    [Fact]
+    public async Task JudgeAPageOfPostsByTheRulesOfTheWriteInTwoQueries()
+    {
+        _intentionManager.IsAllowed(PostReviewIntention.Create).Returns(true);
+        var game = Guid.NewGuid();
+        var coolingGame = Guid.NewGuid();
+        var own = new ReviewCandidate(Guid.NewGuid(), _currentUserId, game);
+        var rated = new ReviewCandidate(Guid.NewGuid(), Guid.NewGuid(), game);
+        var cooling = new ReviewCandidate(Guid.NewGuid(), Guid.NewGuid(), coolingGame);
+        var open = new ReviewCandidate(Guid.NewGuid(), Guid.NewGuid(), game);
+        Reviewed(rated.PostId);
+        RecentlyReviewedGames(coolingGame);
+
+        var result = await _service.ReviewableAsync([own, rated, cooling, open]);
+
+        result.Should().BeEquivalentTo([open.PostId]);
+        await _repository.Received(1).SelectReviewedPostIdsAsync(_currentUserId, Arg.Any<IReadOnlyCollection<Guid>>());
+        await _repository.Received(1).SelectGamesReviewedSinceAsync(_currentUserId,
+            Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<DateTimeOffset>());
     }
 
     #endregion
@@ -386,7 +422,7 @@ public class PostReviewServiceShould : UnitTestBase
             CreatedUtc = DateTimeOffset.UtcNow
         };
         _repository.GetAsync(reviewId).Returns(review);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>()).Returns(review);
 
         await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
 
@@ -424,7 +460,7 @@ public class PostReviewServiceShould : UnitTestBase
         var review = EditableReview(reviewId);
         _repository.GetAsync(reviewId).Returns(review);
         UpdatePostReviewEntity? written = null;
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>())
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>())
             .Returns(review)
             .AndDoes(ci =>
             {
@@ -456,7 +492,7 @@ public class PostReviewServiceShould : UnitTestBase
         var review = EditableReview(reviewId);
         _repository.GetAsync(reviewId).Returns(review);
         UpdatePostReviewEntity? written = null;
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>())
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>())
             .Returns(review)
             .AndDoes(ci =>
             {
@@ -482,7 +518,7 @@ public class PostReviewServiceShould : UnitTestBase
         var review = EditableReview(reviewId);
         _repository.GetAsync(reviewId).Returns(review);
         UpdatePostReviewEntity? written = null;
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>())
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>())
             .Returns(review)
             .AndDoes(ci =>
             {
@@ -516,7 +552,7 @@ public class PostReviewServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>());
+        await _repository.DidNotReceive().UpdateAsync(Arg.Any<UpdatePostReviewEntity>());
     }
 
     /// <summary>
@@ -529,7 +565,7 @@ public class PostReviewServiceShould : UnitTestBase
         var review = EditableReview(reviewId, ReviewSign.Neutral);
         _repository.GetAsync(reviewId).Returns(review);
         _repository.GetUserPostCountAsync(_currentUserId).Returns(10);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>()).Returns(review);
 
         await _service.UpdateAsync(new UpdatePostReview
         {
@@ -538,50 +574,39 @@ public class PostReviewServiceShould : UnitTestBase
             Text = "Поправил опечатку"
         });
 
-        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>());
-    }
-
-    [Fact]
-    public async Task UpdateQualityRatingOnSignChange()
-    {
-        var reviewId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var review = new PostReview
-        {
-            Id = reviewId,
-            Author = new GeneralUser { UserId = _currentUserId },
-            PostAuthor = new GeneralUser { UserId = postAuthorId },
-            Sign = ReviewSign.Positive,
-            CreatedUtc = DateTimeOffset.UtcNow
-        };
-        _repository.GetAsync(reviewId).Returns(review);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
-
-        await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Negative });
-
-        // Positive (+1) to Negative (-1) is worth -2 to the post author: the old
-        // sign taken back and the new one applied. One number, on the call that
-        // writes the sign — the two deltas used to be two commits of their own,
-        // both before the row they belong to was written.
-        await _repository.Received(1).UpdateAsync(
-            Arg.Is<UpdatePostReviewEntity>(e => e.Sign == ReviewSign.Negative), -2);
-        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>());
+        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>());
     }
 
     /// <summary>
-    /// An edit that leaves the sign where it is owes the counter nothing.
+    /// An omitted sign keeps the stored one, and it is what tells the write that
+    /// the post author's counter does not move.
     /// </summary>
+    /// <remarks>
+    /// The mirror of the text rule above. The counter is moved by the write, from
+    /// the row it locks — an edit that names no sign leaves the contribution of
+    /// that row exactly where it was — so a service that filled the field in with
+    /// the sign it had read would turn every typo correction into a counter move
+    /// computed from a state somebody else may already have changed.
+    /// </remarks>
     [Fact]
-    public async Task MoveNoQualityRatingWhenOnlyTheTextChanges()
+    public async Task LeaveTheSignAloneWhenTheRequestDoesNotCarryIt()
     {
         var reviewId = Guid.NewGuid();
         var review = EditableReview(reviewId);
         _repository.GetAsync(reviewId).Returns(review);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
+        UpdatePostReviewEntity? written = null;
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>())
+            .Returns(review)
+            .AndDoes(ci =>
+            {
+                var e = ci.ArgAt<UpdatePostReviewEntity>(0);
+                written = e;
+            });
 
         await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Text = "Поправил опечатку" });
 
-        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), 0);
+        written.Should().NotBeNull();
+        written!.Sign.Should().BeNull();
     }
 
     #endregion
@@ -601,57 +626,11 @@ public class PostReviewServiceShould : UnitTestBase
             Sign = ReviewSign.Neutral
         };
         _repository.GetAsync(reviewId).Returns(review);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>()).Returns(review);
 
         await _service.DeleteAsync(reviewId);
 
         _intentionManager.Received(1).ThrowIfForbidden(PostReviewIntention.Delete, review);
-    }
-
-    [Fact]
-    public async Task RevertQualityRatingOnDelete()
-    {
-        var reviewId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var review = new PostReview
-        {
-            Id = reviewId,
-            Author = new GeneralUser { UserId = _currentUserId },
-            PostAuthor = new GeneralUser { UserId = postAuthorId },
-            Sign = ReviewSign.Positive
-        };
-        _repository.GetAsync(reviewId).Returns(review);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
-
-        await _service.DeleteAsync(reviewId);
-
-        // On the removal itself, so the counter and the flag land together
-        await _repository.Received(1).UpdateAsync(
-            Arg.Is<UpdatePostReviewEntity>(e => e.IsRemoved == true), -1);
-        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>());
-    }
-
-    /// <summary>
-    /// A neutral review took nothing from the post author, so removing it gives
-    /// nothing back.
-    /// </summary>
-    [Fact]
-    public async Task MoveNoQualityRatingWhenRemovingANeutralReview()
-    {
-        var reviewId = Guid.NewGuid();
-        var review = new PostReview
-        {
-            Id = reviewId,
-            Author = new GeneralUser { UserId = _currentUserId },
-            PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
-            Sign = ReviewSign.Neutral
-        };
-        _repository.GetAsync(reviewId).Returns(review);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
-
-        await _service.DeleteAsync(reviewId);
-
-        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), 0);
     }
 
     /// <summary>
@@ -671,7 +650,7 @@ public class PostReviewServiceShould : UnitTestBase
         };
         _repository.GetAsync(reviewId).Returns(review);
         UpdatePostReviewEntity? written = null;
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>())
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>())
             .Returns(review)
             .AndDoes(ci =>
             {
@@ -705,12 +684,12 @@ public class PostReviewServiceShould : UnitTestBase
             CreatedUtc = DateTimeOffset.UtcNow.AddDays(-30)
         };
         _repository.GetAsync(reviewId).Returns(review);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>(), Arg.Any<int>()).Returns(review);
+        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>()).Returns(review);
 
         await _service.DeleteAsync(reviewId);
 
         await _repository.Received(1).UpdateAsync(
-            Arg.Is<UpdatePostReviewEntity>(e => e.IsRemoved == true), -1);
+            Arg.Is<UpdatePostReviewEntity>(e => e.IsRemoved == true));
     }
 
     #endregion
@@ -767,8 +746,21 @@ public class PostReviewServiceShould : UnitTestBase
 
         _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
         _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
-        _repository.ExistsAsync(_currentUserId, postId).Returns(false);
-        _repository.HasRecentReviewInGameAsync(_currentUserId, gameId, Arg.Any<DateTimeOffset>()).Returns(false);
+        Reviewed();
+        RecentlyReviewedGames();
         _repository.CreateAsync(Arg.Any<CreatePostReviewEntity>(), Arg.Any<int>()).Returns(expectedReview);
     }
+
+    /// <summary>The posts among the asked ones the rater has a review of.</summary>
+    private void Reviewed(params Guid[] postIds) =>
+        _repository.SelectReviewedPostIdsAsync(_currentUserId, Arg.Any<IReadOnlyCollection<Guid>>())
+            .Returns(callInfo => (IReadOnlyCollection<Guid>)callInfo.Arg<IReadOnlyCollection<Guid>>()
+                .Where(postIds.Contains).ToArray());
+
+    /// <summary>The games among the asked ones the rater reviewed a post in since the cutoff.</summary>
+    private void RecentlyReviewedGames(params Guid[] gameIds) =>
+        _repository.SelectGamesReviewedSinceAsync(_currentUserId, Arg.Any<IReadOnlyCollection<Guid>>(),
+                Arg.Any<DateTimeOffset>())
+            .Returns(callInfo => (IReadOnlyCollection<Guid>)callInfo.Arg<IReadOnlyCollection<Guid>>()
+                .Where(gameIds.Contains).ToArray());
 }

@@ -28,7 +28,6 @@ public class BlogSubscriptionServiceShould : UnitTestBase
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IBlogBlacklistRepository _blacklistRepository;
     private readonly BlogSubscriptionService _service;
 
     public BlogSubscriptionServiceShould()
@@ -38,7 +37,6 @@ public class BlogSubscriptionServiceShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _guidFactory = Mock<IGuidFactory>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
-        _blacklistRepository = Mock<IBlogBlacklistRepository>();
 
         _identityProvider.Current.Returns(Identity.Guest());
         _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
@@ -48,30 +46,20 @@ public class BlogSubscriptionServiceShould : UnitTestBase
             _userLookupService,
             _identityProvider,
             _guidFactory,
-            _dateTimeProvider,
-            // The real guard over the mocked store: the rule under test is the
-            // guard's, and the generic subscription endpoint asks the same
-            // object, so a stub here would test a copy of it that no caller uses.
-            new BlogSubscriptionGuard(_blacklistRepository));
+            _dateTimeProvider);
     }
 
+    /// <summary>
+    /// The blog's blacklist does not stand between anybody and a subscription:
+    /// it closes writing, and following the blog is reading. The behaviour end
+    /// to end is in BlacklistRuleShould.
+    /// </summary>
     [Fact]
-    public async Task RefuseToSubscribeAUserTheBlogBlacklisted()
+    public void KnowNothingOfTheBlacklist()
     {
-        var blogId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(userId));
-        _blacklistRepository
-            .IsBlocked(blogId, userId, Arg.Any<CancellationToken>()).Returns(true);
-
-        var act = async () => await _service.SubscribeAsync(blogId);
-
-        // Reading the blog is open to them and stays open. Joining its list of
-        // readers is the write the blacklist refuses, and the entry that put them
-        // on the list dropped the subscription they had.
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().CreateAsync(Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>());
+        typeof(BlogSubscriptionService).GetConstructors().Single().GetParameters()
+            .Select(parameter => parameter.ParameterType)
+            .Should().NotContain([typeof(IBlogBlacklistRepository), typeof(DM.Domain.Blog.Features.Blogs.IBlogService)]);
     }
 
     [Fact]

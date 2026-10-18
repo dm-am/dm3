@@ -17,6 +17,14 @@ public interface IUnreadApiService
     Task<Envelope<FirstUnreadPostResult>> GetFirstUnreadPost(Guid gameId);
 
     /// <summary>
+    /// Get the first unread post in one room, with its page
+    /// </summary>
+    /// <param name="roomId">Room identifier</param>
+    /// <param name="pageSize">Page size to count the page at; the reader's own setting when null</param>
+    /// <returns>Result with location of the first unread post</returns>
+    Task<Envelope<FirstUnreadRoomPostResult>> GetFirstUnreadPostInRoom(Guid roomId, int? pageSize);
+
+    /// <summary>
     /// Get the first unread comment in a game
     /// </summary>
     /// <param name="gameId">Game identifier</param>

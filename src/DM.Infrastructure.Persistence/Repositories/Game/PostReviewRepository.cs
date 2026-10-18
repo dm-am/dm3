@@ -36,11 +36,22 @@ internal class PostReviewRepository : IPostReviewRepository
         .CountAsync();
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The list numbers its reviews ("#1", "#2") by this order, so it has to
+    /// come out the same on every read. Two reviews of one post can carry the
+    /// same moment (the seed draws whole minutes), and an ORDER BY that leaves
+    /// a tie open lets Postgres hand the pair back either way round, by the
+    /// plan it picks: the first two reviews of a post came back swapped between
+    /// a request for five and a request for twenty. The identifier closes the
+    /// tie. It says nothing about which of the two came first, only that the
+    /// answer is the same every time.
+    /// </remarks>
     public async Task<IEnumerable<PostReview>> GetAsync(Guid postId, PagingData paging) =>
         await _dbContext.PostReviews
             .TagWith("DM.PostReview.GetByPost")
             .Where(r => r.PostId == postId && !r.IsRemoved)
             .OrderByDescending(r => r.CreatedUtc)
+            .ThenByDescending(r => r.PostReviewId)
             .Page(paging)
             .ProjectToPostReview()
             .ToArrayAsync();
@@ -74,6 +85,12 @@ internal class PostReviewRepository : IPostReviewRepository
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The identifier after the moment for the reason given at
+    /// <see cref="GetAsync(Guid, PagingData)"/>, and for the pages as well: an
+    /// open tie at a page boundary lets one review stand on two pages and
+    /// another on none.
+    /// </remarks>
     public async Task<IEnumerable<PostReview>> GetAllAsync(PagingData paging, PostReviewFilter? filter = null)
     {
         var query = _dbContext.PostReviews
@@ -84,6 +101,7 @@ internal class PostReviewRepository : IPostReviewRepository
 
         return await query
             .OrderByDescending(r => r.CreatedUtc)
+            .ThenByDescending(r => r.PostReviewId)
             .Page(paging)
             .ProjectToPostReview()
             .ToArrayAsync();
@@ -92,11 +110,16 @@ internal class PostReviewRepository : IPostReviewRepository
     // ═══ WRITE ═══
 
     /// <inheritdoc />
-    public Task<bool> ExistsAsync(Guid authorId, Guid postId) => _dbContext.PostReviews
-        .TagWith("DM.PostReview.Exists")
-        .AnyAsync(r => r.AuthorId == authorId &&
-                       r.PostId == postId &&
-                       !r.IsRemoved);
+    public async Task<IReadOnlyCollection<Guid>> SelectReviewedPostIdsAsync(
+        Guid authorId, IReadOnlyCollection<Guid> postIds) =>
+        await _dbContext.PostReviews
+            .TagWith("DM.PostReview.Reviewed")
+            .Where(r => r.AuthorId == authorId &&
+                        postIds.Contains(r.PostId) &&
+                        !r.IsRemoved)
+            .Select(r => r.PostId)
+            .Distinct()
+            .ToListAsync();
 
     /// <inheritdoc />
     /// <remarks>
@@ -162,35 +185,77 @@ internal class PostReviewRepository : IPostReviewRepository
     /// counter used to be moved by a call of its own that committed before the row
     /// was written at all. A refusal in the gap left the profile carrying a sign
     /// the review does not have, with nothing to recompute it from.
+    ///
+    /// What the counter owes is worked out here rather than handed in. The caller
+    /// could only compute it from the review it had read a moment earlier, and two
+    /// writes started from that same reading — a removal and an edit, or two
+    /// removals — each paid for a state the row was no longer in: the sign given
+    /// back twice for one review. The row is locked first and the difference is
+    /// taken between what it holds now and what this write leaves it holding, so
+    /// the loser of that race owes nothing.
     /// </remarks>
-    public async Task<PostReview> UpdateAsync(UpdatePostReviewEntity entity, int qualityRatingDelta)
+    public async Task<PostReview> UpdateAsync(UpdatePostReviewEntity entity)
     {
         // The strategy wrapper is required because the API host configures
         // EnableRetryOnFailure.
         await RetryableWrite.Run(_dbContext, async () =>
         {
-            // Read inside the block: the clear above drops the tracked review, so
-            // it has to be loaded again. On the first attempt this costs nothing.
-            var dbReview = await _dbContext.PostReviews.FindAsync(entity.PostReviewId);
-            if (dbReview == null)
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            // First statement of the transaction: whoever else is editing or
+            // removing this review waits here until this one commits, and then
+            // reads the row as this write left it.
+            await _dbContext.Database.ExecuteSqlRawAsync(
+                """SELECT "PostReviewId" FROM "PostReviews" WHERE "PostReviewId" = {0} FOR UPDATE""",
+                entity.PostReviewId);
+
+            // Under the lock, past the change tracker and past the soft-delete
+            // filter: one of the states this method starts from is "already
+            // removed", the filter hides it, and a row the context happens to
+            // carry from an earlier read holds what it held before the lock.
+            var stored = await _dbContext.PostReviews
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .TagWith("DM.PostReview.Locked")
+                .Where(r => r.PostReviewId == entity.PostReviewId)
+                .Select(r => new { r.SignValue, r.IsRemoved, r.PostAuthorId })
+                .FirstOrDefaultAsync();
+            if (stored == null)
             {
                 throw new InvalidOperationException($"Review {entity.PostReviewId} not found");
             }
 
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            // What this write leaves the row holding: a field the caller left out
+            // keeps the stored value, which is also what the row write below omits.
+            var signAfter = entity.Sign.HasValue ? (short)entity.Sign.Value : stored.SignValue;
+            var removedAfter = entity.IsRemoved ?? stored.IsRemoved;
 
             // The row carries whose counter this is: the same denormalised column
             // the reads filter by, rather than a second copy passed in alongside.
-            await MoveQualityRating(dbReview.PostAuthorId, qualityRatingDelta);
+            await MoveQualityRating(stored.PostAuthorId,
+                Contribution(signAfter, removedAfter) - Contribution(stored.SignValue, stored.IsRemoved));
+
+            // IgnoreQueryFilters for the same reason as the read above; the row is
+            // loaded after the lock, and only the fields the caller named are
+            // assigned, so the update carries nothing the caller did not ask for.
+            var dbReview = await _dbContext.PostReviews
+                .IgnoreQueryFilters()
+                .FirstAsync(r => r.PostReviewId == entity.PostReviewId);
 
             if (entity.Sign.HasValue)
                 dbReview.Sign = entity.Sign.Value;
             if (entity.Text != null)
                 dbReview.Text = entity.Text;
-            if (entity.IsRemoved == true)
+            if (entity.IsRemoved == true && !stored.IsRemoved)
                 // Through the one call that writes the flag and the audit together,
                 // as the endorsement removal does: a review a senior moderator took
                 // down with no hand recorded cannot be reviewed afterwards.
+                //
+                // Only when the row is still live. The audit says who took the
+                // review down and when, and a second removal arriving behind the
+                // first would overwrite that with its own hand and clock, so the
+                // removal that actually happened would be recorded as somebody
+                // else's. The counter above already owes nothing in that case.
                 SoftDelete.Mark(dbReview, entity.DeletedByUserId, entity.DeletedUtc ?? _dateTimeProvider.Now);
             else if (entity.IsRemoved == false)
                 dbReview.IsRemoved = false;
@@ -215,6 +280,18 @@ internal class PostReviewRepository : IPostReviewRepository
             .ProjectToPostReview()
             .FirstAsync();
     }
+
+    /// <summary>
+    /// What one review row is worth to the post author's stored quality rating.
+    /// </summary>
+    /// <remarks>
+    /// A removed review is worth nothing and a live one is worth its sign, so the
+    /// edit and the removal are the same arithmetic: the contribution the row will
+    /// have, less the contribution it has. Stated once because the two used to be
+    /// two formulas at the call site, and a formula the caller computes is a
+    /// formula computed from a row that may have moved since.
+    /// </remarks>
+    private static int Contribution(short signValue, bool isRemoved) => isRemoved ? 0 : signValue;
 
     /// <summary>
     /// Move the post author's stored quality rating by what a review is worth.
@@ -269,13 +346,17 @@ internal class PostReviewRepository : IPostReviewRepository
     }
 
     /// <inheritdoc />
-    public Task<bool> HasRecentReviewInGameAsync(Guid authorId, Guid gameId, DateTimeOffset cutoffDate) =>
-        _dbContext.PostReviews
-            .TagWith("DM.PostReview.HasRecentInGame")
-            .AnyAsync(r => r.AuthorId == authorId &&
-                           r.GameId == gameId &&
-                           r.CreatedUtc >= cutoffDate &&
-                           !r.IsRemoved);
+    public async Task<IReadOnlyCollection<Guid>> SelectGamesReviewedSinceAsync(
+        Guid authorId, IReadOnlyCollection<Guid> gameIds, DateTimeOffset cutoffDate) =>
+        await _dbContext.PostReviews
+            .TagWith("DM.PostReview.RecentInGames")
+            .Where(r => r.AuthorId == authorId &&
+                        gameIds.Contains(r.GameId) &&
+                        r.CreatedUtc >= cutoffDate &&
+                        !r.IsRemoved)
+            .Select(r => r.GameId)
+            .Distinct()
+            .ToListAsync();
 
     /// <inheritdoc />
     /// <remarks>

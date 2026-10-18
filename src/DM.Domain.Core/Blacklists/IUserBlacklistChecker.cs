@@ -27,6 +27,17 @@ public interface IUserBlacklistChecker
     Task<bool> IsBlockedAsync(Guid ownerId, Guid blockedUserId, CancellationToken ct = default);
 
     /// <summary>
+    /// The switches a user put on their personal blacklist
+    /// </summary>
+    /// <remarks>
+    /// Read across modules for the one switch that acts outside a listing: whether
+    /// a new game or blog takes a copy of its creator's list.
+    /// </remarks>
+    /// <param name="userId">The user who owns the blacklist</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<UserBlacklistSettings> GetSettings(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
     /// Get IDs of users blocked by a specific user, only if the specified flag is enabled.
     /// Returns empty collection if flag is not set.
     /// </summary>

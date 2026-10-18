@@ -27,6 +27,13 @@ internal class UnreadApiService : IUnreadApiService
     }
 
     /// <inheritdoc />
+    public async Task<Envelope<FirstUnreadRoomPostResult>> GetFirstUnreadPostInRoom(Guid roomId, int? pageSize)
+    {
+        var result = await _firstUnreadService.GetFirstUnreadPostInRoom(roomId, pageSize);
+        return new Envelope<FirstUnreadRoomPostResult>(_mapper.ToResponse(result));
+    }
+
+    /// <inheritdoc />
     public async Task<Envelope<FirstUnreadCommentResult>> GetFirstUnreadComment(Guid gameId)
     {
         var result = await _firstUnreadService.GetFirstUnreadComment(gameId);

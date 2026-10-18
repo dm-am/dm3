@@ -1,20 +1,22 @@
 @*
     Уведомление о входе с незнакомого устройства.
 
-    Адрес и устройство приходят необязательными: детектор мог их не определить.
-    Пустую строку показывать нельзя — вместо нее строка таблицы не печатается вовсе,
-    иначе письмо утверждает "устройство: " и выглядит сломанным.
+    Страна, адрес и устройство приходят необязательными: детектор мог их не
+    определить. Пустую строку показывать нельзя — вместо нее строка таблицы не
+    печатается вовсе, иначе письмо утверждает "устройство: " и выглядит сломанным.
+
+    Адрес назван IP-адресом, а не адресом: словом "адрес" соседние письма
+    зовут почтовый ящик ("Текущий адрес", "Новый адрес", "Прежний адрес"), и в
+    наборе из тринадцати писем одно слово не может значить две разные вещи.
+
+    Адрес стоит выше страны: строка называет, откуда пришел вход, а страна
+    поясняет ее. Сам по себе адрес читателю мало что говорит - своего он чаще
+    всего не знает, а на телефоне тот меняется с каждым подключением, - поэтому
+    под ним идет страна, на которой читатель и узнает чужой вход.
 *@
-<EmailLayout Title="Вход с незнакомого устройства">
-    <p style="@EmailConstants.ParagraphStyles">
-        Здравствуйте, @Model.Username!
-    </p>
-
-    <p style="@EmailConstants.ParagraphStyles">
-        В вашу учетную запись вошли с устройства, которое мы раньше не видели.
-    </p>
-
-    <table style="@EmailConstants.ParagraphStyles">
+<EmailLayout Title="Незнакомое устройство">
+    <div style="@EmailConstants.BoxStyles">
+    <table style="@EmailConstants.FactTableStyles">
         <tr>
             <td style="@EmailConstants.FactLabelStyles">Когда</td>
             <td style="@EmailConstants.FactValueStyles">@Model.Timestamp</td>
@@ -22,23 +24,26 @@
         @if (!string.IsNullOrWhiteSpace(Model.IpAddress))
         {
             <tr>
-                <td style="@EmailConstants.FactLabelStyles">Адрес</td>
+                <td style="@EmailConstants.FactLabelStyles">IP-адрес</td>
                 <td style="@EmailConstants.FactValueStyles">@Model.IpAddress</td>
             </tr>
-        }
+            }
+        @if (!string.IsNullOrWhiteSpace(Model.Country))
+        {
+            <tr>
+                <td style="@EmailConstants.FactLabelStyles">Страна</td>
+                <td style="@EmailConstants.FactValueStyles">@Model.Country</td>
+            </tr>
+            }
         @if (!string.IsNullOrWhiteSpace(Model.DeviceInfo))
         {
             <tr>
                 <td style="@EmailConstants.FactLabelStyles">Устройство</td>
                 <td style="@EmailConstants.FactValueStyles">@Model.DeviceInfo</td>
             </tr>
-        }
+            }
     </table>
-
-    <p style="@EmailConstants.ParagraphStyles">
-        Если это были вы, ничего делать не нужно. Если нет — смените пароль: это
-        завершит чужую сессию.
-    </p>
+    </div>
 </EmailLayout>
 
 @code {

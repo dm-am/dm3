@@ -14,6 +14,10 @@ using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Chara
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
+using DM.Web.API.IntegrationTests.Helpers;
+
+using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAttributeSchema;
+
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
 /// <summary>
@@ -77,6 +81,43 @@ public class CharacterStatusShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    /// <summary>
+    /// Exile is the lead's move, and the lead takes it back.
+    /// </summary>
+    [Fact]
+    public async Task BringBackTheCharacterTheMasterExiled()
+    {
+        var (master, characterId) = await AddGameWithCharacterAsync(CharacterStatus.Retired, exiled: true);
+
+        var response = await Send(characterId, CharacterStatusTransition.Readmit, master);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var character = await Reload(characterId);
+        character.Status.Should().Be(CharacterStatus.Active);
+        character.IsPlayerExiled.Should().BeFalse("a character back in play is not marked thrown out");
+    }
+
+    /// <summary>
+    /// Each way back undoes its own move. A death is not undone by Readmit, an
+    /// exile is not undone by Resurrect, and what the player left nobody undoes.
+    /// </summary>
+    [Theory]
+    [InlineData(CharacterStatusTransition.Readmit, true, false, false)]
+    [InlineData(CharacterStatusTransition.Resurrect, false, false, true)]
+    [InlineData(CharacterStatusTransition.Resurrect, false, true, false)]
+    [InlineData(CharacterStatusTransition.Readmit, false, true, false)]
+    public async Task UndoOnlyTheMoveTheTransitionIsFor(
+        CharacterStatusTransition transition, bool dead, bool left, bool exiled)
+    {
+        var (master, characterId) = await AddGameWithCharacterAsync(
+            CharacterStatus.Retired, dead: dead, left: left, exiled: exiled);
+
+        var response = await Send(characterId, transition, master);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await Reload(characterId)).Status.Should().Be(CharacterStatus.Retired);
+    }
+
     [Fact]
     public async Task RefuseAStrangerWhoIsNotInTheGame()
     {
@@ -125,7 +166,7 @@ public class CharacterStatusShould : IntegrationTestBase
     /// and seeded, so fixed identifiers would collide.
     /// </summary>
     private async Task<(GeneralUser Master, Guid CharacterId)> AddGameWithCharacterAsync(
-        CharacterStatus status)
+        CharacterStatus status, bool dead = false, bool left = false, bool exiled = false)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
@@ -157,12 +198,16 @@ public class CharacterStatusShould : IntegrationTestBase
             Status = ModuleStatus.Active,
             PremoderationStatus = PremoderationStatus.Approved,
         });
+        dbContext.Set<DbGameAttributeSchema>().Add(GameSheetTestHelper.Sheet(gameId));
         dbContext.Characters.Add(new DbCharacter
         {
             CharacterId = characterId,
             GameId = gameId,
             AuthorId = playerId,
             Status = status,
+            IsDead = dead,
+            IsPlayerLeft = left,
+            IsPlayerExiled = exiled,
             Name = "Char " + Guid.NewGuid().ToString("N")[..6],
             CreatedUtc = DateTimeOffset.UtcNow,
         });

@@ -3,6 +3,7 @@ using DM.Domain.Core.Content;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using DM.Domain.Core.Enums;
+using DM.Web.API.Features.Game.AttributeSchemas;
 using CommentariesAccessMode = DM.Domain.Core.Enums.CommentsAccessMode;
 
 namespace DM.Web.API.Features.Game.Games;
@@ -52,9 +53,11 @@ public class CreateGameRequest
     public IEnumerable<int>? Tags { get; set; }
 
     /// <summary>
-    /// Attribute schema identifier (for character attributes)
+    /// The character sheet the game starts with. Created together with the
+    /// game, so a refused sheet is a refused game; an empty set is allowed and
+    /// means characters with no attributes.
     /// </summary>
-    public Guid? SchemaId { get; set; }
+    public IEnumerable<AttributeSpecification> AttributeSpecifications { get; set; } = [];
 
     /// <summary>
     /// Assistant user username (optional)
@@ -65,6 +68,13 @@ public class CreateGameRequest
     /// Privacy settings for the game
     /// </summary>
     public CreateGamePrivacySettings? PrivacySettings { get; set; }
+
+    /// <summary>
+    /// Copy the creator's personal blacklist into the game's. Absent, the
+    /// creator's account setting "Переносить черный список в новые игры и
+    /// блоги" decides.
+    /// </summary>
+    public bool? CopyBlacklist { get; set; }
 }
 
 /// <summary>

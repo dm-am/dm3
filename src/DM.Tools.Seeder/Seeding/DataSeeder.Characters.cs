@@ -7,14 +7,9 @@ using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
-using DbAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
-using DbAttributeSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
-using DbStringConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.StringAttributeConstraints;
-using DbBbCodeConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.BbCodeAttributeConstraints;
-using DbListConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeConstraints;
-using DbListValueKind = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListValueKind;
-using DbListAttributeValue = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeValue;
+using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAttributeSchema;
 using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
+using DefaultAttributeSchema = DM.Infrastructure.Persistence.InitialData.DefaultAttributeSchema;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Tools.Seeder.Seeding;
@@ -22,110 +17,63 @@ namespace DM.Tools.Seeder.Seeding;
 internal sealed partial class DataSeeder
 {
     // ─────────────────────────────────────────────────────────────────────
-    // System attribute schema ("Классическая схема")
-    //
-    // A single well-known Public schema (Author=null) that mirrors the eight
-    // legacy character fields. Its Id and every specification Id are PINNED so
-    // that seeded games (Game.AttributeSchemaId) and character attribute rows
-    // (CharacterAttribute.AttributeId) keep referencing the same schema across
-    // repeated seeds. The upsert below is idempotent — a regenerated Id would
-    // orphan those references.
+    // The default character sheet is initial data of the schema and lives
+    // beside it (DefaultAttributeSchema): the template row ships with the
+    // migration, and every seeded game gets its own copy of the same sheet.
+    // Every specification identifier is pinned there, because the attribute
+    // values of seeded characters address them.
     // ─────────────────────────────────────────────────────────────────────
-    private static readonly Guid SystemSchemaId = new("b1a5c0de-0000-4000-8000-000000000001");
-    private static readonly Guid SpecRaceId = new("b1a5c0de-0000-4000-8000-000000000101");
-    private static readonly Guid SpecClassId = new("b1a5c0de-0000-4000-8000-000000000102");
-    private static readonly Guid SpecAlignmentId = new("b1a5c0de-0000-4000-8000-000000000103");
-    private static readonly Guid SpecAppearanceId = new("b1a5c0de-0000-4000-8000-000000000104");
-    private static readonly Guid SpecTemperId = new("b1a5c0de-0000-4000-8000-000000000105");
-    private static readonly Guid SpecStoryId = new("b1a5c0de-0000-4000-8000-000000000106");
-    private static readonly Guid SpecSkillsId = new("b1a5c0de-0000-4000-8000-000000000107");
-    private static readonly Guid SpecInventoryId = new("b1a5c0de-0000-4000-8000-000000000108");
+    private static IReadOnlyList<string> AlignmentNames => DefaultAttributeSchema.AlignmentNames;
 
     /// <summary>
-    /// The nine D&amp;D alignments, used both as the "Мировоззрение" list options
-    /// and as the stored value of a character's alignment attribute. Order is
-    /// the classic law/chaos by good/evil grid, and callers index into it.
+    /// Gives every seeded game its own copy of the default sheet.
     /// </summary>
-    private static readonly string[] AlignmentNames =
+    /// <remarks>
+    /// Written only for the games that hold none, so a second run leaves the
+    /// sheets a master may already have edited alone and the version of an
+    /// untouched one does not creep upwards with every run. The copy carries
+    /// the pinned identifiers, which is what keeps the attribute values of
+    /// seeded characters readable across runs.
+    /// </remarks>
+    private async Task SeedGameAttributeSchemasAsync(ComprehensiveSeedResult result)
     {
-        "Законопослушный добрый",
-        "Нейтральный добрый",
-        "Хаотичный добрый",
-        "Законопослушный нейтральный",
-        "Нейтральный",
-        "Хаотичный нейтральный",
-        "Законопослушный злой",
-        "Нейтральный злой",
-        "Хаотичный злой"
-    };
+        var gamesWithoutSheet = await _dbContext.Set<DbGame>()
+            .Where(g => !_dbContext.GameAttributeSchemas.Any(s => s.GameId == g.GameId))
+            .Select(g => new { g.GameId, g.CreatedUtc })
+            .ToListAsync();
 
-    /// <summary>
-    /// Idempotently upserts the pinned system attribute schema, so a reseed
-    /// keeps the same Id (games would otherwise orphan). Every seeded game is
-    /// attached to <see cref="SystemSchemaId"/>.
-    /// </summary>
-    private async Task SeedSystemAttributeSchemaAsync(ComprehensiveSeedResult result)
-    {
-        var schema = new DbAttributeSchema
+        if (gamesWithoutSheet.Count == 0)
         {
-            AttributeSchemaId = SystemSchemaId,
-            UserId = null,
-            Type = SchemaType.Public,
-            Title = "Классическая схема",
-            IsRemoved = false,
-            Specifications = new List<DbAttributeSpecification>
+            result.Details.Add("Every game already carries its own attribute sheet");
+            return;
+        }
+
+        foreach (var game in gamesWithoutSheet)
+        {
+            _dbContext.GameAttributeSchemas.Add(new DbGameAttributeSchema
             {
-                new() { Id = SpecRaceId, Title = "Раса", Order = 0, IsDescriptor = false, IsHidden = false,
-                    Constraints = new DbStringConstraints { Required = false, MaxLength = 30 } },
-                new() { Id = SpecClassId, Title = "Класс", Order = 1, IsDescriptor = true, IsHidden = false,
-                    Constraints = new DbStringConstraints { Required = false, MaxLength = 30 } },
-                new() { Id = SpecAlignmentId, Title = "Мировоззрение", Order = 2, IsDescriptor = false, IsHidden = false,
-                    Constraints = new DbListConstraints
-                    {
-                        Required = false,
-                        Kind = DbListValueKind.Text,
-                        Values = AlignmentNames.Select(a => new DbListAttributeValue { Value = a, Modifier = null }).ToList()
-                    } },
-                new() { Id = SpecAppearanceId, Title = "Внешность", Order = 3, IsDescriptor = false, IsHidden = false,
-                    Constraints = new DbBbCodeConstraints { Required = false, MaxLength = 20000 } },
-                new() { Id = SpecTemperId, Title = "Характер", Order = 4, IsDescriptor = false, IsHidden = false,
-                    Constraints = new DbBbCodeConstraints { Required = false, MaxLength = 20000 } },
-                new() { Id = SpecStoryId, Title = "История", Order = 5, IsDescriptor = false, IsHidden = false,
-                    Constraints = new DbBbCodeConstraints { Required = false, MaxLength = 20000 } },
-                new() { Id = SpecSkillsId, Title = "Навыки", Order = 6, IsDescriptor = false, IsHidden = false,
-                    Constraints = new DbBbCodeConstraints { Required = false, MaxLength = 20000 } },
-                new() { Id = SpecInventoryId, Title = "Инвентарь", Order = 7, IsDescriptor = false, IsHidden = false,
-                    Constraints = new DbBbCodeConstraints { Required = false, MaxLength = 20000 } }
-            }
-        };
+                GameId = game.GameId,
+                Specifications = DefaultAttributeSchema.Specifications(),
+                Version = 0,
+                UpdatedUtc = game.CreatedUtc
+            });
+        }
 
-        // Idempotent upsert: a repeated seed replaces the pinned row in place.
-        var existing = await _dbContext.AttributeSchemata
-            .FirstOrDefaultAsync(s => s.AttributeSchemaId == SystemSchemaId);
-        if (existing == null)
-        {
-            _dbContext.AttributeSchemata.Add(schema);
-        }
-        else
-        {
-            _dbContext.Entry(existing).CurrentValues.SetValues(schema);
-            existing.Specifications = schema.Specifications;
-        }
         await _dbContext.SaveChangesAsync();
-
-        result.Details.Add("System attribute schema 'Классическая схема' upserted");
+        result.Details.Add($"Attribute sheets written for {gamesWithoutSheet.Count} games");
     }
 
     /// <summary>
-    /// Writes <see cref="DbCharacterAttribute"/> rows for the legacy per-field
-    /// character values against the pinned system schema. Empty/null values are
-    /// skipped (e.g. a Cyberpunk character with no alignment gets no "Мировоззрение"
-    /// row, mirroring the legacy games that had no alignment at all).
+    /// Writes <see cref="DbCharacterAttribute"/> rows for the inherited
+    /// per-field character values against the pinned default sheet. Empty and
+    /// null values are skipped (e.g. a Cyberpunk character with no alignment
+    /// gets no "Мировоззрение" row, mirroring the legacy games that had no
+    /// alignment at all). The fields the default sheet does not draw - race and
+    /// class - are not written at all: there would be no specification for them
+    /// to answer to.
     /// </summary>
     private void AddLegacyCharacterAttributes(
         Guid characterId,
-        string? race = null,
-        string? @class = null,
         int? alignmentIndex = null,
         string? appearance = null,
         string? temper = null,
@@ -149,14 +97,12 @@ internal sealed partial class DataSeeder
             });
         }
 
-        Add(SpecRaceId, race);
-        Add(SpecClassId, @class);
-        Add(SpecAlignmentId, alignmentIndex.HasValue ? AlignmentNames[alignmentIndex.Value] : null);
-        Add(SpecAppearanceId, appearance);
-        Add(SpecTemperId, temper);
-        Add(SpecStoryId, story);
-        Add(SpecSkillsId, skills);
-        Add(SpecInventoryId, inventory);
+        Add(DefaultAttributeSchema.AlignmentId, alignmentIndex.HasValue ? AlignmentNames[alignmentIndex.Value] : null);
+        Add(DefaultAttributeSchema.AppearanceId, appearance);
+        Add(DefaultAttributeSchema.TemperId, temper);
+        Add(DefaultAttributeSchema.StoryId, story);
+        Add(DefaultAttributeSchema.SkillsId, skills);
+        Add(DefaultAttributeSchema.InventoryId, inventory);
     }
 
     /// <summary>
@@ -179,7 +125,7 @@ internal sealed partial class DataSeeder
         };
         _dbContext.Set<Character>().Add(npc);
         AddLegacyCharacterAttributes(npc.CharacterId,
-            race: "Неизвестно", @class: "Неизвестно", appearance: "Фигура, скрытая тенью.");
+            appearance: "Фигура, скрытая тенью.");
         result.CharactersCreated++;
         return npc;
     }
@@ -191,8 +137,6 @@ internal sealed partial class DataSeeder
         // seed and could not be pinned at all.
         var now = _now;
         var characterNames = new[] { "Арагорн Следопыт", "Эльвира Чародейка", "Горим Железный Кулак", "Лиара Тенебраум", "Кассандра Видящая", "Торин Дубощит" };
-        var races = new[] { "Человек", "Эльф", "Дварф", "Полуэльф", "Тифлинг", "Гном" };
-        var classes = new[] { "Следопыт", "Маг", "Воин", "Плут", "Жрец", "Паладин" };
         var postTexts = new[]
         {
             "Я осторожно оглядываюсь по сторонам, держа руку на рукояти меча.",
@@ -256,9 +200,7 @@ internal sealed partial class DataSeeder
 
                 _dbContext.Set<Character>().Add(character);
                 AddLegacyCharacterAttributes(character.CharacterId,
-                    race: races[ci % races.Length],
-                    @class: classes[ci % classes.Length],
-                    alignmentIndex: ci % AlignmentNames.Length,
+                    alignmentIndex: ci % AlignmentNames.Count,
                     appearance: "Высокий, крепкого телосложения.",
                     temper: "Решительный и отважный.",
                     story: "Родился в маленькой деревне...",
@@ -368,8 +310,6 @@ internal sealed partial class DataSeeder
             "Чародей-отшельник", "Авантюрист", "Наемник", "Картограф",
             "Бывший монах", "Путник",
         };
-        var races = new[] { "человек", "эльф", "гном", "полуэльф", "тифлинг" };
-        var classes = new[] { "воин", "маг", "следопыт", "бард", "плут" };
 
         for (var i = 0; i < toCreate; i++)
         {
@@ -392,8 +332,6 @@ internal sealed partial class DataSeeder
             };
             _dbContext.Set<Character>().Add(dropCharacter);
             AddLegacyCharacterAttributes(dropCharacter.CharacterId,
-                race: races[(existing + i) % races.Length],
-                @class: classes[(existing + i) % classes.Length],
                 story: "Покинул игру по личным обстоятельствам.");
         }
         await _dbContext.SaveChangesAsync();
@@ -425,21 +363,21 @@ internal sealed partial class DataSeeder
             return;
         }
 
-        var plans = new (int GameIndex, string Name, CharacterStatus Status, bool IsDead, bool IsPlayerLeft, int DaysAgo, string Race, string Class, string Story)[]
+        var plans = new (int GameIndex, string Name, CharacterStatus Status, bool IsDead, bool IsPlayerLeft, int DaysAgo, string Story)[]
         {
             // Game 0: active character + a dead one.
-            (0, "Ролан Странник", CharacterStatus.Active, false, false, 30, "Человек", "Следопыт", "Вышел на тракт за новыми историями."),
-            (0, "Торвальд Смелый", CharacterStatus.Retired, true, false, 120, "Дварф", "Воин", "Пал в бою, прикрывая отход отряда."),
+            (0, "Ролан Странник", CharacterStatus.Active, false, false, 30, "Вышел на тракт за новыми историями."),
+            (0, "Торвальд Смелый", CharacterStatus.Retired, true, false, 120, "Пал в бою, прикрывая отход отряда."),
             // Game 1: active character + one that left the game.
-            (1, "Мираэль Тихая", CharacterStatus.Active, false, false, 20, "Эльф", "Плут", "Держится в тени и слушает больше, чем говорит."),
-            (1, "Каспар Непоседа", CharacterStatus.Retired, false, true, 90, "Полуэльф", "Бард", "Покинул игру: дорога позвала дальше."),
+            (1, "Мираэль Тихая", CharacterStatus.Active, false, false, 20, "Держится в тени и слушает больше, чем говорит."),
+            (1, "Каспар Непоседа", CharacterStatus.Retired, false, true, 90, "Покинул игру: дорога позвала дальше."),
             // Game 2: former participation only (dead + left, no active
             // character) - visible only via PlayerParticipation.Any.
-            (2, "Эйнар Хмурый", CharacterStatus.Retired, true, false, 200, "Человек", "Варвар", "Погиб, не отступив ни на шаг."),
-            (2, "Лира Певунья", CharacterStatus.Retired, false, true, 150, "Полуэльф", "Бард", "Покинула игру ради новой баллады."),
+            (2, "Эйнар Хмурый", CharacterStatus.Retired, true, false, 200, "Погиб, не отступив ни на шаг."),
+            (2, "Лира Певунья", CharacterStatus.Retired, false, true, 150, "Покинула игру ради новой баллады."),
             // Game 3: application under review only - visible only via
             // PlayerParticipation.Any.
-            (3, "Дориан Пытливый", CharacterStatus.UnderReview, false, false, 3, "Человек", "Маг", "Заявка ожидает решения мастера."),
+            (3, "Дориан Пытливый", CharacterStatus.UnderReview, false, false, 3, "Заявка ожидает решения мастера."),
         };
 
         // Per-name idempotency: every plan name is a marker. A database
@@ -537,7 +475,7 @@ internal sealed partial class DataSeeder
             };
             _dbContext.Set<Character>().Add(planCharacter);
             AddLegacyCharacterAttributes(planCharacter.CharacterId,
-                race: plan.Race, @class: plan.Class, story: plan.Story);
+                story: plan.Story);
             result.CharactersCreated++;
         }
 

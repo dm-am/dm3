@@ -39,4 +39,14 @@ public class EmailLookupInfo
     /// User email
     /// </summary>
     public string Email { get; set; } = null!;
+
+    /// <summary>
+    /// Whether the account behind the address has been removed
+    /// </summary>
+    /// <remarks>
+    /// Found on purpose: recovery answers a removed account exactly as a live
+    /// one on the wire and tells the truth in the letter, and it cannot do
+    /// either without knowing which it found (SECURITY.md).
+    /// </remarks>
+    public bool IsRemoved { get; set; }
 }

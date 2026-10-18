@@ -27,13 +27,15 @@
     // PagingWithSeparators.vue, so even ~1px of extra leading matters).
     line-height: 0
     margin: $small 0
+    // The side of a link, read by Paging.vue as well: the same at every width.
+    --paging-side: #{$small}
 
     a
       display: inline-block
       line-height: normal
       // Half-gap per side = former flex gap $small between neighbors.
       margin: 0 ($small * 0.5)
-      padding: $tiny $small
+      padding: $tiny var(--paging-side)
       font-size: $secondary-font-size
       color: $link
       text-decoration: none
@@ -48,9 +50,10 @@
       white-space: pre
       font-size: 0
 
+    // The current page: bold at the face's one bold weight, and not a link.
     .page-number
       &.active
-        font-weight: 600
+        font-weight: 700
         color: $text
         cursor: default
 

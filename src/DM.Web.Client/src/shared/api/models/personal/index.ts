@@ -31,6 +31,15 @@ export type Paging = {
 export type Preferences = {
   theme: Theme;
   paging: Paging;
+  /**
+   * IANA name of the zone the account keeps time in ("Europe/Moscow"). Null is
+   * UTC.
+   *
+   * The letters read it, having no browser to ask, and so does the site: a
+   * signed-in reader sees every time of the site in it (siteTime in
+   * shared/lib/utils/datetime.ts), a guest in the zone of the device.
+   */
+  timeZoneId: string | null;
 };
 
 /**

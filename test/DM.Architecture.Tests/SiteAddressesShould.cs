@@ -51,6 +51,20 @@ public class SiteAddressesShould
         client.Should().BeEquivalentTo(DM.Domain.Core.Site.SiteAddresses.Hosts,
             "the server names these addresses in every letter and the client draws them in " +
             "the footer, and the two lists have no way of noticing they disagree");
+
+        var names = Regex
+            .Matches(
+                File.ReadAllText(Path.Combine(RepositoryRoot,
+                    "src", "DM.Web.Client", "src", "shared", "config", "site.ts")),
+                @"name:\s*""([^""]+)""")
+            .Select(match => match.Groups[1].Value)
+            .ToList();
+
+        names.Should().BeEquivalentTo(
+            DM.Domain.Core.Site.SiteAddresses.All.Select(address => address.Name),
+            "the letterhead calls each address the way the sidebar calls it, and a reader " +
+            "who meets one name in one place and another in the other has no way of " +
+            "telling they are the same door");
     }
 
     /// <summary>

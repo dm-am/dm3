@@ -142,49 +142,4 @@ public class UserBlacklistServiceShould : UnitTestBase
 
         await _repository.DidNotReceive().Delete(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
-
-    [Fact]
-    public async Task CheckIfUserIsBlocked()
-    {
-        _userRepository.FindUserIdAsync("Target").Returns(_targetUserId);
-        _repository.IsBlockedAsync(_currentUserId, _targetUserId, Arg.Any<CancellationToken>()).Returns(true);
-
-        var result = await _service.IsBlocked("Target");
-
-        result.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task ReturnCannotCommunicateWhenYouBlockedThem()
-    {
-        _repository.IsBlockedAsync(_currentUserId, _targetUserId, Arg.Any<CancellationToken>()).Returns(true);
-
-        var result = await _service.GetBlockStatus(_targetUserId);
-
-        result.CanCommunicate.Should().BeFalse();
-        result.Reason.Should().Be("YouBlockedThem");
-    }
-
-    [Fact]
-    public async Task ReturnCannotCommunicateWhenTheyBlockedYou()
-    {
-        _repository.IsBlockedAsync(_currentUserId, _targetUserId, Arg.Any<CancellationToken>()).Returns(false);
-        _repository.IsBlockedAsync(_targetUserId, _currentUserId, Arg.Any<CancellationToken>()).Returns(true);
-
-        var result = await _service.GetBlockStatus(_targetUserId);
-
-        result.CanCommunicate.Should().BeFalse();
-        result.Reason.Should().Be("CannotCommunicate");
-    }
-
-    [Fact]
-    public async Task ReturnCanCommunicateWhenNotBlocked()
-    {
-        _repository.IsBlockedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
-
-        var result = await _service.GetBlockStatus(_targetUserId);
-
-        result.CanCommunicate.Should().BeTrue();
-        result.Reason.Should().BeNull();
-    }
 }

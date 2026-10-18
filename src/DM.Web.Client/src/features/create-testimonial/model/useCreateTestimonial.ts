@@ -1,6 +1,10 @@
 import { ref } from "vue";
 import { useTestimonialStore } from "@/entities/testimonial";
-import { describeFailure } from "@/shared/lib/errors";
+import {
+  describeFailure,
+  refusalHere,
+  REQUEST_FAILED,
+} from "@/shared/lib/errors";
 
 export function useCreateTestimonial() {
   const testimonialStore = useTestimonialStore();
@@ -57,15 +61,12 @@ export function useCreateTestimonial() {
         authorError.value = describeFailure(error, "Пользователь не найден");
       } else if (error.status === 400) {
         errorMessage.value = "Некорректные данные (10-1000 символов)";
-      } else if (error.status === 500) {
-        errorMessage.value = "Внутренняя ошибка сервера. Попробуйте позже";
       } else {
-        // The server names which refusal a 403 was; this sentence is for a
-        // failure that named nothing.
-        errorMessage.value = describeFailure(
-          error,
-          "Не удалось создать отзыв. Попробуйте позже",
-        );
+        // What is left after the three answers about the form itself - a
+        // refused action, a rate limit, a dead server - stands in the same
+        // line, and the plate the interceptor held for it is taken down. An
+        // expired session and a dead connection stay with the plate.
+        errorMessage.value = refusalHere(error, REQUEST_FAILED) ?? "";
       }
     } else {
       authorUsername.value = "";

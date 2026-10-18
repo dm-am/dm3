@@ -4,8 +4,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using DbGlobalChatEvent = DM.Infrastructure.Persistence.Entities.Messaging.GlobalChatEvent;
 using DbGlobalChatEventParticipant = DM.Infrastructure.Persistence.Entities.Messaging.GlobalChatEventParticipant;
 
@@ -42,6 +44,13 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
     /// <inheritdoc />
     public Task<GlobalChatEvent?> GetActiveEvent() => _dbContext.GlobalChatEvents
         .Where(e => e.Status == GlobalChatEventStatus.Live)
+        // At most one row is live on PostgreSQL, where the partial unique index
+        // says so, and this order decides nothing there. It is what makes the
+        // answer the same one every time where that index is not created: an
+        // unordered read of several rows returns whichever one the plan reached
+        // first, and the chat would name a different event on every render.
+        .OrderByDescending(e => e.StartedUtc)
+        .ThenBy(e => e.GlobalChatEventId)
         .ProjectToGlobalChatEvent()
         .FirstOrDefaultAsync();
 
@@ -146,27 +155,46 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
     // ═══ LIFECYCLE ═══
 
     /// <inheritdoc />
-    public async Task<GlobalChatEvent> UpdateStatus(
+    public async Task<GlobalChatEvent?> UpdateStatus(
         Guid eventId,
+        GlobalChatEventStatus expectedStatus,
         GlobalChatEventStatus status,
         DateTimeOffset? startedAt,
         DateTimeOffset? endedAt,
         CancellationToken ct = default)
     {
-        var chatEvent = await _dbContext.GlobalChatEvents
-            .FirstAsync(e => e.GlobalChatEventId == eventId, ct).ConfigureAwait(false);
-
-        chatEvent.Status = status;
-        if (startedAt.HasValue)
+        int moved;
+        try
         {
-            chatEvent.StartedUtc = startedAt.Value;
+            // The status the move starts from is part of the write, not of a read
+            // before it. Two clicks on "start" used to read one scheduled event
+            // and both write the live status over it, which stamped the moment of
+            // the second one over the moment the event actually began and made the
+            // announcement twice. A statement of this shape matches once.
+            //
+            // The two moments are written with a fallback to what is stored, so
+            // the move that carries neither leaves both alone: an end must not
+            // erase how long the event ran.
+            moved = await _dbContext.GlobalChatEvents
+                .Where(e => e.GlobalChatEventId == eventId && e.Status == expectedStatus)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(e => e.Status, status)
+                    .SetProperty(e => e.StartedUtc, e => startedAt ?? e.StartedUtc)
+                    .SetProperty(e => e.EndedUtc, e => endedAt ?? e.EndedUtc), ct)
+                .ConfigureAwait(false);
         }
-        if (endedAt.HasValue)
+        catch (PostgresException ex) when (ex.SqlState == DuplicateKey)
         {
-            chatEvent.EndedUtc = endedAt.Value;
+            // The partial unique index over the live status: another event went
+            // live between the caller's check and this write. Translated here so
+            // the domain does not have to know the storage engine's error codes.
+            throw new DuplicateEntityException("Concurrent live global chat event", ex);
         }
 
-        await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        if (moved == 0)
+        {
+            return null;
+        }
 
         return await _dbContext.GlobalChatEvents
             .Where(e => e.GlobalChatEventId == eventId)
@@ -177,21 +205,26 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
     // ═══ PARTICIPANTS ═══
 
     /// <inheritdoc />
-    public async Task<GlobalChatEventParticipant> AddParticipant(
+    public async Task<GlobalChatEventParticipant?> AddParticipant(
         CreateGlobalChatEventParticipantEntity participant,
         CancellationToken ct = default)
     {
-        var dbParticipant = new DbGlobalChatEventParticipant
-        {
-            GlobalChatEventParticipantId = participant.GlobalChatEventParticipantId,
-            GlobalChatEventId = participant.GlobalChatEventId,
-            UserId = participant.UserId,
-            IsOrganizer = participant.IsOrganizer,
-            JoinedUtc = participant.JoinedUtc
-        };
+        // The unique pair is what says a person is on one list once, and the
+        // server settles it: a read before the insert answers for the moment it
+        // ran, and two clicks arriving together both pass it. Raw, because
+        // ON CONFLICT is not something the change tracker can express.
+        var inserted = await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "GlobalChatEventParticipants"
+                ("GlobalChatEventParticipantId", "GlobalChatEventId", "UserId", "IsOrganizer", "JoinedUtc")
+            VALUES ({participant.GlobalChatEventParticipantId}, {participant.GlobalChatEventId},
+                    {participant.UserId}, {participant.IsOrganizer}, {participant.JoinedUtc})
+            ON CONFLICT ("GlobalChatEventId", "UserId") DO NOTHING
+            """, ct).ConfigureAwait(false);
 
-        _dbContext.GlobalChatEventParticipants.Add(dbParticipant);
-        await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        if (inserted == 0)
+        {
+            return null;
+        }
 
         return await _dbContext.GlobalChatEventParticipants
             .Where(p => p.GlobalChatEventParticipantId == participant.GlobalChatEventParticipantId)
@@ -200,15 +233,13 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
     }
 
     /// <inheritdoc />
-    public async Task RemoveParticipant(Guid eventId, Guid userId, CancellationToken ct = default)
-    {
-        var participant = await _dbContext.GlobalChatEventParticipants
-            .FirstOrDefaultAsync(p => p.GlobalChatEventId == eventId && p.UserId == userId, ct).ConfigureAwait(false);
+    public Task RemoveParticipant(Guid eventId, Guid userId, CancellationToken ct = default) =>
+        // Everything the pair holds, not the one row a read happened to return:
+        // leaving has to leave, whatever the list looked like when it was written.
+        _dbContext.GlobalChatEventParticipants
+            .Where(p => p.GlobalChatEventId == eventId && p.UserId == userId)
+            .ExecuteDeleteAsync(ct);
 
-        if (participant != null)
-        {
-            _dbContext.GlobalChatEventParticipants.Remove(participant);
-            await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
-        }
-    }
+    /// <summary>The unique violation PostgreSQL answers a broken index with.</summary>
+    private const string DuplicateKey = "23505";
 }

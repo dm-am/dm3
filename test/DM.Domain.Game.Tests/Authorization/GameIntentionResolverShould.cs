@@ -495,40 +495,6 @@ public class GameIntentionResolverShould : UnitTestBase
     }
 
     [Fact]
-    public void AllowReadCommentsWhenAccessModeIsPublic()
-    {
-        var game = new GameBuilder()
-            .WithCommentsAccessMode(CommentsAccessMode.Public)
-            .Please();
-
-        resolver.IsAllowed(AuthenticatedUser.Guest, GameIntention.ReadComments, game).Should().BeTrue();
-    }
-
-    [Fact]
-    public void ForbidReadCommentsWhenAccessModeIsPrivateAndUserHasNoRole()
-    {
-        var game = new GameBuilder()
-            .WithCommentsAccessMode(CommentsAccessMode.Private)
-            .Please();
-        var user = Create.User().WithRole(UserRole.RegularUser).Please();
-
-        resolver.IsAllowed(user, GameIntention.ReadComments, game).Should().BeFalse();
-    }
-
-    [Fact]
-    public void AllowReadPrivateCommentsForPlayer()
-    {
-        var playerId = Guid.NewGuid();
-        var game = new GameBuilder()
-            .WithCommentsAccessMode(CommentsAccessMode.Private)
-            .WithPlayers(playerId)
-            .Please();
-        var user = Create.User(playerId).WithRole(UserRole.RegularUser).Please();
-
-        resolver.IsAllowed(user, GameIntention.ReadComments, game).Should().BeTrue();
-    }
-
-    [Fact]
     public void ForbidCommentingSomebodyElsesGameUnderTheOrdinaryBan()
     {
         var game = new GameBuilder()
@@ -669,6 +635,27 @@ public class GameIntentionResolverShould : UnitTestBase
         // The other half of the same rule: they may read the game and may not
         // write in it
         resolver.IsAllowed(user, GameIntention.CreateComment, game).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// An application is writing into the game, whichever door it comes
+    /// through: open recruitment or a player invitation. The gate carries the
+    /// rule so that IsAllowed does not answer "yes" to somebody the service
+    /// then refuses.
+    /// </summary>
+    [Fact]
+    public void ForbidApplyingToAGameForTheUserItBlacklisted()
+    {
+        var blacklistedId = Guid.NewGuid();
+        var game = new GameBuilder()
+            .WithStatus(ModuleStatus.Active)
+            .WithRecruitmentOpen()
+            .WithPendingPlayerInvitation(blacklistedId)
+            .WithBlacklisted(blacklistedId)
+            .Please();
+        var user = Create.User(blacklistedId).WithRole(UserRole.RegularUser).Please();
+
+        resolver.IsAllowed(user, GameIntention.CreateCharacter, game).Should().BeFalse();
     }
 
     [Fact]

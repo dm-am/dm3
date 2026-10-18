@@ -4,13 +4,14 @@
 
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import type { ListEnvelope } from "@/shared/api/models/common";
+import type { GeneralError, ListEnvelope } from "@/shared/api/models/common";
 import type { Blog, BlogRef, BlogStatus } from "./types";
 import blogApi from "../api/blogApi";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
 import { Api } from "@/shared/api";
+import { RENDER_AUDIENCE } from "@/shared/api/audience";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
-import { describeFailure } from "@/shared/lib/errors";
+import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
 import {
   createKeyedCache,
   stableCacheKey,
@@ -82,12 +83,47 @@ function buildApiParams(params: BlogsSearchParams): BlogsApiParams {
 
 /**
  * One sentence for both failure paths of the blogs list. A refusal the API
- * named goes through describeFailure, which prefers the server's own title, so
- * a rate limit stops reading like a broken server; a request that got no
- * response carries no problem document to read, and neither does a throw, so
+ * named goes through describeFailure, which prefers the server's own title (a
+ * wait is the one exception, worded by searchFailure below); a request that got
+ * no response carries no problem document to read, and neither does a throw, so
  * both fall back to this.
  */
 const LOAD_FAILURE = "Не удалось загрузить блоги";
+
+/**
+ * The search is the only carrier of its own failures.
+ *
+ * BlogsDataTable stands a strip where the rows would be, so the sentence is
+ * already on screen and in the place the reader is looking. The response
+ * interceptor used to put the same words in a plate over it on a 403, a 429 and
+ * a 5xx; with both flags it keeps quiet about this request and the strip
+ * answers alone.
+ *
+ * An expired session and a dead connection are deliberately not in here. The
+ * interceptor speaks for both, because neither is about this list — one is
+ * about the reader's session, the other about the road to the site, and only
+ * the interceptor can offer the other address. The strip beside them says a
+ * different thing: that there are no rows.
+ */
+const SEARCH_OWNS_REFUSAL = {
+  ownsRefusal: true,
+  ownsRateLimit: true,
+} as const;
+
+/**
+ * What the strip says about a failed search.
+ *
+ * A wait keeps the shared wording instead of the title the API sent with it:
+ * that title names the refusal without the number, and the number is the part a
+ * reader acts on. It is also the sentence the interceptor would have raised, so
+ * taking the refusal over costs the reader nothing. Everything else the API
+ * named is relayed as it stands.
+ */
+function searchFailure(error: GeneralError): string {
+  return error.status === 429
+    ? describeRateLimit(error.retryAfterSeconds)
+    : describeFailure(error, LOAD_FAILURE);
+}
 
 export const useBlogsStore = defineStore("blogs", () => {
   // Sidebar lists with caching (60s TTL by default) - use lightweight BlogRef
@@ -145,9 +181,14 @@ export const useBlogsStore = defineStore("blogs", () => {
     searchLoading.value = true;
 
     try {
+      // The flags are declared above, with the reason the strip keeps the
+      // refusal. The audience is written out only because they sit behind it in
+      // the signature; it is the value this call sent implicitly before.
       const { data, error } = await Api.get<ListEnvelope<Blog>>(
         "blogs",
         buildApiParams(params),
+        RENDER_AUDIENCE.Display,
+        SEARCH_OWNS_REFUSAL,
       );
 
       // Ignore stale responses
@@ -156,7 +197,7 @@ export const useBlogsStore = defineStore("blogs", () => {
       }
 
       if (error) {
-        searchError.value = describeFailure(error, LOAD_FAILURE);
+        searchError.value = searchFailure(error);
         return;
       }
 

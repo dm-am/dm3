@@ -26,8 +26,8 @@ export type GameReview = {
   gameId: Served<string>;
   /** Title of the reviewed game — what names the row on the profile listings */
   gameTitle?: Served<string>;
-  /** Review author */
-  author: Served<User>;
+  /** Review author; null when the account was removed */
+  author: Served<User | null>;
   /** Review text (BBCode supported) */
   text: string;
   /** Creation timestamp (UTC) */
@@ -74,10 +74,10 @@ export type PostReview = {
   postId: Served<string>;
   /** Game identifier (denormalized) */
   gameId: Served<string>;
-  /** Review author */
-  author: Served<User>;
-  /** Post author (recipient of the review) */
-  postAuthor: Served<User>;
+  /** Review author; null when the account was removed */
+  author: Served<User | null>;
+  /** Post author (recipient of the review); null when the account was removed */
+  postAuthor: Served<User | null>;
   /** Review text (BBCode supported, required) */
   text: string;
   /** Rating sign (+1, 0, -1) */

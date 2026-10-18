@@ -96,18 +96,6 @@ public enum SecurityEventType
     TwoFactorRemovedByAdmin = 18,
 
     /// <summary>
-    /// A mailed request to take the second factor off was refused because the
-    /// rank owes a factor
-    /// </summary>
-    /// <remarks>
-    /// Its own type rather than the scheduled one it used to borrow. The entry
-    /// is read by the owner of the account as a sentence, and "removal
-    /// scheduled" written where nothing was scheduled sends him looking for a
-    /// waiting period that does not exist.
-    /// </remarks>
-    TwoFactorRemovalRefused = 19,
-
-    /// <summary>
     /// A code offered while setting the second factor up did not match
     /// </summary>
     /// <remarks>

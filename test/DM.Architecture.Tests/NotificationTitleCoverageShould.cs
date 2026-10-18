@@ -17,7 +17,7 @@ namespace DM.Architecture.Tests;
 /// </summary>
 /// <remarks>
 /// Both senders ask NotificationCategoryMapper first and return where it answers
-/// null, then title what is left from NotificationText. A category is therefore
+/// null, then title what is left from NotificationWording. A category is therefore
 /// the permission to send, and the table has to cover every event that holds
 /// one. Four did not. A changed topic, a changed publication, a filed ticket and
 /// a granted award reached their recipient headed "Dungeon Master: Уведомление",
@@ -25,10 +25,11 @@ namespace DM.Architecture.Tests;
 /// table was right about the other forty-three, which is why reading it top to
 /// bottom shows nothing: what is missing from a table is not in it to be read.
 ///
-/// The rule spans three projects that do not know each other. The mapper sorts
-/// events in the domain, the words live in the worker, and the generators between
-/// them decide which events can occur at all. No compiler looks across the three,
-/// and a missing title is noticed first by the person it was owed to.
+/// The rule spans two projects and three files that do not know each other. The
+/// mapper sorts events and the words name them, two tables side by side in the
+/// domain, and the generators in the worker decide which events can occur at all.
+/// No compiler looks across the three, and a missing title is noticed first by the
+/// person it was owed to.
 ///
 /// The sendable set is wider than the set of events a generator answers: a
 /// subscription generator renames the event it puts on its notification, and the
@@ -38,9 +39,6 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class NotificationTitleCoverageShould
 {
-    private const string SharedType =
-        "DM.Workers.NotificationDispatcher.Dispatching.NotificationText";
-
     private const string GeneratorInterface = "INotificationGenerator";
     private const string ResolveMethod = "CanResolve";
 
@@ -59,14 +57,6 @@ public class NotificationTitleCoverageShould
     private static readonly Assembly Dispatcher =
         typeof(DM.Workers.NotificationDispatcher.Startup).Assembly;
 
-    /// <summary>
-    /// Reached by name, because NotificationText is internal to the worker and
-    /// this suite is not on its InternalsVisibleTo list.
-    /// </summary>
-    private static readonly MethodInfo TitleOf = Dispatcher
-        .GetType(SharedType, throwOnError: true)!
-        .GetMethod("GetTitle", BindingFlags.Public | BindingFlags.Static)!;
-
     [Fact]
     public void TitleEveryEventACategoryLetsOut()
     {
@@ -80,8 +70,8 @@ public class NotificationTitleCoverageShould
         sent.Should().NotBeEmpty(
             "a rule that matches nothing passes: a category is what lets an event out");
 
-        var untitled = Title(EventType.Unknown);
-        sent.Where(candidate => Title(candidate) == untitled)
+        var untitled = NotificationWording.GetTitle(EventType.Unknown);
+        sent.Where(candidate => NotificationWording.GetTitle(candidate) == untitled)
             .Select(candidate => candidate.ToString())
             .Should().BeEmpty(
                 "an unnamed event is delivered all the same: the subject line says only " +
@@ -193,9 +183,6 @@ public class NotificationTitleCoverageShould
 
         return triggers;
     }
-
-    private static string Title(EventType eventType) =>
-        (string)TitleOf.Invoke(null, new object[] { eventType })!;
 
     /// <summary>
     /// Every event a notification can carry out: the ones a generator answers and

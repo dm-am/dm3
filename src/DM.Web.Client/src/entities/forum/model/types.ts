@@ -45,6 +45,28 @@ export type Board = {
   unreadCommentsCount: Served<number>;
   lastComment: Served<BoardLastComment | null>;
   lastTopic: Served<BoardLastTopic | null>;
+  /**
+   * What the viewer may do on this board, answered by the code that refuses the
+   * request. On the read of one board and on the board of a topic read alone;
+   * the list of boards and the rows of a topic list leave it out.
+   */
+  viewer?: Served<BoardViewer>;
+};
+
+/**
+ * What the viewer may do on a board (mirrors BoardViewer). The server asks each
+ * flag with the code that refuses the write it stands for.
+ */
+export type BoardViewer = {
+  /** May open a topic: the board's policy against the role, and no ban. False for a guest. */
+  canCreateTopic: boolean;
+  /**
+   * Signing in is the way to a topic here: the viewer is a guest, and an
+   * ordinary member may open topics on the board. False for anybody signed in,
+   * and on a board whose topics come from the moderation (the news, the
+   * contests).
+   */
+  canCreateTopicAfterSignIn: boolean;
 };
 
 export type LastComment = {
@@ -66,6 +88,12 @@ export type Topic = {
   isAttached: boolean;
   attachOrder: Served<number | null>;
   isClosed: boolean;
+  /**
+   * Whether the topic was closed by its author, who may then reopen it. A topic
+   * closed by a board moderator or an administrator stays closed to its author;
+   * false while the topic is open.
+   */
+  closedByAuthor: Served<boolean>;
   lastActivityUtc: Served<string>;
   lastComment: Served<LastComment | null>;
   commentsCount: Served<number>;
@@ -84,6 +112,21 @@ export type Topic = {
    * period's leaderboards inside the topic from the statistics API.
    */
   periodDigest?: PeriodDigestRef | null;
+  /**
+   * What the viewer may do under this topic, answered by the code that refuses
+   * the request. On the read of one topic and the writes that return one, the
+   * PATCH that closes it included; a list of topics leaves it out.
+   */
+  viewer?: Served<TopicViewer>;
+};
+
+/**
+ * What the viewer may do under a topic (mirrors TopicViewer). The server asks
+ * each flag with the code that refuses the write it stands for.
+ */
+export type TopicViewer = {
+  /** May write a new comment: the topic open and no ban. False for a guest. */
+  canComment: boolean;
 };
 
 /** Closed statistics period a digest topic summarizes */

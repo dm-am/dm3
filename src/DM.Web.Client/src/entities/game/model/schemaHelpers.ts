@@ -3,9 +3,8 @@
 // and shared by the screens that embed the editor instead of copied into each.
 
 import {
-  AttributeSchemaType,
   AttributeSpecificationType,
-  type AttributeSchema,
+  type AttributeSchemaDraft,
   type AttributeSpecification,
   type AttributeValueSpecification,
 } from "@/entities/game";
@@ -60,12 +59,9 @@ export function newSpecId(): string {
   return crypto.randomUUID();
 }
 
-export function createEmptySchema(): AttributeSchema {
+export function createEmptySchema(): AttributeSchemaDraft {
   return {
-    id: null,
     title: "",
-    author: null,
-    type: AttributeSchemaType.Private,
     specifications: [],
   };
 }
@@ -80,15 +76,28 @@ export function createEmptySpec(order: number): AttributeSpecification {
     isDescriptor: false,
     isHidden: false,
     maxLength: null,
-    values: null,
+    values: [],
   };
 }
 
 function cloneValues(
   values: AttributeValueSpecification[] | null | undefined,
-): AttributeValueSpecification[] | null {
-  if (!values) return null;
+): AttributeValueSpecification[] {
+  if (!values) return [];
   return values.map((v) => ({ value: v.value, modifier: v.modifier }));
+}
+
+/**
+ * Deep copy of a set of specifications, identifiers kept.
+ *
+ * Kept is what a game's own sheet needs: a replacement keeps the values of
+ * every specification whose id it sends back, and a copy that renumbered them
+ * would drop the answers of every character in the game.
+ */
+export function cloneSpecs(
+  specs: AttributeSpecification[],
+): AttributeSpecification[] {
+  return specs.map((s) => ({ ...s, values: cloneValues(s.values) }));
 }
 
 /**
@@ -99,25 +108,20 @@ function cloneValues(
 export function cloneSpecsWithNewIds(
   specs: AttributeSpecification[],
 ): AttributeSpecification[] {
-  return specs.map((s, index) => ({
+  return cloneSpecs(specs).map((s, index) => ({
     ...s,
     id: newSpecId(),
     order: index,
-    values: cloneValues(s.values),
   }));
 }
 
-/** Deep clone of a whole schema (JSON round-trip is enough for this shape). */
-export function cloneSchema(schema: AttributeSchema): AttributeSchema {
+/** Deep clone of a whole draft (JSON round-trip is enough for this shape). */
+export function cloneSchema(
+  schema: AttributeSchemaDraft,
+): AttributeSchemaDraft {
   return {
-    id: schema.id,
     title: schema.title,
-    author: schema.author,
-    type: schema.type,
-    specifications: schema.specifications.map((s) => ({
-      ...s,
-      values: cloneValues(s.values),
-    })),
+    specifications: cloneSpecs(schema.specifications),
   };
 }
 
@@ -127,14 +131,14 @@ export function cloneSchema(schema: AttributeSchema): AttributeSchema {
  */
 export function normalizeSpecForType(spec: AttributeSpecification): void {
   if (usesMaxLength(spec.type)) {
-    spec.values = null;
+    spec.values = [];
     if (spec.maxLength === undefined) spec.maxLength = null;
   } else if (usesValues(spec.type)) {
     spec.maxLength = null;
     if (!spec.values) spec.values = [];
   } else {
     spec.maxLength = null;
-    spec.values = null;
+    spec.values = [];
   }
   // Descriptor is meaningless for BbCode rows.
   if (isBbCode(spec.type)) spec.isDescriptor = false;

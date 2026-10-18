@@ -99,15 +99,19 @@ export async function uploadPostAttachments(
 const CONTENT_URL = /\/v1\/uploads\/([0-9a-fA-F-]{36})\/content(?:[?#]|$)/;
 
 /**
- * Tallest a picture in BBCode text is drawn, mirroring the `--bb-image-max-height`
- * fallback in `_BbcodeContent.sass`, which is where it is decided.
+ * Tallest a picture in BBCode text is drawn: 500 pixels, as on DM2. Mirrors
+ * the `--bb-image-max-height` fallback in `_BbcodeContent.sass`, which is
+ * where it is decided.
  *
- * Needed here because the cap and a declared width interact: the browser clamps
- * the height against it without touching the width, so a pair taller than this
- * would be drawn squashed rather than shrunk. The declared pair is scaled to fit
- * under the cap instead, which is the size the picture ends up at anyway.
+ * Needed here because the cap and a declared width interact: the browser
+ * clamps the height against it without touching the width, so a picture
+ * taller than the cap would keep the full width of its pair and be drawn
+ * narrower inside a box that is not (object-fit), with the gap on both sides.
+ * The pair stays the file's own, and the width is capped instead, at the width
+ * the picture has when it is exactly as tall as the cap; the height follows
+ * the ratio down to the cap by itself.
  */
-const MAX_DRAWN_HEIGHT = 500;
+const DRAWN_HEIGHT_CAP = "500px";
 
 /**
  * Whether the attachment is a picture, which is what decides that a post shows
@@ -123,20 +127,20 @@ export function isImageAttachment(attachment: PostAttachment): boolean {
 }
 
 /**
- * The box a picture attachment is drawn in, or null when its size is unknown.
+ * The box a picture attachment is measured at, or null when its size is
+ * unknown.
  *
- * The pair is what reserves room before the bytes arrive, and it is the same
- * pair whether the picture stands in the post's text or in the attachment block
- * below it — one measurement of the same file, shrunk under the same drawing
- * cap. Null for an attachment stored before the pipeline recorded a size, and
- * for a pair that is not a usable ratio: no box beats a guessed one.
+ * The pair is what reserves room before the bytes arrive: the file's own
+ * width and height, as the upload pipeline measured them. Null for an
+ * attachment stored before the pipeline recorded a size, and for a pair that
+ * is not a usable ratio: no box beats a guessed one.
  */
 export function attachmentImageBox(
   attachment: PostAttachment,
 ): { width: number; height: number } | null {
   const { width, height } = attachment;
   if (!width || !height || width <= 0 || height <= 0) return null;
-  return drawnSize(width, height);
+  return { width, height };
 }
 
 /**
@@ -149,6 +153,14 @@ export function attachmentImageBox(
  * ratio, `max-width: 100%` keeps working — the box shrinks with the column
  * rather than staying at the pixel size the file happens to have, and the
  * reservation is right at every width rather than at the file's own.
+ *
+ * With the pair goes a cap on the width (`--bb-image-max-width`, which the
+ * stylesheet already reads for every picture of the text): the width at which
+ * the picture is exactly as tall as the text allows (DRAWN_HEIGHT_CAP). A
+ * tall map is then drawn smaller as a whole, the way a picture without a pair
+ * is, and a click on it opens it whole like any other picture of the text
+ * (bbcodeInteractive.ts, shared/ui/ImageViewer). A collapsed post caps its
+ * pictures with a declaration of its own and does not read the property.
  *
  * Left alone, deliberately:
  *   - any address that is not this post's own attachment, which includes every
@@ -193,20 +205,19 @@ export function reserveAttachmentImageBoxes(
     if (!size) continue;
     image.setAttribute("width", String(size.width));
     image.setAttribute("height", String(size.height));
+    image.style.setProperty("--bb-image-max-width", widthCap(size));
     changed = true;
   }
 
   return changed ? template.innerHTML : html;
 }
 
-/** The file's own size, or the same ratio shrunk to the height it is drawn at. */
-function drawnSize(
-  width: number,
-  height: number,
-): { width: number; height: number } {
-  if (height <= MAX_DRAWN_HEIGHT) return { width, height };
-  return {
-    width: Math.max(1, Math.round((width * MAX_DRAWN_HEIGHT) / height)),
-    height: MAX_DRAWN_HEIGHT,
-  };
+/**
+ * The widest a picture of this ratio is drawn: the column, or the width at
+ * which it is exactly as tall as DRAWN_HEIGHT_CAP, whichever is narrower.
+ */
+function widthCap(size: { width: number; height: number }): string {
+  // Rounded down, so the height the width gives is never over the cap.
+  const ratio = Math.floor((size.width / size.height) * 10000) / 10000;
+  return `min(100%, calc(${DRAWN_HEIGHT_CAP} * ${ratio}))`;
 }

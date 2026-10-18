@@ -92,8 +92,6 @@ const ANSWERS_BARE: Record<string, string> = {
     "ITagApiService.UpdateTag -> Task<Tag>.",
 
   // --- Messaging ------------------------------------------------------------
-  "entities/message/api/messagingApi.ts:canStartChat":
-    "IMessagingApiService.CanStartChatAsync -> Task<ChatAvailability>.",
   "entities/message/api/messagingApi.ts:getOrCreateDirectChat":
     "IMessagingApiService.GetDirectChatAsync -> Task<Chat>.",
   "entities/message/api/messagingApi.ts:getChat":
@@ -194,8 +192,6 @@ const ANSWERS_BARE: Record<string, string> = {
     "IPreferencesApiService.UpdateMyPreferences -> Task<Preferences>.",
 
   // --- Community ------------------------------------------------------------
-  "entities/user/api/userApi.ts:getUserProfileNote":
-    "IUserProfileNoteApiService.GetNote -> Task<UserProfileNote?>.",
   "entities/user/api/userApi.ts:upsertUserProfileNote":
     "IUserProfileNoteApiService.UpsertNote -> Task<UserProfileNote?>.",
   "entities/user/api/userApi.ts:createUserEndorsement":

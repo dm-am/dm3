@@ -225,7 +225,7 @@ docker compose --env-file .env.pop -f docker-compose.yml -f docker-compose.previ
 |-------|---------|
 | Docker образ | `IMAGE_TAG=<sha>` в `docker/.env`, затем `sudo systemctl restart dm3` |
 | PostgreSQL | `gunzip -c /var/backups/postgresql/<файл>.sql.gz \| docker exec -i dm-pg psql -U postgres dm3` |
-| MinIO | `docker run --rm --network host -v /var/backups/minio/<каталог>:/backup --entrypoint sh minio/mc:RELEASE.2025-05-21T01-59-54Z -c 'mc alias set dst "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc mirror /backup dst/dm-uploads'` |
+| MinIO | `docker run --rm --network host -v /var/backups/minio/<каталог>:/backup --entrypoint sh quay.io/minio/mc:RELEASE.2025-05-21T01-59-54Z -c 'mc alias set dst "$MINIO_ENDPOINT" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc mirror /backup dst/dm-uploads'` |
 | Git | `git revert HEAD && git push` |
 
 Команды восстановления соответствуют тому, что кладут скрипты бэкапа: дамп

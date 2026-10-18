@@ -83,11 +83,6 @@ public class Publication : ISoftDeletable, IEditable
     public DateTimeOffset? PublishedUtc { get; set; }
 
     /// <summary>
-    /// Whether comments are enabled for this publication
-    /// </summary>
-    public bool CommentsEnabled { get; set; } = true;
-
-    /// <summary>
     /// View count
     /// </summary>
     public int ViewCount { get; set; }

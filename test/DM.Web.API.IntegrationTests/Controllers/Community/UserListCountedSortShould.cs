@@ -27,7 +27,9 @@ public class UserListCountedSortShould : IntegrationTestBase
     {
     }
 
-    private async Task<(string Username, int Count)[]> ListAsync(string field, string order)
+    private sealed record Page((string Username, int Count)[] Rows, int Total);
+
+    private async Task<Page> ListAsync(string field, string order)
     {
         var response = await Client.GetAsync(
             $"/v1/users?sortBy={field}&sortOrder={order}&activity=All&take=100");
@@ -35,13 +37,14 @@ public class UserListCountedSortShould : IntegrationTestBase
 
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var property = char.ToLowerInvariant(field[0]) + field[1..];
-        return doc.RootElement.GetProperty("resources").EnumerateArray()
+        var rows = doc.RootElement.GetProperty("resources").EnumerateArray()
             .Select(r => (
                 Username: r.GetProperty("username").GetString()!,
                 Count: r.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number
                     ? value.GetInt32()
                     : 0))
             .ToArray();
+        return new Page(rows, doc.RootElement.GetProperty("paging").GetProperty("total").GetInt32());
     }
 
     [Theory]
@@ -53,16 +56,17 @@ public class UserListCountedSortShould : IntegrationTestBase
         var descending = await ListAsync(field, "desc");
         var ascending = await ListAsync(field, "asc");
 
-        descending.Select(x => x.Count).Should().BeInDescendingOrder(
+        descending.Rows.Select(x => x.Count).Should().BeInDescendingOrder(
             "the sort key is the counter, and the row carries the counter it was sorted by");
-        ascending.Select(x => x.Count).Should().BeInAscendingOrder(
+        ascending.Rows.Select(x => x.Count).Should().BeInAscendingOrder(
             "asking for the other direction reverses the number, not the meaning of it");
     }
 
     /// <summary>
-    /// Counted by page size rather than by membership: the registry the suite leaves
-    /// behind is longer than one page, so two pages of it hold different people, and
-    /// the question here is how many the sort admits, not which.
+    /// Counted by the total the envelope reports rather than by the page: the registry
+    /// the suite leaves behind is longer than one page and holds more than a page of
+    /// hosts, so a page says nothing about who was admitted. The total does, and the
+    /// ascending list opens with the ones an inner join would have dropped.
     /// </summary>
     [Theory]
     [InlineData("GamesHosting")]
@@ -72,14 +76,14 @@ public class UserListCountedSortShould : IntegrationTestBase
     public async Task KeepEveryUserTheAlphabeticalListHas(string field)
     {
         var byName = await ListAsync("Name", "asc");
-        var byCount = await ListAsync(field, "desc");
+        var byCount = await ListAsync(field, "asc");
 
-        byCount.Should().HaveCount(byName.Length,
+        byCount.Total.Should().Be(byName.Total,
             "the counter is left-joined: a user with none of the counted thing counts zero, " +
             "which is what the correlated Count() answered for him, and he stays on the list");
-        byCount[^1].Count.Should().Be(0,
-            "most of the registry hosts and plays nothing, so the far end of the descending " +
-            "page is theirs — an inner join would fill the page with the few who have rows");
+        byCount.Rows[0].Count.Should().Be(0,
+            "most of the registry hosts and plays nothing, so the ascending list opens with " +
+            "them — an inner join would open it with the few who have rows");
     }
 
     /// <summary>
@@ -102,7 +106,7 @@ public class UserListCountedSortShould : IntegrationTestBase
     [Fact]
     public async Task SortByTheHostingCounterAndNotByANeighbouringOne()
     {
-        var whole = await ListAsync("GamesHosting", "desc");
+        var whole = (await ListAsync("GamesHosting", "desc")).Rows;
         whole.Should().NotBeEmpty();
 
         var seeded = whole.Should().ContainSingle(x => x.Username == TestConstants.TestUserLogin).Subject;

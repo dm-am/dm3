@@ -1,14 +1,13 @@
 import type {
+  ChatUnreadCount,
   ListEnvelope,
   PagingQuery,
   CursorEnvelope,
   Envelope,
-  QuoteSource,
   Username,
 } from "@/shared/api/models/common";
 import type {
   Chat,
-  ChatAvailability,
   ChatId,
   CreateChat,
   Message,
@@ -18,6 +17,17 @@ import type {
 import type { Patch } from "@/shared/api/models";
 import { Api } from "@/shared/api";
 import { RENDER_AUDIENCE } from "@/shared/api";
+
+/**
+ * A screen that shows the refusal of its own request (a window that stays
+ * open with the reason in it) says so, and the client keeps the plate down.
+ */
+type RefusalOptions = {
+  /** The screen shows a 403 and a 5xx itself. */
+  ownsRefusal?: boolean;
+  /** The screen shows a 429 itself, the wait included. */
+  ownsRateLimit?: boolean;
+};
 
 /**
  * Query parameters for cursor-based pagination
@@ -47,16 +57,6 @@ export default new (class MessagingApi {
     return Api.get<ListEnvelope<Chat>>("chats", queryParams);
   }
 
-  /**
-   * Check if current user can start a chat with another user
-   * Returns false if either user has blocked the other
-   */
-  public canStartChat(username: Username) {
-    return Api.get<ChatAvailability>(
-      `chats/can-start/${encodeURIComponent(username)}`,
-    );
-  }
-
   public async getOrCreateDirectChat(username: Username) {
     // POST creates chat if it doesn't exist, returns existing if present
     return Api.post<Chat>(`chats/direct/${username}`);
@@ -71,6 +71,18 @@ export default new (class MessagingApi {
   }
 
   /**
+   * The reader's total of unread messages over every conversation they are in.
+   *
+   * The header badge used to add up the `unreadMessagesCount` of the first page
+   * of the chat list, so conversations past that page were missing from the
+   * number, and each recount fetched a page of chats with their participants
+   * and last messages to read one integer out of it.
+   */
+  public getUnreadCount() {
+    return Api.get<Envelope<ChatUnreadCount>>("chats/unread");
+  }
+
+  /**
    * Create a new group chat
    */
   public createChat(input: CreateChat) {
@@ -82,6 +94,22 @@ export default new (class MessagingApi {
    */
   public updateChat(id: ChatId, input: UpdateChat) {
     return Api.patch<Chat>(`chats/${id}`, input);
+  }
+
+  /**
+   * Leave a group chat. It goes out of the reader's list; the others keep it
+   * with every message.
+   */
+  public leaveChat(id: ChatId, options?: RefusalOptions) {
+    return Api.post(`chats/${id}/leave`, undefined, options);
+  }
+
+  /**
+   * Clear the history of a chat for the reader alone: the messages written up
+   * to now are no longer given to him, the others keep them.
+   */
+  public clearHistory(id: ChatId, options?: RefusalOptions) {
+    return Api.post(`chats/${id}/clear-history`, undefined, options);
   }
 
   // Messages
@@ -134,18 +162,6 @@ export default new (class MessagingApi {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
-  }
-
-  /**
-   * Fetch the markup of a quotation of a private message.
-   *
-   * The server composes the whole tag, author included, already filtered for
-   * whoever is asking. The client does not build one out of the rendered page:
-   * that conversion is lossy, and the source of somebody else's message is not
-   * something the browser holds.
-   */
-  public getMessageQuote(id: MessageId) {
-    return Api.get<Envelope<QuoteSource>>(`messages/${id}/quote`);
   }
 
   public updateMessage(id: MessageId, message: Patch<Message>) {

@@ -14,7 +14,6 @@ using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Core.Events;
-using DM.Domain.Core.Subscriptions;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.Blacklists;
@@ -30,7 +29,6 @@ internal class GameBlacklistService : IGameBlacklistService
     private readonly IGameBlacklistRepository _repository;
     private readonly IGameInvitationRepository _invitationRepository;
     private readonly ICharacterRepository _characterRepository;
-    private readonly ISubscriptionRepository _subscriptionRepository;
     private readonly IEventProducer _producer;
 
     /// <inheritdoc />
@@ -43,7 +41,6 @@ internal class GameBlacklistService : IGameBlacklistService
         IGameBlacklistRepository repository,
         IGameInvitationRepository invitationRepository,
         ICharacterRepository characterRepository,
-        ISubscriptionRepository subscriptionRepository,
         IEventProducer producer)
     {
         _validator = validator;
@@ -54,7 +51,6 @@ internal class GameBlacklistService : IGameBlacklistService
         _repository = repository;
         _invitationRepository = invitationRepository;
         _characterRepository = characterRepository;
-        _subscriptionRepository = subscriptionRepository;
         _producer = producer;
     }
 
@@ -72,38 +68,50 @@ internal class GameBlacklistService : IGameBlacklistService
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
 
         var (_, userId) = await _userLookupService.FindUserIdAsync(operateBlacklistLink.Username);
-        if (game.BlacklistedUsers.Any(b => b.UserId == userId))
+        if (game.IsBlacklisted(userId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "Пользователь уже в черном списке");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyInBlacklist);
         }
 
-        if (game.Master.UserId == userId || game.Mentor?.UserId == userId)
+        if (game.Master?.UserId == userId || game.Mentor?.UserId == userId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden,
-                "Мастера и наставника игры нельзя внести в черный список");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotBlacklistGameLead);
         }
 
-        // Cannot blacklist a member (they must be removed first). Membership is
-        // read off the game directly rather than through GetRoles: this is the
-        // only question in the codebase asked about somebody other than the
-        // current viewer, and GetRoles answers Reader from the viewer-scoped
-        // subscriber flag without comparing it to the id it was handed. Calling
-        // it here would put the viewer's own readership in the result set — a
-        // value nothing may read, which is exactly the kind of thing a later
-        // edit reads by accident.
-        var isSubscriber = await _subscriptionRepository.FindAsync(
-            userId, SubscriptionTargetType.Game, game.Id) != null;
+        // An assistant or a player has to leave the game first: somebody inside
+        // the game is answered by the game's own tools (exile, taking the
+        // assistant off), and the list is for the people outside it. A subscriber
+        // is not a member and is blacklisted as he stands, subscription and all -
+        // the list closes the discussion and the application, and a subscription
+        // is reading. The player who has just left is exactly such a subscriber
+        // (CharacterService subscribes him), and refusing him here made the one
+        // person a list is usually started for impossible to put on it.
+        //
+        // Membership is read off the game directly rather than through GetRoles:
+        // this is the only question in the codebase asked about somebody other
+        // than the current viewer, and GetRoles answers Reader from the
+        // viewer-scoped subscriber flag without comparing it to the id it was
+        // handed.
         var isMember = game.Assistants.Any(a => a.UserId == userId) ||
-                       game.Players.Any(p => p.UserId == userId) ||
-                       isSubscriber;
+                       game.Players.Any(p => p.UserId == userId);
         if (isMember)
         {
-            throw new HttpException(HttpStatusCode.Conflict,
-                "Сначала удалите пользователя из игры");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.RemoveFromGameFirst);
         }
 
         var currentUserId = _identityProvider.Current.User.UserId;
-        var blacklistedUser = await _repository.Add(game.Id, userId, currentUserId);
+        GeneralUser blacklistedUser;
+        try
+        {
+            blacklistedUser = await _repository.Add(game.Id, userId, currentUserId);
+        }
+        catch (DuplicateEntityException)
+        {
+            // The request that lost the race against an identical one. Same answer
+            // as the check above gives, because the caller asked the same question
+            // and the outcome is the same: the person is on the list.
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyInBlacklist);
+        }
 
         // Cancel pending invitations for this user
         var cancelledInvitations = await _invitationRepository.CancelInvitationsForUser(game.Id, userId);
@@ -136,9 +144,9 @@ internal class GameBlacklistService : IGameBlacklistService
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
 
         var (_, userId) = await _userLookupService.FindUserIdAsync(operateBlacklistLink.Username);
-        if (!game.BlacklistedUsers.Any(b => b.UserId == userId))
+        if (!game.IsBlacklisted(userId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "Пользователя нет в черном списке");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.NotInBlacklist);
         }
 
         await _repository.Remove(game.Id, userId);

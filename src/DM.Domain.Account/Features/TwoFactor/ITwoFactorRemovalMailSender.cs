@@ -18,16 +18,15 @@ public interface ITwoFactorRemovalMailSender
     /// The letter that asks whether the request was really made.
     /// </summary>
     /// <param name="email">Confirmed address of the account</param>
-    /// <param name="username">Name of the account</param>
     /// <param name="secret">Value of the confirmation link</param>
-    Task SendRequest(string email, string username, Guid secret);
+    Task SendRequest(string email, Guid secret);
 
     /// <summary>
     /// The letter that says the removal is scheduled and how to stop it.
     /// </summary>
     /// <param name="email">Confirmed address of the account</param>
-    /// <param name="username">Name of the account</param>
     /// <param name="dueUtc">When the factor comes off</param>
     /// <param name="secret">Value of the cancellation link</param>
-    Task SendScheduled(string email, string username, DateTimeOffset dueUtc, Guid secret);
+    /// <param name="timeZoneId">Zone the account keeps time in, null for UTC</param>
+    Task SendScheduled(string email, DateTimeOffset dueUtc, Guid secret, string? timeZoneId);
 }

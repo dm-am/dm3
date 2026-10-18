@@ -7,8 +7,18 @@
  * step of the flow was a 404 and the approval could only run out. Everything
  * behind it — the token, the two endpoints — was already there.
  *
- * A dead link is not one thing. The reader is told which of the three it is,
- * because only one of them leaves them anything to do.
+ * The choice is made in two steps, the way the activation makes it: the name is
+ * typed on the first and confirmed on the second, and the caution about a
+ * further change stands on the second, over the plate that repeats the name.
+ * On the first step there is nothing to be cautious about yet — the reader is
+ * still trying names out.
+ *
+ * A dead link gets two answers and not three: the window that closed, because
+ * that one leaves the reader a new request to file, and everything else, which
+ * is the one dead link the whole site shows. Whichever of the answers it gives,
+ * it gives it on the guest surface: this is the third page a letter opens, and
+ * it drew its own card, its own widths and its own footer until the three were
+ * put side by side.
  */
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
@@ -20,18 +30,29 @@ import {
   fetchUser,
 } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
-import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
-import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
-import { describeFailure } from "@/shared/lib/errors";
+import { symbols } from "@/shared/lib/utils/icons";
+import { supportFor } from "@/entities/ticket";
 
-/** loading -> ready -> completed, or one of the three dead ends. */
+/** loading -> selectName -> confirmName -> completed, or one of the two dead ends. */
 type PageState =
   | "loading"
-  | "ready"
+  | "selectName"
+  | "confirmName"
   | "expired"
-  | "used"
   | "invalid"
   | "completed";
+
+/**
+ * What a token that is no longer good for anything leaves on screen.
+ *
+ * The server tells a spent approval apart from one it never issued, and the
+ * page used to tell the reader: a card of its own, headed "Имя уже изменено".
+ * It is the same dead link either way — nothing is owed and nothing can be
+ * done with it — so it takes the one answer the site gives a dead link, the
+ * same as on the five screens beside this one. Owner's decision.
+ */
+const deadEnd = (status: "expired" | "used"): PageState =>
+  status === "expired" ? "expired" : "invalid";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -47,10 +68,15 @@ const token = ref("");
 const currentUsername = ref("");
 const chosenUsername = ref("");
 const nameAvailable = ref(false);
-const nameError = ref("");
 
-const canSubmit = computed(
-  () => nameAvailable.value && !submitting.value && !!chosenUsername.value,
+// The name passed the check in the field and the server still refused it, which
+// here means one thing only: somebody took it in between. It is not a second
+// message next to the field's own verdict but that verdict replaced — the strip
+// cannot say "Имя свободно" about a name that has just been given away.
+const nameRefused = ref(false);
+
+const canProceed = computed(
+  () => nameAvailable.value && !!chosenUsername.value && !nameRefused.value,
 );
 
 onMounted(async () => {
@@ -70,14 +96,41 @@ onMounted(async () => {
   }
 
   currentUsername.value = data.currentUsername ?? "";
-  pageState.value = data.status;
+  pageState.value =
+    data.status === "ready" ? "selectName" : deadEnd(data.status);
 });
 
+/**
+ * Typing is the answer to a refusal: the field takes its own verdict back.
+ *
+ * The value is bound by hand rather than through v-model, so that the one
+ * handler both stores the name and clears the refusal standing in place of the
+ * field's verdict.
+ */
+function onNameTyped(value: string) {
+  chosenUsername.value = value;
+  nameRefused.value = false;
+}
+
+function onAvailability(available: boolean) {
+  nameAvailable.value = available;
+  if (available) nameRefused.value = false;
+}
+
+function proceedToConfirm() {
+  if (!canProceed.value) return;
+  pageState.value = "confirmName";
+}
+
+function goBackToSelect() {
+  if (submitting.value) return;
+  pageState.value = "selectName";
+}
+
 async function submit() {
-  if (!canSubmit.value) return;
+  if (submitting.value) return;
 
   submitting.value = true;
-  nameError.value = "";
 
   const { data, error } = await accountApi.completeUsernameChange(
     token.value,
@@ -96,16 +149,24 @@ async function submit() {
       token.value,
     );
 
-    if (!state || state.status !== "ready") {
-      pageState.value = state?.status ?? "invalid";
+    if (!state) {
+      pageState.value = "invalid";
       return;
     }
 
-    // The approval still stands, so the name is what was refused. The form stays
-    // open: picking another one is something the reader can do right here, and
-    // closing it over this would cost them the approval.
-    nameError.value = describeFailure(error, "Это имя уже занято");
+    if (state.status !== "ready") {
+      pageState.value = deadEnd(state.status);
+      return;
+    }
+
+    // The approval still stands, so the name is what was refused, and the only
+    // way that happens is somebody taking it between the check and the send.
+    // The reader goes back to the field with the answer in it: picking another
+    // name is something they can do right here, and closing the card over this
+    // would cost them the approval.
+    nameRefused.value = true;
     nameAvailable.value = false;
+    pageState.value = "selectName";
     return;
   }
 
@@ -125,219 +186,289 @@ function goToProfile() {
 function goHome() {
   router.push("/");
 }
+
+function goToSettings() {
+  router.push("/account");
+}
+
+function goToLogin() {
+  router.push({ path: "/", query: { action: "login" } });
+}
 </script>
 
 <template>
-  <div
-    class="username-change-page"
-    :class="{ 'username-change-page--wide': pageState === 'invalid' }"
-  >
-    <div class="username-change-card">
-      <!-- Checking the link, as on the three pages next to this one: the card
-           is never blank under the support line while the request is out. -->
-      <div v-if="pageState === 'loading'" class="checking">
-        <p class="loading-text">Проверяем ссылку...</p>
-      </div>
+  <!-- A page and not a dialog: nothing dims the ground behind it, so the card
+       carries a frame of its own and there is no cross to close it with. -->
+  <div class="auth-surface username-change-page">
+    <!-- Every answer here is a mark, a heading and a line or two, and the one
+         form on the page holds a single field, so the card takes the narrow
+         measure in all of its states — the same one the activation keeps. The
+         sheet cannot work that out from the contents, so the card says it. -->
+    <div
+      class="auth-card auth-card--framed auth-card--center auth-card--compact"
+    >
+      <!-- Checking the link, as on the pages next to this one: the card is
+           never blank under the support line while the request is out. -->
+      <p
+        v-if="pageState === 'loading'"
+        class="auth-note username-change-loading"
+      >
+        Проверяем ссылку...
+      </p>
 
-      <!-- The approval stands: choose the name -->
-      <template v-else-if="pageState === 'ready'">
-        <dialog-title>Выберите новое имя</dialog-title>
-        <p class="status-description">
-          Сейчас вас зовут <strong>{{ currentUsername }}</strong
-          >.
-        </p>
+      <!-- Step 1: the approval stands, so a name is typed -->
+      <template v-else-if="pageState === 'selectName'">
+        <h1 class="auth-title">Выберите новое имя</h1>
 
-        <form @submit.prevent="submit" class="name-form">
-          <label class="field-label" for="new-username">Новое имя</label>
+        <!-- The card is centred, the field is not: a label, the box under it
+             and the verdict under that read from the left, as everywhere else
+             on the site something is filled in. -->
+        <form class="username-change-name" @submit.prevent="proceedToConfirm">
+          <label class="auth-label" for="new-username">Новое имя</label>
           <username-input
             id="new-username"
-            v-model="chosenUsername"
-            :disabled="submitting"
-            @availability="nameAvailable = $event"
+            :model-value="chosenUsername"
+            class="auth-field username-change-name__field"
+            :class="{ 'username-change-name__field--refused': nameRefused }"
+            @update:model-value="onNameTyped"
+            @availability="onAvailability"
           />
 
-          <p v-if="nameError" class="field-error">{{ nameError }}</p>
-
-          <div class="warning">
-            Следующая смена имени снова потребует заявки и одобрения модератора.
-          </div>
+          <!-- In the strip's own place and never beside it: two verdicts on one
+               name, one green and one red, is the state this card used to
+               reach. -->
+          <p v-if="nameRefused" class="username-change-refusal" role="alert">
+            Это имя занято
+          </p>
 
           <Button
             type="submit"
-            :loading="submitting"
-            :disabled="!canSubmit"
-            class="submit-button"
+            variant="primary"
+            class="auth-button submit-button"
+            :disabled="!canProceed"
           >
-            Сменить имя
+            Продолжить
           </Button>
         </form>
       </template>
 
+      <!-- Step 2: the name is repeated back before it is spent -->
+      <template v-else-if="pageState === 'confirmName'">
+        <h1 class="auth-title">Подтвердите выбор имени</h1>
+
+        <!-- The caution belongs to the step that cannot be taken back, and it
+             stands over the plate rather than under it: it is read before the
+             button, not after. Same box and same opening line as the
+             confirmation step of the activation, because it is the same
+             caution. -->
+        <div class="auth-warnbox">
+          <b>Будьте внимательны</b>Дальнейшая смена имени возможна лишь в
+          исключительных случаях
+        </div>
+
+        <div class="auth-label-row">
+          <span class="auth-label">Новое имя</span>
+          <!-- A real space, so the row copies as one line (Reset.sass,
+               .copy-space). -->
+          <span class="copy-space">{{ " " }}</span>
+          <!-- "Изменить" goes back a step in code and nowhere in the address
+               bar, so the control is a button, wearing the guest surface's own
+               secondary action to read as the <a> it replaces. -->
+          <button
+            type="button"
+            class="auth-action"
+            :disabled="submitting"
+            @click="goBackToSelect"
+          >
+            Изменить
+          </button>
+        </div>
+        <div class="auth-value">{{ chosenUsername }}</div>
+
+        <Button
+          type="button"
+          variant="primary"
+          class="auth-button submit-button"
+          :loading="submitting"
+          @click="submit"
+        >
+          Сменить имя
+        </Button>
+      </template>
+
       <!-- Done -->
       <template v-else-if="pageState === 'completed'">
-        <status-icon type="success" />
-        <dialog-title>Имя изменено</dialog-title>
-        <p class="status-description">
-          Теперь вас зовут <strong>{{ currentUsername }}</strong
-          >.
-        </p>
-        <div class="status-actions">
-          <Button v-if="auth.isAuthenticated" @click="goToProfile"
-            >В профиль</Button
-          >
-          <Button v-else @click="goHome">На главную</Button>
+        <div class="auth-status auth-status--ok" aria-hidden="true">
+          {{ symbols.checkmark }}
         </div>
+        <h1 class="auth-title">Имя изменено</h1>
+        <p class="auth-text">Ваше имя успешно обновлено</p>
+        <Button
+          type="button"
+          variant="primary"
+          class="auth-button auth-button--spaced"
+          @click="goToProfile"
+        >
+          Перейти в профиль
+        </Button>
       </template>
 
-      <!-- The window closed before the name was chosen -->
+      <!-- The window closed before the name was chosen. The way on is a new
+           request, and a new request is filed from the settings — so the reader
+           who is not signed in is sent to sign in first. -->
       <template v-else-if="pageState === 'expired'">
-        <status-icon type="warning" />
-        <dialog-title>Срок действия ссылки истек</dialog-title>
-        <p class="status-description">
-          Ссылка на выбор имени действует 48 часов. Чтобы сменить имя, подайте
-          заявку заново в
-          <router-link to="/account">настройках аккаунта</router-link>.
-        </p>
-      </template>
-
-      <!-- The same letter followed twice -->
-      <template v-else-if="pageState === 'used'">
-        <status-icon type="warning" />
-        <dialog-title>Имя уже изменено</dialog-title>
-        <p class="status-description">
-          По этой ссылке новое имя уже выбрано. Второй раз она не сработает: на
-          каждую смену имени нужна своя заявка.
-        </p>
-        <div class="status-actions">
-          <Button v-if="auth.isAuthenticated" @click="goHome"
-            >На главную</Button
-          >
-          <router-link
-            v-else
-            :to="{ path: '/', query: { action: 'login' } }"
-            class="login-link"
-            >Войти</router-link
-          >
+        <!-- The warning sign by the rule at .auth-status--warn in
+             AuthSurface.sass: the site can take the next step for the reader,
+             and the button under the card is that step - the settings for
+             whoever is signed in, the sign-in for whoever is not. -->
+        <div class="auth-status auth-status--warn" aria-hidden="true">
+          {{ symbols.warning }}
         </div>
+        <h1 class="auth-title">Ссылка устарела</h1>
+        <p class="auth-text">Ссылка действительна 48 часов</p>
+        <p class="auth-note">Переподайте заявку для изменения имени</p>
+        <!-- The way out is the button of the card and not a word inside the
+             sentence: on a dead link there is one thing left to do, and it is
+             the thing the card is for. -->
+        <Button
+          v-if="auth.isAuthenticated"
+          type="button"
+          variant="primary"
+          class="auth-button auth-button--spaced"
+          @click="goToSettings"
+        >
+          Перейти в настройки
+        </Button>
+        <Button
+          v-else
+          type="button"
+          variant="primary"
+          class="auth-button auth-button--spaced"
+          @click="goToLogin"
+        >
+          Войти
+        </Button>
       </template>
 
-      <!-- Nothing was ever issued for this value -->
+      <!-- Nothing was ever issued for this value, or the letter was followed
+           twice and the approval is spent. -->
       <template v-else>
-        <status-icon type="error" />
-        <dialog-title>Ссылка не работает</dialog-title>
+        <!-- The cross by the rule at .auth-status--warn in AuthSurface.sass:
+             a link that opens nothing leaves this card no next step, unlike the
+             expired one above it. It is drawn by the surface and not typed, so
+             no glyph goes inside it. -->
+        <div class="auth-status auth-status--error" aria-hidden="true" />
+        <h1 class="auth-title">Ссылка недействительна</h1>
 
-        <div class="error-info">
-          <p><strong>Возможные причины:</strong></p>
-          <ul>
-            <li>Адрес скопирован из письма не целиком</li>
-            <li>Заявка была отозвана или отклонена модератором</li>
-            <li>Пришло более новое письмо, проверьте последнее из них</li>
-          </ul>
-        </div>
+        <!-- What actually puts a reader here: an address that lost its tail, a
+             value the mail client wrapped or cut, an address edited by hand, or
+             the same letter followed a second time. A refusal by a moderator is
+             not one of them — a rejected request is never given a token and
+             never mails a link — and expiry does not reach this card: it has
+             one of its own, because there the reader can still file a new
+             request. -->
+        <p class="auth-text">
+          Возможно ссылка уже была использована или срок ее действия истек
+        </p>
+        <Button
+          type="button"
+          variant="primary"
+          class="auth-button auth-button--spaced"
+          @click="goHome"
+        >
+          На главную
+        </Button>
       </template>
 
-      <div class="help-section">
+      <!-- Nothing has gone wrong while the link is being checked, and nothing
+           has gone wrong once the name is changed, so there is nobody to ask
+           for help on either: the offer stands under every other answer. -->
+      <p
+        v-if="pageState !== 'loading' && pageState !== 'completed'"
+        class="auth-footnote help-section"
+      >
         Нужна помощь? Обратитесь в
-        <router-link to="/support?reason=access">поддержку</router-link>
-      </div>
+        <router-link :to="supportFor('Bug')">поддержку</router-link>
+      </p>
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
 .username-change-page
-  max-width: 380px
   margin: $major auto
   padding: 0 $medium
 
-  &--wide
-    max-width: 480px
-
-.checking
-  padding: $big 0
-
-.loading-text
-  color: $text-muted
-
-.username-change-card
-  text-align: center
-  background: $bg-element
-  border-radius: $border-radius
-  padding: $big
-  box-shadow: 0 2px 12px $shadow-color
-
-.status-description
-  margin: 0 0 $medium
-  font-size: $font-size
-  line-height: 1.6
-  color: $text
-
-.status-actions
-  margin-top: $big
-
-  :deep(.button)
-    min-width: 200px
-
-.login-link
-  font-weight: bold
-
-// Form
-.name-form
-  display: flex
-  flex-direction: column
-  gap: $small
-  text-align: left
-
-.field-label
-  font-size: $secondary-font-size
-  color: $text-muted
-
-.field-error
+// The card says what it is doing rather than standing empty; the line is the
+// whole body, so it carries no bottom gap of its own.
+.username-change-loading
   margin: 0
-  font-size: $secondary-font-size
-  color: $accent-red
 
-// Info section — same notice as .registration-info: square frame, ordinary ink.
-.warning
-  padding: $small $medium
-  border: 1px solid $border
-  font-size: $secondary-font-size
-  line-height: 1.5
-  color: $text
-
-.submit-button
-  margin-top: $tiny
-
-// Error info box
-.error-info
-  margin: $medium 0
-  padding: $small $medium
-  border: 1px solid $border-accent-red
-  font-size: $secondary-font-size
-  line-height: 1.5
+.username-change-name
   text-align: left
 
-  p
-    margin: $minor 0
+  // UsernameInput draws the verdict on the name inside its own root, so the
+  // strip AuthSurface hangs on `.auth-field + .auth-message` cannot reach it.
+  // It is rebuilt one level in, exactly as the activation rebuilds it: the
+  // field gives up its 2rem, the verdict line starts on the usual 3px and holds
+  // the rest of the strip open, and the button below stands 2rem under the
+  // field whatever the line says.
+  //
+  // The extra class carries the specificity — a bare `.auth-field` here ties
+  // with the sheet's own two-level selector, and a tie is settled by whichever
+  // stylesheet the bundler happened to emit last.
+  .username-change-name__field
+    margin-bottom: 0
 
-    &:first-child
-      margin-top: 0
+    :deep(.username-status)
+      margin-top: 3px
+      min-height: calc(2rem - 3px)
 
-  ul
-    margin: $minor 0 0
-    padding-left: $medium
+    // The mark inside the field. The component prints the ✗ of the icon set
+    // for a refusal; the guest surface draws its crosses from two bars,
+    // because every typographic cross in the fonts the site ships is thinner
+    // than the ✓ standing beside it and how much thinner depends on which font
+    // actually loaded. The component is shared and its markup is not this
+    // page's to change, so the recipe of .auth-field-status--error is repeated
+    // on the icon it does render — the same repeat the activation carries, and
+    // for the same reason.
+    :deep(.status-icon.unavailable)
+      width: 16px
+      height: 16px
+      font-size: 0
 
-    li
-      margin: $minor 0
+      &::before,
+      &::after
+        content: ""
+        position: absolute
+        left: 50%
+        top: 50%
+        width: 14px
+        height: 2px
+        margin: -1px 0 0 -7px
+        border-radius: 1px
+        background-color: currentColor
 
-// Help section
-.help-section
-  margin-top: $big
-  padding-top: $medium
-  border-top: 1px solid $border
+      &::before
+        transform: rotate(45deg)
+
+      &::after
+        transform: rotate(-45deg)
+
+  // A name the server gave away while the reader was confirming it. The field's
+  // own strip is standing on the answer to a question that is no longer being
+  // asked — it checked the name before it was taken — so the strip steps aside
+  // and the refusal takes its place, in the same slot and on the same metrics,
+  // rather than standing under it as a second opinion.
+  .username-change-name__field--refused
+    :deep(.username-status)
+      display: none
+
+.username-change-refusal
+  margin: 3px 0 0
+  min-height: calc(2rem - 3px)
   font-size: $secondary-font-size
-  color: $text-muted
-
-  a
-    font-weight: bold
+  line-height: 1.4
+  color: $accent-red
+  text-align: left
 </style>

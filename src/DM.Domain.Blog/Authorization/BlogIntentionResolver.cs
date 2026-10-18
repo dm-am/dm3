@@ -12,7 +12,7 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
     /// <inheritdoc />
     public bool IsAllowed(IAuthorizationSubject user, BlogIntention intention, BlogDto target)
     {
-        var isOwner = user.UserId == target.Author.UserId;
+        var isOwner = user.UserId == target.Author?.UserId;
         var isMentor = target.Mentor?.UserId == user.UserId;
         var isAssistant = target.Assistants.Any(a => a.UserId == user.UserId);
         // Filled by the list-shaped reads only. Every intention below is decided
@@ -128,15 +128,17 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
                 hasPendingInvitation ||
                 user.MayJudgePremoderation(),
 
-            // Anyone who can view the blog can comment (if comments enabled and not blacklisted)
-            // An ordinary ban silences discussion of other people's blogs; the
-            // user's own blog stays open. Publications themselves are a
-            // different intention and are not affected.
+            // Anyone who can view the blog can comment unless blacklisted: the
+            // discussion has no switch that closes it. An ordinary ban silences
+            // discussion of other people's blogs; the user's own blog stays open.
+            // Publications themselves are a different intention and are not
+            // affected. The services ask ThrowIfBlacklisted before this gate,
+            // for the words.
             BlogIntention.CreateComment =>
-                target.CommentsEnabled &&
                 user.IsAuthenticated &&
-                !target.BlacklistedUserIds.Contains(user.UserId) &&
-                (target.DraftVisibility == DraftVisibility.Public || isOwner || isAssistant || isSubscriber || isMentor || user.Role >= UserRole.Admin) &&
+                !target.IsBlacklisted(user.UserId) &&
+                (target.Status != ModuleStatus.Draft || target.DraftVisibility == DraftVisibility.Public ||
+                 isOwner || isAssistant || isSubscriber || isMentor || user.Role >= UserRole.Admin) &&
                 user.MaySpeak(inOwnSpace: target.IsOwnBlog(user.UserId)),
 
             _ => false

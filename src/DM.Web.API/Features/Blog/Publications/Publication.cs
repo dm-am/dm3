@@ -73,11 +73,6 @@ public class Publication
     public DateTimeOffset? PublishedUtc { get; set; }
 
     /// <summary>
-    /// Whether comments are enabled
-    /// </summary>
-    public bool CommentsEnabled { get; set; }
-
-    /// <summary>
     /// View count
     /// </summary>
     public int ViewCount { get; set; }
@@ -91,6 +86,28 @@ public class Publication
     /// Users who liked this publication
     /// </summary>
     public IEnumerable<User> Likes { get; set; } = [];
+
+    /// <summary>
+    /// What the viewer may do under this publication. Null in a list of
+    /// publications: it is answered on a read of one publication and on every
+    /// write that returns one, the shape a page offers something from
+    /// </summary>
+    public PublicationViewer? Viewer { get; set; }
+}
+
+/// <summary>
+/// What the viewer may do under a publication. Each flag is asked by the same
+/// code the write it stands for is refused by, so a page that offers by it
+/// offers only what the server takes; the server refuses all the same.
+/// </summary>
+public class PublicationViewer
+{
+    /// <summary>
+    /// Whether the viewer may write a new comment under the publication:
+    /// published, comments on, the blog's blacklist and the ban, all at once.
+    /// False for a guest
+    /// </summary>
+    public bool CanComment { get; set; }
 }
 
 /// <summary>
@@ -127,11 +144,6 @@ public class CreatePublicationRequest
     /// Whether to publish immediately (default: false - draft)
     /// </summary>
     public bool PublishImmediately { get; set; }
-
-    /// <summary>
-    /// Whether comments are enabled (default: true)
-    /// </summary>
-    public bool CommentsEnabled { get; set; } = true;
 }
 
 /// <summary>
@@ -171,9 +183,4 @@ public class UpdatePublicationRequest
     /// Whether the publication is published (optional)
     /// </summary>
     public bool? IsPublished { get; set; }
-
-    /// <summary>
-    /// Whether comments are enabled (optional)
-    /// </summary>
-    public bool? CommentsEnabled { get; set; }
 }

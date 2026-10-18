@@ -2,6 +2,17 @@ import { ref, readonly } from "vue";
 
 export type ToastType = "success" | "error" | "info" | "warning";
 
+/**
+ * The one thing a message offers to do about itself.
+ *
+ * The words that run it are not passed here: they are written inside the
+ * message, between square brackets, so the sentence is whole where it is
+ * written and whole where it is read. A label handed in beside the text ends
+ * up appended after it, and a trailing "Перейти" next to a sentence that
+ * already names the place is the same offer said twice.
+ */
+export type ToastAction = () => void;
+
 export interface Toast {
   id: string;
   type: ToastType;
@@ -9,6 +20,7 @@ export interface Toast {
   duration: number;
   remaining: number;
   paused: boolean;
+  action?: ToastAction;
 }
 
 const toasts = ref<Toast[]>([]);
@@ -46,7 +58,12 @@ const DURATIONS: Record<ToastType, number> = {
   warning: 8000,
 };
 
-function show(type: ToastType, message: string, duration?: number) {
+function show(
+  type: ToastType,
+  message: string,
+  duration?: number,
+  action?: ToastAction,
+) {
   // Deduplicate: don't show if same message already exists
   const existing = toasts.value.find((t) => t.message === message);
   if (existing) {
@@ -65,6 +82,7 @@ function show(type: ToastType, message: string, duration?: number) {
     duration: finalDuration,
     remaining: finalDuration,
     paused: false,
+    action,
   });
 
   if (finalDuration > 0) {
@@ -94,9 +112,13 @@ export function useToast() {
     dismiss,
     pause,
     resume,
-    success: (msg: string, duration?: number) => show("success", msg, duration),
-    error: (msg: string, duration?: number) => show("error", msg, duration),
-    info: (msg: string, duration?: number) => show("info", msg, duration),
-    warning: (msg: string, duration?: number) => show("warning", msg, duration),
+    success: (msg: string, duration?: number, action?: ToastAction) =>
+      show("success", msg, duration, action),
+    error: (msg: string, duration?: number, action?: ToastAction) =>
+      show("error", msg, duration, action),
+    info: (msg: string, duration?: number, action?: ToastAction) =>
+      show("info", msg, duration, action),
+    warning: (msg: string, duration?: number, action?: ToastAction) =>
+      show("warning", msg, duration, action),
   };
 }

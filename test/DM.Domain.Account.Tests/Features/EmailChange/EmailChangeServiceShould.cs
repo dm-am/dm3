@@ -31,7 +31,7 @@ public class EmailChangeServiceShould : UnitTestBase
     private readonly IEmailChangeRepository _repository;
     private readonly IEmailChangeConfirmationRepository _confirmationRepository;
     private readonly IEmailChangeMailSender _mailSender;
-    private readonly IEmailChangeWarningMailSender _warningMailSender;
+    private readonly IEmailChangeNoticeMailSender _noticeMailSender;
     private readonly IEventProducer _eventProducer;
     private readonly ISecurityAuditRepository _auditService;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -44,7 +44,7 @@ public class EmailChangeServiceShould : UnitTestBase
         _repository = Mock<IEmailChangeRepository>();
         _confirmationRepository = Mock<IEmailChangeConfirmationRepository>();
         _mailSender = Mock<IEmailChangeMailSender>();
-        _warningMailSender = Mock<IEmailChangeWarningMailSender>();
+        _noticeMailSender = Mock<IEmailChangeNoticeMailSender>();
         _eventProducer = Mock<IEventProducer>();
         _auditService = Mock<ISecurityAuditRepository>();
         _dateTimeProvider = Mock<IDateTimeProvider>();
@@ -65,7 +65,7 @@ public class EmailChangeServiceShould : UnitTestBase
             _repository,
             _confirmationRepository,
             _mailSender,
-            _warningMailSender,
+            _noticeMailSender,
             _eventProducer,
             _auditService,
             _dateTimeProvider,
@@ -123,12 +123,15 @@ public class EmailChangeServiceShould : UnitTestBase
 
         result.UserId.Should().Be(userId);
         result.Username.Should().Be("testuser");
-        await _repository.Received(1).InvalidateOldEmailChangeTokens(userId);
+        // One call, and it is the call that also retires the letters sent before
+        // it: as two, a request from another tab slipped between them and left two
+        // live links.
+        //
         // The request puts the address in waiting: the account keeps answering by the
         // old one until the link is opened.
         await _repository.Received(1).RequestChange(userId, emailChange.Email, token);
-        await _mailSender.Received(1).Send(emailChange.Email, emailChange.Username, secret);
-        await _mailSender.DidNotReceive().Send(emailChange.Email, emailChange.Username, tokenId);
+        await _mailSender.Received(1).Send(emailChange.Email, secret);
+        await _mailSender.DidNotReceive().Send(emailChange.Email, tokenId);
         await _eventProducer.Received(1).SendAsync(EventType.EmailChanged, userId);
     }
 
@@ -164,7 +167,7 @@ public class EmailChangeServiceShould : UnitTestBase
 
         await _service.Change(emailChange);
 
-        await _warningMailSender.Received(1).SendAsync(user.Email!, emailChange.Username, emailChange.Email);
+        await _noticeMailSender.Received(1).SendRequested(user.Email!, emailChange.Email);
     }
 
     [Fact]
@@ -173,13 +176,53 @@ public class EmailChangeServiceShould : UnitTestBase
         var tokenId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
         _confirmationRepository.FindEmailChangeTokenOwner(tokenId, Arg.Any<DateTimeOffset>()).Returns(ownerId);
-        _repository.ApplyPendingEmail(ownerId).Returns(true);
+        _repository.ApplyPendingEmail(ownerId)
+            .Returns(new EmailMove("was@example.com", "now@example.com"));
 
         await _service.Confirm(tokenId);
 
         // Confirmation is the moment the address changes.
         await _repository.Received(1).ApplyPendingEmail(ownerId);
         await _confirmationRepository.Received(1).MarkTokenUsed(tokenId);
+    }
+
+    /// <summary>
+    /// The second letter of the pair goes to the address the account just left.
+    /// </summary>
+    /// <remarks>
+    /// The first letter warns while a new password can still call the move off.
+    /// This one cannot be acted on from that mailbox at all, and it exists for
+    /// the reader who never opened the first: without it the move is silent, and
+    /// the owner learns of it at a door that no longer opens.
+    /// </remarks>
+    [Fact]
+    public async Task TellThePreviousAddressThatTheAccountHasMoved()
+    {
+        var tokenId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        _confirmationRepository.FindEmailChangeTokenOwner(tokenId, Arg.Any<DateTimeOffset>()).Returns(ownerId);
+        _repository.ApplyPendingEmail(ownerId)
+            .Returns(new EmailMove("was@example.com", "now@example.com"));
+
+        await _service.Confirm(tokenId);
+
+        await _noticeMailSender.Received(1).SendCompleted("was@example.com", "now@example.com");
+    }
+
+    /// <summary>
+    /// A link with nothing behind it moves nobody, so nobody is told about it.
+    /// </summary>
+    [Fact]
+    public async Task TellNobodyWhenThereWasNothingToMove()
+    {
+        var tokenId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        _confirmationRepository.FindEmailChangeTokenOwner(tokenId, Arg.Any<DateTimeOffset>()).Returns(ownerId);
+        _repository.ApplyPendingEmail(ownerId).Returns((EmailMove?)null);
+
+        await Assert.ThrowsAsync<HttpException>(() => _service.Confirm(tokenId));
+
+        await _noticeMailSender.DidNotReceiveWithAnyArgs().SendCompleted(default!, default!);
     }
 
     [Fact]
@@ -191,13 +234,43 @@ public class EmailChangeServiceShould : UnitTestBase
         var tokenId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
         _confirmationRepository.FindEmailChangeTokenOwner(tokenId, Arg.Any<DateTimeOffset>()).Returns(ownerId);
-        _repository.ApplyPendingEmail(ownerId).Returns(false);
+        _repository.ApplyPendingEmail(ownerId).Returns((EmailMove?)null);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
             () => _service.Confirm(tokenId));
 
         exception.StatusCode.Should().Be(HttpStatusCode.NotFound);
         await _confirmationRepository.DidNotReceive().MarkTokenUsed(Arg.Any<Guid>());
+    }
+
+    /// <summary>
+    /// An address taken while the letter waited is refused the way the form
+    /// refuses one, and the link is spent all the same.
+    /// </summary>
+    /// <remarks>
+    /// The check that the address is free runs when the change is asked for, and
+    /// nothing holds it between then and the click: whoever registers or moves
+    /// onto it first gets it, and the unique index is what says so. Answered under
+    /// the address field, because the form that sent the person here is the form
+    /// that has to offer them another address - and spent, because the link
+    /// authorised a move that cannot happen and would otherwise only collect the
+    /// same refusal again.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseAnAddressTakenWhileTheLetterWaited()
+    {
+        var tokenId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        _confirmationRepository.FindEmailChangeTokenOwner(tokenId, Arg.Any<DateTimeOffset>()).Returns(ownerId);
+        _repository.ApplyPendingEmail(ownerId)
+            .Returns<EmailMove?>(_ => throw new DuplicateEntityException("Duplicate account email"));
+
+        var thrown = await Assert.ThrowsAsync<HttpBadRequestException>(
+            () => _service.Confirm(tokenId));
+
+        thrown.ValidationErrors.Should().ContainKey(nameof(UserEmailChange.Email))
+            .WhoseValue.Should().Be(ValidationError.Taken);
+        await _confirmationRepository.Received(1).MarkTokenUsed(tokenId);
     }
 
     [Fact]

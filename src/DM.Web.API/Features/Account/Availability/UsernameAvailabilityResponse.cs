@@ -25,12 +25,6 @@ public enum UsernameUnavailableReason
     /// Username is taken by another user
     /// </summary>
     Taken,
-
-    /// <summary>
-    /// Username was previously used by another user and is reserved in history
-    /// </summary>
-    Reserved,
-
     /// <summary>
     /// Username format is invalid
     /// </summary>

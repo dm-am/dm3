@@ -1,4 +1,4 @@
-import { formatDate } from "@/shared/lib/utils/datetime";
+import { formatDate, siteTime } from "@/shared/lib/utils/datetime";
 /**
  * Pure utility functions for chat message rendering.
  * Shared between GlobalChatPage, ChatView, and future chat components.
@@ -48,9 +48,9 @@ export const MAX_MESSAGES = 500;
 // Formatting
 // =============================================================================
 
-/** Format message time as "HH:mm" */
+/** Format message time as "HH:mm", on the site's clock (siteTime). */
 export function formatChatTime(dateStr: string): string {
-  return dayjs(dateStr).format("HH:mm");
+  return siteTime(dateStr).format("HH:mm");
 }
 
 /**
@@ -61,8 +61,10 @@ export function formatChatTime(dateStr: string): string {
  * formats, they are calendar-relative labels.
  */
 export function formatSeparatorDate(dateStr: string): string {
+  // A day of the calendar, taken as it was handed. "Today" is the day on the
+  // site's clock, the one the messages under the separator are counted in.
   const date = dayjs(dateStr);
-  const today = dayjs().startOf("day");
+  const today = dayjs(siteTime().format("YYYY-MM-DD"));
   const yesterday = today.subtract(1, "day");
 
   if (date.isSame(today, "day")) return "Сегодня";
@@ -104,7 +106,9 @@ export function groupMessagesWithSeparators(
   let lastMessageTime: dayjs.Dayjs | null = null;
 
   for (const msg of messages) {
-    const msgDate = dayjs(msg.createdUtc).format("YYYY-MM-DD");
+    // The day on the site's clock, so a message sent at 23:30 in the zone of
+    // the account stands under that day and not the device's next one.
+    const msgDate = siteTime(msg.createdUtc).format("YYYY-MM-DD");
     const msgTime = dayjs(msg.createdUtc);
 
     // Insert date separator when date changes
@@ -246,4 +250,35 @@ export function isUserOnline(
   return (
     dayjs().diff(dayjs(lastActivityUtc), "minute", true) <= thresholdMinutes
   );
+}
+
+// =============================================================================
+// Images of the global chat
+// =============================================================================
+
+/** The mark the server puts on the spoiler it wraps a chat image in. */
+const IMAGE_GATE = '[data-bb-gate="image"]';
+
+/**
+ * A message of the global chat as the full layout shows it.
+ *
+ * The server puts every image of such a message behind a spoiler of its own,
+ * marked data-bb-gate="image" on the button and on the block, because the
+ * layout is the reader's choice and lives on the reader's device. The compact
+ * layout keeps that spoiler; the full one shows the image where it stands, as
+ * a post does: the button goes and the block gives way to what it holds. A
+ * spoiler the author wrote carries no mark and stays closed in both layouts.
+ *
+ * A transform of a string, like trimHtmlWhitespace: it parses into a detached
+ * template and touches nothing on the page.
+ */
+export function openImageGates(html: string): string {
+  if (!html || !html.includes("data-bb-gate")) return html;
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  template.content.querySelectorAll(IMAGE_GATE).forEach((element) => {
+    if (element.classList.contains("spoiler-head")) element.remove();
+    else element.replaceWith(...Array.from(element.childNodes));
+  });
+  return template.innerHTML;
 }

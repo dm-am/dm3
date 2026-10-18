@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // Blog discussion sub-page (dev doc 4.2.3.6.3 "Обсуждение блога"). The section
 // itself is the site-wide one (widgets/discussion); what stays here is the
-// blog's own part of it. Access is simpler than a game's: the blog carries a
-// single commentsEnabled flag (no public/readonly/private modes), and bans and
-// the blog blacklist are enforced server-side — a rejected POST is the signal,
-// and the ban rule exempts your own blog, which a blanket client-side gate
-// could not express.
-import { computed } from "vue";
+// blog's own part of it. Everybody who sees the blog reads its discussion, and
+// nothing turns its comments off. Who may write is the server's answer about
+// the viewer, asked by the code that refuses the comment: the blacklist and
+// the ban at once, the ban with its exemption for one's own blog, which the
+// page could not express and used to leave to a refused POST.
+import { computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import { blogApi, useBlogDetailsStore } from "@/entities/blog";
@@ -23,13 +23,33 @@ const { blog, comments, commentsPaging, commentsLoading, commentsError } =
 
 const blogId = computed(() => route.params.id as string);
 
-const commentsEnabled = computed(() => blog.value?.commentsEnabled !== false);
+// The answer is for whoever held the session when the blog was read, and the
+// blog shell does not read it again on a sign-in the way the game shell does:
+// the guest who signs in from "Войдите, чтобы оставить комментарий" would be
+// left with neither the prompt nor the form. So this page reads the blog again
+// when the viewer changes, and until then a viewer whose session has just
+// ended is offered nothing.
+const canComment = computed(
+  () => !!user.value && !!blog.value?.viewer?.canComment,
+);
+watch(
+  () => user.value?.username ?? null,
+  () => blogStore.loadBlog(blogId.value),
+);
 
-const canComment = computed(() => !!user.value && commentsEnabled.value);
+// The blog's blacklist reaches the comments themselves, where it takes
+// "Редактировать" off the viewer's own: the server refuses that edit by the
+// list and the ban, so the flag above cannot stand for it.
+const viewerBlacklisted = computed(
+  () => !!user.value && !!blog.value?.viewerBlacklisted,
+);
 
-// Said instead of the composer when the blog has closed its discussion.
+// The plaque in place of the form for the one on the blog's blacklist: what
+// was written stays to read, empty or not.
 const closedHint = computed(() =>
-  commentsEnabled.value ? undefined : "Комментарии в этом блоге отключены",
+  viewerBlacklisted.value
+    ? "Вы в черном списке этого блога: писать комментарии нельзя"
+    : undefined,
 );
 
 const load = (query: CommentsQuery) =>
@@ -40,7 +60,6 @@ const create = (text: string) =>
 
 // Raw BBCode source fetch for the edit form (AuthorEdit audience).
 const fetchEditSource = (id: string) => blogApi.getBlogCommentForEdit(id);
-const fetchQuoteSource = (id: string) => blogApi.getBlogCommentQuote(id);
 
 async function markAsRead() {
   if (!user.value) return;
@@ -67,11 +86,11 @@ async function markAsRead() {
       :like="blogStore.likeComment"
       :unlike="blogStore.unlikeComment"
       :fetch-edit-source="fetchEditSource"
-      :fetch-quote-source="fetchQuoteSource"
       :paging-to="{ name: 'blog-comments', params: { id: blogId } }"
       :draft-key="composerDraftKey('blog', 'comment', blog?.id)"
       :can-comment="canComment"
       :closed-hint="closedHint"
+      :viewer-blacklisted="viewerBlacklisted"
       @loaded="markAsRead"
     />
   </div>

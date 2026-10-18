@@ -2,6 +2,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence.Entities.Moderation;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Repositories.General;
 using DM.Testing;
@@ -136,6 +138,84 @@ public class UploadOrphanCollectorShould : UnitTestBase
         await Sweep();
 
         await _objectStorage.Received(1).DeleteAsync("uploads/aging.png", Arg.Any<CancellationToken>());
+        (await RemainingUploads()).Should().Be(0);
+    }
+
+    /// <summary>A warning on a profile that pins the upload as the avatar it showed.</summary>
+    private async Task GivenPinnedBy(Upload upload)
+    {
+        await using var dbContext = Context();
+        dbContext.Warnings.Add(new Warning
+        {
+            WarningId = Guid.NewGuid(),
+            TargetUserId = upload.UserId,
+            AuthorId = Guid.NewGuid(),
+            EntityId = upload.UserId,
+            EntityType = WarningEntityType.Profile,
+            CreatedUtc = Now.AddDays(-12),
+            Text = "Неприемлемый аватар",
+            ProfileAvatarUploadId = upload.UploadId
+        });
+        await dbContext.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// An avatar a warning on a profile pinned outlives its replacement: the
+    /// owner replacing or deleting it is not moderation's decision about the
+    /// picture, and the open log shows it as the evidence of the warning.
+    /// </summary>
+    /// <remarks>
+    /// Replacing an avatar marks the previous upload deleted with no author, and
+    /// the sweeper used to erase it a day later together with the only copy of
+    /// what the warning was given for.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LeaveAPinnedAvatarItsOwnerTookDown(bool signedByTheOwner)
+    {
+        var upload = NewUpload(removed: true, Now.AddDays(-10), "avatars/pinned.png");
+        upload.DeletedByUserId = signedByTheOwner ? upload.UserId : null;
+        await GivenUpload(upload);
+        await GivenPinnedBy(upload);
+
+        await Sweep();
+
+        await _objectStorage.DidNotReceive().DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        (await RemainingUploads()).Should().Be(1);
+    }
+
+    /// <summary>
+    /// The pin does not keep a picture from moderation: deleted by anybody but
+    /// its owner, the pinned avatar is collected as any other.
+    /// </summary>
+    [Fact]
+    public async Task CollectAPinnedAvatarModerationDeleted()
+    {
+        var upload = NewUpload(removed: true, Now.AddDays(-10), "avatars/forbidden.png");
+        upload.DeletedByUserId = Guid.NewGuid();
+        await GivenUpload(upload);
+        await GivenPinnedBy(upload);
+
+        await Sweep();
+
+        await _objectStorage.Received(1).DeleteAsync("avatars/forbidden.png", Arg.Any<CancellationToken>());
+        (await RemainingUploads()).Should().Be(0);
+    }
+
+    /// <summary>
+    /// The pin is one warning's and not a rule about every replaced avatar: one
+    /// nothing pins goes after the grace period, as it always did.
+    /// </summary>
+    [Fact]
+    public async Task CollectAReplacedAvatarNothingPins()
+    {
+        await GivenPinnedBy(NewUpload(removed: true, Now.AddDays(-10), "avatars/other.png"));
+        await GivenUpload(NewUpload(removed: true, Now.AddDays(-10), "avatars/replaced.png"));
+
+        await Sweep();
+
+        await _objectStorage.Received(1).DeleteAsync("avatars/replaced.png", Arg.Any<CancellationToken>());
         (await RemainingUploads()).Should().Be(0);
     }
 }

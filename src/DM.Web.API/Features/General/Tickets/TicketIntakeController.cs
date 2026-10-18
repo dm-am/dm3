@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
+using DM.Web.API.Features.Moderation.Tickets;
 using DM.Web.API.Swagger;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
@@ -101,5 +102,37 @@ public class TicketIntakeController : ControllerBase
         }
 
         return Ok(new Envelope<TrackedTicket>(ticket));
+    }
+
+    /// <summary>
+    /// Write in the conversation of a guest ticket
+    /// </summary>
+    /// <remarks>
+    /// The guest who filed a ticket answers moderation on his tracking page. The
+    /// tracking token is the credential, in the X-Dm-Ticket-Token header for the
+    /// reason given at the tracking call, and the comment is the guest's whoever
+    /// holds the token: signed by nobody, [mod] stripped. It leaves the ticket
+    /// waiting for moderation. Returns 404 for a missing, empty or unknown token,
+    /// 400 for a closed or full ticket and for a refused text.
+    /// </remarks>
+    /// <param name="token">Tracking token issued at submission time, in the X-Dm-Ticket-Token header</param>
+    /// <param name="request">The comment</param>
+    /// <response code="201">The comment as it stands in the conversation</response>
+    /// <response code="400">The ticket is closed or full, or the text is refused</response>
+    /// <response code="404">No ticket for this token</response>
+    /// <response code="429">Too many requests. Try again later.</response>
+    [HttpPost("track/comments", Name = nameof(CreateTrackedTicketComment))]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    [ProducesResponseType(typeof(Envelope<TicketComment>), StatusCodes.Status201Created)]
+    [CreatedWithoutLocation]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> CreateTrackedTicketComment(
+        [FromHeader(Name = TokenHeaders.Ticket)] string? token,
+        [FromBody] CreateTicketCommentRequest request)
+    {
+        var comment = await _ticketIntakeApiService.CreateTrackedComment(token ?? string.Empty, request);
+        return StatusCode(StatusCodes.Status201Created, comment);
     }
 }

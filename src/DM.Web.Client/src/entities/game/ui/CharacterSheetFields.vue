@@ -156,6 +156,8 @@ function onNumberInput(specId: string, event: Event) {
 .required-mark
   color: $accent-red
 
+// A note beside the caption, like "необязательно": the caption row of a
+// field is bold (FormField), the note keeps the regular weight.
 .privacy-indicator
   display: inline-flex
   align-items: center
@@ -163,6 +165,7 @@ function onNumberInput(specId: string, event: Event) {
   flex-shrink: 0
   color: $text-muted
   font-size: $secondary-font-size
+  font-weight: 400
 
 .privacy-icon
   width: 12px

@@ -36,7 +36,6 @@ test.beforeAll(async () => {
     data: {
       title: "Invitation Test Blog",
       isPublic: false,
-      commentsEnabled: true,
     },
   });
 

@@ -7,12 +7,11 @@ import {
   type ModerationTagGroup,
   type ModerationTag,
 } from "@/entities/game";
-import { Tooltip } from "@/shared/ui/Tooltip";
+import { Tooltip, TooltipContent } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { describeFailure, notifyFailure } from "@/shared/lib/errors";
+import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
 import { pluralize } from "@/shared/lib/utils/pluralize";
 import TagGroupDialog from "./dialogs/TagGroupDialog.vue";
 import TagDialog from "./dialogs/TagDialog.vue";
@@ -20,7 +19,6 @@ import { useRoleGate } from "./lib/useRoleGate";
 import { sectionRole } from "./lib/sections";
 
 const { hasAccess, deniedText } = useRoleGate(sectionRole("moderation-tags"));
-const toast = useToast();
 const gamesStore = useGamesStore();
 
 // State
@@ -49,20 +47,39 @@ const selectedGroupTitle = computed(() => {
   return group?.title ?? "Группа";
 });
 
+/**
+ * Both reads answer for themselves, because this page does.
+ *
+ * The failure stands where the two panels would be, so the interceptor's plate
+ * over it said the same sentence a second time — word for word on a 403 and a
+ * 5xx, since both read it out of the same problem document. Without the strip
+ * the plate alone would be left explaining an empty section from the corner.
+ *
+ * An expired session and a dead connection are not in here: neither is about
+ * the tag catalogue, and only the interceptor can offer the way back in.
+ */
+const OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
+
 // Actions
 async function loadData() {
   loading.value = true;
   error.value = null;
   try {
     const [groupsRes, tagsRes] = await Promise.all([
-      gameTagApi.getTagGroups(),
-      gameTagApi.getTags(),
+      gameTagApi.getTagGroups(OWNS_REFUSAL),
+      gameTagApi.getTags(OWNS_REFUSAL),
     ]);
     // A failed load is the page's own state, not a toast: there is nothing on
     // screen to go back to, so the message belongs where the table would be.
     const failure = groupsRes.error ?? tagsRes.error;
     if (failure) {
-      error.value = describeFailure(failure, "Не удалось загрузить данные");
+      // A wait is said in the shared wording, the one the interceptor would
+      // have raised: it is the only one that names the seconds the server asked
+      // for, and the title sent with a 429 carries no number.
+      error.value =
+        failure.status === 429
+          ? describeRateLimit(failure.retryAfterSeconds)
+          : describeFailure(failure, "Не удалось загрузить данные");
       return;
     }
     groups.value = groupsRes.data?.resources ?? [];
@@ -117,35 +134,27 @@ function openEditGroupModal(group: ModerationTagGroup) {
 
 // --- Group delete (ConfirmDialog) ---
 const deleteGroupTarget = ref<ModerationTagGroup | null>(null);
-const deletingGroup = ref(false);
 
 function deleteGroup(group: ModerationTagGroup) {
-  if (group.tagsCount > 0) {
-    toast.error("Нельзя удалить группу, в которой есть теги");
-    return;
-  }
+  // The trash control is drawn only for a group without tags, and the count
+  // stands next to its name, so this guard only repeats what the row shows.
+  if (group.tagsCount > 0) return;
   deleteGroupTarget.value = group;
 }
 
+// The requests of the two confirmations. The window waits for one, prints a
+// refusal in itself and closes on success alone, so the interceptor keeps quiet
+// about it the way it does about the reads.
 async function confirmDeleteGroup() {
-  if (!deleteGroupTarget.value || deletingGroup.value) return;
-  deletingGroup.value = true;
-  try {
-    const { error } = await gameTagApi.deleteTagGroup(
-      deleteGroupTarget.value.id,
-    );
-    if (error) {
-      notifyFailure(error, "Не удалось удалить группу тегов");
-      return;
-    }
-    if (selectedGroupId.value === deleteGroupTarget.value.id) {
-      selectedGroupId.value = null;
-    }
-    deleteGroupTarget.value = null;
-    await reloadAfterWrite();
-  } finally {
-    deletingGroup.value = false;
+  const target = deleteGroupTarget.value;
+  if (!target) return;
+  const result = await gameTagApi.deleteTagGroup(target.id, OWNS_REFUSAL);
+  if (result.error) return result;
+  if (selectedGroupId.value === target.id) {
+    selectedGroupId.value = null;
   }
+  void reloadAfterWrite();
+  return result;
 }
 
 // --- Tag dialog (shared Dialog idiom) ---
@@ -180,33 +189,20 @@ function openEditTagModal(tag: ModerationTag) {
 
 // --- Tag delete (ConfirmDialog) ---
 const deleteTagTarget = ref<ModerationTag | null>(null);
-const deletingTag = ref(false);
 
 function deleteTag(tag: ModerationTag) {
-  if (tag.gamesCount > 0) {
-    const games = pluralize(tag.gamesCount, "игре", "играх", "играх");
-    toast.error(
-      `Нельзя удалить тег, который используется в ${tag.gamesCount} ${games}`,
-    );
-    return;
-  }
+  // Same as deleteGroup: the trash control is drawn only for a tag no game
+  // uses, and the row already says in how many games it stands.
+  if (tag.gamesCount > 0) return;
   deleteTagTarget.value = tag;
 }
 
 async function confirmDeleteTag() {
-  if (!deleteTagTarget.value || deletingTag.value) return;
-  deletingTag.value = true;
-  try {
-    const { error } = await gameTagApi.deleteTag(deleteTagTarget.value.id);
-    if (error) {
-      notifyFailure(error, "Не удалось удалить тег");
-      return;
-    }
-    deleteTagTarget.value = null;
-    await reloadAfterWrite();
-  } finally {
-    deletingTag.value = false;
-  }
+  const target = deleteTagTarget.value;
+  if (!target) return;
+  const result = await gameTagApi.deleteTag(target.id, OWNS_REFUSAL);
+  if (!result.error) void reloadAfterWrite();
+  return result;
 }
 
 onMounted(() => {
@@ -215,155 +211,183 @@ onMounted(() => {
 </script>
 
 <template>
-  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+  <!-- The frame the two panels measure themselves against: the page, not
+       the window. -->
+  <div class="tags-page">
+    <page-title>Игровые теги</page-title>
 
-  <div v-else class="moderation-tags">
-    <div v-if="loading" class="loading">Загрузка...</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
-    <template v-else>
-      <!-- Groups panel -->
-      <div class="groups-panel">
-        <div class="panel-header">
-          <h3>Группы тегов</h3>
-          <button type="button" class="btn-add" @click="openCreateGroupModal">
-            + Группа
-          </button>
-        </div>
-        <div class="groups-list">
-          <button
-            type="button"
-            class="group-item"
-            :class="{ active: selectedGroupId === null }"
-            @click="selectGroup(null)"
-          >
-            <span class="group-title">Все теги</span>
-            <span class="group-count">{{ tags.length }}</span>
-          </button>
-          <div
-            v-for="group in groups"
-            :key="group.id"
-            class="group-item-wrapper"
-          >
-            <button
-              type="button"
-              class="group-item"
-              :class="{ active: selectedGroupId === group.id }"
-              @click="selectGroup(group.id)"
-            >
-              <span class="group-title">{{ group.title }}</span>
-              <span class="group-count">{{ group.tagsCount }}</span>
+    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+
+    <div v-else class="moderation-tags">
+      <div v-if="loading" class="loading">Загрузка...</div>
+      <div v-else-if="error" class="error">{{ error }}</div>
+      <template v-else>
+        <!-- Groups panel -->
+        <div class="groups-panel">
+          <div class="panel-header">
+            <h3>Группы тегов</h3>
+            <button type="button" class="btn-add" @click="openCreateGroupModal">
+              + Группа
             </button>
-            <div class="group-actions">
-              <Tooltip text="Редактировать">
-                <button
-                  type="button"
-                  class="btn-icon"
-                  aria-label="Редактировать группу"
-                  @click.stop="openEditGroupModal(group)"
-                >
-                  <SvgIcon name="pencil" />
-                </button>
-              </Tooltip>
-              <Tooltip text="Удалить">
-                <button
-                  type="button"
-                  class="btn-icon btn-danger"
-                  aria-label="Удалить группу"
-                  :disabled="group.tagsCount > 0"
-                  @click.stop="deleteGroup(group)"
-                >
-                  <SvgIcon name="trash" />
-                </button>
-              </Tooltip>
+          </div>
+          <div class="groups-list">
+            <!-- In the frame of a group row, which stretches its button: a
+                 button outside it is as wide as its words, and the count stood
+                 against the title. -->
+            <div class="group-item-wrapper">
+              <button
+                type="button"
+                class="group-item group-item--all"
+                :class="{ active: selectedGroupId === null }"
+                @click="selectGroup(null)"
+              >
+                <span class="group-title">Все теги</span>
+                <span class="group-count">{{ tags.length }}</span>
+              </button>
+            </div>
+            <div
+              v-for="group in groups"
+              :key="group.id"
+              class="group-item-wrapper"
+            >
+              <button
+                type="button"
+                class="group-item"
+                :class="{ active: selectedGroupId === group.id }"
+                @click="selectGroup(group.id)"
+              >
+                <span class="group-title">{{ group.title }}</span>
+                <span class="group-count">{{ group.tagsCount }}</span>
+              </button>
+              <div class="group-actions">
+                <Tooltip text="Редактировать">
+                  <button
+                    type="button"
+                    class="btn-icon"
+                    aria-label="Редактировать группу"
+                    @click.stop="openEditGroupModal(group)"
+                  >
+                    <SvgIcon name="pencil" />
+                  </button>
+                </Tooltip>
+                <!-- The server refuses to delete a group that holds tags,
+                     so a group with tags has no trash: a pale control that
+                     does nothing was the refusal drawn in advance. -->
+                <Tooltip v-if="group.tagsCount === 0" text="Удалить">
+                  <button
+                    type="button"
+                    class="btn-icon"
+                    aria-label="Удалить группу"
+                    @click.stop="deleteGroup(group)"
+                  >
+                    <SvgIcon name="trash" />
+                  </button>
+                </Tooltip>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Tags panel -->
-      <div class="tags-panel">
-        <div class="panel-header">
-          <h3>{{ selectedGroupTitle }}</h3>
-          <button type="button" class="btn-add" @click="openCreateTagModal">
-            + Тег
-          </button>
-        </div>
-        <EmptyState
-          v-if="filteredTags.length === 0"
-          :title="
-            selectedGroupId ? 'Нет тегов в этой группе' : 'Тегов пока нет'
-          "
-        />
-        <div v-else class="tags-list">
-          <div v-for="tag in filteredTags" :key="tag.id" class="tag-item">
-            <div class="tag-info">
-              <div class="tag-header">
-                <span class="tag-title">{{ tag.title }}</span>
-                <span class="tag-id">#{{ tag.shortId }}</span>
+        <!-- Tags panel -->
+        <div class="tags-panel">
+          <div class="panel-header">
+            <h3>{{ selectedGroupTitle }}</h3>
+            <button type="button" class="btn-add" @click="openCreateTagModal">
+              + Тег
+            </button>
+          </div>
+          <EmptyState
+            v-if="filteredTags.length === 0"
+            :title="
+              selectedGroupId ? 'Нет тегов в этой группе' : 'Тегов пока нет'
+            "
+          />
+          <div v-else class="tags-list">
+            <div v-for="tag in filteredTags" :key="tag.id" class="tag-item">
+              <div class="tag-info">
+                <div class="tag-header">
+                  <span class="tag-title">{{ tag.title }}</span>
+                  <span class="tag-id">#{{ tag.shortId }}</span>
+                </div>
+                <!-- As a reader sees it in the tag's tooltip: the words of a
+                     [tip] under a dotted line, their small tooltip on hover. -->
+                <div v-if="tag.description" class="tag-description">
+                  <TooltipContent
+                    :html="tag.descriptionHtml"
+                    :text="tag.description"
+                  />
+                </div>
+                <div class="tag-meta">
+                  <span class="tag-group">{{ tag.groupTitle }}</span>
+                  <span class="tag-games">{{
+                    gamesLabel(tag.gamesCount)
+                  }}</span>
+                  <span class="tag-sort">Порядок: {{ tag.sortOrder }}</span>
+                </div>
               </div>
-              <div v-if="tag.description" class="tag-description">
-                {{ tag.description }}
+              <div class="tag-actions">
+                <Tooltip text="Редактировать">
+                  <button
+                    type="button"
+                    class="btn-icon"
+                    aria-label="Редактировать тег"
+                    @click="openEditTagModal(tag)"
+                  >
+                    <SvgIcon name="pencil" />
+                  </button>
+                </Tooltip>
+                <!-- Same for a tag that stands in a game. -->
+                <Tooltip v-if="tag.gamesCount === 0" text="Удалить">
+                  <button
+                    type="button"
+                    class="btn-icon"
+                    aria-label="Удалить тег"
+                    @click="deleteTag(tag)"
+                  >
+                    <SvgIcon name="trash" />
+                  </button>
+                </Tooltip>
               </div>
-              <div class="tag-meta">
-                <span class="tag-group">{{ tag.groupTitle }}</span>
-                <span class="tag-games">{{ gamesLabel(tag.gamesCount) }}</span>
-                <span class="tag-sort">Порядок: {{ tag.sortOrder }}</span>
-              </div>
-            </div>
-            <div class="tag-actions">
-              <Tooltip text="Редактировать">
-                <button
-                  type="button"
-                  class="btn-icon"
-                  aria-label="Редактировать тег"
-                  @click="openEditTagModal(tag)"
-                >
-                  <SvgIcon name="pencil" />
-                </button>
-              </Tooltip>
-              <Tooltip text="Удалить">
-                <button
-                  type="button"
-                  class="btn-icon btn-danger"
-                  aria-label="Удалить тег"
-                  :disabled="tag.gamesCount > 0"
-                  @click="deleteTag(tag)"
-                >
-                  <SvgIcon name="trash" />
-                </button>
-              </Tooltip>
             </div>
           </div>
         </div>
-      </div>
-    </template>
+      </template>
 
-    <!-- Delete confirmations -->
-    <ConfirmDialog
-      :show="deleteGroupTarget !== null"
-      title="Удаление группы"
-      :message="`Удалить группу &quot;${deleteGroupTarget?.title ?? ''}&quot;?`"
-      confirm-label="Удалить"
-      danger
-      :loading="deletingGroup"
-      @update:show="(v) => !v && (deleteGroupTarget = null)"
-      @confirm="confirmDeleteGroup"
-    />
-    <ConfirmDialog
-      :show="deleteTagTarget !== null"
-      title="Удаление тега"
-      :message="`Удалить тег &quot;${deleteTagTarget?.title ?? ''}&quot;?`"
-      confirm-label="Удалить"
-      danger
-      :loading="deletingTag"
-      @update:show="(v) => !v && (deleteTagTarget = null)"
-      @confirm="confirmDeleteTag"
-    />
+      <!-- Delete confirmations -->
+      <ConfirmDialog
+        :show="deleteGroupTarget !== null"
+        title="Удалить группу?"
+        :message="`Группа &quot;${deleteGroupTarget?.title ?? ''}&quot; пропадет из каталога тегов`"
+        confirm-label="Удалить"
+        failure="Не удалось удалить группу тегов"
+        :action="confirmDeleteGroup"
+        @update:show="(v) => !v && (deleteGroupTarget = null)"
+      />
+      <ConfirmDialog
+        :show="deleteTagTarget !== null"
+        title="Удалить тег?"
+        :message="`Тег &quot;${deleteTagTarget?.title ?? ''}&quot; пропадет из каталога тегов`"
+        confirm-label="Удалить"
+        failure="Не удалось удалить тег"
+        :action="confirmDeleteTag"
+        @update:show="(v) => !v && (deleteTagTarget = null)"
+      />
+    </div>
   </div>
 </template>
 
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
+
+// The side of an icon button (.btn-icon), and the room a row keeps for two of
+// them: the pencil, then the trash where there is something to delete. The
+// actions of a group and of a tag take it, and .group-item--all leaves it.
+$icon-button: 28px
+$two-icon-buttons: calc(2 * #{$icon-button} + #{$tiny})
+
+// Inline-size containment keeps the width of the page from its ancestors.
+.tags-page
+  container: tags-page / inline-size
 
 .moderation-tags
   display: grid
@@ -378,12 +402,11 @@ onMounted(() => {
 .error
   color: $accent-red
 
-// Panels
+// Panels: content surfaces, square as every card of the site.
 .groups-panel,
 .tags-panel
   background: $bg-element
   border: 1px solid $border
-  border-radius: $border-radius
   overflow: hidden
 
 .panel-header
@@ -431,11 +454,21 @@ onMounted(() => {
   color: $text
 
   &:hover
-    background: $bg-element-accent
+    background: $bg-element-hover
 
+  // A choice, not a button: the chosen group wears the active segment of the
+  // site ($bg-element-accent and the bold), so the one fill of $link on a page
+  // stays the main button's.
   &.active
-    background: $link
-    color: $text-on-fill
+    background: $bg-element-accent
+    color: $text
+    font-weight: 700
+
+// The row of every tag has no buttons of its own. It stops where a group row
+// stops before its two and the gaps around them, so the counts stand in one
+// column.
+.group-item--all
+  margin-right: calc(#{$two-icon-buttons} + #{$tiny})
 
 .group-title
   flex: 1
@@ -445,9 +478,13 @@ onMounted(() => {
   color: inherit
   opacity: 0.7
 
+// The room of both buttons whether the trash is drawn or not, so a group that
+// holds tags keeps its count and its pencil in the column of the others.
 .group-actions
   display: flex
   gap: $tiny
+  flex: none
+  width: $two-icon-buttons
   opacity: 0
   transition: opacity 0.15s
 
@@ -462,7 +499,6 @@ onMounted(() => {
   padding: $small $medium
   margin-bottom: $small
   border: 1px solid $border
-  border-radius: $border-radius
   background: $bg-element-accent
 
   &:hover .tag-actions
@@ -498,6 +534,8 @@ onMounted(() => {
 .tag-actions
   display: flex
   gap: $tiny
+  flex: none
+  width: $two-icon-buttons
   opacity: 0
   transition: opacity 0.15s
 
@@ -506,8 +544,8 @@ onMounted(() => {
   display: flex
   align-items: center
   justify-content: center
-  width: 28px
-  height: 28px
+  width: $icon-button
+  height: $icon-button
   padding: 0
   cursor: pointer
   border: none
@@ -515,24 +553,20 @@ onMounted(() => {
   background: none
   color: $text-muted
 
+  // Deleting wears no colour of its own: the question it asks first spells
+  // it out.
   &:hover
     background: $bg-element-accent
     color: $text
-
-  &:disabled
-    opacity: 0.3
-    cursor: default
-
-  &.btn-danger:hover:not(:disabled)
-    +tint($accent-red, 10%)
-    color: $accent-red
 
   svg
     width: 18px
     height: 18px
 
-// Responsive
-@media (max-width: $bp-tablet)
+// The two panels side by side need 600px of the column: the list of groups
+// keeps its 300px, and a narrower list of tags cut the right edge of its cards
+// off. At 1280 the column is 556px, and there the groups stand over the tags.
+@container tags-page (max-width: 599px)
   .moderation-tags
     grid-template-columns: 1fr
 </style>

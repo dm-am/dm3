@@ -4,12 +4,13 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import dayjs from "dayjs";
-import { DATE_TIME_FORMAT } from "@/shared/lib/utils/datetime";
+import { DATE_TIME_FORMAT, formatSiteTime } from "@/shared/lib/utils/datetime";
 
 const props = withDefaults(defineProps<{ date: string; format?: string }>(), {
   format: DATE_TIME_FORMAT,
 });
 
-const humanDate = computed(() => dayjs(props.date).format(props.format));
+// On the site's clock: the account's for a signed-in reader, the device's for
+// a guest (siteTime).
+const humanDate = computed(() => formatSiteTime(props.date, props.format));
 </script>

@@ -31,7 +31,6 @@ public class BrokerObservabilityShould
     private const string Alerts = "docker/prometheus/alerts.yml";
     private const string Dashboard = "docker/grafana/dashboards/dm-consumers.json";
     private const string PushConsumer = "src/DM.Web.API/Realtime/RealtimeNotificationConsumer.cs";
-    private const string Logging = "src/DM.Infrastructure.Core/Logging/LoggingConfiguration.cs";
 
     /// <summary>
     /// A trace does not end at the broker.
@@ -53,12 +52,12 @@ public class BrokerObservabilityShould
     [Fact]
     public void KeepTheTraceOfARequestAcrossTheBroker()
     {
-        var logging = Read(Logging);
+        var composition = TelemetrySources.CompositionCode;
 
-        logging.Should().Contain("RabbitMQ.Client.Publisher",
+        composition.Should().Contain("RabbitMQ.Client.Publisher",
             "without the publisher source no context is opened around a publish, and the " +
             "consumer has nothing to continue");
-        logging.Should().Contain("RabbitMQ.Client.Subscriber",
+        composition.Should().Contain("RabbitMQ.Client.Subscriber",
             "without the subscriber source a consumer opens a root span, and the request " +
             "that sent the message is a separate trace nobody can reach from it");
     }

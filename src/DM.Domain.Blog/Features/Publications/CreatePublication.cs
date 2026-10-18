@@ -36,9 +36,4 @@ public class CreatePublication
     /// Whether to publish immediately
     /// </summary>
     public bool PublishImmediately { get; set; }
-
-    /// <summary>
-    /// Whether comments are enabled
-    /// </summary>
-    public bool CommentsEnabled { get; set; } = true;
 }

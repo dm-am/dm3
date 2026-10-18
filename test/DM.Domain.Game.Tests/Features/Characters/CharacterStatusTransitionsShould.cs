@@ -17,10 +17,13 @@ using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing;
 using DM.Testing.Dsl;
+using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using NSubstitute;
 using Xunit;
+
+using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
 
@@ -39,7 +42,9 @@ namespace DM.Domain.Game.Tests.Features.Characters;
 /// The transition is now named by the caller and the table lives here. Each row
 /// asserts the right the transition needs, since that is what differs between
 /// three ways of reaching the same status: the lead kills and exiles, the player
-/// leaves, and only the player comes back.
+/// leaves. The way back undoes only a move of the lead: Accept after Decline,
+/// Resurrect after Kill, Readmit after Exile. What the player took out of the
+/// game stays out.
 /// </remarks>
 public class CharacterStatusTransitionsShould : UnitTestBase
 {
@@ -47,6 +52,8 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     private readonly IIntentionManager _intentionManager;
     private readonly IEventProducer _producer;
     private readonly IGameSubscriptionService _subscriptions;
+    private readonly IGameService _gameService;
+    private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly ICharacterService _service;
 
     public CharacterStatusTransitionsShould()
@@ -59,17 +66,21 @@ public class CharacterStatusTransitionsShould : UnitTestBase
         _producer.SendAsync(Arg.Any<IEnumerable<EventType>>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Current.Returns(Identities.User(Guid.NewGuid()));
+        identityProvider.Current.Returns(Identities.User(_currentUserId));
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         _subscriptions = Mock<IGameSubscriptionService>();
 
+        // A game that blacklisted nobody, unless a case says otherwise.
+        _gameService = Mock<IGameService>();
+        _gameService.GetAsync(Arg.Any<Guid>()).Returns(call => new GameDto { Id = call.Arg<Guid>() });
+
         _service = new CharacterService(
             createValidator,
             updateValidator,
-            Mock<IGameService>(),
+            _gameService,
             _intentionManager,
             _repository,
             Mock<ICharacterAttributeValueFiller>(),
@@ -78,7 +89,8 @@ public class CharacterStatusTransitionsShould : UnitTestBase
             _producer,
             identityProvider,
             Mock<IGuidFactory>(),
-            dateTimeProvider);
+            dateTimeProvider,
+            new TagNamesAsTyped());
     }
 
     public static TheoryData<CharacterStatusTransition, CharacterStatus, CharacterIntention,
@@ -98,8 +110,8 @@ public class CharacterStatusTransitionsShould : UnitTestBase
             CharacterStatus.Retired, EventType.StatusCharacterLeft },
         { CharacterStatusTransition.Resurrect, CharacterStatus.Retired, CharacterIntention.Resurrect,
             CharacterStatus.Active, EventType.StatusCharacterResurrected },
-        { CharacterStatusTransition.Return, CharacterStatus.Retired, CharacterIntention.Return,
-            CharacterStatus.Active, EventType.StatusCharacterReturned },
+        { CharacterStatusTransition.Readmit, CharacterStatus.Retired, CharacterIntention.Readmit,
+            CharacterStatus.Active, EventType.StatusCharacterReadmitted },
     };
 
     [Theory]
@@ -156,11 +168,11 @@ public class CharacterStatusTransitionsShould : UnitTestBase
 
     /// <summary>
     /// Coming back clears all three, or a resurrected character stays marked dead
-    /// and cannot be killed again.
+    /// and cannot be killed again, and a readmitted one stays marked exiled.
     /// </summary>
     [Theory]
     [InlineData(CharacterStatusTransition.Resurrect)]
-    [InlineData(CharacterStatusTransition.Return)]
+    [InlineData(CharacterStatusTransition.Readmit)]
     public async Task ClearEveryReasonOnTheWayBack(CharacterStatusTransition transition)
     {
         var characterId = Given(CharacterStatus.Retired);
@@ -191,7 +203,8 @@ public class CharacterStatusTransitionsShould : UnitTestBase
         { CharacterStatusTransition.Exile, CharacterStatus.Retired },
         { CharacterStatusTransition.Leave, CharacterStatus.UnderReview },
         { CharacterStatusTransition.Resurrect, CharacterStatus.Active },
-        { CharacterStatusTransition.Return, CharacterStatus.Active },
+        { CharacterStatusTransition.Readmit, CharacterStatus.Active },
+        { CharacterStatusTransition.Readmit, CharacterStatus.UnderReview },
     };
 
     /// <summary>
@@ -226,9 +239,77 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     }
 
     /// <summary>
+    /// From Retired the ways back are Resurrect and Readmit, the lead undoing his
+    /// own Kill or Exile (the resolver asks which of the two it was). Every other
+    /// transition, including any that would bring back what the player took out
+    /// of the game, does not start here.
+    /// </summary>
+    [Fact]
+    public async Task LeaveOnlyTheLeadsUndoingsAsTheWaysBackFromRetired()
+    {
+        foreach (var transition in Enum.GetValues<CharacterStatusTransition>()
+                     .Where(t => t is not (CharacterStatusTransition.Resurrect or CharacterStatusTransition.Readmit)))
+        {
+            var characterId = Given(CharacterStatus.Retired);
+
+            var act = () => _service.ChangeStatusAsync(characterId, transition);
+
+            (await act.Should().ThrowAsync<HttpException>(transition.ToString()))
+                .Which.StatusCode.Should().Be(HttpStatusCode.BadRequest, transition.ToString());
+        }
+
+        await _repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
+    }
+
+    /// <summary>
+    /// The game's blacklist does not stand between a lead and his own moves: he
+    /// accepts the application he declined, or one the entry declined, revives
+    /// the character he killed and brings back the one he exiled, whoever the
+    /// list holds.
+    /// </summary>
+    [Theory]
+    [InlineData(CharacterStatusTransition.Accept, CharacterStatus.Declined)]
+    [InlineData(CharacterStatusTransition.Accept, CharacterStatus.UnderReview)]
+    [InlineData(CharacterStatusTransition.Resurrect, CharacterStatus.Retired)]
+    [InlineData(CharacterStatusTransition.Readmit, CharacterStatus.Retired)]
+    public async Task LetALeadUndoHisOwnMoveForABlacklistedAuthor(
+        CharacterStatusTransition transition, CharacterStatus from)
+    {
+        var authorId = Guid.NewGuid();
+        var characterId = Given(from, authorId);
+        BlacklistInTheGameOf(characterId, authorId);
+        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
+
+        await _service.ChangeStatusAsync(characterId, transition);
+
+        await _repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
+    }
+
+    /// <summary>
+    /// Taking a character out of the game is not what the list closes: a lead
+    /// still kills, exiles and declines, and the author still leaves.
+    /// </summary>
+    [Theory]
+    [InlineData(CharacterStatusTransition.Kill, CharacterStatus.Active)]
+    [InlineData(CharacterStatusTransition.Exile, CharacterStatus.Active)]
+    [InlineData(CharacterStatusTransition.Leave, CharacterStatus.Active)]
+    [InlineData(CharacterStatusTransition.Decline, CharacterStatus.UnderReview)]
+    public async Task LeaveTheWaysOutOpenForABlacklistedAuthor(
+        CharacterStatusTransition transition, CharacterStatus from)
+    {
+        var characterId = Given(from, _currentUserId);
+        BlacklistInTheGameOf(characterId, _currentUserId);
+        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
+
+        await _service.ChangeStatusAsync(characterId, transition);
+
+        await _repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
+    }
+
+    /// <summary>
     /// A character in the given status, existing.
     /// </summary>
-    private Guid Given(CharacterStatus status)
+    private Guid Given(CharacterStatus status, Guid? authorId = null)
     {
         var characterId = Guid.NewGuid();
         _repository.FindCharacter(characterId).Returns(new Character { Id = characterId });
@@ -237,10 +318,23 @@ public class CharacterStatusTransitionsShould : UnitTestBase
             Id = characterId,
             Status = status,
             GameId = Guid.NewGuid(),
-            AuthorId = Guid.NewGuid(),
+            AuthorId = authorId ?? Guid.NewGuid(),
             GameAssistantIds = Array.Empty<Guid>(),
         });
         return characterId;
+    }
+
+    /// <summary>
+    /// The game of this character, with the user on its blacklist.
+    /// </summary>
+    private void BlacklistInTheGameOf(Guid characterId, Guid userId)
+    {
+        var gameId = _repository.GetForUpdate(characterId).Result!.GameId;
+        _gameService.GetAsync(gameId).Returns(new GameDto
+        {
+            Id = gameId,
+            BlacklistedUsers = [new BlacklistedUser { UserId = userId }]
+        });
     }
 
     /// <summary>

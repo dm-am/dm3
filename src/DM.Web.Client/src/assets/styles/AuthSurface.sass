@@ -1,0 +1,870 @@
+// The guest surface: the one visual language of the screens a visitor meets
+// before he has an account: the login, registration, access recovery and
+// two-factor dialogs, and the pages their letters lead to.
+//
+// It is a sheet of its own and not a set of mixins because every one of those
+// screens draws the same six or seven shapes, and a mixin emits its rules again
+// into each scoped stylesheet that calls it (InputsGlobal.sass records what
+// that cost the last time). So this file is imported once, from app/main.ts,
+// beside the other sheets that emit.
+//
+// Every value here comes from the guest prototype. Part of that prototype the
+// owner settled line by line and part of it was closed under a delegation and is
+// still offered there as a switch, so a number standing on this page is not by
+// itself proof that it was chosen: the reason written beside it is what holds it
+// up. Where the palette owns the value it is written as a token, so the two
+// themes are one set of rules and there is no hex on this page at all; where the
+// prototype decided a number the scale has no name for (the 52px control, the
+// 2rem message strip) the number is written out with the reason beside it.
+@use "Inputs" as *
+
+// The site's disabled hatch, which +disabled-hatch binds to `&:disabled` and
+// therefore cannot hand to anything that is not a form control. The read-only
+// value plate below is a <div>, so it repeats the pattern rather than the
+// mixin. Same six-pixel diagonal, so the two states are one drawing.
+$auth-hatch: url("data:image/svg+xml,%3Csvg width='6' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 6L6 0M-1 1L1 -1M5 7L7 5' stroke='white' stroke-width='1'/%3E%3C/svg%3E")
+
+// The guest screens are set one step below the site's 16px: the forms are
+// narrow and the labels are bold, and at 16px the card outgrew the 432px it is
+// allowed. 15px is not on the type scale, which knows 16, 14 and 12. It is
+// the prototype's own step between the first two.
+$auth-font-size: 15px
+
+// Height of a guest control: the field, the value plate and the main button all
+// stand on it. It is not $control-height (38px): these forms hold three or four
+// controls in total and are the whole page, so the target is a thumb's rather
+// than a dense toolbar's.
+$auth-control-height: 52px
+
+// How far into a control its text starts. Everything standing in the strip
+// under a field starts on the same axis, one pixel further out to clear the
+// frame, so a refusal and the value it is about share a left edge.
+$auth-field-inset: 14px
+
+// The strip under a field. A message (an error, a name check, the strength
+// scale) starts 3px below the field and occupies the strip, so whatever comes
+// next stands 2rem below the field whether a message is showing or not, and
+// the card does not change height when one appears.
+$auth-strip: 2rem
+$auth-strip-gap: 3px
+
+// The rhythm of a guest card is the site's 8px grid. The label stands 8px above
+// its field, the card keeps 24px of gutter on every side, and the two values
+// above were already on the same step: the strip is four of it and the gap
+// between blocks (1rem) is two. The numbers are written out where they apply,
+// because 24 has no name on the scale and naming only half of the rhythm would
+// hide the rest of it.
+
+// How wide a guest card is, and how wide the narrow one. The card and the
+// dialog wrapper around it are measured from the same pair: written twice, the
+// lit rectangle and the card would differ by the gutter between them, and a
+// click on that gutter would land on the dialog instead of closing it.
+$auth-card-width: 432px
+$auth-card-width-compact: 352px
+
+// Width follows what a card holds and not the tier it opens in: the same "mark,
+// title, one line, button" card measured 352px as a dialog and 432px as a page
+// from a letter. The wide card
+// is kept where an address or a password is typed and where a refusal explains
+// itself; everything else that states an outcome is narrow.
+//
+// The screen declares which of the two it wants, by putting --compact on its
+// own card and on the dialog wrapper around it. The sheet does not work it out
+// from what the card holds: the width of a dialog sits on the wrapper, so a
+// wrapper asking about the contents of its card would stand one :has inside
+// another, which Selectors Level 4 refuses. The browser drops such a rule whole
+// and the dialog keeps the wide measure with nothing on screen to say why.
+
+.auth-surface
+  font-size: $auth-font-size
+  line-height: 1.45
+  color: $text
+
+  // Links on this contour are bold: on a card of four controls the secondary
+  // actions live in the label rows, and at regular weight they read as prose
+  // rather than as the way out.
+  a
+    color: $link
+    font-weight: 700
+    text-decoration: none
+
+    &:hover
+      color: $link-hover
+      text-decoration: underline
+
+// ─────────────────────────────────────────────────────────────── the card ──
+
+// The guest card is the whole dialog. The wrapper vue-final-modal draws has its
+// own padding, fill and edge, which would put a second card around this one, so
+// it steps out of the way and leaves the width to the surface inside.
+.dialog:has(> .auth-surface)
+  width: auto
+  max-width: none
+  padding: 0
+  background-color: transparent
+  border-radius: 0
+
+// The width of a dialog sits on the wrapper and not on the card, so the lit
+// area and the card are one rectangle: a click on a transparent gutter beside
+// the card would land on the dialog and not on the page, and closing by
+// clicking outside would stop working along one edge.
+.auth-surface.auth-dialog
+  width: $auth-card-width
+  // The same viewport cap the dialog tier keeps, for the same reason: on a
+  // 375px screen an uncapped card runs off both edges.
+  max-width: calc(100vw - #{$medium} * 2)
+
+// The narrow dialog. The word comes from the screen that opened it and reaches
+// the card inside as well, so the two never disagree: a card that shrank on its
+// own would leave a transparent strip inside the lit rectangle, and a click on
+// that strip would land on the dialog instead of closing it.
+.auth-surface.auth-dialog--compact
+  width: $auth-card-width-compact
+
+.auth-surface .auth-card
+  position: relative
+  box-sizing: border-box
+  max-width: $auth-card-width
+  margin: 0 auto
+  // Three steps of the rhythm above, the same on every side: the card used to
+  // keep a different number at the top, at the sides and at the foot, and none
+  // of the three was on the grid the rest of the card stands on.
+  padding: 24px
+  background-color: $bg-page
+  // Transparent and not absent: the dialog takes its edge from the dimmed page
+  // behind it, and a page card turns the same line on with --framed. Written as
+  // a colour, the two would differ by a pixel of width.
+  border: 1px solid transparent
+  border-radius: $border-radius
+
+/// The last line of a card adds no gap of its own to the card's padding. Every
+/// text block carries margin-bottom: 1rem, so a card that ends in a sentence
+/// held 40px under it against 24 above.
+.auth-surface .auth-card > *:last-child
+  margin-bottom: 0
+
+/// A card standing on the undimmed page (the pages reached from letters).
+/// Without the overlay under it, the card needs a line of its own.
+.auth-surface .auth-card--framed
+  border-color: $border
+
+/// The narrow card: a dialog whose whole job is one short question, and a page
+/// from a letter whose whole job is to state an outcome. Sized by the task and
+/// not by the template the wide forms share, and worn by the screens that say
+/// so of themselves.
+.auth-surface .auth-card--compact
+  max-width: $auth-card-width-compact
+
+.auth-surface .auth-card--center
+  text-align: center
+
+/// A sentence in a card stays centred even when a field follows it. The card
+/// carries one axis for its prose and another for its controls: the title, the
+/// sentences under it and the boxes are centred, and the label, the field and
+/// what stands in the strip under it start on the control's left edge. Owner's
+/// call, 12 September 2026, after both were on screen side by side.
+
+// The visible way out of a guest dialog. Escape and a click outside work too,
+// but neither is on screen, and the target language has no "Отмена".
+//
+// The cross is drawn out of two bars and not typed: a typographic cross is
+// thinner than the marks it stands beside, and how much thinner depends on which
+// of the fonts the site ships actually loaded.
+.auth-surface .auth-close
+  position: absolute
+  top: 10px
+  right: 10px
+  width: 32px
+  height: 32px
+  padding: 0
+  color: $text-muted
+  background: none
+  border: 0
+  border-radius: $border-radius
+  cursor: pointer
+
+  &:hover
+    color: $text
+
+  // The site's ring, following the button's own rounded edge instead of
+  // standing outside it: the cross sits in the corner of the card, and an
+  // outline there is clipped by the card's edge.
+  &:focus-visible
+    outline: none
+    box-shadow: 0 0 0 2px $link
+
+  &::before,
+  &::after
+    content: ""
+    position: absolute
+    left: 50%
+    top: 50%
+    width: 14px
+    height: 2px
+    margin: -1px 0 0 -7px
+    border-radius: 1px
+    background-color: currentColor
+
+  &::before
+    transform: rotate(45deg)
+
+  &::after
+    transform: rotate(-45deg)
+
+// A title centred in the card would sit off-centre against the cross, and a
+// long one would run under it. The reserve is symmetric so the centring stays
+// honest, and it is there only where there is a cross.
+//
+// It is the card's own gutter and not the cross's width. The cross is 32px wide
+// and sits 10px from the edge, so on the narrow card it reaches 17px into the
+// content box: the box ends at 327 (352 less a 1px border and 24px of padding)
+// and the cross starts at 310. A reserve of 24 clears that by 7px and gives the
+// title 16px back on either side. That is what fits the longest heading of the
+// surface on the compact dialog, which needs 239.6px and had 238. A heading
+// here never wraps to a second line, so a reserve wider than the thing it
+// reserves for is not free.
+.auth-surface .auth-card:has(> .auth-close) .auth-title
+  padding: 0 24px
+
+// ─────────────────────────────────────────────────────────── typography ──
+
+/// The card names itself: the site's page-title size rather than the 16px of a
+/// dialog heading, in caps, centred.
+.auth-surface .auth-title
+  margin: 0 0 1rem
+  font-size: $title-font-size
+  font-weight: 700
+  letter-spacing: .5px
+  text-transform: uppercase
+  color: $heading
+  text-align: center
+
+/// A paragraph of the card body.
+.auth-surface .auth-text
+  margin: 0 0 1rem
+  line-height: 1.5
+
+/// The secondary line under it: a validity period, a consequence, a way back.
+.auth-surface .auth-note
+  margin: 0 0 1rem
+  font-size: $secondary-font-size
+  line-height: 1.4
+  color: $text-muted
+
+// ─────────────────────────────────────────────────────────────── fields ──
+
+.auth-surface .auth-label
+  display: block
+  // One step of the rhythm above, and the only gap between a label and the
+  // field it names.
+  margin: 0 0 8px
+  font-size: $auth-font-size
+  font-weight: 700
+
+/// Label on the left, the escape hatch for this field on the right ("Не могу
+/// войти", "Изменить", "Нет доступа?"). Baselines and not boxes, so the 14px
+/// link sits on the line of the 15px label.
+///
+/// One line on screen, one line in a copy. A flex row was neither: a selection
+/// serializer walks boxes and blockifies every flex item, so this row reached
+/// the clipboard as "Почта" and then "Изменить" underneath. The label is taken
+/// out of the line by a float instead, the way the site already pins the
+/// right-hand end of a strip: a float carries no line break into
+/// Selection.toString(). The escape hatch stays an inline
+/// word that the row's own alignment pushes to the right edge. It has to be
+/// the part left in the line: the row aligns baselines, and a floated box
+/// aligns by its top. The space between the two is a real character, the
+/// global .copy-space of Reset.sass, zero-width on screen and a plain " " in a
+/// copy.
+.auth-surface .auth-label-row
+  // flow-root and not block: nothing else here would contain the float, and an
+  // uncontained one leaves the row no height of its own. The row therefore
+  // needs no bottom gap of its own either: the contained float carries the
+  // label's own step down with it, so a row and a lone label leave the same
+  // distance to the field.
+  display: flow-root
+  text-align: right
+
+  .auth-label
+    float: left
+    // The float owns the left edge; the row's alignment is for the hatch, and
+    // a label long enough to wrap would otherwise inherit it.
+    text-align: left
+
+  a
+    font-size: $secondary-font-size
+
+/// The field wrapper: it positions the eye and the in-field status, and it owns
+/// the strip below the field.
+.auth-surface .auth-field
+  position: relative
+  margin-bottom: $auth-strip
+  // Read by PasswordInput. The eye stands over the right edge of the field, so
+  // the text has to stop before it, and this control is taller and its eye
+  // further in than the site's own field.
+  --password-toggle-space: 44px
+  --password-toggle-inset: 8px
+
+.auth-surface .auth-field input
+  box-sizing: border-box
+  width: 100%
+  height: $auth-control-height
+  padding: 0 44px 0 $auth-field-inset
+  font: inherit
+  color: $text
+  background-color: $input-bg-overlay
+  // The frame stays neutral in every state, including an error: what is wrong
+  // is said in words under the field, and a field that also turns red says it
+  // twice, in a colour a third of readers cannot separate from the resting
+  // one.
+  border: 1px solid $border
+  border-radius: $border-radius
+
+  &:focus
+    border-color: $link
+    box-shadow: 0 0 0 1px $link
+
+  // The ring is drawn here as the frame plus a shadow of the same colour: 2px
+  // of $link, which is the site's focus ring measured to the pixel, but
+  // following the field's own rounded edge instead of standing outside it. The
+  // outline is dropped only because this pair replaces it, and focus stays as
+  // visible for the keyboard as anywhere else on the site.
+  &:focus-visible
+    outline: none
+
+  // Chrome paints an autofilled field in its own opaque colour; an inset
+  // shadow is the only override it honours, and a shadow needs the flat twin
+  // of the overlay above.
+  &:-webkit-autofill,
+  &:-webkit-autofill:hover,
+  &:-webkit-autofill:focus
+    -webkit-box-shadow: 0 0 0 1000px $input-bg-autofill inset
+    -webkit-text-fill-color: $text
+    caret-color: $text
+
+/// The one multi-line field of the guest surface, on the request to bring a
+/// removed account back. Frame, ground and radius are the single-line field's,
+/// because it is the same control asking for a longer answer. What it does not
+/// take is the height and the right gutter: the height comes from the rows it
+/// is given, and there is no eye to leave room for.
+.auth-surface .auth-field textarea
+  box-sizing: border-box
+  width: 100%
+  padding: 13px $auth-field-inset
+  font: inherit
+  color: $text
+  background-color: $input-bg-overlay
+  border: 1px solid $border
+  border-radius: $border-radius
+  // Vertical only: a field dragged wider than its card tears the layout, and
+  // the answer this one takes grows downwards anyway.
+  resize: vertical
+
+  &:focus
+    border-color: $link
+    box-shadow: 0 0 0 1px $link
+
+  &:focus-visible
+    outline: none
+
+/// The code field takes the whole width of the card and centres what is typed
+/// into it: a field cut to the length of the code hung under a full-width label
+/// and over a full-width button with nothing to line up against, and a short
+/// code pinned to the left edge of a wide field reads as a fragment of a longer
+/// one.
+.auth-surface .auth-field input.auth-input--code
+  padding-left: $auth-field-inset
+  padding-right: $auth-field-inset
+  text-align: center
+  // The face is the surface's own: one field set in another family read as a
+  // piece of someone else's form. What the code keeps is the spacing, which is
+  // what makes six symbols countable rather than read as a number. The spacing
+  // is added after the last symbol too, so the same amount is handed back as an
+  // indent: without it the line sits off centre by half of one gap.
+  letter-spacing: .3em
+  text-indent: .3em
+
+  // The mask of the code and not a sentence about it: how many symbols, and
+  // where the field will put the dashes. In the muted ink of the surface at
+  // full strength, because some browsers dim a placeholder of their own accord
+  // and the token already carries the whole of the difference.
+  &::placeholder
+    color: $text-muted
+    opacity: 1
+
+/// A recovery code holds nineteen positions against six, so it is set smaller
+/// and tighter to stand in the same field.
+/// The recovery code is four times as long, so its spacing is tighter.
+.auth-surface .auth-field input.auth-input--code.auth-input--code-recovery
+  letter-spacing: .1em
+  text-indent: .1em
+
+// ───────────────────────────────────────────────── the strip under a field ──
+
+/// The line under a field: a hint, a refusal, the verdict on a name. It pulls
+/// itself up into the field's 2rem gap so it starts 3px below the field, and
+/// holds the rest of the gap open so nothing below moves when it changes.
+///
+/// It must be the element immediately after .auth-field: the negative margin
+/// collapses against the field's own, and only adjacent siblings collapse.
+.auth-surface .auth-field + .auth-message
+  margin: calc(#{$auth-strip-gap} - #{$auth-strip}) 0 0
+  min-height: calc(#{$auth-strip} - #{$auth-strip-gap})
+
+.auth-surface .auth-message
+  font-size: $secondary-font-size
+  line-height: 1.4
+  color: $text-muted
+
+.auth-surface .auth-message--error
+  color: $accent-red
+
+/// The verdict that a name is free. Green and nothing else: the weight it used
+/// to carry was 500, and the site ships PT Sans in 400 and 700 only, so the
+/// browser either synthesised a bolder face or fell back to 400 - a difference
+/// nobody chose, different on every machine.
+.auth-surface .auth-message--ok
+  color: $accent-green
+
+/// A strip that keeps its place and says nothing until something goes wrong.
+/// The code field is the one that needs it: the shape of the code is shown by
+/// the field itself, in its mask and in its length, and a sentence repeating
+/// that under it is the same thing said twice. What the strip is held open for
+/// is the refusal, and it is held open so the card does not move when one
+/// arrives. Hidden rather than dropped, because an empty line of the same text
+/// is what keeps the height honest.
+.auth-surface .auth-message--reserved:not(.auth-message--error)
+  visibility: hidden
+
+/// The strength scale takes the same strip, 6px below the field rather than
+/// 3px: it is a drawing and not a line of text, and at 3px it read as part of
+/// the field's own frame. Below its caption sits the 8px any message leaves.
+.auth-surface .auth-field + .auth-meter
+  margin: calc(6px - #{$auth-strip}) 0 .5rem
+
+/// Nothing in the strip is indented: the label, the frame of the field, the line
+/// under it, the caption of the scale, the row of the checkbox and the button all
+/// start on one left edge, which is how every other form of the site prints the
+/// reason under a field (.form-field-error carries no inset either).
+///
+/// The strip used to begin where the text typed into the field begins, an inset
+/// of fifteen pixels. One line standing to the right of the whole column left a
+/// ragged edge, and the scale showed it worst: its bar is drawn across the full
+/// width from the same left edge, and only its caption moved. A reader asked
+/// whether it was meant to look that way, which is the answer about whether the
+/// alignment worked.
+
+// ───────────────────────────────────────────────────── the value plate ──
+
+/// A value that is settled and cannot be edited here: the address the letter
+/// went to, the name about to be fixed. Not a disabled field: there is no
+/// field, and a reader who tries to type into one has been told he may not.
+///
+/// Same recipe as the site's disabled control, in one layer behind the text: a
+/// control fill and frame at half strength, hatched in the ink of the text.
+/// The text itself stays at full strength on top, because it is the thing being
+/// shown.
+.auth-surface .auth-value
+  position: relative
+  z-index: 0
+  display: flex
+  align-items: center
+  box-sizing: border-box
+  // The floor, not the height: the plate measures like the field above it for
+  // every address that fits on one line, and grows for the ones that do not.
+  // A fixed height put the broken lines outside the frame instead: the column
+  // allows 100 characters, and an address that long takes three lines of 15px
+  // in a narrow card - 57px of text in a 52px box.
+  min-height: $auth-control-height
+  margin-bottom: 1rem
+  padding: $small $auth-field-inset
+  border: 1px solid transparent
+  border-radius: $border-radius
+  cursor: default
+  // An address has no spaces to break at, and a card 432px wide is narrower
+  // than some of them.
+  word-break: break-all
+
+  // The fill layer. Pulled out over the transparent frame so the plate measures
+  // exactly like the field above it.
+  &::before
+    content: ""
+    position: absolute
+    inset: -1px
+    z-index: -1
+    pointer-events: none
+    border-radius: inherit
+    background-color: $control-fill-overlay
+    border: 1px solid $control-border-overlay
+    opacity: $disabled-opacity
+
+  // The hatch. The plate carries no dimming of its own, so the product a
+  // disabled control reaches by nesting is written out here: the site's hatch
+  // weight over the site's disabled strength, and the two drawings stay one.
+  &::after
+    content: ""
+    position: absolute
+    inset: 0
+    z-index: -1
+    pointer-events: none
+    border-radius: inherit
+    background-color: currentColor
+    opacity: $disabled-opacity * $disabled-hatch-opacity
+    mask-image: $auth-hatch
+
+// ─────────────────────────────────────────────────────── the warning box ──
+
+/// One box for the two jobs the guest screens have for one: a rule of the site
+/// ("Создание дополнительных аккаунтов запрещено") and a caution before a step
+/// that cannot be taken back ("Будьте внимательны"). The type scale and the
+/// spacing are shared with a third block, the list of reasons behind a refusal,
+/// which carries no frame, so the base holds what all three have and the
+/// modifiers hold what each of them is.
+///
+/// Its frame is the neutral line of the fields and not red. Neither of the two
+/// is an error: both are on screen before the reader has done anything. Red
+/// stays with the lines under fields and with the
+/// status cross, whose job it actually is. A filled panel in the site's blue
+/// was the other alternative and was rejected: blue reads as information.
+.auth-surface .auth-warnbox
+  margin: 0 0 1rem
+  padding: .8rem 1rem
+  font-size: $secondary-font-size
+  line-height: 1.5
+  border: 1px solid $border
+  border-radius: $border-radius
+
+  b
+    display: block
+    margin-bottom: 4px
+
+/// The box that opens a screen with a prohibition ("Создание дополнительных
+/// аккаунтов запрещено"): the heading is a statement and the lines under it are
+/// the way out of it, so the box is roomier, centred on its own, and the two
+/// parts stand apart.
+///
+.auth-surface .auth-warnbox--notice
+  text-align: center
+
+// ────────────────────────────────────────────────────────────── statuses ──
+
+/// The verdict of a whole screen: activation done, link expired, link invalid.
+/// All three arrive with the same small movement, so the three screens are
+/// recognisably one screen with three answers.
+.auth-surface .auth-status
+  position: relative
+  display: flex
+  align-items: center
+  justify-content: center
+  width: 48px
+  height: 48px
+  margin: 0 auto 16px
+  font-size: 2rem
+  line-height: 1
+  animation: auth-status-in $animation-time ease-out
+
+.auth-surface .auth-status--ok
+  color: $accent-green
+
+/// Which of the two refusal marks a card carries is decided by what the site
+/// can still do for the reader, and not by how bad the event is. The warning
+/// sign stands where there is a next step and the card itself offers it - every
+/// "Ссылка устарела" does: a new letter, the recovery dialog, the settings. The
+/// cross stands where there is none and the reader has to start from somewhere
+/// else: "Ссылка недействительна", "Почта занята". The mark and the button
+/// under it therefore always say the same thing, and the mark was picked by
+/// hand before that: two screens that ended the same way wore different marks.
+/// pages/account/refusalStatusMark.spec.ts holds every screen to the rule.
+.auth-surface .auth-status--warn
+  color: $accent-yellow
+
+/// The cross is drawn and not typed. Every typographic cross in the fonts the
+/// site ships is thinner than the checkmark it stands beside, and how much
+/// thinner depends on which font actually loaded, so two screens of one flow
+/// disagreed about the weight of their own verdict.
+.auth-surface .auth-status--error
+  color: $accent-red
+  font-size: 0
+
+  &::before,
+  &::after
+    content: ""
+    position: absolute
+    left: 50%
+    top: 50%
+    width: 24px
+    height: 3px
+    margin: -1.5px 0 0 -12px
+    border-radius: 2px
+    background-color: currentColor
+
+  &::before
+    transform: rotate(45deg)
+
+  &::after
+    transform: rotate(-45deg)
+
+/// The same verdict at the scale of one field: the mark that says whether a
+/// name is free, standing inside the field's right edge.
+.auth-surface .auth-field-status
+  position: absolute
+  right: .75rem
+  top: 50%
+  display: flex
+  align-items: center
+  justify-content: center
+  width: 16px
+  height: 16px
+  transform: translateY(-50%)
+  pointer-events: none
+
+.auth-surface .auth-field-status--ok
+  color: $accent-green
+
+.auth-surface .auth-field-status--error
+  color: $accent-red
+  font-size: 0
+
+  &::before,
+  &::after
+    content: ""
+    position: absolute
+    left: 50%
+    top: 50%
+    width: 14px
+    height: 2px
+    margin: -1px 0 0 -7px
+    border-radius: 1px
+    background-color: currentColor
+
+  &::before
+    transform: rotate(45deg)
+
+  &::after
+    transform: rotate(-45deg)
+
+@keyframes auth-status-in
+  from
+    opacity: 0
+    transform: scale(.9) translateY(8px)
+
+// ─────────────────────────────────────────────────────────────── controls ──
+
+/// The one filled control of a guest screen, across the whole card. It names
+/// the result ("Создать аккаунт", "Отправить письмо") rather than the act, so
+/// there is nothing beside it to compare it against and nothing for a secondary
+/// button to sit next to.
+///
+/// Self-sufficient, so a bare <button> wears it; on shared/ui/Button with
+/// variant="primary" it changes the geometry and agrees with the component
+/// about everything else. The colours are the site's main action and are not
+/// written here: +button-primary (Inputs.sass) carries the fill, the ink, the
+/// weight, the lightening hover and press and the ring's step out, for this
+/// control and for the page's primary alike. A copy of them lived here and was
+/// the one place the two could part.
+.auth-surface .auth-button
+  display: flex
+  align-items: center
+  justify-content: center
+  box-sizing: border-box
+  width: 100%
+  height: $auth-control-height
+  padding: 0
+  font-family: inherit
+  // The site's own body step, and not the 1.05rem the prototype left here:
+  // 16.8px is on no scale the site keeps, and the caption of the one filled
+  // control was the single place it stood. The longest caption of the surface
+  // ("Попробовать другую почту") asks 189.5px at this size, against the 278px
+  // the card has on a phone; guestTitleFits.spec.ts measures both.
+  font-size: $font-size
+  line-height: 1
+  // The width and the style of the frame; its colour is the mixin's
+  // transparent, which keeps the control the height the box model was
+  // measured at.
+  border: 1px solid transparent
+  border-radius: $border-radius
+  cursor: pointer
+  +button-primary
+
+  &:focus:not(:focus-visible)
+    outline: none
+
+  // The ring itself: this control does not take +button, which draws it for
+  // every other button. The step out is the mixin's.
+  &:focus-visible
+    outline: 2px solid $link
+
+  +disabled-hatch
+
+/// On the pages reached from letters the button follows a sentence rather than
+/// a field, and a sentence leaves no strip under it. The gap is three steps and
+/// not the strip's four: the strip's height is reserved for a message that may
+/// arrive, while here there is only a sentence, and 32px read as a hole in a
+/// card whose lines stand 16 apart.
+.auth-surface .auth-button--spaced
+  margin-top: $medium + $small
+
+/// The choice a card makes before its field is filled: which kind of code is
+/// being typed. It is the site's SegmentedControl, so what stands here is only
+/// what this card changes about it: the pill runs the full width and the two
+/// halves split it, because they stand over a field and a button that already
+/// do, and the segments carry less side padding than a toolbar's because half
+/// of a narrow card is all the room they get.
+///
+/// Three class levels deep on purpose: the component's own rules are scoped and
+/// therefore two levels, and a rule that only ties with them is settled by
+/// whichever sheet the bundler happened to emit last.
+.auth-surface .auth-card .auth-segmented
+  display: block
+  margin: 0 0 1rem
+
+  .segment
+    // Nothing on the site resets the box model, so a percentage width on a
+    // padded control has to say which box it means.
+    box-sizing: border-box
+    width: 50%
+    padding: 0 $small
+
+/// The secondary action of a guest card: the way on from the card it stands in,
+/// or the step back inside it. It names no destination, so it stays a <button>
+/// (linkDestinations.spec.ts sends an anchor with nowhere to go back to one)
+/// and takes the look of the <a> it replaces from here. Every screen that has
+/// one carried a copy of this recipe under a name of its own before the recipe
+/// moved into the surface.
+.auth-surface .auth-action
+  +inline-link-button
+  // The bare & keeps these after the mixin's own declarations under Sass
+  // mixed-decls semantics: `font: inherit` in the reset would otherwise land
+  // last and take the weight back to the card's.
+  &
+    font-weight: 700
+    text-decoration: none
+    // A button standing inside a sentence sits on the line of the words around
+    // it, and not on the line the user agent gives a control.
+    vertical-align: baseline
+
+  // A word and not a control, so it takes the ring of a text link: 1px with a
+  // 2px gap. The 2px ring a block control wears, drawn around a word, reads as
+  // a box drawn around the word, and without a rule of its own the button
+  // would take exactly that from the global button:focus-visible.
+  &:focus-visible
+    outline: 1px solid $link
+    outline-offset: 2px
+
+  // While the request it belongs to is in flight the control is disabled for
+  // real, and says so the way the site says it.
+  &:disabled
+    opacity: $disabled-opacity
+    cursor: default
+
+/// In a label row it is the smaller of the two, exactly as a real link is
+/// there: the 14px secondary against the 15px label.
+/// Ссылка в строке лейбла берет кегль лейбла, а не вторичного текста.
+///
+/// Обе половины стоят на одной строке, и разный кегль на одной строке читается
+/// не как разная важность, а как сбой набора: разница в пиксель для иерархии
+/// мала, для ровной строки велика. Что из двух имя поля, а что действие, и так
+/// сказано цветом и работой.
+.auth-surface .auth-label-row .auth-action
+  font-size: $auth-font-size
+
+// The room the box of a check line takes out of the line, and the gap that
+// follows it. The box is the site's checkbox, so its side is the one
+// +checkbox draws with; the gap is the one the row used to draw with flex `gap`.
+$auth-check-box: $checkbox-size
+$auth-check-gap: .55rem
+
+/// A checkbox and its line: "Запомнить меня", "Я принимаю правила сайта".
+///
+/// Words and not items, for the reason .auth-label-row is not a flex row
+/// either: a flex item is a line of its own in a copy, so this one reached the
+/// clipboard as an empty line and then its text. The box and the words share
+/// one line box instead, and the row hangs its own indent, so a text long
+/// enough to wrap starts under itself and not under the box, what
+/// `align-items` did for the flex item.
+///
+/// No .copy-space between the two: the box puts no character on the screen, so
+/// there is nothing to separate, and a space there would be a space at the
+/// head of the copy.
+.auth-surface .auth-checkline
+  display: block
+  padding-left: calc(#{$auth-check-box} + #{$auth-check-gap})
+  text-indent: calc(-#{$auth-check-box} - #{$auth-check-gap})
+  // The row's own strut would stand beside the box and the words and make the
+  // line taller than either of them; the two parts carry the line height.
+  line-height: 0
+  margin: 0 0 1rem
+  font-size: $secondary-font-size
+
+  input[type="checkbox"]
+    vertical-align: middle
+    margin-right: $auth-check-gap
+
+  label
+    font-size: $secondary-font-size
+    font-weight: 400
+    line-height: 1.45
+    vertical-align: middle
+
+/// A check line standing between the strip of a field and the button below it,
+/// which is the login card: the field, the line that may carry a refusal, then
+/// "Запомнить меня", then "Войти".
+///
+/// Three gaps and one number, and the number is what the eye measures rather
+/// than what the margin says: from the frame of the field (or from the bottom
+/// of the letters of the refusal, when there is one) down to the checkbox, and
+/// from the row down to the button. All three come out at the 17.3px the
+/// consent row of the registration leaves above its own button, so a reader
+/// moving between the two cards sees one rhythm and not two.
+///
+/// The two margins are fractional because the distances they answer are: a
+/// strip of reserved height above, ink below, and a line box that starts a
+/// fraction of a pixel inside its own box. Set to round numbers they measured
+/// 15 and 26 against the registration's 17.3, which is what the owner saw.
+///
+/// Measured headless on the login card at 432px under the site's own face:
+/// 17.31 / 17.3 with the strip empty, 17.3 / 17.3 with a refusal in it, against
+/// the registration's 17.3.
+///
+/// The row moves down when the refusal arrives, and the card grows with it.
+/// That is the owner's decision: a row that keeps its place by shrinking the
+/// space above it reads as a row pressed against the red line.
+///
+/// The second split is keyed on the refusal and not on the strip being filled,
+/// because a strip holding only whitespace is not reliably :empty across
+/// browsers. Today the one strip that has a check line under it carries nothing
+/// but refusals. A card that ever hangs a hint there would take the wider split
+/// with words in the strip, and would need the same pair keyed on its own class.
+.auth-surface .auth-message + .auth-checkline
+  margin-top: -15.7px
+  margin-bottom: 1rem
+
+.auth-surface .auth-message--error + .auth-checkline
+  margin-top: 5.3px
+  margin-bottom: 1rem
+
+/// The consent variant, whose text wraps to two lines: the box aligns with the
+/// first of them instead of with the middle of the block.
+.auth-surface .auth-checkline--top
+  input[type="checkbox"]
+    vertical-align: top
+    margin-top: 2px
+
+  label
+    vertical-align: baseline
+
+/// The last line of a card, under the main button and behind a rule: the
+/// consents of a registration, the way into the recovery code, the offer of
+/// support. Set apart because it is not part of the task the card is for.
+.auth-surface .auth-footnote
+  margin: 24px 0 0
+  padding-top: 16px
+  font-size: $secondary-font-size
+  color: $text-muted
+  text-align: center
+  border-top: 1px solid $border
+
+  // The names of the documents are what the line is about, and a break in the
+  // middle of one of them reads as two documents.
+  a
+    white-space: nowrap

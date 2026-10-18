@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Moderation.Bans;
@@ -32,9 +31,10 @@ public interface IBanApiService
     Task<ListEnvelope<Ban>> GetAllActiveBans(BanType? type = null);
 
     /// <summary>
-    /// Get full ban history - active, expired and lifted - newest first, paged (for moderators)
+    /// Get a page of the ban list (for moderators): every issue and every lift as
+    /// an entry of its own, newest first, narrowed to one person by name
     /// </summary>
-    Task<ListEnvelope<Ban>> GetBanHistory(PagingQuery query);
+    Task<ListEnvelope<BanLogEntry>> GetBanHistory(BansQuery query);
 
     /// <summary>
     /// Create a ban
@@ -44,5 +44,5 @@ public interface IBanApiService
     /// <summary>
     /// Lift (cancel) a ban early
     /// </summary>
-    Task LiftBan(Guid banId, LiftBanRequest? request = null);
+    Task LiftBan(Guid banId, LiftBanRequest request);
 }

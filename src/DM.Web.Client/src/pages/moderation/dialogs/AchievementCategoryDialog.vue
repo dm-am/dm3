@@ -4,6 +4,10 @@
  * description / icon / sortOrder / isActive; metric is immutable).
  * Dialog twin of the former hand-rolled modal in
  * ModerationAchievements.vue.
+ *
+ * The window runs the request (Dialog `action`): it waits for the answer,
+ * prints a refusal in itself and closes on success alone. An edited
+ * description is typed text, so the window asks before it is dropped.
  */
 import { ref, computed } from "vue";
 import { achievementApi } from "@/entities/achievement";
@@ -28,9 +32,6 @@ const iconName = ref(props.category.iconName);
 const sortOrder = ref(props.category.sortOrder);
 const isActive = ref(props.category.isActive);
 
-const saving = ref(false);
-const error = ref<string | null>(null);
-
 const canSubmit = computed(
   () =>
     title.value.trim().length > 0 &&
@@ -38,44 +39,37 @@ const canSubmit = computed(
     iconName.value.trim().length > 0,
 );
 
-async function submit() {
-  if (!canSubmit.value || saving.value) return;
-  saving.value = true;
-  error.value = null;
-  try {
-    await achievementApi.updateAchievementCategory(props.category.id, {
+/** The description differs from what the window opened with. */
+const dirty = computed(() => description.value !== props.category.description);
+
+async function send() {
+  const result = await achievementApi.updateAchievementCategory(
+    props.category.id,
+    {
       title: title.value,
       description: description.value,
       iconName: iconName.value,
       sortOrder: sortOrder.value,
       isActive: isActive.value,
-    });
-    emit("success");
-  } catch {
-    error.value = "Не удалось сохранить категорию";
-  } finally {
-    saving.value = false;
-  }
+    },
+    { ownsRefusal: true, ownsRateLimit: true },
+  );
+  if (!result.error) emit("success");
+  return result;
 }
 </script>
 
 <template>
-  <Dialog narrow>
+  <Dialog
+    :action="send"
+    failure="Не удалось сохранить категорию"
+    :dirty="dirty"
+    @close="emit('cancel')"
+  >
     <DialogTitle>Категория: {{ category.code }}</DialogTitle>
 
-    <Form
-      :valid="canSubmit"
-      :loading="saving"
-      action="Сохранить"
-      cancel="Отмена"
-      @submit="submit"
-      @cancel="emit('cancel')"
-    >
-      <FormField
-        label="Название"
-        name="achievement-cat-title"
-        :errors="error ? [error] : []"
-      >
+    <Form :valid="canSubmit" action="Сохранить" cancel="Отмена">
+      <FormField label="Название" name="achievement-cat-title" field="title">
         <input
           id="achievement-cat-title"
           v-model="title"
@@ -88,6 +82,7 @@ async function submit() {
       <FormField
         label="Описание (показывается в popover)"
         name="achievement-cat-description"
+        field="description"
       >
         <textarea
           id="achievement-cat-description"
@@ -98,7 +93,11 @@ async function submit() {
         ></textarea>
       </FormField>
 
-      <FormField label="Имя иконки" name="achievement-cat-icon">
+      <FormField
+        label="Имя иконки"
+        name="achievement-cat-icon"
+        field="iconName"
+      >
         <input
           id="achievement-cat-icon"
           v-model="iconName"
@@ -108,7 +107,7 @@ async function submit() {
         />
       </FormField>
 
-      <FormField label="Порядок" name="achievement-cat-sort">
+      <FormField label="Порядок" name="achievement-cat-sort" field="sortOrder">
         <input
           id="achievement-cat-sort"
           v-model.number="sortOrder"

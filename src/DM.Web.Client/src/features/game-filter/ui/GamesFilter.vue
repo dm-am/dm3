@@ -212,10 +212,20 @@ const allSelectedTags = computed(
     ]),
 );
 
-// Strip tooltip markup for display
-function stripRichTextMarkup(text: string | undefined): string | undefined {
-  if (!text) return text;
-  return text.replace(/\[(tipimg|tip):[^\]]+\]([^[]*)\[\/\1\]/g, "$2");
+/**
+ * The words of a tag description, for the line under a tag in the list. The
+ * description is the server's markup of the tag's tooltip, and the list shows
+ * it as text: DOMParser builds a document nothing runs in and nothing is
+ * asked for from, as an element given the markup would do, and a line break
+ * is a space in one line.
+ */
+function descriptionText(html: string | undefined): string | undefined {
+  if (!html) return html;
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  for (const lineBreak of parsed.querySelectorAll("br")) {
+    lineBreak.replaceWith(" ");
+  }
+  return parsed.body.textContent ?? "";
 }
 
 // Tags for current level (groups or tags in group)
@@ -253,7 +263,7 @@ const tagsInGroup = computed(() => {
       .map((t) => ({
         value: String(t.id),
         label: t.title,
-        hint: stripRichTextMarkup(t.description),
+        hint: descriptionText(t.description),
       }));
   }
 
@@ -266,7 +276,7 @@ const tagsInGroup = computed(() => {
       .map((t) => ({
         value: String(t.id),
         label: t.title,
-        hint: stripRichTextMarkup(t.description),
+        hint: descriptionText(t.description),
       }));
   }
 

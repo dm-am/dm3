@@ -2,6 +2,9 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using DM.Web.API.Features.Moderation.Bans;
 using DM.Web.API.Shared.Dto;
+// Aliased rather than imported whole: the domain namespace carries a Violator and
+// a Ban of its own, and this file declares the one and nests the other.
+using WarningPolicy = DM.Domain.Moderation.Features.Warnings.WarningPolicy;
 
 namespace DM.Web.API.Features.Moderation.Warnings;
 
@@ -15,15 +18,13 @@ public class Violator
     /// which it colours the row.
     /// </summary>
     /// <remarks>
-    /// A scale, not a threshold. Nothing compares points against it: there is no
-    /// automatic ban in DM3 — a ban is always issued by a senior moderator, which
-    /// is what WarningController and UserRole.System both say. This constant used
-    /// to be called AutoBanPointsThreshold and documented as "gaining this many
-    /// points within 30 days triggers a ban", describing a mechanism that has
-    /// never existed and a window nothing measures: the sum behind it is over
-    /// every warning a user still carries, with no date filter at all.
+    /// The same number the automatic ban fires at, taken from the domain rather
+    /// than written again here: a scale on the screen that disagreed with the line
+    /// the site bans at would colour the row at one count and ban at another. The
+    /// sum behind it is over every warning a user still carries, with no date
+    /// filter - no window is measured anywhere, and none is described.
     /// </remarks>
-    public const int WarningPointsScale = 6;
+    public const int WarningPointsScale = WarningPolicy.AutoBanPointsThreshold;
 
     /// <summary>
     /// The violating user

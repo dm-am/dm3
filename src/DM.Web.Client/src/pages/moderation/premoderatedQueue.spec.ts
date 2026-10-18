@@ -238,12 +238,14 @@ describe("premoderation queues", () => {
     ).toEqual([
       "col col-title align-left",
       "col col-author align-left",
-      "col col-created hide-mobile align-left",
+      "col col-created align-left",
       "col col-status align-left",
     ]);
+    // Shares of the whole table, padding included, which is how an auto
+    // layout reads them: 22% draws the column the fixed layout drew at 20%.
     expect(
       blogs.findAll("thead th").map((th) => th.attributes("style")),
-    ).toEqual([undefined, "width: 20%;", "width: 20%;", "width: 20%;"]);
+    ).toEqual([undefined, "width: 22%;", "width: 22%;", "width: 22%;"]);
     expect(
       blogs
         .findAll("tr.table-row")[0]
@@ -252,7 +254,7 @@ describe("premoderation queues", () => {
     ).toEqual([
       "Название",
       "Владеющий",
-      "01.04.2026 в 00:00",
+      "01.04.2026 в\u00a000:00",
       "Требует правок",
     ]);
 

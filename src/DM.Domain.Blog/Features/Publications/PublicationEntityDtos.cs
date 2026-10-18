@@ -43,11 +43,6 @@ public class CreatePublicationEntity
     public string? Preview { get; set; }
 
     /// <summary>
-    /// Whether comments are enabled
-    /// </summary>
-    public bool CommentsEnabled { get; set; }
-
-    /// <summary>
     /// Whether to publish immediately
     /// </summary>
     public bool PublishImmediately { get; set; }
@@ -92,11 +87,6 @@ public class UpdatePublicationEntity
     /// New preview (if changed)
     /// </summary>
     public string? Preview { get; set; }
-
-    /// <summary>
-    /// Comments enabled flag (if changed)
-    /// </summary>
-    public bool? CommentsEnabled { get; set; }
 
     /// <summary>
     /// Published flag (if changed)

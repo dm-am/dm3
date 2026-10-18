@@ -7,6 +7,7 @@ import {
 import { nextTick } from "vue";
 
 import { LeftSidebar, RightSidebar } from "@/widgets/sidebar";
+import { removedAccountRoute, restoreSession } from "@/entities/user";
 import ShellPage from "./ShellPage.vue";
 import { clearRegistry as clearExpandableRegistry } from "@/shared/lib/composables/useExpandableRegistry";
 import { formatDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
@@ -55,6 +56,16 @@ declare module "vue-router" {
      * the ModerationPanel navigation on this flag (product doc 4.2.1.5).
      */
     moderationZone?: boolean;
+    /**
+     * Marks a page a letter leads to: activation, the new address, the reset
+     * of a password, the choice of a name, the two ends of taking a second
+     * factor off. The shell drops both sidebars on these, because between
+     * 1001px and 1123px their 660px leave the card 285px of the 352px it asks
+     * for, and the heading of a guest card never wraps to a second line.
+     * Whoever opens such a letter came to finish one thing, and the boards and
+     * the polls are not it.
+     */
+    fromLetter?: boolean;
   }
 }
 
@@ -62,8 +73,8 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     // One record owns the shell. Every page below is a child of it, so a new
-    // route cannot render without the sidebars by forgetting to declare them —
-    // which is exactly how the OAuth callback below ended up bare. Opting out
+    // route cannot render without the sidebars by forgetting to declare them:
+    // forgetting is exactly how a page ended up bare once already. Opting out
     // is now structural: be a sibling of this record, not a child.
     {
       path: "/",
@@ -110,32 +121,6 @@ const router = createRouter({
           component: () => import("@/pages/global-chat/GlobalChatPage.vue"),
         },
         {
-          path: "/messenger",
-          meta: { requiresAuth: true },
-          component: () => import("@/pages/messenger/MessengerPage.vue"),
-          children: [
-            {
-              name: "messenger",
-              path: "",
-              meta: { title: "Личные сообщения" },
-              component: () => import("@/pages/messenger/ChatsList.vue"),
-            },
-            {
-              name: "chat",
-              path: "c/:id",
-              meta: { dynamicTitle: true },
-              component: () => import("@/pages/messenger/ChatView.vue"),
-            },
-            {
-              name: "direct-message",
-              path: "user/:username",
-              meta: { title: "Переход к переписке" },
-              component: () =>
-                import("@/pages/messenger/DirectChatRedirect.vue"),
-            },
-          ],
-        },
-        {
           name: "notifications",
           path: "/notifications",
           meta: { requiresAuth: true, title: "Уведомления" },
@@ -158,6 +143,14 @@ const router = createRouter({
           path: "/my-tickets",
           meta: { requiresAuth: true, title: "Мои обращения" },
           component: () => import("@/pages/personal/MyTicketsPage.vue"),
+        },
+        // One ticket of the reader's own: where his list of tickets and the
+        // notification of the answer lead.
+        {
+          name: "my-ticket",
+          path: "/my-tickets/:ticketId",
+          meta: { requiresAuth: true, dynamicTitle: true },
+          component: () => import("@/pages/personal/MyTicketPage.vue"),
         },
         {
           name: "site-statistics",
@@ -252,7 +245,7 @@ const router = createRouter({
           path: "/users/:username/uploads",
           meta: { dynamicTitle: true },
           // Owner-or-admin gating is done in-page (the router has no role
-          // mechanism); the page renders its own access notice otherwise.
+          // mechanism); the page sends anybody else to "not found".
           component: () => import("@/pages/profile/ProfileUploadsPage.vue"),
         },
 
@@ -348,9 +341,12 @@ const router = createRouter({
               component: () => import("@/pages/blog/BlogFeed.vue"),
             },
             {
+              // No requiresAuth: the page is the owner's and the
+              // assistants', and it answers anybody else, a guest included,
+              // with the site's "not found" rather than the login window.
               name: "blog-publication-create",
               path: "feed/create",
-              meta: { requiresAuth: true, section: "Создание публикации" },
+              meta: { section: "Создание публикации" },
               component: () => import("@/pages/blog/PublicationCreate.vue"),
             },
             {
@@ -364,12 +360,10 @@ const router = createRouter({
               component: () => import("@/pages/blog/PublicationPage.vue"),
             },
             {
+              // No requiresAuth, as on the creation of one above.
               name: "blog-publication-edit",
               path: "feed/:pubId/edit",
-              meta: {
-                requiresAuth: true,
-                section: "Редактирование публикации",
-              },
+              meta: { section: "Редактирование публикации" },
               component: () => import("@/pages/blog/PublicationEdit.vue"),
             },
             {
@@ -393,29 +387,144 @@ const router = createRouter({
           ],
         },
         {
+          // Moderation zone (product doc 4.2.1.5). One record owns the zone:
+          // a guest is sent to sign in, the left sidebar mounts the moderation
+          // menu on the flag, and ModerationPage answers a viewer below a
+          // section's role with the 403 page in the section's place. The shell
+          // draws nothing else: every section titles itself, and the menu is
+          // the sidebar's. The role of each section is a row of
+          // shared/config/moderationSections.ts.
           path: "/moderation",
           meta: { requiresAuth: true, moderationZone: true },
           component: () => import("@/pages/moderation/ModerationPage.vue"),
           children: [
+            // The address of the zone itself opens the moderators, a section
+            // every moderator may open: an overview page that only asked to
+            // pick a section from the menu beside it was a stop on the way to
+            // every one of them.
             {
-              name: "moderation",
               path: "",
-              meta: { title: "Модерация" },
+              redirect: { name: "moderation-moderators" },
+            },
+            {
+              name: "moderation-moderators",
+              path: "moderators",
+              meta: { title: "Модераторы" },
               component: () =>
-                import("@/pages/moderation/ModerationOverview.vue"),
+                import("@/pages/moderation/ModerationModerators.vue"),
+            },
+            {
+              name: "moderation-games",
+              path: "games",
+              meta: { title: "Премодерируемые игры" },
+              component: () =>
+                import("@/pages/moderation/ModerationPremoderatedGames.vue"),
+            },
+            {
+              name: "moderation-blogs",
+              path: "blogs",
+              meta: { title: "Премодерируемые блоги" },
+              component: () =>
+                import("@/pages/moderation/ModerationPremoderatedBlogs.vue"),
+            },
+            {
+              name: "moderation-bans",
+              path: "bans",
+              meta: { title: "Последние баны" },
+              component: () => import("@/pages/moderation/ModerationBans.vue"),
+            },
+            {
+              name: "moderation-warnings",
+              path: "warnings",
+              meta: { title: "Последние предупреждения" },
+              component: () =>
+                import("@/pages/moderation/ModerationWarnings.vue"),
+            },
+            {
+              name: "moderation-rated-posts",
+              path: "rated-posts",
+              meta: { title: "Последние оцененные посты" },
+              component: () =>
+                import("@/pages/moderation/ModerationRatedPosts.vue"),
+            },
+            {
+              name: "moderation-new-users",
+              path: "new-users",
+              meta: { title: "Новые пользователи" },
+              component: () =>
+                import("@/pages/moderation/ModerationNewUsers.vue"),
+            },
+            {
+              name: "moderation-violators",
+              path: "violators",
+              meta: { title: "Нарушители" },
+              component: () =>
+                import("@/pages/moderation/ModerationViolators.vue"),
             },
             {
               name: "moderation-username-changes",
               path: "username-changes",
-              meta: { title: "Запросы на смену имени пользователя" },
+              meta: { title: "Запросы на смену имени" },
               component: () =>
                 import("@/pages/moderation/ModerationUsernameChanges.vue"),
             },
             {
+              name: "moderation-removed-accounts",
+              path: "removed-accounts",
+              meta: { title: "Удаленные пользователи" },
+              component: () =>
+                import("@/pages/moderation/ModerationRemovedAccounts.vue"),
+            },
+            {
+              name: "moderation-tickets",
+              path: "tickets",
+              meta: { title: "Обращения" },
+              component: () =>
+                import("@/pages/moderation/ModerationTickets.vue"),
+            },
+            {
+              name: "moderation-ticket",
+              path: "tickets/:ticketId",
+              meta: { dynamicTitle: true },
+              component: () =>
+                import("@/pages/moderation/ModerationTicketPage.vue"),
+            },
+            {
+              name: "moderation-uploads",
+              path: "uploads",
+              meta: { title: "Все загруженные файлы" },
+              component: () =>
+                import("@/pages/moderation/ModerationUploads.vue"),
+            },
+            {
               name: "moderation-tags",
               path: "tags",
-              meta: { title: "Теги игр" },
+              meta: { title: "Игровые теги" },
               component: () => import("@/pages/moderation/ModerationTags.vue"),
+            },
+            {
+              name: "moderation-schema-templates",
+              path: "schema-templates",
+              meta: { title: "Шаблоны схем атрибутов" },
+              component: () =>
+                import("@/pages/moderation/ModerationSchemaTemplates.vue"),
+            },
+            // Creating and editing a template are one page: they differ in
+            // whether the address carries an identifier, and the static
+            // segment is declared first so it cannot be read as one.
+            {
+              name: "moderation-schema-template-new",
+              path: "schema-templates/new",
+              meta: { title: "Шаблоны схем атрибутов" },
+              component: () =>
+                import("@/pages/moderation/ModerationSchemaTemplate.vue"),
+            },
+            {
+              name: "moderation-schema-template",
+              path: "schema-templates/:id",
+              meta: { title: "Шаблоны схем атрибутов" },
+              component: () =>
+                import("@/pages/moderation/ModerationSchemaTemplate.vue"),
             },
             {
               name: "moderation-awards",
@@ -453,133 +562,6 @@ const router = createRouter({
             },
           ],
         },
-        // Moderation zone pages (product doc 4.2.1.5, navigated from the
-        // left-sidebar ModerationPanel). Top-level records, NOT children of
-        // /moderation: each page owns its own H1 and must not render under the
-        // admin tab strip of ModerationPage. Role gating is done in-page (the
-        // router has no role mechanism); requiresAuth only screens guests.
-        {
-          name: "moderation-moderators",
-          path: "/moderation/moderators",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Модераторы",
-          },
-          component: () =>
-            import("@/pages/moderation/ModerationModerators.vue"),
-        },
-        {
-          name: "moderation-games",
-          path: "/moderation/games",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Премодерируемые игры",
-          },
-          component: () =>
-            import("@/pages/moderation/ModerationPremoderatedGames.vue"),
-        },
-        {
-          name: "moderation-blogs",
-          path: "/moderation/blogs",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Премодерируемые блоги",
-          },
-          component: () =>
-            import("@/pages/moderation/ModerationPremoderatedBlogs.vue"),
-        },
-        {
-          name: "moderation-bans",
-          path: "/moderation/bans",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Последние баны",
-          },
-          component: () => import("@/pages/moderation/ModerationBans.vue"),
-        },
-        {
-          name: "moderation-warnings",
-          path: "/moderation/warnings",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Последние предупреждения",
-          },
-          component: () => import("@/pages/moderation/ModerationWarnings.vue"),
-        },
-        {
-          name: "moderation-rated-posts",
-          path: "/moderation/rated-posts",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Последние оцененные посты",
-          },
-          component: () =>
-            import("@/pages/moderation/ModerationRatedPosts.vue"),
-        },
-        {
-          name: "moderation-new-users",
-          path: "/moderation/new-users",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Новые пользователи",
-          },
-          component: () => import("@/pages/moderation/ModerationNewUsers.vue"),
-        },
-        {
-          name: "moderation-violators",
-          path: "/moderation/violators",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Нарушители",
-          },
-          component: () => import("@/pages/moderation/ModerationViolators.vue"),
-        },
-        {
-          name: "moderation-support",
-          path: "/moderation/support",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Поддержка",
-          },
-          component: () => import("@/pages/moderation/ModerationSupport.vue"),
-        },
-        {
-          name: "moderation-complaints",
-          path: "/moderation/complaints",
-          meta: { requiresAuth: true, moderationZone: true, title: "Жалобы" },
-          component: () =>
-            import("@/pages/moderation/ModerationComplaints.vue"),
-        },
-        {
-          name: "moderation-ticket",
-          path: "/moderation/tickets/:ticketId",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            dynamicTitle: true,
-          },
-          component: () =>
-            import("@/pages/moderation/ModerationTicketPage.vue"),
-        },
-        {
-          name: "moderation-uploads",
-          path: "/moderation/uploads",
-          meta: {
-            requiresAuth: true,
-            moderationZone: true,
-            title: "Все загруженные файлы",
-          },
-          component: () => import("@/pages/moderation/ModerationUploads.vue"),
-        },
         {
           name: "create-game",
           path: "/games/create",
@@ -604,12 +586,8 @@ const router = createRouter({
               meta: { dynamicTitle: true },
               component: () => import("@/pages/game/GameDetails.vue"),
             },
-            {
-              name: "game-room",
-              path: "rooms/:num",
-              meta: { dynamicTitle: true },
-              component: () => import("@/pages/game/GameRoom.vue"),
-            },
+            // The room of posts is a record of its own below, outside this
+            // shell: it has no right column.
             {
               // Chat-type rooms route here (RoomType.Chat) — a message-based,
               // cursor-paginated OOC room, distinct from the post room view.
@@ -705,19 +683,19 @@ const router = createRouter({
         {
           name: "activation",
           path: "/activate",
-          meta: { title: "Активация аккаунта" },
+          meta: { title: "Активация аккаунта", fromLetter: true },
           component: () => import("@/pages/account/AccountActivationPage.vue"),
         },
         {
           name: "confirm-email",
           path: "/confirm-email",
-          meta: { title: "Подтверждение почты" },
+          meta: { title: "Подтверждение почты", fromLetter: true },
           component: () => import("@/pages/account/EmailChangePage.vue"),
         },
         {
           name: "reset-password",
           path: "/reset-password",
-          meta: { title: "Сброс пароля" },
+          meta: { title: "Сброс пароля", fromLetter: true },
           component: () => import("@/pages/account/PasswordResetPage.vue"),
         },
         // Reached from the approval letter, and open to a guest for the same
@@ -726,7 +704,7 @@ const router = createRouter({
         {
           name: "change-username",
           path: "/change-username",
-          meta: { title: "Смена имени" },
+          meta: { title: "Смена имени", fromLetter: true },
           component: () => import("@/pages/account/UsernameChangePage.vue"),
         },
         // The two addresses the letters about taking a second factor off point
@@ -736,13 +714,19 @@ const router = createRouter({
         {
           name: "two-factor-removal",
           path: "/two-factor/removal",
-          meta: { title: "Снятие второго фактора" },
+          meta: {
+            title: "Отключение двухфакторной аутентификации",
+            fromLetter: true,
+          },
           component: () => import("@/pages/account/TwoFactorRemovalPage.vue"),
         },
         {
           name: "two-factor-removal-cancel",
           path: "/two-factor/removal/cancel",
-          meta: { title: "Отмена снятия второго фактора" },
+          meta: {
+            title: "Отмена отключения двухфакторной аутентификации",
+            fromLetter: true,
+          },
           component: () =>
             import("@/pages/account/TwoFactorRemovalCancelPage.vue"),
         },
@@ -782,6 +766,14 @@ const router = createRouter({
           meta: { title: "Лог предупреждений" },
           component: () => import("@/pages/warnings/WarningsPage.vue"),
         },
+        // The address every "Аккаунт удален" signature used to lead to, a page
+        // that said what the name means. The signatures lead to the profile of
+        // the name now, which gathers what removed accounts left and says the
+        // same in its "О себе"; an old link lands there too.
+        {
+          path: "/removed-account",
+          redirect: removedAccountRoute,
+        },
         {
           name: "privacy-policy",
           path: "/privacy",
@@ -815,8 +807,8 @@ const router = createRouter({
           meta: { title: "Переход к публикации" },
           component: () => import("@/pages/redirect/PublicationRedirect.vue"),
         },
-        // Error page — dynamic route for /error/:code (400, 401, 403, symbolic
-        // OAuth codes…). The code segment is optional so /error?code= also matches.
+        // Error page — dynamic route for /error/:code (400, 401, 403…). The
+        // code segment is optional so /error?code= also matches.
         {
           name: "error",
           path: "/error/:code?",
@@ -834,14 +826,67 @@ const router = createRouter({
         },
       ],
     },
-    // Outside the shell on purpose: the OAuth provider redirects here, the page
-    // only exchanges the code and navigates on, and sidebars would flash for a
-    // frame with no session to render from.
+    // The messenger lays its list of conversations where the right column
+    // stands, as the old site leaves that column empty under a
+    // correspondence: the shell's two outlets without the right one.
     {
-      name: "auth-callback",
-      path: "/auth/callback",
-      meta: { title: "Внешняя авторизация" },
-      component: () => import("@/pages/account/AuthCallbackPage.vue"),
+      path: "/messenger",
+      components: { left: LeftSidebar, page: ShellPage },
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: "",
+          component: () => import("@/pages/messenger/MessengerPage.vue"),
+          children: [
+            {
+              name: "messenger",
+              path: "",
+              meta: { title: "Личные сообщения" },
+              component: () => import("@/pages/messenger/NoChatSelected.vue"),
+            },
+            {
+              name: "chat",
+              path: "c/:id",
+              meta: { dynamicTitle: true },
+              component: () => import("@/pages/messenger/ChatView.vue"),
+            },
+            {
+              name: "direct-message",
+              path: "user/:username",
+              meta: { title: "Переход к переписке" },
+              component: () =>
+                import("@/pages/messenger/DirectChatRedirect.vue"),
+            },
+          ],
+        },
+      ],
+    },
+    // A room of posts is read across the whole middle of the page, the way the
+    // old site lays it out: the left column and no right one. A child cannot
+    // drop a column its parent mounts, so the room is a sibling of the shell
+    // above, the shell's two outlets without the right one. Every level keeps
+    // the component the other tree has at the same depth (ShellPage, then
+    // GamePage), and every path of the three is the room's, so the game shell
+    // stays mounted on the way in and out of a room, and the address of the
+    // game itself still opens the record above.
+    {
+      path: "/game/:id/rooms/:num",
+      components: { left: LeftSidebar, page: ShellPage },
+      children: [
+        {
+          path: "",
+          meta: { gameZone: true },
+          component: () => import("@/pages/game/GamePage.vue"),
+          children: [
+            {
+              name: "game-room",
+              path: "",
+              meta: { dynamicTitle: true },
+              component: () => import("@/pages/game/GameRoom.vue"),
+            },
+          ],
+        },
+      ],
     },
   ],
 });
@@ -857,15 +902,23 @@ const router = createRouter({
  * page after signing in, with "Назад" leading to where they came from and the
  * link they had followed nowhere at all.
  *
+ * A page that needs a session waits for the answer about one when the store
+ * holds nobody: the cookie may carry a session the browser has no stored copy
+ * of, and the start of the page asks the server about it (restoreSession).
+ * Decided before that answer, a link to a protected page bounced a signed-in
+ * reader to the login window, under a header that a moment later greeted him
+ * by name. The answer is asked once per page, so the wait costs a guest one
+ * request on the first such navigation and nothing on the next.
+ *
  * Exported for the test: calling it is the whole decision, and a real push
  * would pull every lazy route component into the suite.
  */
-export function guardAuthenticated(
+export async function guardAuthenticated(
   to: RouteLocationNormalized,
-): RouteLocationRaw | undefined {
-  if (to.meta.requiresAuth && !useAuthStore().isAuthenticated) {
-    return loginLocation(to.fullPath);
-  }
+): Promise<RouteLocationRaw | undefined> {
+  if (!to.meta.requiresAuth) return undefined;
+  if (!useAuthStore().isAuthenticated) await restoreSession();
+  if (!useAuthStore().isAuthenticated) return loginLocation(to.fullPath);
   return undefined;
 }
 

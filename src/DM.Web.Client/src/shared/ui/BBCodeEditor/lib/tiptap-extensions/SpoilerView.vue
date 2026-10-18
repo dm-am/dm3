@@ -20,6 +20,15 @@ const props = defineProps(nodeViewProps);
 
 const isCollapsed = computed(() => props.node?.attrs?.collapsed !== false);
 
+// [spoiler text="..."] names the button, open or closed, as the server draws
+// it; with no caption, or an empty one, the button swaps between the old
+// site's words.
+const caption = computed(
+  () => (props.node?.attrs?.text as string | null) || "",
+);
+const showText = computed(() => caption.value || SPOILER_SHOW_TEXT);
+const hideText = computed(() => caption.value || SPOILER_HIDE_TEXT);
+
 // Manual user toggle: notify clears the registry's pending bulk action
 // (registry-driven expand/collapse below go through updateAttributes only).
 function toggleCollapsed() {
@@ -52,7 +61,7 @@ onBeforeUnmount(unregister);
       :aria-expanded="!isCollapsed"
       role="button"
       tabindex="0"
-      >{{ isCollapsed ? SPOILER_SHOW_TEXT : SPOILER_HIDE_TEXT }}</span
+      >{{ isCollapsed ? showText : hideText }}</span
     >
     <!-- Content block - matches backend .spoiler. Wrapped into the shared
          .bb-collapse grid structure (same smooth expand/collapse animation

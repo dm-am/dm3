@@ -1,3 +1,4 @@
+using DM.Web.API.Shared.BbRendering;
 using Riok.Mapperly.Abstractions;
 using DtoCreateTag = DM.Domain.Moderation.Features.Tags.CreateTag;
 using DtoCreateTagGroup = DM.Domain.Moderation.Features.Tags.CreateTagGroup;
@@ -12,6 +13,7 @@ namespace DM.Web.API.Features.Moderation.Tags;
 /// Compile-time mapper for tag administration
 /// </summary>
 [Mapper]
+[UseStaticMapper(typeof(BbTextMappers))]
 internal partial class TagMapper
 {
     /// <summary>
@@ -20,8 +22,11 @@ internal partial class TagMapper
     public partial TagGroup ToTagGroup(DtoTagGroup group);
 
     /// <summary>
-    /// Domain tag to its response DTO
+    /// Domain tag to its response DTO: the description both as typed, for the
+    /// edit window, and rendered, for the card
     /// </summary>
+    [MapProperty(nameof(DtoTag.Description), nameof(Tag.DescriptionHtml))]
+    [MapProperty(nameof(DtoTag.Description), nameof(Tag.Description))]
     public partial Tag ToTag(DtoTag tag);
 
     /// <summary>

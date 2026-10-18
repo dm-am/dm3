@@ -15,7 +15,10 @@ import {
   type PublicBan,
 } from "@/entities/moderation";
 import { StatLine } from "@/shared/ui/StatLine";
-import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
+import {
+  shownOnPage,
+  useGuardedRequest,
+} from "@/shared/lib/composables/useGuardedRequest";
 
 // The scale the points are drawn against, matching Violator.WarningPointsScale
 // on the server. It triggers nothing: there is no automatic ban in DM3, a ban is
@@ -42,9 +45,11 @@ const { loading, error, run } = useGuardedRequest({
 function fetchViolations() {
   return run(
     async () => {
+      // Taken over one by one as they land (shownOnPage): the line says the
+      // failure itself, and the first plate would not wait for the second.
       const [warnings, bans] = await Promise.all([
-        moderationApi.getWarnings(props.username),
-        moderationApi.getBans(props.username),
+        moderationApi.getWarnings(props.username).then(shownOnPage),
+        moderationApi.getBans(props.username).then(shownOnPage),
       ]);
       // Both halves are one line on screen, so one failure is the line's
       // failure — and the partial data is still handed over, as it was.
@@ -77,6 +82,20 @@ const lastBanOrdinal = computed(() => history.value.length);
 
 const warningPoints = computed(() => warningsInfo.value?.totalPoints ?? 0);
 
+/**
+ * The points lead to the warnings behind them, in the open log narrowed to this
+ * user, when there are warnings to lead to.
+ *
+ * The count decides it and not the points: a verbal warning carries none, so a
+ * zero here can still stand for a log entry with a reason in it, and a user with
+ * no warnings at all would otherwise be handed a link to an empty page.
+ */
+const warningsLogLink = computed(() =>
+  (warningsInfo.value?.activeCount ?? 0) > 0
+    ? { name: "warnings", query: { username: props.username } }
+    : undefined,
+);
+
 function formatActiveBan(ban: PublicBan): string {
   if (ban.type === BanType.Permanent) return "полный бессрочный";
   if (ban.expiresUtc) return `до ${formatDate(ban.expiresUtc)}`;
@@ -96,6 +115,7 @@ function formatLastBan(ban: PublicBan, ordinal: number): string {
       label="Нарушения"
       :value="`${warningPoints}/${WARNING_LIMIT}`"
       :variant="activeBan || warningPoints > 0 ? 'negative' : 'default'"
+      :to="warningsLogLink"
     />
     <StatLine
       v-else-if="error"

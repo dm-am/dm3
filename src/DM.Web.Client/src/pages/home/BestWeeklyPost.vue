@@ -15,10 +15,11 @@
     <SecondaryText v-else-if="store.bestLoaded">
       Оцененных постов за эту неделю пока нет
     </SecondaryText>
-    <!-- Skeleton: reserves the height of one truncatable post card
-         (navigation breadcrumb + two-column post card clamped to the
-         default 150px content budget). Without it the "Последний
-         оцененный пост" block below jumps up when the fetch resolves. -->
+    <!-- Skeleton: reserves the place of one truncatable post card
+         (navigation breadcrumb + post card whose text is clamped to the
+         height of its author's column, GamePost.vue). Without it the
+         "Последний оцененный пост" block below jumps up when the fetch
+         resolves. -->
     <GamePostSkeleton v-else />
   </section>
 </template>

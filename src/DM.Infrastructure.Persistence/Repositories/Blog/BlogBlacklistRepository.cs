@@ -7,8 +7,10 @@ using DM.Domain.Blog.Features.Blacklists;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 using DM.Infrastructure.Persistence.Entities.Blog;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 using DM.Infrastructure.Persistence.Shared.Users;
 
@@ -32,20 +34,19 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The game's order (GameBlacklistRepository.Get): oldest entry first, and
+    /// by name among the rows the copy of the personal list wrote at one moment.
+    /// </remarks>
     public async Task<IEnumerable<GeneralUser>> GetBlacklist(Guid blogId, CancellationToken ct = default)
     {
         return await _dbContext.BlogBlacklists
             .Where(b => b.BlogId == blogId)
+            .OrderBy(b => b.CreatedUtc)
+            .ThenBy(b => b.BlockedUser.Username)
             .Select(b => b.BlockedUser)
             .ProjectToGeneralUser()
             .ToArrayAsync(ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> IsBlocked(Guid blogId, Guid userId, CancellationToken ct = default)
-    {
-        return await _dbContext.BlogBlacklists
-            .AnyAsync(b => b.BlogId == blogId && b.BlockedUserId == userId, ct);
     }
 
     /// <inheritdoc />
@@ -61,7 +62,18 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
         };
 
         _dbContext.BlogBlacklists.Add(entry);
-        await _dbContext.SaveChangesAsync(ct);
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            // The race the caller's check cannot see: two requests for the same
+            // name both passed it. Translated here, as the game's list does, so
+            // the domain does not have to know the storage engine's error codes.
+            _dbContext.ChangeTracker.Clear();
+            throw new DuplicateEntityException("Duplicate blog blacklist entry", ex);
+        }
     }
 
     /// <inheritdoc />
@@ -99,41 +111,19 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
     }
 
     /// <inheritdoc />
-    public async Task<int> CopyFromPersonalBlacklist(Guid blogId, Guid ownerId, CancellationToken ct = default)
-    {
-        var now = _dateTimeProvider.Now;
-
-        // Get personal blacklist entries that are not already in blog blacklist
-        var personalBlacklistUserIds = await _dbContext.UserBlacklists
-            .Where(ub => ub.OwnerId == ownerId)
-            .Select(ub => ub.BlockedUserId)
-            .ToListAsync(ct);
-
-        var existingBlogBlacklistUserIds = await _dbContext.BlogBlacklists
-            .Where(bb => bb.BlogId == blogId)
-            .Select(bb => bb.BlockedUserId)
-            .ToListAsync(ct);
-
-        var toAdd = personalBlacklistUserIds.Except(existingBlogBlacklistUserIds).ToList();
-
-        foreach (var blockedUserId in toAdd)
-        {
-            var entry = new BlogBlacklist
-            {
-                EntryId = _guidFactory.Create(),
-                BlogId = blogId,
-                BlockedUserId = blockedUserId,
-                BlockedByUserId = ownerId,
-                CreatedUtc = now
-            };
-            _dbContext.BlogBlacklists.Add(entry);
-        }
-
-        if (toAdd.Count > 0)
-        {
-            await _dbContext.SaveChangesAsync(ct);
-        }
-
-        return toAdd.Count;
-    }
+    /// <remarks>
+    /// One statement, the way the game copies the same list
+    /// (GameBlacklistRepository.CopyFromPersonalBlacklist), and with the same
+    /// skip: ON CONFLICT on the unique index over the pair settles each entry
+    /// against the committed state, so an entry added beside the copy is not
+    /// inserted twice and does not refuse the whole copy with a 23505.
+    /// </remarks>
+    public Task<int> CopyFromPersonalBlacklist(Guid blogId, Guid ownerId, CancellationToken ct = default) =>
+        _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "BlogBlacklists" ("EntryId", "BlogId", "BlockedUserId", "BlockedByUserId", "CreatedUtc")
+            SELECT gen_random_uuid(), {blogId}, personal."BlockedUserId", {ownerId}, {_dateTimeProvider.Now}
+            FROM "UserBlacklists" AS personal
+            WHERE personal."OwnerId" = {ownerId}
+            ON CONFLICT ("BlogId", "BlockedUserId") DO NOTHING
+            """, ct);
 }

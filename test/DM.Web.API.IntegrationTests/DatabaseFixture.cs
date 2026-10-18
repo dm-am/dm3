@@ -17,6 +17,9 @@ using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 using Xunit;
 
+using DM.Web.API.IntegrationTests.Helpers;
+using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAttributeSchema;
+
 namespace DM.Web.API.IntegrationTests;
 
 /// <summary>
@@ -101,7 +104,7 @@ public class DatabaseFixture : IAsyncLifetime
     /// <summary>
     /// Stops the broker container without removing it: the queues, the bindings
     /// and the persisted messages survive, which is exactly the deployment
-    /// window the outbox exists for (AC-1 of the outbox design).
+    /// window the outbox exists for.
     /// </summary>
     public Task StopBrokerAsync() => _rabbitMqContainer.StopAsync();
 
@@ -270,7 +273,7 @@ public class DatabaseFixture : IAsyncLifetime
                 60, 55, false, 2, CommentsAccessMode.Readonly),
             (TestConstants.NoRecruitmentGameId, TestConstants.AdminUserId,
                 "Invitation Only Game", "Словеска", "Original", "Game that was always by invitation only.",
-                90, 85, false, 0, CommentsAccessMode.Private),
+                90, 85, false, 0, CommentsAccessMode.Readonly),
         };
 
         var gameList = games.ToArray();
@@ -296,6 +299,11 @@ public class DatabaseFixture : IAsyncLifetime
             CommentsAccessMode = g.Comments,
             IsRemoved = false
         }));
+
+        // Every writer of a game row writes its sheet in the same save, and a
+        // fixture is such a writer: the reads of a game fail loudly without one.
+        db.Set<DbGameAttributeSchema>().AddRange(
+            GameSheetTestHelper.Sheets(gameList.Select(g => g.Id)));
     }
 
     private static void SeedGameTags(DmDbContext db)
@@ -347,7 +355,6 @@ public class DatabaseFixture : IAsyncLifetime
             CreatedUtc = DateTimeOffset.UtcNow.AddDays(-b.DaysAgo),
             Status = ModuleStatus.Active,
             PremoderationStatus = PremoderationStatus.Approved,
-            CommentsEnabled = true,
             IsRemoved = false
         }));
     }

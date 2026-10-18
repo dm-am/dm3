@@ -159,6 +159,37 @@ describe("SpoilerView", () => {
       });
       expect(wrapper.find(".spoiler-head").text()).toBe("Скрыть содержимое");
     });
+
+    // [spoiler text="..."] names the button that shows the content.
+    it("shows its caption when collapsed, and the default for an empty one", () => {
+      const captioned = mount(SpoilerView, {
+        props: createMockProps(
+          { collapsed: true, text: "Карта" },
+          updateAttributesMock,
+        ),
+      });
+      expect(captioned.find(".spoiler-head").text()).toBe("Карта");
+
+      const empty = mount(SpoilerView, {
+        props: createMockProps(
+          { collapsed: true, text: "" },
+          updateAttributesMock,
+        ),
+      });
+      expect(empty.find(".spoiler-head").text()).toBe("Показать содержимое");
+    });
+
+    // Open, a captioned spoiler keeps its caption on the button, as the post
+    // draws it; only one without a caption says "Скрыть содержимое".
+    it("keeps its caption when expanded", () => {
+      const captioned = mount(SpoilerView, {
+        props: createMockProps(
+          { collapsed: false, text: "Карта" },
+          updateAttributesMock,
+        ),
+      });
+      expect(captioned.find(".spoiler-head").text()).toBe("Карта");
+    });
   });
 
   // ============================================================================

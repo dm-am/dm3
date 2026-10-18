@@ -28,8 +28,14 @@
 
 // Skeleton shimmer: call +skeleton-shimmer AFTER all other declarations
 // in the selector to avoid Sass mixed-decls deprecation warning.
-=skeleton-shimmer
-  border-radius: $minor  // 4px
+//
+// A shimmer that stands where a picture will be (an avatar, a portrait, a QR
+// code) takes +skeleton-shimmer($square: true): a picture is never rounded
+// (owner, 5 October 2026), and a placeholder rounder than what replaces it
+// changes shape the moment the page loads.
+=skeleton-shimmer($square: false)
+  @if not $square
+    border-radius: $minor  // 4px
   background: linear-gradient(90deg, $bg-element-hover 25%, $bg-element 50%, $bg-element-hover 75%)
   background-size: 200% 100%
   animation: skeleton-shimmer $loading-tempo ease-in-out infinite

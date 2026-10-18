@@ -117,8 +117,8 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
     /// render.
     /// </summary>
     /// <remarks>
-    /// Told apart by [mod], which is the one tag of this surface the two renders
-    /// spell differently — the round-trip one carries <c>data-bb-tag</c> so the
+    /// Told apart by [mod], one of the tags this surface renders differently for
+    /// the author — the round-trip one carries <c>data-bb-tag</c> so the
     /// editor can turn the markup back into BBCode. Authored by a moderator
     /// because a regular author's [mod] is stripped on the way in.
     /// </remarks>
@@ -342,52 +342,6 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
             HttpMethod.Delete, $"/v1/global-chat/messages/{messageId}", Moderator));
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-    }
-
-    /// <summary>
-    /// Quoting a line of the global chat is read the same way the line is: the
-    /// markup of the quotation comes from the route of the global chat, not from
-    /// the one that asks whether the reader is a participant of the chat.
-    /// </summary>
-    [Fact]
-    public async Task HandOutTheQuotationOfAReply()
-    {
-        var messageId = await Say(Author, "Реплика, которую цитируют");
-
-        var response = await Client.SendAsync(CreateAuthenticatedRequest(
-            HttpMethod.Get, $"/v1/global-chat/messages/{messageId}/quote", Reader));
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var quote = await TextOf(response);
-        quote.Should().Contain("Реплика, которую цитируют");
-        quote.Should().Contain(Author.Username, "the quotation is attributed to the author of the line");
-    }
-
-    /// <summary>
-    /// Reading the global chat needs no account, and quoting one of its lines is
-    /// the same read.
-    /// </summary>
-    [Fact]
-    public async Task HandOutTheQuotationOfAReplyWithoutAnAccount()
-    {
-        var messageId = await Say(Author, "Цитируется и без входа");
-
-        var response = await Client.GetAsync($"/v1/global-chat/messages/{messageId}/quote");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    /// <summary>
-    /// And the quotation route accepts nothing but global chat lines, the way its
-    /// six neighbours do.
-    /// </summary>
-    [Fact]
-    public async Task RefuseAPrivateMessageOnTheGlobalChatQuoteRoute()
-    {
-        var response = await Client.SendAsync(CreateAuthenticatedRequest(
-            HttpMethod.Get, $"/v1/global-chat/messages/{TestConstants.TestMessageId}/quote", Author));
-
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>

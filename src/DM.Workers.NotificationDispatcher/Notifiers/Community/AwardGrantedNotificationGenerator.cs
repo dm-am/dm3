@@ -35,6 +35,7 @@ internal class AwardGrantedNotificationGenerator : BaseNotificationGenerator
             {
                 a.UserAwardId,
                 a.UserId,
+                Username = a.User.Username,
                 AwardTitle = a.AwardType.Title,
                 AwardDescription = a.AwardType.Description,
                 AwardTier = a.AwardType.Tier,
@@ -63,6 +64,10 @@ internal class AwardGrantedNotificationGenerator : BaseNotificationGenerator
             Metadata = new
             {
                 UserAwardId = data.UserAwardId,
+                // The name of the recipient: the notification leads to the hall
+                // of fame of his profile, and the list and the letter both build
+                // that address out of this field.
+                Username = data.Username,
                 AwardTitle = data.AwardTitle,
                 AwardDescription = data.AwardDescription,
                 AwardTier = data.AwardTier,

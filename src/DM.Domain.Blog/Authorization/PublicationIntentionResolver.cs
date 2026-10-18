@@ -10,7 +10,7 @@ internal class PublicationIntentionResolver : IIntentionResolver<PublicationInte
     /// <inheritdoc />
     public bool IsAllowed(IAuthorizationSubject user, PublicationIntention intention, Publication target)
     {
-        var isAuthor = user.UserId == target.Author.UserId;
+        var isAuthor = user.UserId == target.Author?.UserId;
 
         return intention switch
         {
@@ -30,10 +30,10 @@ internal class PublicationIntentionResolver : IIntentionResolver<PublicationInte
             PublicationIntention.Delete =>
                 isAuthor || user.Role >= UserRole.Admin,
 
-            // Any authenticated user can comment if publication is published and comments enabled
+            // Any authenticated user can comment on a published publication: the
+            // discussion has no switch that closes it
             PublicationIntention.CreateComment =>
                 target.IsPublished &&
-                target.CommentsEnabled &&
                 user.IsAuthenticated,
 
             // Any authenticated user can like published publications

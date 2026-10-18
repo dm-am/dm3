@@ -21,10 +21,10 @@ const loading = ref(false);
 const loadError = ref<string | null>(null);
 
 const columns: Column[] = [
-  { key: "user", label: "Модератор", width: "22%" },
+  { key: "user", label: "Модератор", width: "24%" },
   { key: "boards", label: "Форумы" },
-  { key: "games", label: "Курируемые игры" },
-  { key: "blogs", label: "Курируемые блоги" },
+  { key: "games", label: "Курируемые игры", width: "25.3%" },
+  { key: "blogs", label: "Курируемые блоги", width: "25.3%" },
 ];
 
 // DataTable requires rows with an id — key by the moderator's user id.

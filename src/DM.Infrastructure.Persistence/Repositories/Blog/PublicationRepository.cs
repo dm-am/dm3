@@ -34,15 +34,16 @@ internal class PublicationRepository : IPublicationRepository
     // ═══ READ ═══
 
     /// <inheritdoc />
-    public async Task<int> CountPublications(Guid blogId, Guid? rubricId, bool includeUnpublished, CancellationToken ct = default)
+    public async Task<int> CountPublications(Guid blogId, Guid? rubricId, Guid viewerId, bool everyUnpublished,
+        CancellationToken ct = default)
     {
         var query = _dbContext.Publications
             .TagWith("DM.Blog.CountPublications")
             .Where(p => !p.IsRemoved && p.BlogId == blogId);
 
-        if (!includeUnpublished)
+        if (!everyUnpublished)
         {
-            query = query.Where(p => p.IsPublished);
+            query = query.Where(p => p.IsPublished || p.AuthorId == viewerId);
         }
 
         if (rubricId.HasValue)
@@ -55,7 +56,7 @@ internal class PublicationRepository : IPublicationRepository
 
     /// <inheritdoc />
     public async Task<IEnumerable<Publication>> GetPublications(
-        Guid blogId, Guid? rubricId, bool includeUnpublished, PagingData paging, CancellationToken ct = default)
+        Guid blogId, Guid? rubricId, Guid viewerId, bool everyUnpublished, PagingData paging, CancellationToken ct = default)
     {
         // No Include: the query ends in ProjectTo, which builds its own Select and makes
         // EF drop every Include with a warning. Author and rubric come from the mapping
@@ -64,9 +65,9 @@ internal class PublicationRepository : IPublicationRepository
             .TagWith("DM.Blog.ListPublications")
             .Where(p => !p.IsRemoved && p.BlogId == blogId);
 
-        if (!includeUnpublished)
+        if (!everyUnpublished)
         {
-            query = query.Where(p => p.IsPublished);
+            query = query.Where(p => p.IsPublished || p.AuthorId == viewerId);
         }
 
         if (rubricId.HasValue)
@@ -98,7 +99,7 @@ internal class PublicationRepository : IPublicationRepository
     }
 
     /// <inheritdoc />
-    public async Task<Publication?> GetBestUserPublication(Guid authorId, CancellationToken ct = default)
+    public async Task<Publication?> GetBestUserPublication(IReadOnlyCollection<Guid> authorIds, CancellationToken ct = default)
     {
         // Single-query "best" lookup: sort by the same likes subquery
         // pattern used by topics/comments, take the top row, project to
@@ -106,7 +107,7 @@ internal class PublicationRepository : IPublicationRepository
         // out so the profile widget can never surface drafts.
         var publication = await _dbContext.Publications
             .TagWith("DM.Blog.GetBestUserPublication")
-            .Where(p => !p.IsRemoved && p.IsPublished && p.AuthorId == authorId)
+            .Where(p => !p.IsRemoved && p.IsPublished && authorIds.Contains(p.AuthorId))
             .OrderByDescending(p => _dbContext.Likes.Count(l =>
                 !l.IsRemoved &&
                 l.EntityId == p.PublicationId &&
@@ -136,20 +137,44 @@ internal class PublicationRepository : IPublicationRepository
             Title = entity.Title,
             Content = entity.Content,
             Preview = entity.Preview ?? "",
-            CommentsEnabled = entity.CommentsEnabled,
             IsPublished = entity.PublishImmediately,
             PublishedUtc = entity.PublishImmediately ? entity.CreatedUtc : null,
             CreatedUtc = entity.CreatedUtc,
             IsRemoved = false
         };
 
-        _dbContext.Publications.Add(publication);
+        // Both writes or neither, and through the strategy because the API host
+        // configures EnableRetryOnFailure.
+        await RetryableWrite.Run(_dbContext, async cancellation =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellation);
 
-        // Update blog publication count
-        var blog = await _dbContext.Blogs.FirstAsync(b => b.BlogId == entity.BlogId, ct);
-        blog.PublicationCount++;
+            // The count is raised in the database rather than on a blog row read into
+            // the change tracker: two publications written at once both read the same
+            // number and both wrote it back plus one, so the blog counted one of the
+            // two and nothing recomputes the column afterwards. Zero rows means the
+            // blog is gone or removed, which the tracked read used to answer by
+            // throwing - the insert below would fail on the foreign key anyway, but
+            // the meaning belongs where the row is missing.
+            var counted = await _dbContext.Blogs
+                .Where(b => b.BlogId == entity.BlogId)
+                .ExecuteUpdateAsync(
+                    b => b.SetProperty(x => x.PublicationCount, x => x.PublicationCount + 1),
+                    cancellation);
+            if (counted == 0)
+            {
+                throw new InvalidOperationException($"Blog {entity.BlogId} not found");
+            }
 
-        await _dbContext.SaveChangesAsync(ct);
+            // The update above holds the blog row until commit, which serializes
+            // creation per blog: that is what makes MAX + 1 an allocation rather
+            // than a guess, exactly as the board row does for topic numbers.
+            publication.PublicationNumber = await NextPublicationNumber(entity.BlogId, cancellation);
+            _dbContext.Publications.Add(publication);
+            await _dbContext.SaveChangesAsync(cancellation);
+
+            await transaction.CommitAsync(cancellation);
+        }, ct);
 
         return await GetPublication(entity.PublicationId, ct) ?? throw new InvalidOperationException("Publication not found after creation");
     }
@@ -174,8 +199,6 @@ internal class PublicationRepository : IPublicationRepository
             publication.Content = entity.Content;
         if (!string.IsNullOrWhiteSpace(entity.Preview))
             publication.Preview = entity.Preview;
-        if (entity.CommentsEnabled.HasValue)
-            publication.CommentsEnabled = entity.CommentsEnabled.Value;
 
         if (entity.IsPublished.HasValue)
         {
@@ -197,22 +220,76 @@ internal class PublicationRepository : IPublicationRepository
     /// <inheritdoc />
     public async Task DeletePublication(Guid publicationId, Guid deletedByUserId, CancellationToken ct = default)
     {
-        var publication = await _dbContext.Publications
-            .Include(p => p.Blog)
-            .FirstOrDefaultAsync(p => p.PublicationId == publicationId, ct);
-
-        if (publication != null)
+        await RetryableWrite.Run(_dbContext, async cancellation =>
         {
-            SoftDelete.Mark(publication, deletedByUserId, _dateTimeProvider.Now);
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellation);
 
-            // Update blog publication count
-            publication.Blog.PublicationCount--;
+            // One statement reads and writes the row: a second removal of the same
+            // publication arriving together with this one waits on the row lock and
+            // then re-tests the predicate against the committed state, so exactly one
+            // of the two matches and the blog's count comes down once. Read, check and
+            // mark over three steps used to take it down twice for one publication,
+            // with nothing that recomputes the column and no row left to say what the
+            // right number was.
+            var now = _dateTimeProvider.Now;
+            var marked = await _dbContext.Publications
+                .Where(p => p.PublicationId == publicationId && !p.IsRemoved)
+                .ExecuteUpdateAsync(p => p
+                    .SetProperty(x => x.IsRemoved, true)
+                    .SetProperty(x => x.DeletedByUserId, (Guid?)deletedByUserId)
+                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)now), cancellation);
 
-            await _dbContext.SaveChangesAsync(ct);
-        }
+            if (marked == 1)
+            {
+                // After the mark, so the row it reads is the one this transaction now
+                // holds; IgnoreQueryFilters, because that row is removed and the global
+                // filter hides it.
+                var blogId = await _dbContext.Publications
+                    .IgnoreQueryFilters()
+                    .TagWith("DM.Blog.RemovedPublicationBlog")
+                    .Where(p => p.PublicationId == publicationId)
+                    .Select(p => p.BlogId)
+                    .FirstAsync(cancellation);
+
+                // Floored at zero rather than trusted: the column is stored and nothing
+                // recomputes it, so a count that has already drifted below the blog
+                // must not go negative and stay there.
+                await _dbContext.Blogs
+                    .Where(b => b.BlogId == blogId)
+                    .ExecuteUpdateAsync(b => b.SetProperty(
+                        x => x.PublicationCount, x => x.PublicationCount > 0 ? x.PublicationCount - 1 : 0),
+                        cancellation);
+            }
+
+            await transaction.CommitAsync(cancellation);
+        }, ct);
     }
 
     // ═══ HELPERS ═══
+
+    /// <summary>
+    /// The number the next publication of this blog takes.
+    /// </summary>
+    /// <remarks>
+    /// Callers hold the blog row, which is what makes MAX + 1 an allocation: two
+    /// of these running at once without it read the same maximum. Every
+    /// publication written by the site used to be stored as 0, and only the seed
+    /// numbered its rows.
+    ///
+    /// IgnoreQueryFilters: a removed publication keeps its number, so the next one
+    /// does not take the number of the newest removed one.
+    /// </remarks>
+    private async Task<int> NextPublicationNumber(Guid blogId, CancellationToken ct)
+    {
+        var highest = await _dbContext.Publications
+            .IgnoreQueryFilters()
+            .TagWith("DM.Blog.MaxPublicationNumber")
+            .Where(p => p.BlogId == blogId)
+            .Select(p => (int?)p.PublicationNumber)
+            .MaxAsync(ct);
+
+        return (highest ?? 0) + 1;
+    }
 
     /// <summary>
     /// Single-publication overload of the backfill below.

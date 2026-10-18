@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
@@ -12,7 +11,6 @@ using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
-using MimeKit.Text;
 using DM.Domain.Core.Mail;
 
 namespace DM.Workers.Mail.Sending;
@@ -106,7 +104,7 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
             MessageId = messageId
         };
 
-        mimeMessage.Body = BuildMessageBody(message);
+        mimeMessage.Body = LetterBody.Build(message);
 
         var client = await ConnectedClient(cancellationToken);
         await client.SendAsync(mimeMessage, cancellationToken);
@@ -199,33 +197,5 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
         }
 
         _client.Dispose();
-    }
-
-    private static MimeEntity BuildMessageBody(EmailLetter message)
-    {
-        var htmlPart = new TextPart(TextFormat.Html) { Text = message.Body };
-
-        // If no linked resources, return simple HTML body
-        if (message.LinkedResources.Count == 0)
-        {
-            return htmlPart;
-        }
-
-        // Build multipart/related for inline images (CID attachments)
-        var multipart = new MultipartRelated { htmlPart };
-
-        foreach (var resource in message.LinkedResources)
-        {
-            var attachment = new MimePart(resource.MimeType)
-            {
-                Content = new MimeContent(new MemoryStream(resource.Content)),
-                ContentId = resource.ContentId,
-                ContentDisposition = new ContentDisposition(ContentDisposition.Inline),
-                ContentTransferEncoding = ContentEncoding.Base64
-            };
-            multipart.Add(attachment);
-        }
-
-        return multipart;
     }
 }

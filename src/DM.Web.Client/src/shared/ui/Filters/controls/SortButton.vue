@@ -3,11 +3,19 @@
  * SortButton - Sort control with dropdown.
  *
  * Shows current sort option and allows changing sort field/direction.
+ *
+ * The icon and the name of the sort at every width, as FilterButton. The menu
+ * stays inside the window (useKeepInWindow).
+ *
+ * The menu and the menu of the filters of the same bar are one floating panel
+ * at a time: a click on either button is a click past the other, which closes
+ * it.
  */
 import { ref, computed } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { useMenuKeyboard } from "@/shared/lib/composables/useMenuKeyboard";
 import type { SortButtonProps } from "../types";
+import { useKeepInWindow } from "./useKeepInWindow";
 
 defineOptions({ name: "SortButton" });
 
@@ -29,11 +37,18 @@ const emit = defineEmits<{
 const showDropdown = ref(false);
 const triggerRef = ref<HTMLButtonElement | null>(null);
 const dropdownRef = ref<HTMLElement | null>(null);
+useKeepInWindow(dropdownRef);
 
 // Current sort label
 const currentSortLabel = computed(() => {
   const option = props.options.find((o) => o.value === props.sortBy);
   return option?.label ?? "Сортировка";
+});
+
+/** The button's name for a reader of the screen: a sort, and which one is on. */
+const buttonName = computed(() => {
+  const option = props.options.find((o) => o.value === props.sortBy);
+  return option ? `Сортировка: ${option.label}` : "Сортировка";
 });
 
 // Sort icon based on direction
@@ -100,10 +115,11 @@ onUnmounted(() => {
       :class="{ active: showDropdown }"
       aria-haspopup="menu"
       :aria-expanded="showDropdown"
+      :aria-label="buttonName"
       @click="toggleDropdown"
     >
       <SvgIcon :name="sortIcon" class="sort-icon" />
-      <span>{{ currentSortLabel }}</span>
+      <span class="sort-btn-label">{{ currentSortLabel }}</span>
     </button>
 
     <div
@@ -152,8 +168,53 @@ onUnmounted(() => {
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
 @use "@/assets/styles/Filters" as *
+@use "@/assets/styles/Menu" as *
+@use "@/assets/styles/ZIndex" as *
 
-+sort-control
+.sort-section
+  position: relative
+  flex-shrink: 0
+
+.sort-icon
+  width: 24px
+  height: 24px
+  flex-shrink: 0
+
+// The site's menu (_Menu.sass), hanging from the right edge of the button.
+.sort-dropdown
+  position: absolute
+  top: calc(100% + $tiny)
+  right: 0
+  z-index: $z-dropdown
+  min-width: $filter-dropdown-min-width
+  +menu-panel
+
+.sort-option
+  +menu-item
+
+  &.sort-direction
+    display: flex
+    align-items: center
+    gap: $small
+
+.sort-option-content
+  display: flex
+  flex-direction: column
+  gap: 1px
+
+.sort-option-label
+  color: $text
+
+.sort-option-hint
+  +menu-hint
+
+.sort-direction-icon
+  width: 18px
+  height: 18px
+  flex-shrink: 0
+
+.sort-divider
+  +menu-divider
 
 // Button visual shared with FilterButton through the unified +button mixin —
 // guarantees identical colors, hover, active, disabled states.

@@ -22,7 +22,12 @@ vi.mock("@/shared/api", () => ({
   setSessionExpiredHandler,
 }));
 
+import { effectScope, ref } from "vue";
 import { useAuthStore } from "@/shared/stores";
+import {
+  openWindowCount,
+  useOpenWindow,
+} from "@/shared/lib/composables/useOpenWindows";
 import {
   endExpiredSession,
   installSessionExpiredHandler,
@@ -93,5 +98,49 @@ describe("endExpiredSession", () => {
     installSessionExpiredHandler();
 
     expect(setSessionExpiredHandler).toHaveBeenCalledWith(endExpiredSession);
+  });
+});
+
+/**
+ * The owner's word: when the site learns the session is over, the windows
+ * open over the page close with it. Each window registers its own way out
+ * (Dialog.vue, useDialogShell); the guest windows, the login one first, do not.
+ */
+describe("the windows at the end of a session", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
+
+  it("closes every open window, each its own way", () => {
+    currentRoute.value = { meta: {}, fullPath: "/forum/flood/12" };
+    const scope = effectScope();
+    const closed: string[] = [];
+    const shown = { confirm: ref(true), form: ref(true), gone: ref(false) };
+    scope.run(() => {
+      useOpenWindow(shown.confirm, () => closed.push("confirm"));
+      useOpenWindow(shown.form, () => closed.push("form"));
+      useOpenWindow(shown.gone, () => closed.push("gone"));
+    });
+
+    endExpiredSession();
+
+    expect(closed.sort()).toEqual(["confirm", "form"]);
+    expect(openWindowCount()).toBe(0);
+    scope.stop();
+  });
+
+  it("asks a window once, however many requests the session ends on", () => {
+    currentRoute.value = { meta: {}, fullPath: "/" };
+    const scope = effectScope();
+    let asked = 0;
+    scope.run(() => useOpenWindow(ref(true), () => asked++));
+
+    endExpiredSession();
+    endExpiredSession();
+
+    expect(asked).toBe(1);
+    scope.stop();
   });
 });

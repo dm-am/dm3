@@ -73,6 +73,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 # adduser wrapper in its slim variant, while useradd is part of passwd and stays.
 RUN useradd --no-create-home --shell /usr/sbin/nologin dmuser
 
+# Where the API keeps the country table it downloads. Owned by dmuser here
+# because docker gives a new named volume the owner of the directory it is
+# mounted over: without this the volume belongs to root and the download cannot
+# be written. Empty in every image, and only the API is given a volume there.
+RUN mkdir -p /data/geo && chown dmuser /data/geo
+
 COPY --from=build /app/out ./
 USER dmuser
 

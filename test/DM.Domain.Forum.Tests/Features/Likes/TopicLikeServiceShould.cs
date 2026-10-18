@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,9 +28,7 @@ public class TopicLikeServiceShould : UnitTestBase
     private readonly ITopicService _topicService;
     private readonly ITopicCommentService _commentService;
     private readonly IIntentionManager _intentionManager;
-    private readonly IIdentityProvider _identityProvider;
     private readonly ILikeOperations _likeOperations;
-    private readonly IUserBlacklistChecker _blacklistChecker;
     private readonly TopicLikeService _service;
 
     public TopicLikeServiceShould()
@@ -39,26 +38,17 @@ public class TopicLikeServiceShould : UnitTestBase
 
         _intentionManager = Mock<IIntentionManager>();
 
-        var userId = Guid.NewGuid();
-        _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
-
         _likeOperations = Mock<ILikeOperations>();
         _likeOperations.LikeAsync(Arg.Any<Topic>(), Arg.Any<EventType>()).Returns(new GeneralUser());
         _likeOperations.LikeAsync(Arg.Any<Comment>(), Arg.Any<EventType>()).Returns(new GeneralUser());
         _likeOperations.UnlikeAsync(Arg.Any<Topic>()).Returns(Task.CompletedTask);
         _likeOperations.UnlikeAsync(Arg.Any<Comment>()).Returns(Task.CompletedTask);
 
-        _blacklistChecker = Mock<IUserBlacklistChecker>();
-        _blacklistChecker.IsBlockedAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
-
         _service = new TopicLikeService(
             _topicService,
             _commentService,
             _intentionManager,
-            _identityProvider,
-            _likeOperations,
-            _blacklistChecker);
+            _likeOperations);
     }
 
     [Fact]
@@ -88,25 +78,17 @@ public class TopicLikeServiceShould : UnitTestBase
         await _likeOperations.Received(1).LikeAsync(topic, EventType.LikedTopic);
     }
 
+    /// <summary>
+    /// The forum is a public place, and neither the topic author's nor the
+    /// comment author's personal blacklist closes a like there; the author hears
+    /// nothing of it, because the notification leaves out whoever blocked its
+    /// actor. The behaviour with a real list behind it is in BlacklistRuleShould.
+    /// </summary>
     [Fact]
-    public async Task ThrowWhenLikingTopicByBlockedUser()
+    public void KnowNothingOfPersonalBlacklists()
     {
-        var topicId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-        var currentUserId = _identityProvider.Current.User.UserId;
-        var topic = new Topic
-        {
-            Id = topicId,
-            Author = new GeneralUser { UserId = authorId }
-        };
-        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
-        _blacklistChecker.IsBlockedAsync(authorId, currentUserId, Arg.Any<CancellationToken>()).Returns(true);
-
-        var act = async () => await _service.LikeTopicAsync(topicId);
-
-        var exception = await act.Should().ThrowAsync<HttpException>();
-        exception.Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        exception.Which.Message.Should().Contain("Вы не можете поставить лайк этому топику");
+        typeof(TopicLikeService).GetConstructors().Single().GetParameters()
+            .Should().NotContain(parameter => parameter.ParameterType == typeof(IUserBlacklistChecker));
     }
 
     [Fact]
@@ -134,27 +116,6 @@ public class TopicLikeServiceShould : UnitTestBase
 
         result.Should().Be(expectedUser);
         await _likeOperations.Received(1).LikeAsync(comment, EventType.LikedTopicComment);
-    }
-
-    [Fact]
-    public async Task ThrowWhenLikingCommentByBlockedUser()
-    {
-        var commentId = Guid.NewGuid();
-        var authorId = Guid.NewGuid();
-        var currentUserId = _identityProvider.Current.User.UserId;
-        var comment = new Comment
-        {
-            Id = commentId,
-            Author = new GeneralUser { UserId = authorId }
-        };
-        _commentService.GetAsync(commentId).Returns(comment);
-        _blacklistChecker.IsBlockedAsync(authorId, currentUserId, Arg.Any<CancellationToken>()).Returns(true);
-
-        var act = async () => await _service.LikeCommentAsync(commentId);
-
-        var exception = await act.Should().ThrowAsync<HttpException>();
-        exception.Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        exception.Which.Message.Should().Contain("Вы не можете поставить лайк этому комментарию");
     }
 
     [Fact]

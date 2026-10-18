@@ -2,13 +2,20 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { nextTick } from "vue";
 import { mount } from "@vue/test-utils";
 import { parse as parseSfc } from "vue/compiler-sfc";
+import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import MonthYearPicker from "./MonthYearPicker.vue";
+
+const SFC = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "MonthYearPicker.vue",
+);
 
 describe("MonthYearPicker", () => {
   const mountComponent = (props: Record<string, unknown> = {}) => {
@@ -247,6 +254,136 @@ describe("MonthYearPicker", () => {
         if (el === root) break;
       }
       expect(clipped).toEqual([]);
+    });
+
+    /**
+     * The popover stands in a fixed layer, off the picker's rectangle, as the
+     * date field's calendar does. Inside the picker it was cut by any box
+     * around it that clips, and on a phone the period of the statistics page
+     * is a row that scrolls sideways, which clips what it scrolls.
+     *
+     * jsdom lays out nothing: the picker's rectangle and the window are given
+     * by hand, and the panel, which measures 0 here, is taken at the size the
+     * component assumes before it can measure it (220 by 200).
+     */
+    describe("in a fixed layer", () => {
+      const html = document.documentElement;
+      let restoreWindow: (() => void) | null = null;
+
+      /** A window of the given size, as the component reads it. */
+      const windowOf = (width: number, height: number) => {
+        Object.defineProperty(html, "clientWidth", {
+          configurable: true,
+          get: () => width,
+        });
+        Object.defineProperty(html, "clientHeight", {
+          configurable: true,
+          get: () => height,
+        });
+        restoreWindow = () => {
+          delete (html as unknown as Record<string, unknown>).clientWidth;
+          delete (html as unknown as Record<string, unknown>).clientHeight;
+        };
+      };
+
+      afterEach(() => {
+        restoreWindow?.();
+        restoreWindow = null;
+      });
+
+      // The template opens with a comment, so the wrapper's element is that.
+      const rootOf = (wrapper: ReturnType<typeof mountComponent>) =>
+        wrapper.get(".month-year-picker").element;
+
+      /** The picker at a place on the screen, 38 high and 200 wide. */
+      const placed = (left: number, top: number) => {
+        const wrapper = mountComponent();
+        const box = { left, top };
+        Object.defineProperty(rootOf(wrapper), "getBoundingClientRect", {
+          configurable: true,
+          value: () => ({
+            left: box.left,
+            top: box.top,
+            right: box.left + 200,
+            bottom: box.top + 38,
+            width: 200,
+            height: 38,
+          }),
+        });
+        return { wrapper, box };
+      };
+
+      const where = (wrapper: ReturnType<typeof mountComponent>) => {
+        const style = (wrapper.find(".myp-popover").element as HTMLElement)
+          .style;
+        return { top: style.top, left: style.left };
+      };
+
+      it("is a fixed layer in the stylesheet, placed by the script alone", () => {
+        const rules = ruleMap(componentCss(SFC));
+        expect(rules.get(".myp-popover")?.position).toBe("fixed");
+        expect(rules.get(".myp-popover")).not.toHaveProperty("top");
+        expect(rules.get(".myp-popover")).not.toHaveProperty("left");
+      });
+
+      it("stands under the picker with the gap of every dropdown, left edges together", async () => {
+        windowOf(1366, 800);
+        const { wrapper } = placed(100, 50);
+        await open(wrapper);
+        // 50 + 38 + the 2 of POPOVER_GAP.
+        expect(where(wrapper)).toEqual({ top: "90px", left: "100px" });
+      });
+
+      it("stands above the picker where the window has no room below", async () => {
+        windowOf(1366, 300);
+        const { wrapper } = placed(100, 212);
+        await open(wrapper);
+        // 212 - 2 - 200.
+        expect(where(wrapper).top).toBe("10px");
+      });
+
+      it("is pushed back inside the window at its right edge", async () => {
+        // A phone: the picker has been scrolled toward the right of its row.
+        windowOf(375, 800);
+        const { wrapper } = placed(300, 50);
+        await open(wrapper);
+        // 375 - the 8 of VIEWPORT_EDGE - 220.
+        expect(where(wrapper).left).toBe("147px");
+      });
+
+      it("is pushed back inside the window at its left edge", async () => {
+        windowOf(375, 800);
+        const { wrapper } = placed(-40, 50);
+        await open(wrapper);
+        expect(where(wrapper)).toEqual({ top: "90px", left: "8px" });
+      });
+
+      it("stands against the bottom edge where there is room neither below nor above", async () => {
+        windowOf(1366, 300);
+        const { wrapper } = placed(100, 120);
+        await open(wrapper);
+        // Below runs past 292, above starts at -82: 300 - 8 - 200.
+        expect(where(wrapper).top).toBe("92px");
+      });
+
+      it("follows the picker while it is open, and stops listening when it closes", async () => {
+        windowOf(1366, 800);
+        const { wrapper, box } = placed(100, 50);
+        await open(wrapper);
+        // The row scrolled sideways under the picker.
+        box.left = 40;
+        document.dispatchEvent(new Event("scroll"));
+        await nextTick();
+        expect(where(wrapper).left).toBe("40px");
+
+        await wrapper.find(".myp-trigger").trigger("click");
+        expect(wrapper.find(".myp-popover").exists()).toBe(false);
+        // Closed, a scroll of the page no longer reads the picker's box.
+        const reads = vi.spyOn(rootOf(wrapper), "getBoundingClientRect");
+        document.dispatchEvent(new Event("scroll"));
+        window.dispatchEvent(new Event("resize"));
+        expect(reads).not.toHaveBeenCalled();
+      });
     });
   });
 });

@@ -83,7 +83,13 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 typeof(RetentionSweepService), // periodic retention sweep — tests call the processor directly
                 typeof(OutboxRelayService), // outbox relay — tests drive the processor directly, a live loop would claim their rows
                 typeof(PendingRegistrationCleanupService), // DB cleanup — avoid race conditions
-                typeof(UsernameChangeCleanupService) // DB cleanup — avoid race conditions
+                typeof(UsernameChangeCleanupService), // DB cleanup — avoid race conditions
+                // period digests — the tests drive the processor directly, and a
+                // live loop generates the very periods they are about: it claims
+                // them before the test can, posts topics on the news board while
+                // the test is counting them, and repoints the board between the
+                // two statements the cleanup takes its topics away with
+                typeof(PeriodDigestService)
             };
 
             foreach (var serviceType in backgroundServicesToRemove)
@@ -144,6 +150,20 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             // sit on the enumerable.
             services.RemoveAll<DM.Domain.Core.Uploads.IObjectStorage>();
             services.AddSingleton<DM.Domain.Core.Uploads.IObjectStorage, InMemoryObjectStorage>();
+
+            // Every letter, copied where a test can read it — see
+            // RecordingMailSender for why a copy is the only way to see one from
+            // in here. Wrapped rather than replaced: the registered sender is
+            // built as the host would build it and keeps doing its whole job
+            // underneath, so nothing this suite covered stops being covered.
+            var mail = services.Last(d => d.ServiceType == typeof(DM.Domain.Core.Mail.IMailSender));
+            services.Remove(mail);
+            services.Add(ServiceDescriptor.Describe(
+                typeof(DM.Domain.Core.Mail.IMailSender),
+                provider => new RecordingMailSender(
+                    (DM.Domain.Core.Mail.IMailSender)ActivatorUtilities.CreateInstance(
+                        provider, mail.ImplementationType!)),
+                mail.Lifetime));
         });
     }
 
@@ -201,6 +221,20 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             UserId = TestConstants.ModeratorUserId,
             Username = TestConstants.ModeratorUserUsername,
             Role = UserRole.Moderator,
+            AccessPolicy = AccessPolicy.NotSpecified
+        };
+    }
+
+    /// <summary>
+    /// Create senior moderator user: the rank that removes and restores accounts
+    /// </summary>
+    public static GeneralUser CreateSeniorModeratorUser()
+    {
+        return new GeneralUser
+        {
+            UserId = TestConstants.SeniorModeratorUserId,
+            Username = TestConstants.SeniorModeratorUserUsername,
+            Role = UserRole.SeniorModerator,
             AccessPolicy = AccessPolicy.NotSpecified
         };
     }

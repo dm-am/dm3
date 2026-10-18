@@ -22,10 +22,9 @@ namespace BBCodeParser.Nodes
     /// comes back off after them.
     ///
     /// The alias substitutions travel per step rather than per walk because a
-    /// preformatted tag turns them off for its whole subtree, and the mode
-    /// travels per step because a code tag switches its subtree to BBCode
-    /// output. Both used to be expressed by what the recursive call passed
-    /// down.
+    /// preformatted tag turns them off for its whole subtree, and the mode travels
+    /// per step because a code tag switches its subtree to BBCode output. Both
+    /// used to be expressed by what the recursive call passed down.
     /// </remarks>
     internal readonly struct EmitStep
     {
@@ -47,14 +46,23 @@ namespace BBCodeParser.Nodes
             Literal = null;
             Mode = mode;
             AliasSubstitutions = aliasSubstitutions;
+            EndsLine = false;
         }
 
-        internal EmitStep(string literal)
+        /// <summary>
+        /// Whether this literal closes a block that ends its line, so that one
+        /// line break at the start of the text right after it is not drawn (see
+        /// Tag.DropsLineBreakAfter).
+        /// </summary>
+        internal bool EndsLine { get; }
+
+        internal EmitStep(string literal, bool endsLine = false)
         {
             Node = null;
             Literal = literal;
             Mode = EmitMode.Html;
             AliasSubstitutions = null;
+            EndsLine = endsLine;
         }
     }
 }

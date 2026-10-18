@@ -13,7 +13,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
 using DM.Domain.Core.Events;
-using DM.Domain.Core.Subscriptions;
 
 namespace DM.Domain.Blog.Features.Blacklists;
 
@@ -26,7 +25,6 @@ internal class BlogBlacklistService : IBlogBlacklistService
     private readonly IIdentityProvider _identityProvider;
     private readonly IIntentionManager _intentionManager;
     private readonly IEventProducer _producer;
-    private readonly ISubscriptionRepository _subscriptionRepository;
 
     public BlogBlacklistService(
         IBlogBlacklistRepository repository,
@@ -34,8 +32,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IIntentionManager intentionManager,
-        IEventProducer producer,
-        ISubscriptionRepository subscriptionRepository)
+        IEventProducer producer)
     {
         _repository = repository;
         _blogService = blogService;
@@ -43,13 +40,12 @@ internal class BlogBlacklistService : IBlogBlacklistService
         _identityProvider = identityProvider;
         _intentionManager = intentionManager;
         _producer = producer;
-        _subscriptionRepository = subscriptionRepository;
     }
 
     private async Task<IEnumerable<GeneralUser>> GetBlacklistAsync(Guid blogId, CancellationToken ct = default)
     {
         var blog = await _blogService.GetBlogAsync(blogId, ct);
-        _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
+        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.Edit, blog, ct);
 
         return await _repository.GetBlacklist(blogId, ct);
     }
@@ -57,48 +53,44 @@ internal class BlogBlacklistService : IBlogBlacklistService
     private async Task<GeneralUser> AddToBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
     {
         var blog = await _blogService.GetBlogAsync(blogId, ct);
-        _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
+        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.Edit, blog, ct);
 
         var user = await _userLookupService.GetAsync(username);
 
-        // Cannot blacklist Owner
-        if (user.UserId == blog.Author.UserId)
+        // The same order and the same words as the game's list: already on it,
+        // one of the people who run the blog, somebody who has to leave it first.
+        if (blog.IsBlacklisted(user.UserId))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя добавить в черный список автора блога");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyInBlacklist);
         }
 
-        // Cannot blacklist Mentor
-        if (blog.Mentor != null && user.UserId == blog.Mentor.UserId)
+        if (user.UserId == blog.Author?.UserId || user.UserId == blog.Mentor?.UserId)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя добавить в черный список наставника блога");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotBlacklistBlogLead);
         }
 
-        // Cannot blacklist an assistant (they must be removed first)
-        var isAssistant = blog.Assistants.Any(a => a.UserId == user.UserId);
-        if (isAssistant)
+        if (blog.Assistants.Any(a => a.UserId == user.UserId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, "Сначала уберите пользователя из ассистентов блога");
-        }
-
-        // Check if already blacklisted
-        if (await _repository.IsBlocked(blogId, user.UserId, ct))
-        {
-            throw new HttpException(HttpStatusCode.Conflict, $"Пользователь {username} уже в черном списке");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.RemoveFromBlogAssistantsFirst);
         }
 
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        // Add to blacklist
-        await _repository.Add(blogId, user.UserId, currentUserId, ct);
-
-        // The game keeps the same invariant by refusing to blacklist a member at
-        // all and making the owner remove them first. A blog has no command for
-        // removing a reader, the blacklist is that command, so the entry ends the
-        // subscription itself. Without this the blacklisted user stayed on the
-        // list of readers and kept receiving every publication the blog
-        // announced, while BlogSubscriptionGuard refused them the subscription
-        // they already had.
-        await _subscriptionRepository.DeleteAsync(user.UserId, SubscriptionTargetType.Blog, blogId, ct);
+        // A subscriber stays subscribed. The list closes comments, and a
+        // subscription is reading: the publications it announces are open to the
+        // person anyway. The entry used to end the subscription, which is
+        // the one thing the list is not for.
+        try
+        {
+            await _repository.Add(blogId, user.UserId, currentUserId, ct);
+        }
+        catch (DuplicateEntityException)
+        {
+            // The request that lost the race against an identical one gets the
+            // answer the check above gives, as on the game's list: the person is
+            // on the list either way.
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyInBlacklist);
+        }
 
         // Cancel pending invitations for this user
         var cancelledInvitations = await _repository.CancelInvitationsForUser(blogId, user.UserId, ct);
@@ -115,13 +107,13 @@ internal class BlogBlacklistService : IBlogBlacklistService
     private async Task RemoveFromBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
     {
         var blog = await _blogService.GetBlogAsync(blogId, ct);
-        _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
+        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.Edit, blog, ct);
 
         var user = await _userLookupService.GetAsync(username);
 
-        if (!await _repository.IsBlocked(blogId, user.UserId, ct))
+        if (!blog.IsBlacklisted(user.UserId))
         {
-            throw new HttpException(HttpStatusCode.Conflict, $"Пользователя {username} нет в черном списке");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.NotInBlacklist);
         }
 
         await _repository.Remove(blogId, user.UserId, ct);

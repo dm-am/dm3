@@ -15,6 +15,7 @@ import {
   type ExpandableListColumn,
 } from "@/shared/ui/ExpandableList";
 import { DISCORD_INVITE_URL } from "@/shared/config/contacts";
+import { supportFor } from "@/entities/ticket";
 import RulesIntro from "./RulesIntro.vue";
 import RulesHelpLinks from "./RulesHelpLinks.vue";
 import RulesExternalLinks from "./RulesExternalLinks.vue";
@@ -104,7 +105,8 @@ const penaltiesListRef = useExpandOnHash(penalties);
         Взлом, DDoS, эксплуатация уязвимостей, шантаж и угрозы — перманентный
         бан. Если хотите помочь найти уязвимость, сначала согласуйте с
         администрацией через
-        <router-link to="/support"><strong>форму поддержки</strong></router-link
+        <router-link :to="supportFor('Bug')"
+          ><strong>форму поддержки</strong></router-link
         >. На критические обращения отвечаем в течение 7 дней.
       </template>
 
@@ -123,7 +125,7 @@ const penaltiesListRef = useExpandOnHash(penalties);
         Один человек — один аккаунт. Дополнительные аккаунты банятся навсегда,
         основной получает 6 баллов (0 баллов, если сразу сообщить об ошибке
         через
-        <router-link to="/support"
+        <router-link :to="supportFor('AccountRemoval')"
           ><strong>форму поддержки</strong></router-link
         >
         или

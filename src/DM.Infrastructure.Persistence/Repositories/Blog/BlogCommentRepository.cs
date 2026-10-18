@@ -42,41 +42,50 @@ internal class BlogCommentRepository : IBlogCommentRepository
 
     /// <inheritdoc />
     public Task<Comment?> Get(Guid commentId, CancellationToken ct = default) =>
-        CommentQueries.Single(_dbContext, commentId, "DM.BlogComments.Get", ct);
+        CommentQueries.Single(_dbContext, commentId, CommentQueries.BlogIds(_dbContext), "DM.BlogComments.Get", ct);
+
+    /// <summary>
+    /// The blog's half of the last-comment move.
+    /// </summary>
+    /// <remarks>
+    /// What the statement says and why it says it that way is stated once, on
+    /// <see cref="CommentWrites.Create{TOwner}" />. Only the table is spelled out
+    /// here: EF refuses raw SQL whose text is not a compile-time constant, so the
+    /// three owners cannot share one statement with the table interpolated into it.
+    /// </remarks>
+    private const string MoveLastCommentForwardSql =
+        """
+        UPDATE "Blogs" SET "LastCommentId" = {1}
+        WHERE "BlogId" = {0}
+          AND NOT EXISTS (
+              SELECT 1 FROM "Comments" c
+              WHERE c."CommentId" = "Blogs"."LastCommentId"
+                AND (c."CreatedUtc", c."CommentId") > ({2}, {1}))
+        """;
 
     /// <inheritdoc />
-    public async Task<(Comment comment, Guid commentId)> Create(CreateComment createComment, Guid authorId, Guid blogId, int newCommentCount, CancellationToken ct = default)
+    public async Task<(Comment comment, Guid commentId)> Create(CreateComment createComment, Guid authorId, Guid blogId, CancellationToken ct = default)
     {
         var commentId = _guidFactory.Create();
-        var now = _dateTimeProvider.Now;
 
-        var dbComment = new DbComment
-        {
-            CommentId = commentId,
-            EntityId = blogId,
-            AuthorId = authorId,
-            Text = createComment.Text,
-            CreatedUtc = now,
-            IsRemoved = false
-        };
-
-        _dbContext.Comments.Add(dbComment);
-
-        // Update blog comment count and last comment ID
-        var blog = await _dbContext.Blogs.FindAsync([blogId], ct);
-        if (blog != null)
-        {
-            blog.CommentCount = newCommentCount;
-            blog.LastCommentId = commentId;
-        }
-
-        await _dbContext.SaveChangesAsync(ct);
-
-        var comment = await _dbContext.Comments
-            .TagWith("DM.BlogComments.Created")
-            .Where(c => c.CommentId == commentId)
-            .ProjectToComment()
-            .FirstAsync(ct);
+        var comment = await CommentWrites.Create(
+            _dbContext,
+            _dbContext.Blogs,
+            b => b.BlogId == blogId,
+            b => b.CommentCount,
+            blogId,
+            new DbComment
+            {
+                CommentId = commentId,
+                EntityId = blogId,
+                AuthorId = authorId,
+                Text = createComment.Text,
+                CreatedUtc = _dateTimeProvider.Now,
+                IsRemoved = false
+            },
+            MoveLastCommentForwardSql,
+            "DM.BlogComments.Created",
+            ct);
 
         return (comment, commentId);
     }
@@ -87,59 +96,25 @@ internal class BlogCommentRepository : IBlogCommentRepository
             entity.EditorUserId, entity.LastUpdateUtc, "DM.BlogComments.Updated", ct);
 
     /// <inheritdoc />
-    public async Task<BlogCommentToDelete?> GetForDelete(Guid commentId, CancellationToken ct = default)
-    {
-        var comment = await _dbContext.Comments
+    public Task<BlogCommentToDelete?> GetForDelete(Guid commentId, CancellationToken ct = default) =>
+        CommentQueries.One(_dbContext, commentId, CommentQueries.BlogIds(_dbContext))
             .TagWith("DM.BlogComments.GetForDelete")
-            .Where(c => !c.IsRemoved && c.CommentId == commentId)
             .ProjectToBlogCommentToDelete()
             .FirstOrDefaultAsync(ct);
 
-        if (comment == null) return null;
-
-        var blogInfo = await _dbContext.Blogs
-            .Where(b => b.BlogId == comment.BlogId)
-            .Select(b => new { b.CommentCount, b.LastCommentId })
-            .FirstOrDefaultAsync(ct);
-
-        if (blogInfo != null)
-        {
-            comment.BlogCommentCount = blogInfo.CommentCount;
-            comment.IsLastComment = blogInfo.LastCommentId == commentId;
-        }
-
-        return comment;
-    }
-
     /// <inheritdoc />
-    public Task<Guid?> GetNewestCommentIdExcept(Guid blogId, Guid exceptCommentId, CancellationToken ct = default) =>
-        CommentQueries.NewestExcept(
-            _dbContext, blogId, exceptCommentId, "DM.BlogComments.NewestCommentIdExcept", ct);
-
-    /// <inheritdoc />
-    public async Task Delete(DeleteBlogCommentEntity entity, CancellationToken ct = default)
-    {
-        var dbComment = await _dbContext.Comments.FindAsync([entity.CommentId], ct);
-        if (dbComment != null)
-        {
-            SoftDelete.Mark(dbComment, entity.DeletedByUserId, entity.DeletedUtc);
-        }
-
-        // Update blog comment count and last comment ID. The pointer moves only when
-        // the row it points at is the one going away: the service computes
-        // NewLastCommentId for the last comment and leaves it null for every other,
-        // so assigning it unconditionally erased the pointer whenever somebody
-        // deleted a comment from the middle of the discussion.
-        var blog = await _dbContext.Blogs.FindAsync([entity.BlogId], ct);
-        if (blog != null)
-        {
-            blog.CommentCount = entity.NewCommentCount;
-            if (entity.NewLastCommentId.HasValue || blog.LastCommentId == entity.CommentId)
-            {
-                blog.LastCommentId = entity.NewLastCommentId;
-            }
-        }
-
-        await _dbContext.SaveChangesAsync(ct);
-    }
+    public Task<bool> Delete(DeleteBlogCommentEntity entity, CancellationToken ct = default) =>
+        CommentWrites.Delete(
+            _dbContext,
+            _dbContext.Blogs,
+            b => b.BlogId == entity.BlogId,
+            b => b.BlogId == entity.BlogId && b.LastCommentId == entity.CommentId,
+            b => b.CommentCount,
+            b => b.LastCommentId,
+            entity.BlogId,
+            entity.CommentId,
+            entity.DeletedByUserId,
+            entity.DeletedUtc,
+            "DM.BlogComments.NewestCommentIdExcept",
+            ct);
 }

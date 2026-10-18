@@ -61,6 +61,10 @@ public interface IUsernameChangeRepository
     /// name for: a history row against a user still carrying the old name and, worst
     /// of the three, a renamed user whose request is still pending - which is one
     /// approval spent on two renames.
+    ///
+    /// Throws <see cref="DM.Domain.Core.Exceptions.DuplicateEntityException" /> when
+    /// either unique structure over this write refuses it: the name is taken, or the
+    /// name being left behind is already in the history.
     /// </remarks>
     Task ApplyRename(UsernameChangeRequest request, CreateUsernameHistory history, CancellationToken ct = default);
 

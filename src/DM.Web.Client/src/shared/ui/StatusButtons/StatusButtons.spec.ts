@@ -24,8 +24,11 @@ import { mount, flushPromises } from "@vue/test-utils";
 import StatusButtons from "./StatusButtons.vue";
 import type { StatusTransitionOption } from "./types";
 
+/** The plates raised, one set for the whole file. */
+const plate = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+
 vi.mock("@/shared/lib/composables/useToast", () => ({
-  useToast: () => ({ success: vi.fn(), error: vi.fn() }),
+  useToast: () => plate,
 }));
 
 /** What features/blog-actions/model/transitions.ts offers an active blog. */
@@ -64,7 +67,7 @@ describe("StatusButtons", () => {
       [
         "<!-- Sidebar strip variant -->",
         '<li class="link"><span class="muted" aria-hidden="true">- </span><button type="button" class="strip-action">Заморозить блог</button></li>',
-        '<li class="link"><span class="muted" aria-hidden="true">- </span><button type="button" class="strip-action danger">Закрыть блог</button></li>',
+        '<li class="link"><span class="muted" aria-hidden="true">- </span><button type="button" class="strip-action">Закрыть блог</button></li>',
         "<!--teleport start-->",
         "<!--teleport end-->",
       ].join("\n"),
@@ -78,7 +81,7 @@ describe("StatusButtons", () => {
       [
         "<!-- Sidebar strip variant -->",
         "<!-- Page button-group variant -->",
-        '<div class="status-buttons"><button type="button" class="status-btn">Завершить игру</button><button type="button" class="status-btn">Заморозить игру</button><button type="button" class="status-btn danger">Закрыть игру</button></div>',
+        '<div class="status-buttons"><button type="button" class="status-btn">Завершить игру</button><button type="button" class="status-btn">Заморозить игру</button><button type="button" class="status-btn">Закрыть игру</button></div>',
         "<!--teleport start-->",
         "<!--teleport end-->",
       ].join("\n"),
@@ -98,7 +101,7 @@ describe("StatusButtons", () => {
     await flushPromises();
 
     expect(apply).toHaveBeenCalledWith("Freeze");
-    expect(document.body.textContent).not.toContain("Изменение статуса");
+    expect(document.body.textContent).not.toContain("Статус блога");
   });
 
   it("asks first about a destructive one, in the words of the module", async () => {
@@ -109,18 +112,78 @@ describe("StatusButtons", () => {
 
     expect(apply).not.toHaveBeenCalled();
     const dialog = document.body.textContent ?? "";
-    expect(dialog).toContain("Изменение статуса игры");
-    expect(dialog).toContain(
-      'Действие "Закрыть игру" изменит статус игры. Продолжить?',
-    );
+    // The heading is the pressed button turned into a question, and the button
+    // in the card is its verb alone - the length every confirm button keeps.
+    expect(dialog).toContain("Закрыть игру?");
+    expect(dialog).toContain("Статус игры сменится сразу");
 
     const confirmButton = [...document.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "Закрыть игру",
+      (button) => button.textContent?.trim() === "Закрыть",
     );
     confirmButton?.click();
     await flushPromises();
 
-    expect(apply).toHaveBeenCalledWith("Close");
+    // The question prints a refusal in itself, so the request tells the
+    // interceptor to keep quiet about it.
+    expect(apply).toHaveBeenCalledWith("Close", {
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
+    expect(document.body.textContent).not.toContain("Закрыть игру?");
+  });
+
+  /**
+   * The question used to close before the request went out, and a refusal
+   * came back as a plate over a page that no longer showed what was refused.
+   * It waits for the answer now and says a refusal in itself.
+   */
+  it("keeps the question open with a refusal in it", async () => {
+    const apply = vi.fn().mockResolvedValue({
+      type: "",
+      title: "",
+      status: 404,
+      traceId: "t",
+    });
+    const { wrapper } = render(GAME, "игры", "strip", apply);
+
+    await wrapper.findAll("button")[2].trigger("click");
+    await flushPromises();
+    document.body
+      .querySelector<HTMLButtonElement>(".dialog-btn-submit")
+      ?.click();
+    await flushPromises();
+
+    expect(
+      document.body.querySelector(".dialog-refusal")?.textContent?.trim(),
+    ).toBe("Не удалось изменить статус игры");
+    expect(document.body.textContent).toContain("Закрыть игру?");
+    wrapper.unmount();
+  });
+
+  /**
+   * The strip is a row of the sidebar menu, and a button of a sidebar answers
+   * a refusal with a plate, not with a line under its row (UI_STANDARDS,
+   * "Всплывающие сообщения"). A transition that asks nothing first has no
+   * window to say it in either.
+   */
+  it("answers a refused plain transition with a plate and adds no row", async () => {
+    plate.error.mockClear();
+    const apply = vi.fn().mockResolvedValue({
+      type: "",
+      title: "",
+      status: 404,
+      traceId: "t",
+    });
+    const { wrapper } = render(BLOG, "блога", "strip", apply);
+
+    await wrapper.findAll("button")[0].trigger("click");
+    await flushPromises();
+
+    expect(plate.error).toHaveBeenCalledWith(
+      "Не удалось изменить статус блога",
+    );
+    expect(wrapper.findAll("li")).toHaveLength(BLOG.length);
+    wrapper.unmount();
   });
 
   it("disables the pressed action while the server is answering", async () => {

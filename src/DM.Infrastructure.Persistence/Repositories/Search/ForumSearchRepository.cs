@@ -97,7 +97,7 @@ internal class ForumSearchRepository : IForumSearchRepository
                         .GetResultHeadline(
                             SearchConfig,
                             DmDbContext.RegexpReplace(
-                                EF.Property<string>(t, "SearchText"), PrivateBlockPattern, " ", "gi"),
+                                EF.Property<string>(t, "SearchText"), PrivateBlockPattern, " ", SearchSnippet.PrivateBlockPatternFlags),
                             SearchSnippet.HeadlineOptions),
                 })
                 .ToArrayAsync(ct))
@@ -117,7 +117,7 @@ internal class ForumSearchRepository : IForumSearchRepository
                         .GetResultHeadline(
                             SearchConfig,
                             DmDbContext.RegexpReplace(
-                                EF.Property<string>(c, "SearchText"), PrivateBlockPattern, " ", "gi"),
+                                EF.Property<string>(c, "SearchText"), PrivateBlockPattern, " ", SearchSnippet.PrivateBlockPatternFlags),
                             SearchSnippet.HeadlineOptions),
                 })
                 .ToArrayAsync(ct))

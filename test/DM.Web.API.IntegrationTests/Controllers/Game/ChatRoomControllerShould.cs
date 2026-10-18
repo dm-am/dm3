@@ -121,10 +121,13 @@ public class ChatRoomControllerShould : IntegrationTestBase
     #region GetChatRoomMessages Tests
 
     /// <summary>
-    /// Get chat room messages without authentication should return Unauthorized
+    /// Chat room messages are read without an account, as the posts of a room
+    /// are, so a guest asking for a room that is not there is told it is not
+    /// there rather than asked to sign in. ChatRoomMessagesShould holds what a
+    /// guest reads of a room that is.
     /// </summary>
     [Fact]
-    public async Task GetChatRoomMessages_WhenNotAuthenticated_ReturnsUnauthorized()
+    public async Task GetChatRoomMessages_WhenNotAuthenticated_WithNonExistentId_ReturnsNotFound()
     {
         // Arrange
         var nonExistentId = Guid.NewGuid();
@@ -133,7 +136,7 @@ public class ChatRoomControllerShould : IntegrationTestBase
         var response = await Client.GetAsync($"/v1/chat-rooms/{nonExistentId}/messages");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     #endregion

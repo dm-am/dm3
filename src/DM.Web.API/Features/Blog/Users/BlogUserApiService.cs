@@ -26,14 +26,18 @@ internal class BlogUserApiService : IBlogUserApiService
     {
         var users = new List<BlogUser>();
 
-        // Get author from blog
+        // Get author from blog. A removed owner is nested as nobody (the blog
+        // read keeps the blogs of removed accounts), and a roster names nobody:
+        // the row is left out rather than listed without a person in it.
         var blog = await _blogService.GetAsync(blogId);
-        var author = new BlogUser
-        {
-            User = UserRefMappers.ToUserRef(blog.Author),
-            Role = nameof(BlogRole.Author),
-            JoinedUtc = blog.CreatedUtc
-        };
+        BlogUser? author = blog.Author is null
+            ? null
+            : new BlogUser
+            {
+                User = UserRefMappers.ToUserRef(blog.Author),
+                Role = nameof(BlogRole.Author),
+                JoinedUtc = blog.CreatedUtc
+            };
 
         // Get mentor if assigned
         BlogUser? mentor = null;
@@ -68,7 +72,7 @@ internal class BlogUserApiService : IBlogUserApiService
         // Apply role filter or return all
         if (role == null)
         {
-            users.Add(author);
+            if (author != null) users.Add(author);
             if (mentor != null) users.Add(mentor);
             users.AddRange(assistantDtos);
             users.AddRange(readerDtos);
@@ -82,7 +86,7 @@ internal class BlogUserApiService : IBlogUserApiService
             switch (role.Value)
             {
                 case BlogRole.Author:
-                    users.Add(author);
+                    if (author != null) users.Add(author);
                     break;
                 case BlogRole.Mentor:
                     if (mentor != null) users.Add(mentor);
@@ -102,8 +106,8 @@ internal class BlogUserApiService : IBlogUserApiService
     /// <inheritdoc />
     public async Task RemoveUser(Guid blogId, Guid userId)
     {
-        // Only assistants can be removed - readers can only unsubscribe themselves
-        // Use blacklist for problematic readers
+        // Only assistants can be removed - readers can only unsubscribe themselves.
+        // The blacklist does not remove one either: it closes writing, not reading.
         var assistants = await _blogService.GetAssistants(blogId);
         var assistant = assistants.FirstOrDefault(a => a.User.UserId == userId);
         if (assistant != null)

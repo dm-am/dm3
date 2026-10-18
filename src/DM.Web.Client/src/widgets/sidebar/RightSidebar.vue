@@ -1,21 +1,25 @@
 <template>
-  <nav aria-label="Опросы, игры, блоги и контакты">
+  <nav :aria-label="label">
     <ul class="blocks">
       <SiteAddresses />
       <ActivePolls />
       <PopularGames />
       <PopularBlogs />
       <GameTagCloud />
-      <ContactLinks />
-      <SupportPanel />
-      <PartnersPanel />
-      <SocialsPanel />
+    </ul>
+    <RightSidebarTail />
+    <!-- On a narrow screen the column slides in over the page, and the
+         documents of the footer, a page away there, close it. -->
+    <ul v-if="narrow" class="blocks">
+      <LegalLinks />
     </ul>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent } from "vue";
+import { computed, defineAsyncComponent } from "vue";
+import { useShellMode } from "@/shared/lib/composables/useShellMode";
+import RightSidebarTail from "./RightSidebarTail.vue";
 
 // Critical above-fold components - load synchronously.
 // SiteAddresses leads the column, so deferring it would land it a frame later
@@ -28,10 +32,15 @@ import PopularGames from "./PopularGames.vue";
 // Below-fold components - lazy load to reduce initial bundle
 const PopularBlogs = defineAsyncComponent(() => import("./PopularBlogs.vue"));
 const GameTagCloud = defineAsyncComponent(() => import("./GameTagCloud.vue"));
-const ContactLinks = defineAsyncComponent(() => import("./ContactLinks.vue"));
-const SupportPanel = defineAsyncComponent(() => import("./SupportPanel.vue"));
-const PartnersPanel = defineAsyncComponent(() => import("./PartnersPanel.vue"));
-const SocialsPanel = defineAsyncComponent(() => import("./SocialsPanel.vue"));
+const LegalLinks = defineAsyncComponent(() => import("./LegalLinks.vue"));
+
+const { narrow } = useShellMode();
+
+const label = computed(() =>
+  narrow.value
+    ? "Опросы, игры, блоги, контакты и документы"
+    : "Опросы, игры, блоги и контакты",
+);
 </script>
 
 <style scoped lang="sass">

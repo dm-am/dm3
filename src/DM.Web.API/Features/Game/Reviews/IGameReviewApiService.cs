@@ -32,10 +32,11 @@ public interface IGameReviewApiService
     Task<ListEnvelope<GameReviewDto>> GetWrittenByUser(string username, UserGameReviewsQuery query);
 
     /// <summary>
-    /// Get a single game review
+    /// Get a single review of the game
     /// </summary>
+    /// <param name="gameId">Game identifier</param>
     /// <param name="reviewId">Review identifier</param>
-    Task<Envelope<GameReviewDto>> Get(Guid reviewId);
+    Task<Envelope<GameReviewDto>> Get(Guid gameId, Guid reviewId);
 
     /// <summary>
     /// Create a review for a game
@@ -43,4 +44,17 @@ public interface IGameReviewApiService
     /// <param name="gameId">Game identifier</param>
     /// <param name="request">Review data</param>
     Task<Envelope<GameReviewDto>> Create(Guid gameId, CreateGameReviewRequest request);
+
+    /// <summary>
+    /// Update a game review the caller authored
+    /// </summary>
+    /// <param name="reviewId">Review identifier</param>
+    /// <param name="request">Fields to change</param>
+    Task<Envelope<GameReviewDto>> Update(Guid reviewId, UpdateGameReviewRequest request);
+
+    /// <summary>
+    /// Delete a game review: its author, or a senior moderator
+    /// </summary>
+    /// <param name="reviewId">Review identifier</param>
+    Task Delete(Guid reviewId);
 }

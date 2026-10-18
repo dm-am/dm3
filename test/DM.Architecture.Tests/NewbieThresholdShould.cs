@@ -28,9 +28,6 @@ public class NewbieThresholdShould
 {
     private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
-    private static string Read(params string[] parts) =>
-        File.ReadAllText(Path.Combine(RepositoryRoot, Path.Combine(parts)));
-
     /// <summary>The SQL the column computes, as the sources spell it.</summary>
     private static string Expression =>
         $"\\\"QuantityRating\\\" < {ProbationPolicy.NewbiePostThreshold}";
@@ -38,7 +35,7 @@ public class NewbieThresholdShould
     [Fact]
     public void BeTheNumberTheStoredColumnComputes()
     {
-        Read("src", "DM.Infrastructure.Persistence", "DmDbContext.cs")
+        SchemaSources.ModelText
             .Should().Contain($".HasComputedColumnSql(\"{Expression}\", stored: true)",
                 "the model is where the column is declared");
 
@@ -72,6 +69,7 @@ public class NewbieThresholdShould
     [Fact]
     public void BeSpelledNowhereElse()
     {
+        var model = SchemaSources.ModelFiles.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var rules = new[]
         {
             new Regex(@"QuantityRating(\\?"")?\s*[<>]=?\s*\d", RegexOptions.Compiled),
@@ -86,8 +84,8 @@ public class NewbieThresholdShould
                        && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
                            StringComparison.Ordinal)
                        && !path.Contains($"{Path.DirectorySeparatorChar}Migrations{Path.DirectorySeparatorChar}",
-                           StringComparison.Ordinal)
-                       && Path.GetFileName(path) != "DmDbContext.cs")
+                           StringComparison.Ordinal))
+            .Where(path => !model.Contains(Path.GetFullPath(path)))
             .Where(path => Path.GetFileName(path) != "ProbationPolicy.cs")
             .Where(path => rules.Any(rule => rule.IsMatch(File.ReadAllText(path))))
             .Select(Path.GetFileName)

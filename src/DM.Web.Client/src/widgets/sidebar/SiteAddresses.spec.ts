@@ -20,6 +20,7 @@ import { nextTick, reactive } from "vue";
 import { SITE_ADDRESSES } from "@/shared/config/site";
 import type { AddressPing } from "@/shared/lib/composables/useAddressPing";
 import SiteAddresses from "./SiteAddresses.vue";
+import Tooltip from "@/shared/ui/Tooltip/Tooltip.vue";
 
 // useRoute reads an injection rather than $route, so a mocked property on the
 // instance never reaches it. The module is what has to answer.
@@ -128,34 +129,45 @@ describe("the site address block", () => {
     );
   });
 
-  it("lays every row's cells into one grid container", () => {
-    // One grid on the block, not one per row: the columns must land on the
-    // same x in every row, and only shared tracks guarantee that. So the
-    // link, the scale and the ms cell of every row are direct children of
-    // the single board element.
+  it("lays every address out as a table row of name, scale and ms", () => {
+    // A CSS table and not a grid of cells: columns line up by nature, and a
+    // row copies as one line with its cells apart, where grid items copy as a
+    // line each and a converter to markdown glued the whole board into one
+    // bullet ("[Основной сервер](...)450 мс[RU-прокси](...)250 мс").
+    // Spans and not table markup: a reader hears the links and their status
+    // sentences, not a table. One row per address, three cells in reading
+    // order; the scale's cell holds the tooltip trigger with the scale inside.
+    // The display values themselves are the copy gate's business.
     onHost(main.host);
     const board = render("/").find("li.site-addresses");
     expect(board.exists()).toBe(true);
+    expect(board.find("table").exists()).toBe(false);
 
-    const children = Array.from(board.element.children);
-    const of = (selector: string) =>
-      children.filter((child) => child.matches(selector)).length;
-    expect(of("span.address-cell")).toBe(SITE_ADDRESSES.length);
-    expect(of(".signal")).toBe(SITE_ADDRESSES.length);
-    expect(of(".latency")).toBe(SITE_ADDRESSES.length);
+    const rows = board.findAll(":scope > .address-row");
+    expect(rows).toHaveLength(SITE_ADDRESSES.length);
+    for (const row of rows) {
+      const cells = row.findAll(":scope > span");
+      expect(cells.map((cell) => cell.classes()[0])).toEqual([
+        "address-cell",
+        "signal-cell",
+        "latency",
+      ]);
+      expect(cells[0].find("a.address-link").exists()).toBe(true);
+      expect(cells[1].find(".tooltip-trigger .signal").exists()).toBe(true);
+    }
   });
 });
 
 describe("the state board", () => {
-  it("reserves the ms cell with a dash until the first measurement lands", () => {
+  it("holds the ms cell with an ellipsis until the first measurement lands", () => {
     // The track is there from the first render, so nothing jumps when the
-    // number arrives; the dash says "not measured", not "not answering".
+    // number arrives; the ellipsis says "measuring", not "not answering".
     onHost(main.host);
     const cells = render("/").findAll(".latency");
 
     expect(cells).toHaveLength(SITE_ADDRESSES.length);
     for (const cell of cells) {
-      expect(cell.text()).toBe("-");
+      expect(cell.text()).toBe("...");
     }
   });
 
@@ -163,11 +175,12 @@ describe("the state board", () => {
     onHost(main.host);
     const wrapper = render("/");
     pings[main.host] = { status: "up", latencyMs: 42 };
-    pings[second.host] = { status: "up", latencyMs: 200 };
+    pings[second.host] = { status: "up", latencyMs: 196 };
     await nextTick();
 
+    // Whole tens: a figure changing by units on every look reads as an event.
     expect(wrapper.findAll(".latency").map((cell) => cell.text())).toEqual([
-      "42 мс",
+      "40 мс",
       "200 мс",
     ]);
 
@@ -176,12 +189,14 @@ describe("the state board", () => {
     expect(signals[0].findAll(".bar")).toHaveLength(4);
     expect(signals[0].findAll(".bar.filled")).toHaveLength(4);
     expect(signals[1].findAll(".bar.filled")).toHaveLength(2);
-    expect(signals[0].attributes("title")).toBe(
-      "отвечает из вашей сети, 42 мс",
+    // The sentence is the site's tooltip on the scale, not the browser's
+    // title: the title never showed for a finger or a keyboard.
+    expect(wrapper.findAllComponents(Tooltip)[0].props("text")).toBe(
+      "Скорость ответа из вашей сети",
     );
   });
 
-  it("turns the comb red and keeps the dash for an address that does not answer", async () => {
+  it("turns the comb red and says нет for an address that does not answer", async () => {
     onHost(main.host);
     const wrapper = render("/");
     pings[main.host] = { status: "up", latencyMs: 42 };
@@ -192,12 +207,14 @@ describe("the state board", () => {
     expect(signal.classes()).toContain("down");
     expect(signal.findAll(".bar")).toHaveLength(4);
     expect(signal.findAll(".bar.filled")).toHaveLength(0);
-    expect(signal.attributes("title")).toBe("не отвечает из вашей сети");
-    expect(wrapper.findAll(".latency")[1].text()).toBe("-");
+    expect(wrapper.findAllComponents(Tooltip)[1].props("text")).toBe(
+      "Не отвечает из вашей сети",
+    );
+    expect(wrapper.findAll(".latency")[1].text()).toBe("нет");
   });
 
   it("says nothing visible about state", async () => {
-    // The numbers say it. The words live only in the scale's title and the
+    // The numbers say it. The words live only in the scale's tooltip and the
     // screen-reader span; the visible copy is the names and the figures, and
     // no row is marked as "the one you are on".
     onHost(main.host);
@@ -214,8 +231,9 @@ describe("the state board", () => {
 
     expect(wrapper.find("strong").exists()).toBe(false);
     expect(wrapper.find("b").exists()).toBe(false);
-    for (const titled of wrapper.findAll("[title]")) {
-      expect(titled.classes()).toContain("signal");
-    }
+    // No browser title anywhere: a title bubble is not the site's tooltip, and
+    // a state sentence in one would come back through the clipboard of a
+    // hover as well as look foreign.
+    expect(wrapper.findAll("[title]")).toHaveLength(0);
   });
 });

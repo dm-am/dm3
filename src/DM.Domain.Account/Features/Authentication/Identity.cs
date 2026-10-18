@@ -28,14 +28,40 @@ public class Identity : IIdentity
     /// <inheritdoc />
     public Guid? TwoFactorChallengeId { get; private init; }
 
+    /// <inheritdoc />
+    public int? LockoutSecondsRemaining { get; private init; }
+
+    /// <inheritdoc />
+    public DateTimeOffset? BanEndsUtc { get; private init; }
+
     /// <summary>
     /// Creates identity for an unauthenticated user
     /// </summary>
     /// <param name="error">Authentication error</param>
+    /// <param name="lockoutSecondsRemaining">
+    /// Seconds left on the lockout, for the one error that has them.
+    /// </param>
     /// <returns>Unauthenticated user identity</returns>
-    public static IIdentity Fail(AuthenticationError error) => new Identity
+    public static IIdentity Fail(
+        AuthenticationError error, int? lockoutSecondsRemaining = null) => new Identity
+        {
+            Error = error,
+            LockoutSecondsRemaining = lockoutSecondsRemaining,
+            User = AuthenticatedUser.Guest,
+            Settings = UserSettings.Default,
+            AuthenticationToken = null,
+            Session = null
+        };
+
+    /// <summary>
+    /// Creates the identity of a sign-in refused by a full ban
+    /// </summary>
+    /// <param name="endsUtc">When the ban runs out, or null for one with no end</param>
+    /// <returns>Unauthenticated user identity carrying the ban's end</returns>
+    public static IIdentity Banned(DateTimeOffset? endsUtc) => new Identity
     {
-        Error = error,
+        Error = AuthenticationError.Banned,
+        BanEndsUtc = endsUtc,
         User = AuthenticatedUser.Guest,
         Settings = UserSettings.Default,
         AuthenticationToken = null,

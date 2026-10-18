@@ -19,7 +19,8 @@ public interface IBotLinkService
 
     /// <summary>
     /// Verify a linking code from a bot and connect the external account.
-    /// Called by the bot when user sends /connect CODE.
+    /// Called by the bot when user sends /connect CODE, and by the Telegram bot
+    /// also on /start CODE, which a deep link t.me/bot?start=CODE sends.
     /// </summary>
     Task<BotLinkResult> VerifyAndLink(string code, string channelType, string externalId, CancellationToken ct = default);
 

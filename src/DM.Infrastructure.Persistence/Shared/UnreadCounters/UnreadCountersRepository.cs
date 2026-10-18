@@ -355,10 +355,10 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
     }
 
     /// <inheritdoc />
-    public async Task ChangeParentAsync(Guid parentId, UnreadEntryType entryType, Guid newParentId)
+    public async Task ChangeParentAsync(Guid entityId, UnreadEntryType entryType, Guid newParentId)
     {
         await _dbContext.UnreadCounters
-            .Where(c => c.ParentId == parentId && c.EntryType == entryType)
+            .Where(c => c.EntityId == entityId && c.EntryType == entryType)
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.ParentId, newParentId));
     }
 

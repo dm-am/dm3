@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using DM.Domain.Core.Enums;
+using DM.Domain.Moderation.Features.Tickets;
 using DM.Infrastructure.Persistence;
 using DM.Domain.Personal.Features.Notifications;
 using Microsoft.EntityFrameworkCore;
@@ -10,8 +11,18 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Moderation;
 
 /// <summary>
 /// Generates notification when a new moderation ticket is created.
-/// Notifies moderators about the new ticket.
+/// Notifies the moderators the ticket is moderation's business of.
 /// </summary>
+/// <remarks>
+/// The notification carries the text of the ticket and the name of its author, so
+/// its audience is the audience of the ticket itself, by the one rule the ticket
+/// service and the queue read (TicketVisibility): a moderator whose role reads the
+/// category and who is not the violator it names. Every moderator on duty used to
+/// be told, and so a junior moderator read the text of an access recovery request
+/// he cannot open, and a moderator read a complaint about himself together with
+/// the name of whoever filed it. The author is left out as well: a moderator who
+/// filed a complaint has nothing to learn from its filing.
+/// </remarks>
 internal class TicketCreatedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
@@ -33,6 +44,7 @@ internal class TicketCreatedNotificationGenerator : BaseNotificationGenerator
             .Select(t => new
             {
                 t.TicketId,
+                t.Subtype,
                 t.Description,
                 t.TargetId,
                 TargetUsername = t.Target != null ? t.Target.Username : null,
@@ -48,13 +60,20 @@ internal class TicketCreatedNotificationGenerator : BaseNotificationGenerator
         }
 
         // Staff, by the ordinal comparison every other role check in the codebase
-        // uses. The enumerated form it replaces had to be edited by hand for every
-        // new role, and System is excluded because the robot account cannot read.
-        var moderatorIds = await _dbContext.Users
+        // uses, and System is excluded because the robot account cannot read. This
+        // only narrows the read: who of the staff is told is TicketVisibility's
+        // answer, asked of each below, and the staff of a site is a handful of rows.
+        var staff = await _dbContext.Users
             .Where(u => !u.IsRemoved)
             .Where(u => u.Role >= UserRole.Moderator && u.Role < UserRole.System)
-            .Select(u => u.UserId)
+            .Select(u => new { u.UserId, u.Role })
             .ToArrayAsync();
+
+        var moderatorIds = staff
+            .Where(u => u.UserId != ticketData.UserId)
+            .Where(u => TicketVisibility.Moderates(u.UserId, u.Role, ticketData.Subtype, ticketData.TargetId))
+            .Select(u => u.UserId)
+            .ToArray();
 
         if (moderatorIds.Length == 0)
         {

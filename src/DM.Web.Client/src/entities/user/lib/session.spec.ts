@@ -61,6 +61,7 @@ import {
   signOut,
   signOutAll,
   fetchUser,
+  restoreSession,
 } from "./session";
 
 const viewer = { id: "user-1", username: "SolohinLex" };
@@ -110,6 +111,9 @@ beforeEach(() => {
 });
 
 describe("signOut", () => {
+  // The viewer stays in, and the saying is left to the interceptor: a request
+  // that never reached the server is announced once, by the sentence that knows
+  // the other address of the site.
   it("keeps the session the server never confirmed it ended", async () => {
     const auth = signedIn();
     mockSignOut.mockResolvedValue(lost());
@@ -118,7 +122,7 @@ describe("signOut", () => {
 
     expect(auth.isAuthenticated).toBe(true);
     expect(localStorage.getItem("user")).not.toBeNull();
-    expect(messages()).toEqual(["Не удалось выйти"]);
+    expect(messages()).toEqual([]);
   });
 
   it("drops the viewer once the server confirms", async () => {
@@ -142,7 +146,8 @@ describe("signOutAll", () => {
 
     expect(mockSignOut).not.toHaveBeenCalled();
     expect(auth.isAuthenticated).toBe(true);
-    expect(messages()).toEqual(["Не удалось выйти со всех устройств"]);
+    // Said once, by the interceptor: see the sign-out case above.
+    expect(messages()).toEqual([]);
   });
 
   it("ends this session after the others are gone", async () => {
@@ -269,5 +274,59 @@ describe("fetchUser", () => {
 
     expect(auth.isAuthenticated).toBe(true);
     expect(localStorage.getItem("user")).not.toBeNull();
+  });
+});
+
+/**
+ * The browser may hold nobody while the cookie holds a session: site data
+ * cleared, a sign-in on another address of the site. The page used to take the
+ * empty copy for the answer and drew a guest over a live session until the
+ * reader signed in again.
+ */
+describe("restoreSession", () => {
+  it("signs the page in when the server holds a session the browser forgot", async () => {
+    mockGetMyProfile.mockResolvedValue({ data: viewer, error: null });
+
+    await restoreSession();
+
+    expect(useAuthStore().user?.username).toBe("SolohinLex");
+    expect(JSON.parse(localStorage.getItem("user") ?? "null")).toMatchObject(
+      viewer,
+    );
+    // Asked as a probe: its 401 is a guest, not an expired session.
+    expect(mockGetMyProfile).toHaveBeenCalledWith({ probesSession: true });
+  });
+
+  it("leaves a guest a guest, without a word, when the server says nobody", async () => {
+    mockGetMyProfile.mockResolvedValue(refused(401));
+
+    await restoreSession();
+
+    expect(useAuthStore().isAuthenticated).toBe(false);
+    expect(localStorage.getItem("user")).toBeNull();
+    expect(messages()).toEqual([]);
+  });
+
+  it("asks once, however many times the page asks", async () => {
+    mockGetMyProfile.mockResolvedValue(refused(401));
+
+    await Promise.all([restoreSession(), restoreSession()]);
+    await restoreSession();
+
+    expect(mockGetMyProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes a stored viewer the way the refresh always did", async () => {
+    signedIn();
+    mockGetMyProfile.mockResolvedValue({
+      data: { ...viewer, username: "Solohin" },
+      error: null,
+    });
+
+    await restoreSession();
+
+    expect(useAuthStore().user?.username).toBe("Solohin");
+    // Not a probe: a 401 here is a session that ran out, and says so.
+    expect(mockGetMyProfile).toHaveBeenCalledWith();
   });
 });

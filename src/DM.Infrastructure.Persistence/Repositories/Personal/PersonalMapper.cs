@@ -34,6 +34,7 @@ internal static class PersonalMapper
     {
         Id = settings.UserId,
         Theme = settings.Theme,
+        TimeZoneId = settings.TimeZoneId,
         Paging = new PagingSettings
         {
             TopicsPerPage = settings.TopicsPerPage,

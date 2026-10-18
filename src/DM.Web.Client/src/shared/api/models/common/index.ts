@@ -15,9 +15,6 @@ export * from "./message";
 // Shared ID types (for FSD compliance - shared modules use these instead of entity imports)
 export * from "./ids";
 
-// Quotation source (one shape for every surface that can be quoted)
-export * from "./quote";
-
 export type PagingInfo = {
   pages: number;
   current: number;
@@ -69,6 +66,16 @@ export type GeneralError = {
   title: string;
   status: number;
   traceId: string;
+  /**
+   * Whole seconds the server asked the caller to wait.
+   *
+   * Two sources, one field. A 429 states the wait in the Retry-After header
+   * alone, and a form that counts it down never sees the response, so the
+   * transport puts the number here on its way past. The lockout after too many
+   * wrong passwords is a 403 and writes the same number into the document
+   * itself, where it arrives under this name already.
+   */
+  retryAfterSeconds?: number;
 };
 
 /**

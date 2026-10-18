@@ -2,60 +2,43 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text.RegularExpressions;
+using DM.Domain.Core.Enums;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
 
 /// <summary>
-/// One event is called one thing, in the list and in the letter about it.
+/// One event is called one thing, in the list and in the letter about it, and the
+/// client calls it nothing at all.
 /// </summary>
 /// <remarks>
-/// Every outbound channel takes its wording from NotificationText, and the
-/// notification list took its own from a switch on the page. The two tables had
-/// drifted on fourteen events at once: the like the list called "Лайк топика"
-/// arrived by mail as "Лайк на топик", and a blog invitation the list named had
-/// no subject line at all and went out titled "Уведомление". Nothing links the
-/// two files and no compiler can, so the reader was the first place the two
-/// names met.
+/// Every outbound channel takes its wording from NotificationWording, and the
+/// notification list used to take its own from a table on the client. The two
+/// tables drifted on fourteen events at once: the like the list called "Лайк
+/// топика" arrived by mail as "Лайк на топик", and a blog invitation the list
+/// named had no subject line at all and went out titled "Уведомление". Later the
+/// client table was kept a subset of the server one and paired with it from here,
+/// and the list still called 35 of 59 events "Уведомление", because nobody
+/// remembered the client when the server learned a new event.
 ///
-/// Neither tier can import the other, so the pair is held from outside: the
-/// client table is read from its source and put to GetTitle. The rest of the
-/// suite is what makes that pairing worth having. One test keeps the words
-/// inside the notification slice, so there is nowhere else for a second set of
-/// them to appear. Two more hold the vocabulary they are keyed by: the client
-/// spells an event the way the server spells it, and spells it once. That pair
-/// answers a second, numeric copy of the enum that lived in shared/api, where
-/// NewPoll had drifted to 51 — the server's slot for DeletedPublicationComment —
-/// and the wire it was written against, where the hub sent the event as its
-/// number while the list sent its name.
+/// So the list row arrives titled: the server writes the title from the same
+/// table the letter is written from, and the client shows it. What is left to
+/// hold is the boundary itself. No client source gives a word to an event, in
+/// the shapes a second table took (a row keyed by the enum, a switch arm that
+/// answers one with a literal) or under another name (a table keyed by the
+/// server's event names). Two more rules hold the vocabulary the client still
+/// needs to react to a push: it spells an event the way the server spells it,
+/// and spells it once. That pair answers a second, numeric copy of the enum that
+/// lived in shared/api, where NewPoll had drifted to 51 — the server's slot for
+/// DeletedPublicationComment — and the wire it was written against, where the
+/// hub sent the event as its number while the list sent its name.
 /// </remarks>
 public class NotificationVocabularyShould
 {
-    private const string SharedType =
-        "DM.Workers.NotificationDispatcher.Dispatching.NotificationText";
-
-    /// <summary>
-    /// EventType.Unknown: an event with no title of its own. Spelled by value
-    /// because the enum is reached through the signature of the method it keys,
-    /// which keeps this suite off a reference to the domain.
-    /// </summary>
-    private const int UntitledEvent = 0;
-
-    private static readonly Assembly Dispatcher =
-        typeof(DM.Workers.NotificationDispatcher.Startup).Assembly;
-
     private static readonly string ClientSource =
         Path.Combine("src", "DM.Web.Client", "src");
-
-    /// <summary>The slice that owns the client half of the table.</summary>
-    private static readonly string NotificationSlice =
-        Path.Combine(ClientSource, "entities", "notification");
-
-    private static readonly string ClientTitleTable =
-        Path.Combine(NotificationSlice, "lib", "notificationTitle.ts");
 
     /// <summary>The one place the client is allowed to spell the server's events.</summary>
     private static readonly string ClientEventTable =
@@ -67,22 +50,22 @@ public class NotificationVocabularyShould
     /// </summary>
     private const int MembersThatMakeACopy = 3;
 
-    /// <summary>One row of the client table: [NotificationType.X]: "Y".</summary>
-    private static readonly Regex ClientRow = new(
-        @"\[NotificationType\.(\w+)\]:\s*""([^""]+)""", RegexOptions.Compiled);
-
-    /// <summary>The word the client falls back to.</summary>
-    private static readonly Regex ClientFallback = new(
-        @"UNKNOWN_TITLE\s*=\s*""([^""]+)""", RegexOptions.Compiled);
-
     /// <summary>
-    /// A word given to an event: a table row [NotificationType.X]: "..." or a
-    /// switch arm that answers one with a literal. Both are shapes the drift
-    /// actually took. Naming an event to decide what to do about it is not one of
-    /// them, and a screen reacting to a push does exactly that.
+    /// A word given to an event through the enum: a table row [NotificationType.X]:
+    /// "..." or a switch arm that answers one with a literal. Both are shapes the
+    /// drift actually took. Naming an event to decide what to do about it is not
+    /// one of them, and a screen reacting to a push does exactly that.
     /// </summary>
     private static readonly Regex TitlesAnEvent = new(
-        @"NotificationType\.\w+\s*\]?\s*:\s*(return\s+)?""", RegexOptions.Compiled);
+        @"NotificationType\.\w+\s*\]?\s*:\s*(return\s+)?[""'`]", RegexOptions.Compiled);
+
+    /// <summary>
+    /// A row of a table keyed by an event's bare name and answered with words:
+    /// NewTopic: "Новый топик". Read per line, and counted against the server's
+    /// names, because a key alone is any identifier.
+    /// </summary>
+    private static readonly Regex WordedRow = new(
+        @"^\s*[""']?(\w+)[""']?\s*:\s*[""'`]\s*[А-Яа-я]", RegexOptions.Compiled | RegexOptions.Multiline);
 
     /// <summary>Any TypeScript enum: its name and its body.</summary>
     private static readonly Regex TypeScriptEnum = new(
@@ -95,76 +78,80 @@ public class NotificationVocabularyShould
     /// <summary>A line comment, dropped so a commented-out member is not read as one.</summary>
     private static readonly Regex LineComment = new(@"//[^\r\n]*", RegexOptions.Compiled);
 
+    /// <summary>
+    /// The shapes the client tables were written in, kept here so the two patterns
+    /// above are shown to find them: a rule that matches nothing passes, and the
+    /// tables they were written against are gone.
+    /// </summary>
+    private const string FormerTitleTable = """
+        const TITLES: Partial<Record<NotificationType, string>> = {
+          [NotificationType.LikedTopic]: "Лайк на топик",
+        };
+        switch (type) {
+          case NotificationType.BanIssued: return "Выдан бан";
+        }
+        const RENAMED = {
+          NewTopic: "Новый топик на форуме",
+          LikedTopic: "Лайк на топик",
+          BanIssued: "Выдан бан",
+        };
+        """;
+
+    /// <summary>What a screen reacting to a push writes, which is no title.</summary>
+    private const string PushReaction = """
+        if (notification.eventType === NotificationType.NewMessage) void refresh();
+        switch (notification.eventType) {
+          case NotificationType.GlobalChatEventStarted:
+            onEvent(notification.payload);
+            break;
+        }
+        const routes = { name: "notifications", title: "Уведомления" };
+        """;
+
     [Fact]
-    public void TitleAnEventTheSameWayInEveryChannel()
+    public void KnowTheShapesOfATitleTable()
     {
-        var table = File.ReadAllText(Path.Combine(RepositoryRoot, ClientTitleTable));
-        var rows = ClientRow.Matches(table);
-        rows.Count.Should().BeGreaterThan(10,
-            "a rule that matches nothing passes: the list titles more than ten events");
+        TitlesAnEvent.Matches(FormerTitleTable).Should().HaveCount(2,
+            "the row keyed by the enum and the switch arm are the two shapes the first table took");
+        WordedRows(FormerTitleTable).Should().BeEquivalentTo(
+            new[] { "NewTopic", "LikedTopic", "BanIssued" },
+            "a table keyed by the server's names is the same table under another name");
 
-        var getTitle = Titles;
-        var events = ServerEvents;
-
-        var drift = new List<string>();
-        foreach (Match row in rows)
-        {
-            var name = row.Groups[1].Value;
-            var shown = row.Groups[2].Value;
-
-            if (!Enum.TryParse(events, name, false, out var answered))
-            {
-                drift.Add($"{name}: the dispatcher has no such event");
-                continue;
-            }
-
-            var sent = (string)getTitle.Invoke(null, new[] { answered })!;
-            if (sent != shown)
-            {
-                drift.Add($"{name}: \"{shown}\" in the list, \"{sent}\" in the letter");
-            }
-        }
-
-        var fallback = ClientFallback.Match(table);
-        fallback.Success.Should().BeTrue(
-            "the list needs a word for an event it has no title for");
-
-        var untitled = (string)getTitle.Invoke(
-            null, new[] { Enum.ToObject(events, UntitledEvent) })!;
-        if (fallback.Groups[1].Value != untitled)
-        {
-            drift.Add(
-                $"an untitled event: \"{fallback.Groups[1].Value}\" in the list, " +
-                $"\"{untitled}\" in the letter");
-        }
-
-        drift.Should().BeEmpty(
-            "a second word for one event is not a synonym: the list and the letter " +
-            "reach the same person minutes apart, and he is given both");
+        TitlesAnEvent.IsMatch(PushReaction).Should().BeFalse(
+            "naming an event to react to it gives it no word");
+        WordedRows(PushReaction).Should().BeEmpty(
+            "an object keyed by words that are not events is not a table of titles");
     }
 
     [Fact]
-    public void TitleAnEventOnlyInTheNotificationSlice()
+    public void TitleNoEventOnTheClient()
     {
         var root = RepositoryRoot;
-        var slice = Path.Combine(root, NotificationSlice);
+        var files = SourceFiles(Path.Combine(root, ClientSource)).ToArray();
+        files.Should().HaveCountGreaterThan(100,
+            "a rule that reads nothing passes: the client has hundreds of sources");
 
-        var titling = SourceFiles(Path.Combine(root, ClientSource))
-            .Where(file => TitlesAnEvent.IsMatch(File.ReadAllText(file)))
-            .ToArray();
+        var titling = new List<string>();
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(file);
+            var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+            if (TitlesAnEvent.IsMatch(source))
+            {
+                titling.Add($"{relative}: a word given to NotificationType");
+            }
 
-        titling
-            .Where(file => file.StartsWith(slice, StringComparison.Ordinal))
-            .Should().NotBeEmpty(
-                "a rule that matches nothing passes: the slice keys its titles by the enum");
+            var rows = WordedRows(source);
+            if (rows.Count >= MembersThatMakeACopy)
+            {
+                titling.Add($"{relative}: words for {string.Join(", ", rows)}");
+            }
+        }
 
-        titling
-            .Where(file => !file.StartsWith(slice, StringComparison.Ordinal))
-            .Select(file => Path.GetRelativePath(root, file).Replace('\\', '/'))
-            .Should().BeEmpty(
-                "a screen that puts a word next to an event sooner or later puts its " +
-                "own word there; the words are imported from the notification entity " +
-                "instead");
+        titling.Should().BeEmpty(
+            "the list row arrives titled from the table the letter is written from; a " +
+            "word for an event on the client is a second table, and the second table is " +
+            "how one event came to have two names and 35 events none");
     }
 
     /// <summary>
@@ -190,7 +177,7 @@ public class NotificationVocabularyShould
         var drift = new List<string>();
         foreach (var (name, value) in members)
         {
-            if (!Enum.TryParse(ServerEvents, name, false, out _))
+            if (!Enum.TryParse<EventType>(name, false, out _))
             {
                 drift.Add($"{name}: the server has no event of that name");
             }
@@ -226,7 +213,7 @@ public class NotificationVocabularyShould
             foreach (Match declaration in TypeScriptEnum.Matches(File.ReadAllText(file)))
             {
                 var known = Members(declaration.Groups[2].Value)
-                    .Count(member => Enum.TryParse(ServerEvents, member.Name, false, out _));
+                    .Count(member => Enum.TryParse<EventType>(member.Name, false, out _));
                 if (known >= MembersThatMakeACopy)
                 {
                     copies.Add(Path.GetRelativePath(root, file).Replace('\\', '/'));
@@ -239,15 +226,17 @@ public class NotificationVocabularyShould
             "second copy is where NewPoll came to mean DeletedPublicationComment");
     }
 
-    /// <summary>The dispatcher's title table, reached by reflection.</summary>
-    private static MethodInfo Titles => Dispatcher.GetType(SharedType, throwOnError: true)!
-        .GetMethod("GetTitle", BindingFlags.Public | BindingFlags.Static)!;
-
     /// <summary>
-    /// The server's event vocabulary, taken from the signature of the method it
-    /// keys rather than from a reference to the domain.
+    /// The server's event names a source gives words to, one per row keyed by the
+    /// bare name. Unknown is left out: it is the fallback, not an event.
     /// </summary>
-    private static Type ServerEvents => Titles.GetParameters()[0].ParameterType;
+    private static List<string> WordedRows(string source) =>
+        WordedRow.Matches(LineComment.Replace(source, string.Empty))
+            .Select(row => row.Groups[1].Value)
+            .Where(name => name != nameof(EventType.Unknown)
+                && Enum.TryParse<EventType>(name, false, out _))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 
     /// <summary>Members of the named enum in the given source.</summary>
     private static List<(string Name, string Value)> MembersOf(string source, string name)
@@ -279,7 +268,7 @@ public class NotificationVocabularyShould
     /// Every client file that can render text. A spec is not text on a screen,
     /// and it may well have to name an event to assert about one.
     /// </summary>
-    private static IEnumerable<string> SourceFiles(string directory)
+    internal static IEnumerable<string> SourceFiles(string directory)
     {
         foreach (var file in Directory.EnumerateFiles(directory))
         {

@@ -19,9 +19,8 @@ public interface IGameSubscriptionService
 
     /// <summary>
     /// Subscribe another user, where the subscription follows from somebody
-    /// else's action rather than from a request of their own. A blacklisted user
-    /// is skipped instead of refused: the caller is not the subscriber, and a
-    /// refusal would fail the action that caused the subscription.
+    /// else's action rather than from a request of their own: the player who
+    /// lost their last character stays with the game as a reader.
     /// </summary>
     Task SubscribeUserAsync(Guid gameId, Guid userId, CancellationToken ct = default);
 

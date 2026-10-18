@@ -125,6 +125,8 @@ function goBack() {
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 .error-page
   padding: $medium 0 $big
 
@@ -133,7 +135,6 @@ function goBack() {
   width: 100%
   height: auto
   margin-bottom: $medium
-  border-radius: $border-radius
 
 .error-description
   color: $text
@@ -156,16 +157,12 @@ function goBack() {
 .action-sep
   color: $text-muted
 
+// A <button> and a router link side by side, one link to the eye: the button
+// reset and the link's behaviour (with the underline under the pointer, which
+// this pair alone went without) from +inline-link-button, bold at the site's
+// one bold weight.
 .error-link
-  font: inherit
-  font-weight: 700
-  color: $link
-  text-decoration: none
-  cursor: pointer
-  // Reset so a <button> styled as a link is indistinguishable from <a>.
-  padding: 0
-  border: none
-  background: none
-  &:hover
-    color: $link-hover
+  +inline-link-button
+  &
+    font-weight: 700
 </style>

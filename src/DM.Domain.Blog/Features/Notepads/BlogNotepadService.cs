@@ -5,6 +5,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
+using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -50,7 +51,8 @@ internal class BlogNotepadService : IBlogNotepadService
     {
         var entry = await RequireEntry(entryId, ct);
 
-        await EnsureBlogParticipant(entry.ContainerId, ct);
+        await HiddenContainerRefusal.AsNotFound(RefusalMessage.NotepadEntryNotFound,
+            () => EnsureBlogParticipant(entry.ContainerId, ct));
         return entry;
     }
 
@@ -80,7 +82,8 @@ internal class BlogNotepadService : IBlogNotepadService
     {
         var entry = await RequireEntry(entryId, ct);
 
-        await EnsureBlogParticipant(entry.ContainerId, ct);
+        await HiddenContainerRefusal.AsNotFound(RefusalMessage.NotepadEntryNotFound,
+            () => EnsureBlogParticipant(entry.ContainerId, ct));
 
         // An entry is its author's own words, so nobody rewrites it for them: a
         // lead who objects to one deletes it rather than edits it. The same rule
@@ -112,7 +115,17 @@ internal class BlogNotepadService : IBlogNotepadService
             return; // Already deleted
         }
 
-        var blogOwnerId = await EnsureBlogParticipant(entry.ContainerId, ct);
+        Guid blogOwnerId;
+        try
+        {
+            blogOwnerId = await EnsureBlogParticipant(entry.ContainerId, ct);
+        }
+        catch (HttpException refusal) when (HiddenContainerRefusal.IsAbsence(refusal))
+        {
+            // An entry of a blog the reader may not open is as gone to him as one
+            // already deleted, and answers the same way: see HiddenContainerRefusal.
+            return;
+        }
 
         // Deleting adds the owner of the blog, who answers for what the notepad
         // holds - the blog's counterpart of the game master. An assistant and
@@ -167,16 +180,24 @@ internal class BlogNotepadService : IBlogNotepadService
     private async Task<Guid> EnsureBlogParticipant(Guid blogId, CancellationToken ct)
     {
         var blog = await _blogService.GetBlogAsync(blogId, ct);
-        var isOwner = blog.Author.UserId == UserId;
+        var isOwner = blog.Author?.UserId == UserId;
         var isAssistant = blog.Assistants.Any(a => a.UserId == UserId);
         // Notepad access = owner + assistants + mentor (curator), per doc.
         var isMentor = blog.Mentor?.UserId == UserId;
 
         if (!isOwner && !isAssistant && !isMentor)
         {
+            // Everybody admitted above sees the blog, so only a refusal asks: a
+            // blog the reader may not open answers as a blog that is not there,
+            // and a 403 would tell him it is.
+            if (!await _blogService.IsVisibleToViewerAsync(blogId, ct))
+            {
+                throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
+            }
+
             throw new HttpException(HttpStatusCode.Forbidden, "Нет доступа к заметкам блога");
         }
 
-        return blog.Author.UserId;
+        return blog.Author?.UserId ?? Guid.Empty;
     }
 }

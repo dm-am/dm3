@@ -28,8 +28,8 @@ public interface IPostService
     /// Get list of posts in the room
     /// </summary>
     /// <param name="roomId">Room identifier</param>
-    /// <param name="query">Paging query</param>
-    Task<(IEnumerable<Post> posts, PagingResult paging)> GetAllAsync(Guid roomId, PagingQuery query);
+    /// <param name="query">Filters, sort and paging</param>
+    Task<(IEnumerable<Post> posts, PagingResult paging)> GetAllAsync(Guid roomId, RoomPostsQuery query);
 
     /// <summary>
     /// Get single existing post

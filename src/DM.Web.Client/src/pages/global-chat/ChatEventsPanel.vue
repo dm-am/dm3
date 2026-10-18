@@ -1,58 +1,65 @@
 <script setup lang="ts">
 /**
- * ChatEventsPanel — one thin events strip pinned at the top of the chat frame,
- * layered over the scrolling feed.
+ * ChatEventsPanel — the events line at the top of the global chat's frame
+ * (ChatStrip), layered over the scrolling feed.
  *
  * The line always leads with ONE focal event — the live one if something is
- * running, otherwise the nearest scheduled one — shown in full: the state word
- * ("Идет:" / "Скоро:"), the title, and the muted time ("до HH:mm" live /
- * "DD.MM в HH:mm" scheduled, + ", закрытый" for invite-only events). The word
- * is not decoration: a scheduled event used to differ from a running one by
- * font weight alone, so the nearest one read as happening now. Every other
- * upcoming event is demoted to one quiet count link "+N запланировано"
- * ("+N ..., ближайший DD.MM" while a live event holds the line); clicking it
- * unrolls the full upcoming list. There is no arrow browsing — the focal event
- * is derived (live ?? nearest), so there is no index to desync when an event
- * starts or ends in realtime.
+ * running, otherwise the nearest scheduled one: the state word ("Идет:" /
+ * "Скоро:"), the title, and the muted time ("до HH:mm" live / "DD.MM в HH:mm"
+ * scheduled, + ", закрытый" for invite-only events). The word is not
+ * decoration: a scheduled event used to differ from a running one by font
+ * weight alone, so the nearest one read as happening now. Every other upcoming
+ * event is demoted to one quiet count link "+N запланировано" ("+N ...,
+ * ближайший DD.MM" while a live event holds the line); clicking it unrolls the
+ * full upcoming list. There is no arrow browsing — the focal event is derived
+ * (live ?? nearest), so there is no index to desync when an event starts or
+ * ends in realtime.
  *
- * The strip is written in the site's one strip idiom: literal " | " text nodes
- * between items, every item a link-button. Search and the archive date are not
- * here — they live on the search row above the chat frame, in the filter-bar
- * idiom.
+ * Every word stays on every width, the title whole (owner, 12 October 2026:
+ * the line as it was, without the sideways scroll). Where the frame is
+ * narrower than the line, the line wraps like any text and the strip grows a
+ * line; nothing leaves it and nothing is cut under "…".
+ *
+ * An empty list is a claim, and the line makes it only once the list has
+ * answered with one: "Нет запланированных эвентов". Before the first answer
+ * the line holds a bar where the event will be; a refused read says "Эвенты
+ * не загрузились | повторить".
  *
  * The card is also where the focal event's one action lives (join, leave, and
- * the organizer's start/end — see features/chat-event-actions): the strip is a
+ * the organizer's start/end — see features/chat-event-actions): the line is a
  * summary, one line and the same line for every reader, while the label of an
  * action depends on who is looking and is decided by the participants list,
- * which arrives with the card and not with the strip's summary.
+ * which arrives with the card and not with the line's summary.
  *
- * Two floating layers hang below the strip — the upcoming list and the
+ * Two floating layers hang below the line — the upcoming list and the
  * description card — mutually exclusive, each kept mounted and toggled by an
  * ".open" class so they animate open/closed with the site's one reveal idiom
  * ($expand-duration/$expand-easing), and marked `inert` while closed so their
  * content is out of the tab order and the a11y tree. They float over the feed
- * (absolute, below the strip), so the message list never shifts. Both are
+ * (absolute, below the line), so the message list never shifts. Both are
  * content rather than tools, so they answer the page-wide "Развернуть все".
  *
  * Copy-friendly: the whole line is one inline-flow run with real spaces, so
  * selecting it copies exactly "Идет: Title, до 22:48 | описание | +2
- * запланировано, ближайший 05.08" — one string, the way it reads.
- * onelineCopy.spec.ts holds that shape; a flex row put a line break at every
- * item boundary instead.
+ * запланировано, ближайший 05.08" — one string, the way it reads, wrapped on
+ * screen or not. onelineCopy.spec.ts holds that shape; a flex row put a line
+ * break at every item boundary instead.
  */
 import {
   computed,
+  nextTick,
   onBeforeUnmount,
   onMounted,
   onUnmounted,
   ref,
   watch,
 } from "vue";
-import dayjs from "dayjs";
 import {
   DATE_TIME_FORMAT,
   DAY_MONTH_FORMAT,
   DAY_MONTH_TIME_FORMAT,
+  formatSiteTime,
+  siteTime,
 } from "@/shared/lib/utils/datetime";
 import { storeToRefs } from "pinia";
 import { useGlobalChatStore } from "@/entities/global-chat";
@@ -63,11 +70,15 @@ import {
   registerExpandable,
 } from "@/shared/lib/composables/useExpandableRegistry";
 import { ContentText } from "@/shared/ui/Content";
+import { ChatStrip } from "@/widgets/chat-feed";
 
 const store = useGlobalChatStore();
-const { liveEvent, upcomingEvents, eventDetails } = storeToRefs(store);
+const { liveEvent, upcomingEvents, eventDetails, eventsLoad } =
+  storeToRefs(store);
 
 const rootRef = ref<HTMLElement | null>(null);
+/** "описание", where the focus goes once a refused read comes back with events. */
+const describeRef = ref<HTMLElement | null>(null);
 
 // ─────────────────────────────────────────────────────────────
 // Focal event = the live one if running, else the nearest upcoming. Derived,
@@ -96,19 +107,55 @@ const restEvents = computed(() =>
 );
 const restCount = computed(() => restEvents.value.length);
 
-// "+2" and " запланировано" are two parts on purpose: a narrow screen keeps the
-// number and drops the noun, so the count never eats the title's width.
+// The number of the count link; " запланировано" follows it in the template.
 const countLabel = computed(() => `+${restCount.value}`);
 
 // "..., ближайший DD.MM" is shown only while a live event holds the line — when
-// an upcoming event is the focal one, it already IS the nearest.
+// an upcoming event is the focal one, it already IS the nearest. The word and
+// its day are one unit: the space between them does not break (U+00A0, as
+// after "в" in a date and a time), so a wrapping line never leaves the day
+// alone on a line of its own, and a copy still reads it as a plain space.
 const nearestText = computed(() => {
   if (!isPrimaryLive.value) return "";
   const first = upcomingEvents.value[0];
   return first
-    ? `, ближайший ${dayjs(first.startsUtc).format(DAY_MONTH_FORMAT)}`
+    ? `, ближайший\u00a0${formatSiteTime(first.startsUtc, DAY_MONTH_FORMAT)}`
     : "";
 });
+
+// ─────────────────────────────────────────────────────────────
+// What the line says when there is no event to lead with: nothing yet before
+// the list has answered (and while a retry is out), why there is none when
+// the read was refused, and that there is none only when the list said so.
+// ─────────────────────────────────────────────────────────────
+const retrying = ref(false);
+
+const emptyLine = computed<"pending" | "failed" | "none">(() => {
+  if (retrying.value || eventsLoad.value === "pending") return "pending";
+  return eventsLoad.value === "failed" ? "failed" : "none";
+});
+
+const retryRef = ref<HTMLElement | null>(null);
+
+/**
+ * Read the list again. The line holds its bar while the read is out, so the
+ * press has an answer even when the refusal comes back at once. The bar takes
+ * the place of the button that had the focus: once the read is back, the focus
+ * goes to what stands there now, "повторить" again or the event's
+ * "описание".
+ */
+async function retry(e: MouseEvent) {
+  const focused = document.activeElement === e.currentTarget;
+  retrying.value = true;
+  try {
+    await store.fetchEvents();
+  } finally {
+    retrying.value = false;
+  }
+  if (!focused) return;
+  await nextTick();
+  (retryRef.value ?? describeRef.value)?.focus();
+}
 
 /** Parse a .NET TimeSpan string ("[d.]hh:mm:ss[.fffffff]") into minutes. */
 function parseDurationMinutes(duration: string): number | null {
@@ -119,17 +166,20 @@ function parseDurationMinutes(duration: string): number | null {
 }
 
 // "до HH:mm" for a live event (end = scheduled start + duration; date appended
-// when it runs past midnight). Empty when the duration is not yet cached OR the
-// computed end is already in the past (manual start can run late, so a stale
-// "до 22:48" at 23:10 would mislead — drop it and let bare "Идет:" stand).
+// when it runs past midnight). Both the time and the midnight are the site's
+// clock (siteTime): the account's zone for a signed-in reader. Empty when the
+// duration is not yet cached OR the computed end is already in the past (manual
+// start can run late, so a stale "до 22:48" at 23:10 would mislead — drop it
+// and let bare "Идет:" stand).
 function liveEndText(ev: { startsUtc: string; id: string }): string {
   const duration = eventDetails.value[ev.id]?.duration;
   if (!duration) return "";
   const minutes = parseDurationMinutes(duration);
   if (!minutes) return "";
-  const end = dayjs(ev.startsUtc).add(minutes, "minute");
-  if (end.isBefore(dayjs())) return "";
-  return end.isSame(dayjs(), "day")
+  const end = siteTime(ev.startsUtc).add(minutes, "minute");
+  const now = siteTime();
+  if (end.isBefore(now)) return "";
+  return end.format("YYYY-MM-DD") === now.format("YYYY-MM-DD")
     ? `до ${end.format("HH:mm")}`
     : `до ${end.format(DATE_TIME_FORMAT)}`;
 }
@@ -142,7 +192,7 @@ const primaryMeta = computed(() => {
   if (!ev) return "";
   const time = isPrimaryLive.value
     ? liveEndText(ev)
-    : dayjs(ev.startsUtc).format(DAY_MONTH_TIME_FORMAT);
+    : formatSiteTime(ev.startsUtc, DAY_MONTH_TIME_FORMAT);
   const parts = [time, ev.isOpen ? "" : "закрытый"].filter(Boolean);
   return parts.length ? `, ${parts.join(", ")}` : "";
 });
@@ -185,7 +235,7 @@ function toggle(which: RevealId, e: MouseEvent) {
 // same rule. One handle for the pair, because they are mutually exclusive:
 // two handles could never be "all expanded" at once and the ScrollNav label
 // would be stuck on "Развернуть все" forever. Registered only while there is
-// an event to reveal, or the button would appear over an empty strip and do
+// an event to reveal, or the button would appear over an empty line and do
 // nothing when pressed.
 // ─────────────────────────────────────────────────────────────
 let unregisterReveal: (() => void) | null = null;
@@ -212,7 +262,7 @@ function syncRevealRegistration() {
 }
 
 // Register synchronously in setup, so the ScrollNav button appears in the same
-// frame as the strip it belongs to.
+// frame as the line it belongs to.
 syncRevealRegistration();
 onBeforeUnmount(() => unregisterReveal?.());
 
@@ -230,7 +280,7 @@ const overlayMetaText = computed(() => {
   if (!ev) return "";
   const time = isPrimaryLive.value
     ? liveEndText(ev) || "идет"
-    : dayjs(ev.startsUtc).format(DATE_TIME_FORMAT);
+    : formatSiteTime(ev.startsUtc, DATE_TIME_FORMAT);
   const parts = [
     time,
     `участников: ${overlayDetails.value?.participants?.length ?? ev.participantCount}`,
@@ -250,7 +300,7 @@ watch([primaryEvent, descriptionOpen], ([ev, open]) => {
 });
 
 // Close a layer whose subject disappeared out from under it, and hand the
-// registry the strip's new shape in the same step.
+// registry the line's new shape in the same step.
 watch(primaryEvent, (ev) => {
   if (!ev) closeAll();
   syncRevealRegistration();
@@ -292,14 +342,17 @@ onUnmounted(() => {
 
 <template>
   <div ref="rootRef" class="chat-events-panel">
-    <div class="panel-row">
-      <!-- Focal event composite (or the empty placeholder), the description
-           item, then the quiet count of everything else. The separators are
-           literal " | " text nodes, and every label a reader would copy is
-           written as a literal interpolation: a bare word after the tag picks
-           up the formatter's line break as a leading space, which is how the
-           strip used to copy as "|  +2". -->
-      <div class="row-main">
+    <ChatStrip>
+      <!-- Focal event composite (or what stands in its place), the
+           description item, then the quiet count of everything else. The
+           separators are literal " | " text nodes, and every label a reader
+           would copy is written as a literal interpolation: a bare word after
+           the tag picks up the formatter's line break as a leading space,
+           which is how the strip used to copy as "|  +2". -->
+      <!-- Every word at every width: where the frame is narrower than the
+           line, the line wraps as text. It scrolled sideways once, and was
+           cut under "…" after that. -->
+      <span class="row-main">
         <template v-if="primaryEvent">
           <span class="row-text" aria-live="polite"
             ><span class="row-status">{{ stateWord }}:{{ " " }}</span
@@ -309,6 +362,7 @@ onUnmounted(() => {
             ><span class="row-meta">{{ primaryMeta }}</span></span
           ><span class="row-sep" aria-hidden="true">{{ " | " }}</span
           ><button
+            ref="describeRef"
             type="button"
             class="strip-item"
             :class="{ act: descriptionOpen }"
@@ -334,11 +388,26 @@ onUnmounted(() => {
             }}</span></span
           >
         </template>
-        <span v-else class="row-none">Нет запланированных эвентов</span>
-      </div>
-    </div>
+        <span v-else-if="emptyLine === 'failed'" class="row-failed"
+          >{{ "Эвенты не загрузились"
+          }}<span class="row-sep" aria-hidden="true">{{ " | " }}</span
+          ><button
+            ref="retryRef"
+            type="button"
+            class="strip-item"
+            @click="retry"
+          >
+            {{ "повторить" }}
+          </button></span
+        >
+        <span v-else-if="emptyLine === 'none'" class="row-none"
+          >Нет запланированных эвентов</span
+        >
+        <span v-else class="row-placeholder" aria-hidden="true" />
+      </span>
+    </ChatStrip>
 
-    <!-- Upcoming list: unrolls from the strip, floats over the feed. -->
+    <!-- Upcoming list: unrolls from the line, floats over the feed. -->
     <div
       v-if="restCount > 0"
       id="chat-event-list"
@@ -348,10 +417,12 @@ onUnmounted(() => {
     >
       <div class="reveal-clip">
         <div class="reveal-inner">
+          <!-- An event a line, the title whole. Where the line is wider
+               than the list, it wraps as text. -->
           <div v-for="ev in restEvents" :key="ev.id" class="rest-item">
             <span class="rest-title">{{ ev.title }}</span
             ><span class="rest-meta"
-              >, {{ dayjs(ev.startsUtc).format(DAY_MONTH_TIME_FORMAT)
+              >, {{ formatSiteTime(ev.startsUtc, DAY_MONTH_TIME_FORMAT)
               }}<template v-if="!ev.isOpen">, закрытый</template></span
             >
           </div>
@@ -387,7 +458,7 @@ onUnmounted(() => {
             >
           </div>
           <!-- The one action this viewer may take. It lives in the card and
-               not on the strip: the label is per-viewer, and it is decided by
+               not on the line: the label is per-viewer, and it is decided by
                the participants list, which only the card's own request
                brings. Above the description, so a long description never
                pushes it out of the card's scroll. -->
@@ -411,63 +482,35 @@ onUnmounted(() => {
 
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Skeleton" as *
 @use "@/assets/styles/ZIndex" as *
 @use "@/assets/styles/Animations" as *
 
-// One thin surface pinned to the top of the chat frame. The dashed bottom
-// border hands over to the feed below. No rounding — this is an informational
-// strip, not a control (rounding is reserved for inputs/buttons/dropdowns).
+// The line and the layers that hang from it. The line's surface, its dashed
+// hand-over to the feed, its size and its muted colour are ChatStrip's; this
+// box only anchors the layers below it and keeps its height in the frame's
+// column.
 .chat-events-panel
   position: relative
   flex-shrink: 0
-  background-color: $bg-element
-  border-bottom: 1px dashed $border
-  font-size: $secondary-font-size
 
-// The strip's own box: one row, vertically centred, never scrolled. It holds a
-// single child now that search and the archive date sit above the frame, so the
-// flex here only centres and pads — the line itself is inline flow inside it.
-.panel-row
-  display: flex
-  align-items: center
-  justify-content: space-between
-  gap: $medium
-  padding: $small $medium
-  line-height: 1.4
-  white-space: nowrap
-
-// Inline flow, not flex: a flex item is blockified, so the strip copied as
-// "Идет: ...\n\n| +2 запланировано". Inline parts copy as one line, and the
-// visible gaps are the spaces of the literal " | " nodes rather than geometry.
-// The ellipsis moves up here with the flow: the strip clips at its own right
-// edge instead of the focal text clipping inside a flex track, which is what
-// makes the title the LAST thing a narrow screen gives up.
-.row-main
-  display: block
-  flex: 1 1 auto
-  min-width: 0
-  overflow: hidden
-  text-overflow: ellipsis
+// Inline flow, not flex: the parts of the line stay inline inside it, so it
+// copies as one line ("Идет: ... | описание | +2 запланировано"), wraps like
+// text where the frame is narrow, and the visible gaps are the spaces of the
+// literal " | " nodes rather than geometry.
 
 // The focal composite: one selectable inline run (status + title + meta).
-.row-text
-  white-space: nowrap
-
 .row-status
   color: $text
-  font-weight: 600
+  font-weight: 700
 
 .row-title
   color: $text
-  font-weight: 600
+  font-weight: 700
   &.upcoming
-    font-weight: 500
+    font-weight: 400
 
 .row-meta
-  color: $text-muted
-
-// The quiet count of everything else.
-.row-more
   color: $text-muted
 
 .row-sep
@@ -476,56 +519,48 @@ onUnmounted(() => {
 .rest-near
   color: $text-muted
 
-// Items of the strip: the description and the count of the remaining events.
-// Both are link-buttons, the site's one strip idiom — the chevron that used to
-// sit here was the single non-link element of the line, which made the "|"
-// next to it read as a separator for an icon. Calm at rest ($text-muted, so
-// the line stays one colour), link-blue + underline on hover, $link/600 while
-// the layer it opened is up: blue appears on intent, not scattered.
+// Items of the line: the description, the count of the remaining events and
+// the retry of a refused read. All are link-buttons, the site's one strip
+// idiom — the chevron that used to sit here was the single non-link element
+// of the line, which made the "|" next to it read as a separator for an icon.
+// Grey links of the site: calm at rest ($text-muted, so the line stays one
+// colour), $link-hover and the underline under the pointer, $link and bold
+// while the layer it opened is up: blue appears on intent, not scattered.
 .strip-item
-  +inline-link-button
+  +muted-link-button
   &
     font-size: $secondary-font-size
     white-space: nowrap
-    color: $text-muted
-  &:hover:not(:disabled)
-    color: $link
   &.act
     color: $link
-    font-weight: 600
+    font-weight: 700
   &:focus:not(:focus-visible)
     outline: none
-  &:focus-visible
-    outline: 2px solid $border-focus
-    outline-offset: 2px
 
-.row-none
-  color: $text-muted
-
-// On a phone the line gives up words before it gives up the title: first the
-// date of the nearest event, then the noun of the count, which leaves "+2".
-// Measured at 375px, where the running event's title had no width left at all.
-@media (max-width: $bp-mobile)
-  .rest-near
-    display: none
-
-  .rest-word
-    display: none
+// While the list has not answered yet: a bar where the event will be.
+.row-placeholder
+  display: inline-block
+  width: 180px
+  max-width: 100%
+  height: 1em
+  vertical-align: middle
+  +skeleton-shimmer
 
 // ─────────────────────────────────────────────────────────────
 // Floating reveals — the upcoming list and the description overlay float over
-// the feed (absolute below the strip), so opening one never shifts the message
+// the feed (absolute below the line), so opening one never shifts the message
 // list. Because they are absolutely positioned (indefinite height), the
 // grid-rows reveal cannot resolve a track height here — so they use the site's
 // floating-overlay idiom instead: opacity + a small drop, on the same $expand
 // tokens (matching the calendar), which reads as "the layer settled in from the
-// strip" and cures the previous instant snap.
+// line" and cures the previous instant snap.
 .event-reveal
   position: absolute
   top: 100%
   left: 0
   right: 0
   z-index: $z-dropdown
+  font-size: $secondary-font-size
   opacity: 0
   transform: translateY(-$small)
   pointer-events: none
@@ -563,7 +598,7 @@ onUnmounted(() => {
   line-height: 1.4
 
 .overlay-title
-  font-weight: 600
+  font-weight: 700
   color: $text
 
 .overlay-meta

@@ -1,5 +1,6 @@
 using System;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Uploads;
 using DM.Testing;
 using DM.Web.API.Features.Community.Users;
@@ -59,19 +60,22 @@ public class BanMappingShould : UnitTestBase
     /// Who lifted the ban, when and why reaches the moderation view. The row was
     /// soft-deleted on lifting, so no query returned it, the two audit fields were
     /// mapped with Ignore(), and IsLifted was false on everything a moderator could
-    /// see.
+    /// see. Who lifted it then came as a bare identifier the list could not sign
+    /// the lift with, then as a name the list could not link; it is the user now,
+    /// as the moderator who issued the ban is.
     /// </summary>
     [Fact]
     public void CarryTheLiftAuditIntoTheModerationView()
     {
         var moment = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var moderator = Guid.NewGuid();
+        var lifterId = Guid.NewGuid();
         var ban = new DomainBan
         {
             StartedUtc = moment.AddDays(-2),
             EndedUtc = moment.AddDays(5),
             LiftedUtc = moment.AddDays(-1),
-            LiftedByUserId = moderator,
+            LiftedByUserId = lifterId,
+            LiftedBy = new GeneralUser { UserId = lifterId, Username = "TestSeniorMod" },
             LiftReason = "Разобрались"
         };
 
@@ -79,7 +83,8 @@ public class BanMappingShould : UnitTestBase
 
         mapped.IsLifted.Should().BeTrue();
         mapped.LiftedUtc.Should().Be(moment.AddDays(-1));
-        mapped.LiftedByUserId.Should().Be(moderator);
+        mapped.LiftedBy!.Username.Should().Be("TestSeniorMod", "the list signs the lift with a link to the user");
+        mapped.LiftedBy.Id.Should().Be(lifterId);
         mapped.LiftReason.Should().Be("Разобрались");
     }
 

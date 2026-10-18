@@ -2,12 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Chat = DM.Web.API.Features.Messaging.Chats.Chat;
 using CreateChat = DM.Web.API.Features.Messaging.Chats.CreateChat;
 using UpdateChat = DM.Web.API.Features.Messaging.Chats.UpdateChat;
-using ChatAvailability = DM.Web.API.Features.Messaging.Chats.ChatAvailability;
+using ChatUnreadCount = DM.Web.API.Features.Messaging.Chats.ChatUnreadCount;
 using Message = DM.Web.API.Features.Messaging.Messages.Message;
 
 namespace DM.Web.API.Features.Messaging;
@@ -56,9 +55,21 @@ public interface IMessagingApiService
     Task<Chat> UpdateChatAsync(Guid id, UpdateChat updateChat);
 
     /// <summary>
-    /// Check if chat can be started with user
+    /// Leave a group chat
     /// </summary>
-    Task<ChatAvailability> CanStartChatAsync(string username);
+    /// <param name="id">Chat identifier</param>
+    Task LeaveChatAsync(Guid id);
+
+    /// <summary>
+    /// Clear the history of a direct or group chat for the current user
+    /// </summary>
+    /// <param name="id">Chat identifier</param>
+    Task ClearChatHistoryAsync(Guid id);
+
+    /// <summary>
+    /// Count unread messages of the current user across every conversation
+    /// </summary>
+    Task<Envelope<ChatUnreadCount>> GetUnreadCountAsync();
 
     /// <summary>
     /// Get list of chat messages with offset-based paging (legacy)
@@ -124,13 +135,6 @@ public interface IMessagingApiService
     Task<Envelope<Message>> GetMessageAsync(Guid messageId);
 
     /// <summary>
-    /// Get the markup of a quotation of a message
-    /// </summary>
-    /// <param name="messageId">Message identifier</param>
-    /// <returns>Envelope containing the quotation source</returns>
-    Task<Envelope<QuoteSource>> GetMessageQuoteAsync(Guid messageId);
-
-    /// <summary>
     /// Update existing message
     /// </summary>
     /// <param name="messageId">Message identifier</param>
@@ -192,18 +196,6 @@ public interface IMessagingApiService
     /// <param name="messageId">Message identifier</param>
     /// <returns>Message details wrapped in envelope</returns>
     Task<Envelope<Message>> GetGlobalChatMessageAsync(Guid messageId);
-
-    /// <summary>
-    /// Get the markup of a quotation of a global chat message
-    /// </summary>
-    /// <remarks>
-    /// Here for the reason the read above is, and composed from that very read:
-    /// whoever may read the line may quote it, and the quotation of a line of the
-    /// global chat cannot be composed from a read that asks about participation.
-    /// </remarks>
-    /// <param name="messageId">Message identifier</param>
-    /// <returns>Envelope containing the quotation source</returns>
-    Task<Envelope<QuoteSource>> GetGlobalChatMessageQuoteAsync(Guid messageId);
 
     /// <summary>
     /// Update an existing global chat message

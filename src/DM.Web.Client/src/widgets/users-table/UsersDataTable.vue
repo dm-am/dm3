@@ -51,60 +51,56 @@ const sortKeyToColumn: Record<string, string> = Object.fromEntries(
 
 // Define table columns (UX order: identity → availability → quality →
 // counts → tenure). Identifier/date columns left-aligned; short numeric
-// count columns centered. Widths sum to 100%.
+// count columns centered. "Имя пользователя" takes what the others leave;
+// their shares are of the whole table, the "#" column and the padding of each
+// cell included.
 const columns: Column[] = [
   {
     key: "username",
     label: "Имя пользователя",
-    width: "20%",
     align: "left",
   },
   {
     key: "activity",
     label: "Активность",
-    width: "12%",
+    width: "11.5%",
     align: "center",
   },
   {
     key: "rating",
     label: "Рейтинг",
-    width: "11%",
+    width: "10.6%",
     align: "center",
   },
   {
     key: "reviews",
     label: "Рекомендации",
-    width: "14%",
+    width: "13.1%",
     align: "center",
-    hideOnMobile: true,
   },
   {
     key: "gameReviews",
     label: "Рецензии",
-    width: "12%",
+    width: "11.5%",
     align: "center",
-    hideOnMobile: true,
   },
   {
     key: "games",
     label: "Игры",
     width: "9%",
     align: "center",
-    hideOnMobile: true,
   },
   {
     key: "blogs",
     label: "Блоги",
     width: "9%",
     align: "center",
-    hideOnMobile: true,
   },
   {
     key: "registered",
     label: "Регистрация",
-    width: "13%",
+    width: "12.3%",
     align: "center",
-    hideOnMobile: true,
   },
 ];
 

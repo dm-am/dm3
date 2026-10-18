@@ -19,6 +19,6 @@ public interface IEmailChangeService
     /// <summary>
     /// Confirm email change by token
     /// </summary>
-    /// <param name="tokenId">Email change confirmation token</param>
-    Task Confirm(Guid tokenId);
+    /// <param name="secret">Value the confirmation letter carried</param>
+    Task Confirm(Guid secret);
 }

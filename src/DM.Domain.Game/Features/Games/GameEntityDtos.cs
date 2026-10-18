@@ -82,9 +82,10 @@ public class CreateGameEntity
     public CommentsAccessMode CommentsAccessMode { get; set; }
 
     /// <summary>
-    /// Attribute schema identifier
+    /// Specifications of the character sheet, written in the same save as the
+    /// game row: a game without a sheet is a defect, not a state
     /// </summary>
-    public Guid? AttributeSchemaId { get; set; }
+    public IEnumerable<CreateAttributeSpecification> AttributeSpecifications { get; set; } = [];
 
     /// <summary>
     /// Recruitment is open for new players
@@ -161,11 +162,6 @@ public class CreateRoomEntity
     /// Room is archived (hidden from the active rooms list, kept for history)
     /// </summary>
     public bool IsArchived { get; set; }
-
-    /// <summary>
-    /// Room order number
-    /// </summary>
-    public double OrderNumber { get; set; }
 }
 
 /// <summary>
@@ -323,12 +319,13 @@ public class UpdateRoomEntity
     public RoomAccessType? AccessType { get; set; }
 
     /// <summary>
-    /// Previous room identifier for reordering (if changed)
+    /// Room of the same game this one is put right after; null puts it first.
+    /// Read only when <see cref="ShouldReorder"/> is set.
     /// </summary>
     public Guid? NewPreviousRoomId { get; set; }
 
     /// <summary>
-    /// Whether position should be changed
+    /// Whether the room moves to the place <see cref="NewPreviousRoomId"/> names
     /// </summary>
     public bool ShouldReorder { get; set; }
 
@@ -422,8 +419,8 @@ public class CreatePostEntity
 
     /// <summary>
     /// Dice rolls made for the post, rolled server-side before the write.
-    /// The repository persists them in the same transaction as the post
-    /// (INV-6): a roll cannot be produced a second time, so it must never
+    /// The repository persists them in the same transaction as the post:
+    /// a roll cannot be produced a second time, so it must never
     /// outlive or predate the post it belongs to.
     /// </summary>
     public IReadOnlyList<Posts.DiceRoll> DiceRolls { get; set; } = [];
@@ -611,11 +608,6 @@ public class CreateGameCommentEntity
     public string Text { get; set; } = null!;
 
     /// <summary>
-    /// New comment count (after creating this comment)
-    /// </summary>
-    public int NewCommentCount { get; set; }
-
-    /// <summary>
     /// Creation timestamp
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
@@ -661,16 +653,6 @@ public class DeleteGameCommentEntity
     /// Game identifier
     /// </summary>
     public Guid GameId { get; set; }
-
-    /// <summary>
-    /// New comment count after deletion
-    /// </summary>
-    public int NewCommentCount { get; set; }
-
-    /// <summary>
-    /// New last comment ID after deletion
-    /// </summary>
-    public Guid? NewLastCommentId { get; set; }
 
     /// <summary>
     /// User who removed the comment
@@ -867,12 +849,16 @@ public class CreateGameReviewEntity
 /// <param name="IsRemoved">Updated removed status (null to keep current)</param>
 /// <param name="ModifiedUtc">Modification timestamp</param>
 /// <param name="ModifiedByUserId">User who modified the review</param>
+/// <param name="DeletedUtc">Deletion timestamp</param>
+/// <param name="DeletedByUserId">User who deleted the review</param>
 public record UpdateGameReviewEntity(
     Guid ReviewId,
     string? Text = null,
     bool? IsRemoved = null,
     DateTimeOffset? ModifiedUtc = null,
-    Guid? ModifiedByUserId = null);
+    Guid? ModifiedByUserId = null,
+    DateTimeOffset? DeletedUtc = null,
+    Guid? DeletedByUserId = null);
 
 /// <summary>
 /// Filter parameters for game reviews
@@ -997,27 +983,6 @@ public record UpdatePostReviewEntity(
     Guid? DeletedByUserId = null);
 
 /// <summary>
-/// DTO for creating an attribute schema
-/// </summary>
-public class CreateAttributeSchema
-{
-    /// <summary>
-    /// Schema title
-    /// </summary>
-    public string Title { get; set; } = null!;
-
-    /// <summary>
-    /// Schema access type
-    /// </summary>
-    public SchemaType Type { get; set; }
-
-    /// <summary>
-    /// Attribute specifications
-    /// </summary>
-    public IEnumerable<CreateAttributeSpecification> Specifications { get; set; } = [];
-}
-
-/// <summary>
 /// Shared shape of an attribute specification on the write path
 /// </summary>
 public interface IAttributeSpecificationInput
@@ -1046,6 +1011,16 @@ public interface IAttributeSpecificationInput
     /// Is descriptor attribute
     /// </summary>
     bool IsDescriptor { get; }
+
+    /// <summary>
+    /// Is hidden attribute (only the leads and the owner see its value)
+    /// </summary>
+    bool IsHidden { get; }
+
+    /// <summary>
+    /// Value is required
+    /// </summary>
+    bool Required { get; }
 
     /// <summary>
     /// Position of the specification in the schema
@@ -1097,32 +1072,6 @@ public class CreateAttributeSpecification : IAttributeSpecificationInput
     /// Order index
     /// </summary>
     public int Order { get; set; }
-}
-
-/// <summary>
-/// DTO for updating an attribute schema
-/// </summary>
-public class UpdateAttributeSchema
-{
-    /// <summary>
-    /// Schema identifier
-    /// </summary>
-    public Guid SchemaId { get; set; }
-
-    /// <summary>
-    /// Schema title
-    /// </summary>
-    public string? Title { get; set; }
-
-    /// <summary>
-    /// Schema access type
-    /// </summary>
-    public SchemaType? Type { get; set; }
-
-    /// <summary>
-    /// Attribute specifications (replace all)
-    /// </summary>
-    public IEnumerable<UpdateAttributeSpecification>? Specifications { get; set; }
 }
 
 /// <summary>

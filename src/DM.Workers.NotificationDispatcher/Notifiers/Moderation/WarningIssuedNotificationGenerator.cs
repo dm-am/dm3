@@ -29,7 +29,7 @@ internal class WarningIssuedNotificationGenerator : BaseNotificationGenerator
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
         var warningData = await _dbContext.Warnings
-            .Where(w => w.WarningId == entityId && !w.IsRemoved)
+            .Where(w => w.WarningId == entityId)
             .Select(w => new
             {
                 w.WarningId,
@@ -57,6 +57,10 @@ internal class WarningIssuedNotificationGenerator : BaseNotificationGenerator
             Metadata = new
             {
                 WarningId = warningData.WarningId,
+                // The name of the warned reader, which is what the link to the log
+                // narrows it by: the list on the website builds that link out of the
+                // payload alone, and the letter reads the same field.
+                Username = warningData.TargetUsername,
                 Reason = warningData.Text,
                 ModeratorUsername = warningData.ModeratorUsername,
                 Points = warningData.Points,

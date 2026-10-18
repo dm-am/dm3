@@ -3,7 +3,6 @@ using DM.Domain.Core.Comments;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Domain.Forum.Features.Comments;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Comment = DM.Web.API.Shared.Dto.Comment;
 using CreateCommentRequest = DM.Web.API.Shared.Dto.CreateCommentRequest;
@@ -37,13 +36,6 @@ public interface ITopicCommentApiService
     /// <param name="commentId">Comment identifier</param>
     /// <returns>Envelope of comment</returns>
     Task<Envelope<Comment>> Get(Guid commentId);
-
-    /// <summary>
-    /// Get the markup of a quotation of a comment
-    /// </summary>
-    /// <param name="commentId">Comment identifier</param>
-    /// <returns>Envelope containing the quotation source</returns>
-    Task<Envelope<QuoteSource>> GetQuote(Guid commentId);
 
     /// <summary>
     /// Update comment by API DTO model

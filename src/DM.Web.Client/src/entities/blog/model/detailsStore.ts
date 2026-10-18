@@ -84,7 +84,7 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   } = createCommentSection({
     getComments: (blogId, query) => blogApi.getBlogComments(blogId, query),
     updateComment: (id, comment) => blogApi.updateBlogComment(id, comment),
-    deleteComment: (id) => blogApi.deleteBlogComment(id),
+    deleteComment: (id, options) => blogApi.deleteBlogComment(id, options),
     likeComment: (id) => blogApi.likeBlogComment(id),
     unlikeComment: (id) => blogApi.unlikeBlogComment(id),
     currentUsername: () => currentUsername.value,
@@ -306,31 +306,42 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
   // here threw away what the server said, so every rejection reached the reader
   // as the caller's own generic sentence.
 
+  /** @param options The refusal flags of a window that shows the failure itself. */
   async function transitionStatus(
     transition: BlogStatusTransition,
+    options?: Parameters<typeof blogApi.transitionStatus>[2],
   ): Promise<GeneralError | null> {
     if (!blog.value) return requestNotSent;
     const id = blog.value.id;
-    const { error } = await blogApi.transitionStatus(id, transition);
+    const { error } = await blogApi.transitionStatus(id, transition, options);
     if (error) return error;
     await loadBlog(id);
     return null;
   }
 
+  /** @param options The refusal flags of a window that shows the failure itself. */
   async function changePremoderation(
     transition: BlogPremoderationTransition,
+    options?: Parameters<typeof blogApi.changePremoderation>[2],
   ): Promise<GeneralError | null> {
     if (!blog.value) return requestNotSent;
     const id = blog.value.id;
-    const { error } = await blogApi.changePremoderation(id, transition);
+    const { error } = await blogApi.changePremoderation(
+      id,
+      transition,
+      options,
+    );
     if (error) return error;
     await loadBlog(id);
     return null;
   }
 
-  async function deleteBlog(): Promise<GeneralError | null> {
+  /** @param options The refusal flags of a window that shows the failure itself. */
+  async function deleteBlog(
+    options?: Parameters<typeof blogApi.deleteBlog>[1],
+  ): Promise<GeneralError | null> {
     if (!blog.value) return requestNotSent;
-    const { error } = await blogApi.deleteBlog(blog.value.id);
+    const { error } = await blogApi.deleteBlog(blog.value.id, options);
     if (error) return error;
     // Same as games: without this the deleted blog stays in every list.
     await useBlogsStore().invalidateBlogLists();
@@ -348,10 +359,14 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     return null;
   }
 
-  async function deleteRubric(rubricId: string): Promise<GeneralError | null> {
+  /** @param options As in deleteBlog. */
+  async function deleteRubric(
+    rubricId: string,
+    options?: Parameters<typeof blogApi.deleteRubric>[2],
+  ): Promise<GeneralError | null> {
     if (!blog.value) return requestNotSent;
     const id = blog.value.id;
-    const { error } = await blogApi.deleteRubric(id, rubricId);
+    const { error } = await blogApi.deleteRubric(id, rubricId, options);
     if (error) return error;
     await loadBlog(id);
     return null;

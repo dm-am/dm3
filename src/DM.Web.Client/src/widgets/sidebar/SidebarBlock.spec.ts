@@ -5,7 +5,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  componentCss,
+  outranks,
+  specificity,
+} from "@/shared/lib/testing/styles";
 import SidebarBlock from "./SidebarBlock.vue";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -213,42 +222,141 @@ describe("SidebarBlock", () => {
   });
 
   // ============================================================================
-  // HOVER STATE
+  // THE +/- SIGN
   // ============================================================================
 
-  describe("Hover State", () => {
-    it("shows icon on hover", async () => {
+  /**
+   * When the sign shows, on a screen with a mouse and on a touch screen.
+   *
+   * It was an inline opacity bound to the hover of the title row, and an
+   * inline value outranks every rule of a stylesheet: the rule that keeps the
+   * sign faintly visible on a touch screen never applied, and a phone showed
+   * no sign at all. So the answer is read the way the browser reaches it: the
+   * inline style of the mounted sign first, then the compiled stylesheet,
+   * the rules of the media the screen matches, by weight and then by order.
+   */
+  describe("The +/- sign", () => {
+    const MOUSE = new Set(["(hover: hover)", "(pointer: fine)"]);
+    const TOUCH = new Set(["(hover: none)", "(pointer: coarse)"]);
+
+    /** The selectors that reach the sign in each state of the title row. */
+    const reaching = (state: { hovered?: boolean; focused?: boolean }) =>
+      new Set([
+        ".icon",
+        ".toggle .icon",
+        ...(state.hovered
+          ? [".sidebar-title:hover .icon", ".toggle:hover .icon"]
+          : []),
+        ...(state.focused ? [".toggle:focus-visible .icon"] : []),
+      ]);
+
+    interface Rule {
+      media: string | null;
+      selectors: string[];
+      opacity?: string;
+    }
+
+    /** The flat compiled sheet, rule by rule, each with the @media over it. */
+    function sheet(): Rule[] {
+      const css = componentCss(join(HERE, "SidebarBlock.vue"));
+      const rules: Rule[] = [];
+      let media: string | null = null;
+      let at = 0;
+      while (at < css.length) {
+        const open = css.indexOf("{", at);
+        const shut = css.indexOf("}", at);
+        if (shut < 0) break;
+        // The brace that closes an @media block.
+        if (open < 0 || shut < open) {
+          media = null;
+          at = shut + 1;
+          continue;
+        }
+        const head = css.slice(at, open).trim();
+        if (head.startsWith("@media")) {
+          media = head.slice("@media".length).trim();
+          at = open + 1;
+          continue;
+        }
+        const body = css.slice(open + 1, shut);
+        const opacity = /(?:^|;)\s*opacity:\s*([^;]+)/.exec(body)?.[1].trim();
+        rules.push({
+          media,
+          selectors: head.split(",").map((one) => one.trim()),
+          opacity,
+        });
+        at = shut + 1;
+      }
+      return rules;
+    }
+
+    /**
+     * The opacity the browser gives the sign: an !important rule first, then
+     * the inline style, then the rule of most weight, the later of two equal.
+     */
+    function opacityOf(
+      icon: HTMLElement,
+      screen: Set<string>,
+      state: { hovered?: boolean; focused?: boolean } = {},
+    ): number {
+      const reach = reaching(state);
+      type Best = { weight: [number, number, number]; value: string } | null;
+      let normal: Best = null;
+      let important: Best = null;
+      for (const rule of sheet()) {
+        if (rule.opacity === undefined) continue;
+        if (rule.media !== null && !screen.has(rule.media)) continue;
+        const isImportant = rule.opacity.includes("!important");
+        const value = rule.opacity.replace("!important", "").trim();
+        for (const selector of rule.selectors) {
+          if (!reach.has(selector)) continue;
+          const weight = specificity(selector);
+          const best = isImportant ? important : normal;
+          if (best && outranks(best.weight, weight)) continue;
+          if (isImportant) important = { weight, value };
+          else normal = { weight, value };
+        }
+      }
+      if (important) return Number(important.value);
+      if (icon.style.opacity !== "") return Number(icon.style.opacity);
+      return Number(normal?.value ?? 1);
+    }
+
+    function mountSign() {
       const wrapper = mount(SidebarBlock, {
         props: { token: "TestBlock" },
         slots: { title: "Title" },
       });
+      return { wrapper, icon: wrapper.get(".icon").element as HTMLElement };
+    }
 
-      const icon = wrapper.find(".icon");
-      // Initially hidden (opacity 0)
-      expect(icon.attributes("style")).toContain("opacity: 0");
-
-      // Hover target is the whole title row (only the icon button toggles).
-      await wrapper.find(".sidebar-title").trigger("mouseenter");
-      await nextTick();
-
-      // After hover, should be visible (opacity 1)
-      expect(icon.attributes("style")).toContain("opacity: 1");
+    it("stays visible on a touch screen, which has no hover", () => {
+      const { icon } = mountSign();
+      expect(opacityOf(icon, TOUCH)).toBeGreaterThan(0);
     });
 
-    it("hides icon on mouse leave", async () => {
-      const wrapper = mount(SidebarBlock, {
-        props: { token: "TestBlock" },
-        slots: { title: "Title" },
-      });
+    it("stays visible on a touch screen after a tap on the row", async () => {
+      // A browser of a phone fires mouseenter on a tap; the sign must not go.
+      const { wrapper, icon } = mountSign();
+      await wrapper.find(".sidebar-title").trigger("mouseenter");
+      await wrapper.find(".sidebar-title").trigger("mouseleave");
+      await nextTick();
+      expect(opacityOf(icon, TOUCH)).toBeGreaterThan(0);
+    });
+
+    it("is hidden under a mouse until the pointer is over the title row", async () => {
+      const { wrapper, icon } = mountSign();
+      expect(opacityOf(icon, MOUSE)).toBe(0);
 
       await wrapper.find(".sidebar-title").trigger("mouseenter");
       await nextTick();
+      expect(opacityOf(icon, MOUSE, { hovered: true })).toBe(1);
+    });
 
-      await wrapper.find(".sidebar-title").trigger("mouseleave");
-      await nextTick();
-
-      const icon = wrapper.find(".icon");
-      expect(icon.attributes("style")).toContain("opacity: 0");
+    it("shows on keyboard focus of the toggle, as under the pointer", () => {
+      const { icon } = mountSign();
+      expect(opacityOf(icon, MOUSE, { focused: true })).toBe(1);
+      expect(opacityOf(icon, TOUCH, { focused: true })).toBe(1);
     });
   });
 

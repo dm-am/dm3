@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using System.Net;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Domain.Blog.Features.Blogs;
 
@@ -36,7 +38,38 @@ public static class BlogRoleExtensions
     /// is edited.
     /// </remarks>
     public static bool IsOwnBlog(this Blog blog, Guid userId) =>
-        blog.Author.UserId == userId ||
+        blog.Author?.UserId == userId ||
         blog.Assistants.Any(a => a.UserId == userId) ||
         blog.Mentor?.UserId == userId;
+
+    /// <summary>
+    /// Whether the blog's owner put this user on its blacklist.
+    /// </summary>
+    /// <remarks>
+    /// The rule of the blog's blacklist, written once, the blog side of
+    /// GameRoleExtensions.IsBlacklisted. It closes comments and nothing else: in
+    /// the blog's discussion and under its publications, a new one and the
+    /// rewrite of one's own. Reading, subscribing and likes stay open.
+    ///
+    /// BlogIntention.CreateComment asks this predicate so an IsAllowed answer does
+    /// not lie; the services ask <see cref="ThrowIfBlacklisted" /> first, so the
+    /// refusal says why. BlacklistRuleShould holds the one spelling and the short
+    /// list of places that ask it.
+    /// </remarks>
+    public static bool IsBlacklisted(this Blog blog, Guid userId) =>
+        blog.BlacklistedUserIds.Contains(userId);
+
+    /// <summary>
+    /// Refuse the user an action the blog's blacklist closes to them, in the
+    /// words that say so.
+    /// </summary>
+    /// <param name="blog">Blog the action writes into</param>
+    /// <param name="userId">The user acting on their own behalf</param>
+    public static void ThrowIfBlacklisted(this Blog blog, Guid userId)
+    {
+        if (blog.IsBlacklisted(userId))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromBlog);
+        }
+    }
 }

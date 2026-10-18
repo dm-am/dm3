@@ -11,6 +11,5 @@ internal interface IPasswordChangeMailSender
     /// Sends the password change notification to user
     /// </summary>
     /// <param name="email">User email</param>
-    /// <param name="username">Username</param>
-    Task Send(string email, string username);
+    Task Send(string email);
 }

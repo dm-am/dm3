@@ -47,6 +47,14 @@ function image(src: string, extra = ""): string {
   return `<p>перед<img src="${src}" class="bb-image" data-bb-tag="img" loading="lazy"${extra} />после</p>`;
 }
 
+/** The cap on the width of the single <img> in the result, or null. */
+function widthCap(html: string): string | null {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const img = template.content.querySelector("img");
+  return img?.style.getPropertyValue("--bb-image-max-width") || null;
+}
+
 /** width/height of the single <img> in the result, or null when undeclared. */
 function declared(html: string): [string, string] | null {
   const template = document.createElement("template");
@@ -152,19 +160,30 @@ describe("reserveAttachmentImageBoxes", () => {
   });
 
   /**
-   * The box is drawn no taller than the stylesheet's cap, and that cap clamps
-   * the height without touching a declared width — a pair taller than it would
-   * be drawn squashed. The same ratio, shrunk to fit under the cap, reserves
-   * exactly the box the picture ends up in.
+   * A picture is drawn no taller than 500 pixels, as on DM2, and that cap
+   * clamps the height without touching a declared width: a tall picture would
+   * keep the width of its pair and be drawn narrower inside it, with the gap
+   * on both sides. The pair is the file's own, and the width is capped where
+   * the picture is exactly as tall as the cap.
    */
-  it("declares a pair the drawn-height cap cannot squash", () => {
+  it("declares the file's own pair however tall it is", () => {
     const html = image(`/v1/uploads/${MAP_ID}/content`);
     const tall = [attachment({ width: 731, height: 793 })];
 
     expect(declared(reserveAttachmentImageBoxes(html, tall))).toEqual([
-      "461",
-      "500",
+      "731",
+      "793",
     ]);
+  });
+
+  it("caps the width where the picture is 500 pixels tall, as on DM2", () => {
+    const html = image(`/v1/uploads/${MAP_ID}/content`);
+    const tall = [attachment({ width: 731, height: 793 })];
+
+    // 731 / 793 = 0.92181..., rounded down so the height stays under the cap.
+    expect(widthCap(reserveAttachmentImageBoxes(html, tall))).toBe(
+      "min(100%, calc(500px * 0.9218))",
+    );
   });
 
   it("keeps the file's own pair when it is drawn whole", () => {

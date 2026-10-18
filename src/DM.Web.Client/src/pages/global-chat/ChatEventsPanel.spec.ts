@@ -5,9 +5,9 @@
 /**
  * Where the event's action is drawn, and where it may not be.
  *
- * The strip above the feed is a summary: one line, the same line for every
- * reader, and the first thing a narrow screen takes away is everything except
- * the title. An action item breaks both halves of that. Its label depends on
+ * The strip above the feed is a summary: short, the same line for every
+ * reader, and on a narrow screen it already wraps onto a second line. An
+ * action item breaks both halves of that. Its label depends on
  * who is looking, so the line stops being one line the room shares — and the
  * label cannot even be chosen from what the strip is drawn with, because the
  * list endpoint sends a summary with no participants in it. "Участвовать" and

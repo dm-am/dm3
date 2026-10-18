@@ -62,6 +62,12 @@ public class Topic
     public bool? IsClosed { get; set; }
 
     /// <summary>
+    /// Closed by its author, who may then reopen it. A topic closed by a moderator
+    /// or an administrator is closed to its author: false while the topic is open
+    /// </summary>
+    public bool ClosedByAuthor { get; set; }
+
+    /// <summary>
     /// Last activity moment (last comment or topic creation)
     /// </summary>
     public DateTimeOffset LastActivityUtc { get; set; }
@@ -105,6 +111,27 @@ public class Topic
     /// computed, never copied into content).
     /// </summary>
     public PeriodDigestRef? PeriodDigest { get; set; }
+
+    /// <summary>
+    /// What the viewer may do under this topic. Null in a list of topics: it is
+    /// answered on a read of one topic and on every write that returns one, the
+    /// shape a page offers something from
+    /// </summary>
+    public TopicViewer? Viewer { get; set; }
+}
+
+/// <summary>
+/// What the viewer may do under a topic. Each flag is asked by the same code the
+/// write it stands for is refused by, so a page that offers by it offers only
+/// what the server takes; the server refuses all the same.
+/// </summary>
+public class TopicViewer
+{
+    /// <summary>
+    /// Whether the viewer may write a new comment under the topic: the topic
+    /// open and the viewer not silenced by a ban. False for a guest
+    /// </summary>
+    public bool CanComment { get; set; }
 }
 
 /// <summary>

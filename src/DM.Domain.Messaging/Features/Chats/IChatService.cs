@@ -78,6 +78,21 @@ public interface IChatService
     Task<Chat> GetOrCreateDirectAsync(string username);
 
     /// <summary>
+    /// Count unread messages of the current user across every conversation
+    /// </summary>
+    /// <remarks>
+    /// The badge in the header used to add up the per-chat counters of the first
+    /// page of the chat list, so a reader with unread messages further down the
+    /// list was shown a number that left them out, and the badge cost a page of
+    /// conversations with their participants and last messages to compute.
+    /// A conversation's marker is parented by its reader, so the whole total is
+    /// one parent-scoped aggregate — see IUnreadCountersRepository on what
+    /// ParentId holds.
+    /// </remarks>
+    /// <returns>Total number of unread messages</returns>
+    Task<long> CountUnreadAsync();
+
+    /// <summary>
     /// Mark all chat messages as read
     /// </summary>
     /// <param name="chatId">Chat identifier</param>
@@ -96,6 +111,44 @@ public interface IChatService
     /// <param name="updateChat">Update data</param>
     /// <returns>Updated chat</returns>
     Task<Chat> UpdateAsync(UpdateChat updateChat);
+
+    /// <summary>
+    /// Leave a group chat
+    /// </summary>
+    /// <remarks>
+    /// The chat goes out of the leaver's list and reads, and with it his unread
+    /// marker. The others keep the chat and every message in it, the leaver's
+    /// included. A direct chat is not left: the conversation of two has nobody
+    /// to stay in it.
+    /// </remarks>
+    /// <param name="chatId">Chat identifier</param>
+    Task LeaveAsync(Guid chatId);
+
+    /// <summary>
+    /// Clear the history of a direct or group chat for the current user
+    /// </summary>
+    /// <remarks>
+    /// Nothing is deleted: the reader's own link to the chat remembers the moment,
+    /// and the messages written up to it are no longer given to him. The other
+    /// participants keep them. What was unread for him is read now, there is
+    /// nothing left to read it in.
+    /// </remarks>
+    /// <param name="chatId">Chat identifier</param>
+    Task ClearHistoryAsync(Guid chatId);
+
+    /// <summary>
+    /// Whether the current user may leave the chat: true exactly when
+    /// <see cref="LeaveAsync" /> takes it
+    /// </summary>
+    /// <param name="chat">The chat, read for the current user</param>
+    bool MayLeave(Chat chat);
+
+    /// <summary>
+    /// Whether the current user may clear the history of the chat for himself:
+    /// true exactly when <see cref="ClearHistoryAsync" /> takes it
+    /// </summary>
+    /// <param name="chat">The chat, read for the current user</param>
+    bool MayClearHistory(Chat chat);
 
     // ═══ DELETE ═══
 

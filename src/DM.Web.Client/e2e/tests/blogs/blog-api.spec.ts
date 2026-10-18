@@ -36,7 +36,6 @@ async function createSuiteBlog(title: string): Promise<string> {
     data: {
       title,
       isPublic: true,
-      commentsEnabled: true,
     },
   });
 
@@ -65,7 +64,6 @@ test.describe("Blog API", () => {
         title: "Test Blog",
         description: "A test blog for E2E testing",
         isPublic: true,
-        commentsEnabled: true,
       },
     });
 
@@ -101,7 +99,6 @@ test.describe("Blog API", () => {
         title: "Blog to Update",
         description: "Original description",
         isPublic: true,
-        commentsEnabled: true,
       },
     });
 
@@ -174,7 +171,6 @@ test.describe("Blog Publications API", () => {
           content: "This is the content of the test publication.",
           preview: "Test preview text",
           publishImmediately: true,
-          commentsEnabled: true,
         },
       },
     );

@@ -24,6 +24,7 @@ using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Blacklists;
@@ -37,7 +38,6 @@ public class GameBlacklistServiceShould : UnitTestBase
     private readonly IGameBlacklistRepository _repository;
     private readonly IGameInvitationRepository _invitationRepository;
     private readonly ICharacterRepository _characterRepository;
-    private readonly ISubscriptionRepository _subscriptionRepository;
     private readonly IEventProducer _producer;
     private readonly GameBlacklistService _service;
     private readonly Guid _currentUserId;
@@ -59,7 +59,6 @@ public class GameBlacklistServiceShould : UnitTestBase
         _repository = Mock<IGameBlacklistRepository>();
         _invitationRepository = Mock<IGameInvitationRepository>();
         _characterRepository = Mock<ICharacterRepository>();
-        _subscriptionRepository = Mock<ISubscriptionRepository>();
         _producer = Mock<IEventProducer>();
         _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
@@ -72,7 +71,6 @@ public class GameBlacklistServiceShould : UnitTestBase
             _repository,
             _invitationRepository,
             _characterRepository,
-            _subscriptionRepository,
             _producer);
     }
 
@@ -131,14 +129,49 @@ public class GameBlacklistServiceShould : UnitTestBase
     }
 
     /// <summary>
-    /// The reader check is the one question this service asks about somebody other
-    /// than the caller, so it reads the subscription table rather than the game's
-    /// viewer-scoped flag. Without this guard the check would silently pass for
-    /// every reader — the game DTO here is loaded for the master, and its
-    /// subscriber flag says nothing about the user being blacklisted.
+    /// The request that lost the race is answered the way the check answers it.
     /// </summary>
+    /// <remarks>
+    /// The blacklist is read off the game a statement before the insert, so two
+    /// requests for one user both pass that read. The unique index refuses the
+    /// second insert and the repository hands it over as a duplicate; leaving that
+    /// exception uncaught would have turned the same question into a 500, and the
+    /// caller asked something whose answer is already true.
+    /// </remarks>
     [Fact]
-    public async Task RefuseToBlacklistAReaderBeforeTheyAreRemoved()
+    public async Task AnswerConflictWhenTheInsertLosesTheRace()
+    {
+        var gameId = Guid.NewGuid();
+        var username = "testuser";
+        var userId = Guid.NewGuid();
+        var game = CreateGame(gameId);
+        _gameService.GetAsync(gameId).Returns(game);
+        _userLookupService.FindUserIdAsync(username, Arg.Any<CancellationToken>()).Returns((true, userId));
+        _repository.Add(gameId, userId, _currentUserId)
+            .ThrowsAsync(new DuplicateEntityException("Duplicate game blacklist entry"));
+
+        var act = async () => await _service.Add(new OperateBlacklistLink { GameId = gameId, Username = username });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Conflict &&
+                        e.Message == RefusalMessage.AlreadyInBlacklist);
+        await _producer.DidNotReceive().SendAsync(EventType.ChangedGame, gameId);
+    }
+
+    /// <summary>
+    /// A subscriber is blacklisted as he stands, and the subscription is left
+    /// alone.
+    /// </summary>
+    /// <remarks>
+    /// The list closes writing, and a subscription is reading. The service used
+    /// to refuse a subscriber with "remove him from the game first", and nothing
+    /// removes a reader - so the player who had just left, whom the game
+    /// subscribes by itself, was the one person who could never be put on the
+    /// list. The service no longer holds the subscription table at all, which is
+    /// what keeps the subscription: there is nothing here to end it with.
+    /// </remarks>
+    [Fact]
+    public async Task BlacklistASubscriberAndKeepTheSubscription()
     {
         var gameId = Guid.NewGuid();
         var username = "reader";
@@ -146,15 +179,49 @@ public class GameBlacklistServiceShould : UnitTestBase
         var game = CreateGame(gameId);
         _gameService.GetAsync(gameId).Returns(game);
         _userLookupService.FindUserIdAsync(username, Arg.Any<CancellationToken>()).Returns((true, userId));
-        _subscriptionRepository
-            .FindAsync(userId, SubscriptionTargetType.Game, gameId, Arg.Any<CancellationToken>())
-            .Returns(new Subscription { Id = Guid.NewGuid(), SubscriberId = userId, TargetId = gameId });
+        _repository.Add(gameId, userId, _currentUserId).Returns(new GeneralUser { UserId = userId });
+        _invitationRepository.CancelInvitationsForUser(gameId, userId, Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<CancelledInvitation>());
+
+        await _service.Add(new OperateBlacklistLink { GameId = gameId, Username = username });
+
+        await _repository.Received(1).Add(gameId, userId, _currentUserId);
+        typeof(GameBlacklistService).GetConstructors().Single().GetParameters()
+            .Should().NotContain(parameter => parameter.ParameterType == typeof(ISubscriptionRepository),
+                "entering the list must not reach the subscription");
+    }
+
+    [Fact]
+    public async Task RefuseToBlacklistAPlayerBeforeTheyLeave()
+    {
+        var gameId = Guid.NewGuid();
+        var username = "player";
+        var userId = Guid.NewGuid();
+        var game = CreateGame(gameId);
+        game.Players = [new GeneralUser { UserId = userId, Username = username }];
+        _gameService.GetAsync(gameId).Returns(game);
+        _userLookupService.FindUserIdAsync(username, Arg.Any<CancellationToken>()).Returns((true, userId));
 
         var act = async () => await _service.Add(new OperateBlacklistLink { GameId = gameId, Username = username });
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Conflict);
+            .Where(e => e.StatusCode == HttpStatusCode.Conflict && e.Message == RefusalMessage.RemoveFromGameFirst);
         await _repository.DidNotReceive().Add(gameId, userId, _currentUserId);
+    }
+
+    [Fact]
+    public async Task RefuseToBlacklistTheMasterInTheSharedWords()
+    {
+        var gameId = Guid.NewGuid();
+        var game = CreateGame(gameId);
+        var masterId = game.Master!.UserId;
+        _gameService.GetAsync(gameId).Returns(game);
+        _userLookupService.FindUserIdAsync("Author", Arg.Any<CancellationToken>()).Returns((true, masterId));
+
+        var act = async () => await _service.Add(new OperateBlacklistLink { GameId = gameId, Username = "Author" });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.CannotBlacklistGameLead);
     }
 
     [Fact]

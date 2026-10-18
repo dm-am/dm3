@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Net.Http;
 using Amazon.S3;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
@@ -9,11 +10,14 @@ using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Authorization;
 using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Core.Correlation;
+using DM.Domain.Core.Geo;
 using DM.Infrastructure.Core.Extensions;
+using DM.Infrastructure.Core.Geo;
 using DM.Infrastructure.Core.Paging;
 using DM.Infrastructure.Core.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace DM.Infrastructure.Core;
@@ -46,6 +50,15 @@ public static class CoreRegistrationExtensions
             provider => provider.GetRequiredService<CorrelationTokenProvider>());
 
         services.TryAddSingleton<ICursorService, CursorService>();
+
+        // Singleton: the table it reads is tens of megabytes, and it is read
+        // once per copy, not once per question. Registered as itself and
+        // forwarded, so the refresh that replaces the table and the letter that
+        // reads it hold the same object; the scan would otherwise register the
+        // class as itself, transient, and the refresh would fill a copy nobody asks.
+        services.TryAddSingleton<IpCountryLookup>();
+        services.TryAddSingleton<IIpCountryLookup>(
+            provider => provider.GetRequiredService<IpCountryLookup>());
 
         // S3 Client registration (uses IAmazonS3ClientProvider implementations)
         services.TryAddSingleton<IAmazonS3>(provider =>
@@ -80,6 +93,40 @@ public static class CoreRegistrationExtensions
         services.TryAddSingleton<IPublicIdService, PublicIdService>();
 
         services.AddDefaultTypes(typeof(CoreRegistrationExtensions).Assembly);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Keeps the country table of the sign-in letter fresh: downloads it when the
+    /// configured file is missing and then once a week, and puts each checked copy
+    /// in use without a restart.
+    /// </summary>
+    /// <remarks>
+    /// Called by the host that sends the letter and by no other: a host that
+    /// never asks for a country has no reason to fetch the table. Does nothing
+    /// unless both GeoLocationConfiguration:CountryDatabasePath and
+    /// GeoLocationConfiguration:CountryDatabaseUrl are set.
+    /// </remarks>
+    /// <param name="services">Service collection that already holds <see cref="AddDmCore"/>.</param>
+    /// <returns>Service collection for chaining.</returns>
+    public static IServiceCollection AddDmCountryTableRefresh(this IServiceCollection services)
+    {
+        services.AddHostedService(provider =>
+        {
+            // Owned by the refresher, which disposes it with itself. One client
+            // for the life of the process; a weekly request opens a new connection
+            // each time, so a long-lived client does not pin a stale address.
+            var http = new HttpClient();
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("DM3-CountryTable/1.0");
+
+            return new CountryTableRefresher(
+                provider.GetRequiredService<IpCountryLookup>(),
+                provider.GetRequiredService<IOptions<GeoLocationConfiguration>>(),
+                provider.GetRequiredService<IDateTimeProvider>(),
+                provider.GetRequiredService<ILogger<CountryTableRefresher>>(),
+                http);
+        });
 
         return services;
     }

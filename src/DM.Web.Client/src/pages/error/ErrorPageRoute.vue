@@ -2,20 +2,19 @@
 /**
  * Dynamic error page for /error/:code routes and the catch-all 404.
  *
- * The code segment resolves in three ways (doc 4.2.3.1.6):
+ * The code segment resolves in two ways:
  *  - a numeric HTTP status (/error/404, /error/403…);
- *  - a symbolic OAuth-style code (/error/access_denied or /error?code=…),
- *    which borrows a matching HTTP illustration and carries its own message;
- *  - absent (the catch-all route) → 404.
+ *  - absent, unreadable or not a number (the catch-all route) -> 404.
+ *
+ * Non-numeric codes used to resolve through a table of symbolic ones borrowed
+ * from an external sign-in the server never grew. Nothing redirected here with
+ * one, so the three entries only gave three addresses a page of their own that
+ * no link led to.
  */
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
-import {
-  ErrorPage,
-  getErrorConfig,
-  getSymbolicError,
-} from "@/shared/ui/ErrorPage";
+import { ErrorPage, getErrorConfig } from "@/shared/ui/ErrorPage";
 
 const route = useRoute();
 
@@ -30,23 +29,14 @@ const rawCode = computed(() => {
   return String(fromParam || fromQuery || "");
 });
 
-const symbolic = computed(() => getSymbolicError(rawCode.value));
-
 const code = computed(() => {
-  if (symbolic.value) return symbolic.value.code;
   const numeric = Number(rawCode.value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : 404;
 });
 
-useDocumentTitle(() =>
-  symbolic.value ? symbolic.value.title : getErrorConfig(code.value).title,
-);
+useDocumentTitle(() => getErrorConfig(code.value).title);
 </script>
 
 <template>
-  <ErrorPage
-    :code="code"
-    :title="symbolic?.title"
-    :description="symbolic?.description"
-  />
+  <ErrorPage :code="code" />
 </template>

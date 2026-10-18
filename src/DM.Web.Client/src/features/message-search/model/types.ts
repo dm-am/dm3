@@ -1,10 +1,20 @@
 /**
- * Types for the global-chat message search.
+ * Types for the search over a feed of messages: the global chat or one
+ * correspondence.
  *
  * Mirrors the backend contract of GET /v1/search/messages
  * (MessageSearchController). The endpoint can address other sources as well,
- * but this client only ever asks it for the global chat (see searchStore).
+ * but this client only ever asks it for the feed its field stands over.
  */
+
+/**
+ * Where a search looks: the global chat, or one correspondence ("dm:<chat id>").
+ *
+ * The endpoint can search every source the reader may read, but its entry
+ * points are the fields above the two feeds, and a field above a feed searches
+ * that feed. Anything wider needs a page of its own before it needs a control.
+ */
+export type MessageSearchScope = "global" | `dm:${string}`;
 
 /** Where a hit lives. `chat` covers both direct ("ЛС") and group chats. */
 export type MessageSearchSourceType = "global" | "chat" | "game";

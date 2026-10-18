@@ -18,10 +18,17 @@ namespace BBCodeParser.Nodes
         /// <summary>Rendered HTML, security and alias substitutions applied.</summary>
         Html,
 
-        /// <summary>Text with no tag markup, substitutions still applied.</summary>
+        /// <summary>Plain text: no markup and no entities, the text substitutions applied.</summary>
         Text,
 
         /// <summary>BBCode source rebuilt from the tree.</summary>
-        Bb
+        Bb,
+
+        /// <summary>
+        /// DM3 addition against the original: BBCode source rebuilt from the
+        /// tree, with the names of every tag read as markup, and of its
+        /// parameters, in lower case. See NodeTree.ToBbInLowerCase.
+        /// </summary>
+        BbInLowerCase
     }
 }

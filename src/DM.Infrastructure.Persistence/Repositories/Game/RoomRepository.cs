@@ -50,7 +50,7 @@ internal class RoomRepository : IRoomRepository
             .ToHashSet();
 
         var rooms = await visible
-            .OrderBy(r => r.OrderNumber)
+            .InGameOrder()
             .ProjectToRoom()
             .ToArrayAsync();
 
@@ -59,17 +59,25 @@ internal class RoomRepository : IRoomRepository
             room.CanView = enterable.Contains(room.Id);
         }
 
+        await CountChatMessages(rooms);
         return rooms;
     }
 
-    public Task<Room?> GetAvailable(Guid roomId, Guid userId, bool mayJudgePremoderation)
+    public async Task<Room?> GetAvailable(Guid roomId, Guid userId, bool mayJudgePremoderation)
     {
-        return _dbContext.Rooms
+        var room = await _dbContext.Rooms
             .Where(r => r.RoomId == roomId)
             .Where(GameAccessibilityFilters.RoomAvailable(
                 userId, mayJudgePremoderation: mayJudgePremoderation))
             .ProjectToRoom()
-            .FirstOrDefaultAsync()!;
+            .FirstOrDefaultAsync();
+
+        if (room != null)
+        {
+            await CountChatMessages([room]);
+        }
+
+        return room;
     }
 
     public Task<RoomToUpdate?> GetForUpdate(Guid roomId, Guid userId)
@@ -81,13 +89,32 @@ internal class RoomRepository : IRoomRepository
             .FirstOrDefaultAsync()!;
     }
 
-    public Task<RoomOrderInfo?> GetLastRoomInfo(Guid gameId)
+    /// <summary>
+    /// The messages of the chats behind the rooms of chat, one grouped read for
+    /// all of them: the projection counts posts, and a room of chat has none.
+    /// </summary>
+    private async Task CountChatMessages(IReadOnlyCollection<Room> rooms)
     {
-        return _dbContext.Rooms
-            .Where(r => !r.IsRemoved && r.GameId == gameId)
-            .OrderByDescending(r => r.OrderNumber)
-            .ProjectToRoomOrderInfo()
-            .FirstOrDefaultAsync();
+        var chatIds = rooms
+            .Where(r => r.Type == RoomType.Chat && r.ChatId.HasValue)
+            .Select(r => r.ChatId!.Value)
+            .Distinct()
+            .ToArray();
+        if (chatIds.Length == 0)
+        {
+            return;
+        }
+
+        var counts = await _dbContext.Messages
+            .Where(m => !m.IsRemoved && chatIds.Contains(m.ChatId))
+            .GroupBy(m => m.ChatId)
+            .Select(g => new { ChatId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(c => c.ChatId, c => c.Count);
+
+        foreach (var room in rooms.Where(r => r.Type == RoomType.Chat && r.ChatId.HasValue))
+        {
+            room.TotalPostsCount = counts.GetValueOrDefault(room.ChatId!.Value);
+        }
     }
 
     #endregion
@@ -96,21 +123,18 @@ internal class RoomRepository : IRoomRepository
 
     public async Task<Room> Create(CreateRoomEntity createRoom)
     {
-        // RoomNumber is the room's address and is allocated as MAX+1, and the
-        // tail of the room list is a read-modify-write of two rows: both are
+        // RoomNumber is the room's address and is allocated as MAX+1, which is
         // wrong the moment two rooms of one game are created at once. Locking
-        // the game row first serializes creation per game, which is the smallest
-        // scope that makes the number and the list links correct at the same
-        // time; the unique index on (GameId, RoomNumber) stays as the invariant
-        // behind it. The strategy wrapper is required because the API host
-        // configures EnableRetryOnFailure, and a retrying execution strategy
-        // refuses a transaction opened by hand.
+        // the game row first serializes creation per game, the smallest scope
+        // that makes the number correct; the unique index on (GameId,
+        // RoomNumber) stays as the invariant behind it. The strategy wrapper is
+        // required because the API host configures EnableRetryOnFailure, and a
+        // retrying execution strategy refuses a transaction opened by hand.
         await RetryableWrite.Run(_dbContext, async () =>
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-            await _dbContext.Database.ExecuteSqlRawAsync(
-                """SELECT "GameId" FROM "Games" WHERE "GameId" = {0} FOR UPDATE""", createRoom.GameId);
+            await LockGame(createRoom.GameId);
 
             // IgnoreQueryFilters: a removed room keeps its number. Counted under
             // the soft-delete filter, deleting the newest room would hand its
@@ -123,11 +147,14 @@ internal class RoomRepository : IRoomRepository
                 .Select(r => (int?)r.RoomNumber)
                 .MaxAsync() ?? 0;
 
-            // Get the last room to set proper links
-            var lastRoom = await _dbContext.Rooms
-                .Where(r => !r.IsRemoved && r.GameId == createRoom.GameId)
-                .OrderByDescending(r => r.OrderNumber)
-                .FirstOrDefaultAsync();
+            // The place after the last room the game lists, read under the
+            // same lock: two rooms created at once would otherwise both take
+            // it. A removed room is listed nowhere and holds no place.
+            var lastPlace = await _dbContext.Rooms
+                .TagWith("DM.Game.MaxRoomOrder")
+                .Where(r => r.GameId == createRoom.GameId)
+                .Select(r => (double?)r.OrderNumber)
+                .MaxAsync() ?? 0;
 
             _dbContext.Rooms.Add(new DbRoom
             {
@@ -141,16 +168,9 @@ internal class RoomRepository : IRoomRepository
                 ViewDiceResults = createRoom.ViewDiceResults,
                 DiceEnabled = createRoom.DiceEnabled,
                 IsArchived = createRoom.IsArchived,
-                OrderNumber = createRoom.OrderNumber,
-                PreviousRoomId = lastRoom?.RoomId,
+                OrderNumber = lastPlace + 1,
                 IsRemoved = false
             });
-
-            // Update last room's next pointer
-            if (lastRoom != null)
-            {
-                lastRoom.NextRoomId = createRoom.RoomId;
-            }
 
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -164,108 +184,110 @@ internal class RoomRepository : IRoomRepository
 
     public async Task<Room> Update(UpdateRoomEntity updateRoom)
     {
-        var room = await _dbContext.Rooms.FindAsync(updateRoom.RoomId);
-        if (room == null)
+        // A move rewrites the place of every room of the game, so it is
+        // serialized per game the way creation is: two moves read side by side
+        // would each number the rooms from the order the other is replacing.
+        // The lock is taken before the room is read, so the values the change
+        // tracker compares against are the ones the lock protects.
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            throw new InvalidOperationException($"Room {updateRoom.RoomId} not found");
-        }
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-        // Update simple fields
-        if (!string.IsNullOrEmpty(updateRoom.Title))
-            room.Title = updateRoom.Title.Trim();
-
-        if (updateRoom.Type.HasValue)
-            room.Type = updateRoom.Type.Value;
-
-        if (updateRoom.AccessType.HasValue)
-            room.AccessType = updateRoom.AccessType.Value;
-
-        if (updateRoom.ViewPrivateText.HasValue)
-            room.ViewPrivateText = updateRoom.ViewPrivateText.Value;
-
-        if (updateRoom.ViewDiceResults.HasValue)
-            room.ViewDiceResults = updateRoom.ViewDiceResults.Value;
-
-        if (updateRoom.DiceEnabled.HasValue)
-            room.DiceEnabled = updateRoom.DiceEnabled.Value;
-
-        if (updateRoom.HiddenWithoutAccess.HasValue)
-            room.HiddenWithoutAccess = updateRoom.HiddenWithoutAccess.Value;
-
-        if (updateRoom.IsArchived.HasValue)
-            room.IsArchived = updateRoom.IsArchived.Value;
-
-        if (updateRoom.ShouldSetChatId)
-            room.ChatId = updateRoom.ChatId;
-
-        // Handle room reordering if requested
-        if (updateRoom.ShouldReorder)
-        {
-            var newPreviousId = updateRoom.NewPreviousRoomId;
-
-            // Only reorder if position actually changed
-            if (room.PreviousRoomId != newPreviousId)
+            if (updateRoom.ShouldReorder)
             {
-                // Remove from current position
-                if (room.PreviousRoomId.HasValue)
-                {
-                    var oldPrev = await _dbContext.Rooms.FindAsync(room.PreviousRoomId.Value);
-                    if (oldPrev != null)
-                        oldPrev.NextRoomId = room.NextRoomId;
-                }
-
-                if (room.NextRoomId.HasValue)
-                {
-                    var oldNext = await _dbContext.Rooms.FindAsync(room.NextRoomId.Value);
-                    if (oldNext != null)
-                        oldNext.PreviousRoomId = room.PreviousRoomId;
-                }
-
-                // Insert at new position
-                room.PreviousRoomId = newPreviousId;
-
-                if (newPreviousId.HasValue && newPreviousId.Value != Guid.Empty)
-                {
-                    var newPrev = await _dbContext.Rooms.FindAsync(newPreviousId.Value);
-                    if (newPrev != null)
-                    {
-                        room.NextRoomId = newPrev.NextRoomId;
-                        newPrev.NextRoomId = room.RoomId;
-                    }
-
-                    if (room.NextRoomId.HasValue)
-                    {
-                        var newNext = await _dbContext.Rooms.FindAsync(room.NextRoomId.Value);
-                        if (newNext != null)
-                            newNext.PreviousRoomId = room.RoomId;
-                    }
-                }
-                else
-                {
-                    // Moving to first position
-                    var firstRoom = await _dbContext.Rooms
-                        .Where(r => !r.IsRemoved && r.GameId == room.GameId && !r.PreviousRoomId.HasValue && r.RoomId != room.RoomId)
-                        .FirstOrDefaultAsync();
-
-                    room.PreviousRoomId = null;
-                    room.NextRoomId = firstRoom?.RoomId;
-
-                    if (firstRoom != null)
-                        firstRoom.PreviousRoomId = room.RoomId;
-                }
+                // A room never changes its game, so reading which one it is
+                // ahead of the lock reads nothing the lock protects.
+                var gameId = await _dbContext.Rooms
+                    .Where(r => r.RoomId == updateRoom.RoomId)
+                    .Select(r => r.GameId)
+                    .FirstAsync();
+                await LockGame(gameId);
             }
-        }
 
-        // Handle soft delete if requested
-        if (updateRoom.IsRemoved.HasValue)
-            room.IsRemoved = updateRoom.IsRemoved.Value;
+            var room = await _dbContext.Rooms.FindAsync(updateRoom.RoomId)
+                ?? throw new InvalidOperationException($"Room {updateRoom.RoomId} not found");
 
-        await _dbContext.SaveChangesAsync();
+            if (!string.IsNullOrEmpty(updateRoom.Title))
+                room.Title = updateRoom.Title.Trim();
 
-        return await _dbContext.Rooms
+            if (updateRoom.Type.HasValue)
+                room.Type = updateRoom.Type.Value;
+
+            if (updateRoom.AccessType.HasValue)
+                room.AccessType = updateRoom.AccessType.Value;
+
+            if (updateRoom.ViewPrivateText.HasValue)
+                room.ViewPrivateText = updateRoom.ViewPrivateText.Value;
+
+            if (updateRoom.ViewDiceResults.HasValue)
+                room.ViewDiceResults = updateRoom.ViewDiceResults.Value;
+
+            if (updateRoom.DiceEnabled.HasValue)
+                room.DiceEnabled = updateRoom.DiceEnabled.Value;
+
+            if (updateRoom.HiddenWithoutAccess.HasValue)
+                room.HiddenWithoutAccess = updateRoom.HiddenWithoutAccess.Value;
+
+            if (updateRoom.IsArchived.HasValue)
+                room.IsArchived = updateRoom.IsArchived.Value;
+
+            if (updateRoom.ShouldSetChatId)
+                room.ChatId = updateRoom.ChatId;
+
+            if (updateRoom.ShouldReorder)
+                await MoveAfter(room, updateRoom.NewPreviousRoomId);
+
+            if (updateRoom.IsRemoved.HasValue)
+                room.IsRemoved = updateRoom.IsRemoved.Value;
+
+            await _dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
+
+        var result = await _dbContext.Rooms
             .Where(r => r.RoomId == updateRoom.RoomId)
             .ProjectToRoom()
             .FirstAsync();
+        await CountChatMessages([result]);
+        return result;
+    }
+
+    /// <summary>
+    /// Puts the room right after <paramref name="previousRoomId" />, or first
+    /// when it is null, and numbers the rooms of the game 1, 2, 3 in the order
+    /// that makes. Every list sorts by that number (RoomOrder), so the move is
+    /// seen by all of them at once.
+    /// </summary>
+    /// <remarks>
+    /// The whole game is renumbered rather than one number squeezed between
+    /// two: halving the gap runs out of precision after some fifty moves into
+    /// one place, and a game holds a few dozen rooms at most. The service has
+    /// checked the room named is one of this game; one removed since then
+    /// leaves the room where it stands.
+    /// </remarks>
+    private async Task MoveAfter(DbRoom room, Guid? previousRoomId)
+    {
+        var order = await _dbContext.Rooms
+            .Where(r => r.GameId == room.GameId)
+            .InGameOrder()
+            .ToListAsync();
+
+        if (previousRoomId == room.RoomId
+            || (previousRoomId.HasValue && order.All(r => r.RoomId != previousRoomId.Value)))
+        {
+            return;
+        }
+
+        order.Remove(room);
+        var place = previousRoomId.HasValue
+            ? order.FindIndex(r => r.RoomId == previousRoomId.Value) + 1
+            : 0;
+        order.Insert(place, room);
+
+        for (var i = 0; i < order.Count; i++)
+        {
+            order[i].OrderNumber = i + 1;
+        }
     }
 
     public async Task Delete(Guid roomId, Guid deletedByUserId)
@@ -281,21 +303,6 @@ internal class RoomRepository : IRoomRepository
             if (room == null) return;
 
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
-
-            // Remove from linked list
-            if (room.PreviousRoomId.HasValue)
-            {
-                var prevRoom = await _dbContext.Rooms.FindAsync(room.PreviousRoomId.Value);
-                if (prevRoom != null)
-                    prevRoom.NextRoomId = room.NextRoomId;
-            }
-
-            if (room.NextRoomId.HasValue)
-            {
-                var nextRoom = await _dbContext.Rooms.FindAsync(room.NextRoomId.Value);
-                if (nextRoom != null)
-                    nextRoom.PreviousRoomId = room.PreviousRoomId;
-            }
 
             var now = _dateTimeProvider.Now;
             SoftDelete.Mark(room, deletedByUserId, now);
@@ -321,6 +328,15 @@ internal class RoomRepository : IRoomRepository
             await transaction.CommitAsync();
         });
     }
+
+    /// <summary>
+    /// Holds the game row until the transaction ends: the writes that read the
+    /// rooms of a game and write them back depending on what they read go one
+    /// at a time per game.
+    /// </summary>
+    private Task LockGame(Guid gameId) =>
+        _dbContext.Database.ExecuteSqlRawAsync(
+            """SELECT "GameId" FROM "Games" WHERE "GameId" = {0} FOR UPDATE""", gameId);
 
     #endregion
 }

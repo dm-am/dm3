@@ -40,19 +40,19 @@ withDefaults(
   flex-direction: column
   gap: $tiny
 
+// Square, as the chat preview it stands in for.
 .skeleton-chat
   display: flex
   align-items: center
   gap: $medium
   padding: $medium
-  border-radius: $border-radius
   background-color: $bg-element
 
 .skeleton-avatar
   flex-shrink: 0
   width: $grid-step * 12
   height: $grid-step * 12
-  +skeleton-shimmer
+  +skeleton-shimmer($square: true)
 
 .skeleton-body
   flex: 1

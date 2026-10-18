@@ -33,6 +33,14 @@ internal class PasswordResetRepository : IPasswordResetRepository
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
+            // The account row is claimed before its tokens are touched, in the
+            // same order a password change takes them. Without it the two
+            // interleave: the change kills the live links, this block issues a new
+            // one after it, and the letter that goes out still sets the password
+            // the owner has just replaced.
+            await _dbContext.Database.ExecuteSqlRawAsync(
+                """SELECT "UserId" FROM "Users" WHERE "UserId" = {0} FOR UPDATE""", userId);
+
             await _dbContext.Tokens
                 .Where(t => t.UserId == userId && t.Type == TokenType.PasswordChange && !t.IsRemoved)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true));

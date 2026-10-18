@@ -68,20 +68,12 @@ public class PrivateAddresseeSnapshotShould
         new(AnnaCharacter, "Владимир", AnnaOwner)
     };
 
-    private const string AddressedToChuck = "[private=Чак]секрет[/private]";
+    private const string AddressedToChuck = "[private=\"Чак\"]секрет[/private]";
 
-    /// <summary>
-    /// Every spelling a client can produce, including the one-sided quote that
-    /// used to defeat normalisation and hand the block to the whole room.
-    /// </summary>
-    [Theory]
-    [InlineData("[private=Анна]секрет[/private]")]
-    [InlineData("[private=\"Анна\"]секрет[/private]")]
-    [InlineData("[PRIVATE=Анна]секрет[/PRIVATE]")]
-    [InlineData("[Private=\"Анна]секрет[/Private]")]
-    [InlineData("[private= Анна ]секрет[/private]")]
-    public void ReachTheAddressee_AndNobodyElse_WhicheverWayTheAttributeIsWritten(string text)
+    [Fact]
+    public void ReachTheAddressee_AndNobodyElse()
     {
+        const string text = "[private=\"Анна\"]секрет[/private]";
         var snapshot = PrivateAddresseeSnapshot.Build(text, Roster);
 
         Render(text, snapshot, AnnaOwner).Should().Contain("секрет");
@@ -89,10 +81,37 @@ public class PrivateAddresseeSnapshotShould
         Render(text, snapshot, Stranger).Should().NotContain("секрет");
     }
 
+    /// <summary>
+    /// A spelling the grammar does not accept addresses nobody, whichever name it
+    /// seems to carry: the block stays with the author and the leads, and the save
+    /// path refuses the text and says how to write it.
+    /// </summary>
+    /// <remarks>
+    /// The unquoted form among them is what the editor used to write. It is not
+    /// the DM2 form, and reading a name out of it would mean guessing where the
+    /// name ends, which is the one guess a hidden block may not make.
+    /// </remarks>
+    [Theory]
+    [InlineData("[private=Анна]секрет[/private]")]
+    [InlineData("[PRIVATE=Анна]секрет[/private]")]
+    [InlineData("[Private=\"Анна]секрет[/private]")]
+    [InlineData("[private= Анна ]секрет[/private]")]
+    [InlineData("[private to=\"Анна\"]секрет[/private]")]
+    public void ReachNoAddressee_WhenTheAttributeIsMisspelled(string text)
+    {
+        var snapshot = PrivateAddresseeSnapshot.Build(text, Roster);
+
+        snapshot.Should().Be(PrivateAddresseeSnapshot.Empty);
+        Render(text, snapshot, AnnaOwner).Should().NotContain("секрет");
+        Render(text, snapshot, Stranger).Should().NotContain("секрет");
+        Render(text, snapshot, AuthorId).Should().Contain("секрет");
+        PrivateBlockMarkup.IsBalanced(text).Should().BeFalse();
+    }
+
     [Fact]
     public void TellTwoBlocksApart()
     {
-        const string text = "[private=Анна]анне[/private] всем [private=Борис]борису[/private]";
+        const string text = "[private=\"Анна\"]анне[/private] всем [private=\"Борис\"]борису[/private]";
         var snapshot = PrivateAddresseeSnapshot.Build(text, Roster);
 
         var anna = Render(text, snapshot, AnnaOwner);
@@ -116,7 +135,7 @@ public class PrivateAddresseeSnapshotShould
     [Fact]
     public void ReachEveryOwnerNamedInOneBlock()
     {
-        const string text = "[private=Анна, Борис]секрет[/private]";
+        const string text = "[private=\"Анна, Борис\"]секрет[/private]";
         var snapshot = PrivateAddresseeSnapshot.Build(text, Roster);
 
         Render(text, snapshot, AnnaOwner).Should().Contain("секрет");
@@ -130,7 +149,7 @@ public class PrivateAddresseeSnapshotShould
         // A snapshot can only name characters that already read the room, so it
         // hands out no access room membership did not hand out first.
         PrivateAddresseeSnapshot
-            .Build("[private=Виктор]секрет[/private]", Roster)
+            .Build("[private=\"Виктор\"]секрет[/private]", Roster)
             .Should().Be(PrivateAddresseeSnapshot.Empty);
     }
 
@@ -147,7 +166,7 @@ public class PrivateAddresseeSnapshotShould
     {
         // Addressee-forever: the block was resolved once, and an edit made after
         // the character left must not revoke the player it was written to.
-        const string text = "[private=Анна]секрет[/private]";
+        const string text = "[private=\"Анна\"]секрет[/private]";
         var atFirstSave = PrivateAddresseeSnapshot.Build(text, Roster);
 
         var afterSheLeft = PrivateAddresseeSnapshot.Build(
@@ -160,8 +179,8 @@ public class PrivateAddresseeSnapshotShould
     [Fact]
     public void ResolveABlockTheEditIntroduced_AndDropOneItRemoved()
     {
-        var before = PrivateAddresseeSnapshot.Build("[private=Анна]анне[/private]", Roster);
-        const string after = "[private=Борис]борису[/private]";
+        var before = PrivateAddresseeSnapshot.Build("[private=\"Анна\"]анне[/private]", Roster);
+        const string after = "[private=\"Борис\"]борису[/private]";
 
         var rebuilt = PrivateAddresseeSnapshot.Build(after, before, Roster);
 
@@ -234,7 +253,7 @@ public class PrivateAddresseeSnapshotShould
     public void ResolveTheCurrentNameOfTheSameCharacterAsANewKey()
     {
         var frozen = PrivateAddresseeSnapshot.Build(AddressedToChuck, RosterBeforeTheRenames);
-        const string renamed = "[private=Владимир]секрет[/private]";
+        const string renamed = "[private=\"Владимир\"]секрет[/private]";
 
         var rebuilt = PrivateAddresseeSnapshot.Build(renamed, frozen, RosterAfterTheRenames);
 
@@ -264,42 +283,44 @@ public class PrivateAddresseeSnapshotShould
 
         PrivateAddresseeSnapshot.Parse(rebuilt).Should().ContainKey("Чак")
             .WhoseValue.Should().BeEquivalentTo(new[] { AnnaOwner });
-        // Nobody is named, so the line falls back to the author's own text -
-        // exactly what it printed before the snapshot recorded any name.
-        Render(AddressedToChuck, rebuilt, AnnaOwner).Should().Contain("Получатели: Чак");
+        // Nobody is named, so the recipients fall back to the author's own
+        // text - exactly what they named before the snapshot recorded any name.
+        Render(AddressedToChuck, rebuilt, AnnaOwner)
+            .Should().Contain("data-recipients=\"DungeonMaster, Assistant, Чак\"");
     }
 
     /// <summary>
-    /// The recipients line is the reader's only statement of who else is in on
-    /// the block. Built from the tag text it names whoever the author typed,
+    /// The recipients are the reader's only statement of who else is in on the
+    /// block. Built from the tag text they name whoever the author typed,
     /// including names that reached nobody.
     /// </summary>
     [Fact]
-    public void NameOnlyTheResolvedAddresseesInTheRecipientsLine()
+    public void NameOnlyTheResolvedAddresseesInTheRecipients()
     {
         const string text = "[private=\"Анна, Виктор\"]секрет[/private]";
         var snapshot = PrivateAddresseeSnapshot.Build(text, Roster);
 
         var html = Render(text, snapshot, AnnaOwner);
 
-        html.Should().Contain("Получатели: Анна");
+        html.Should().Contain("data-recipients=\"DungeonMaster, Assistant, Анна\"");
         html.Should().NotContain("Виктор");
     }
 
     /// <summary>
-    /// After a rename the line names the addressee as they are called now, while
-    /// the tag keeps the name the author typed: the text is theirs, the line is
-    /// the reader's.
+    /// After a rename the recipients name the addressee as they are called now,
+    /// while the tag keeps the name the author typed: the text is theirs, the
+    /// recipients are the reader's.
     /// </summary>
     [Fact]
-    public void NameTheAddresseeAsTheyAreCalledNowInTheRecipientsLine()
+    public void NameTheAddresseeAsTheyAreCalledNowInTheRecipients()
     {
         var frozen = PrivateAddresseeSnapshot.Build(AddressedToChuck, RosterBeforeTheRenames);
 
         var rebuilt = PrivateAddresseeSnapshot.Build(
             AddressedToChuck, frozen, RosterAfterTheFirstRename);
 
-        Render(AddressedToChuck, rebuilt, AnnaOwner).Should().Contain("Получатели: Владимир");
+        Render(AddressedToChuck, rebuilt, AnnaOwner)
+            .Should().Contain("data-recipients=\"DungeonMaster, Assistant, Владимир\"");
         RenderForAuthorEdit(AddressedToChuck).Should().Contain("data-bb-addressees=\"Чак\"");
     }
 

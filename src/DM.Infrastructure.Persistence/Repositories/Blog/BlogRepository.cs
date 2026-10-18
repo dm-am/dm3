@@ -312,7 +312,9 @@ internal class BlogRepository : IBlogRepository
         // composes the collection subqueries and joins from it directly
         var blog = await _dbContext.Blogs
             .TagWith("DM.Blog.GetByUsername")
-            .Where(b => b.Author.Username.ToLower() == username.ToLower())
+            // ProjectToBlog lifts the account filter (RemovedAuthors): a removed
+            // owner's login finds no blog, as it found none before.
+            .Where(b => !b.Author.IsRemoved && b.Author.Username.ToLower() == username.ToLower())
             // AsSplitQuery: BlogDto's Rubrics/Assistants/Tokens collections.
             .ProjectToBlog()
             .AsSplitQuery()
@@ -496,7 +498,6 @@ internal class BlogRepository : IBlogRepository
             Description = entity.Description ?? "",
             PremoderationStatus = entity.PremoderationStatus,
             DraftVisibility = entity.DraftVisibility,
-            CommentsEnabled = entity.CommentsEnabled,
             CreatedUtc = entity.CreatedUtc,
             IsRemoved = false
         };
@@ -530,8 +531,6 @@ internal class BlogRepository : IBlogRepository
             blog.Description = entity.Description;
         if (entity.DraftVisibility.HasValue)
             blog.DraftVisibility = entity.DraftVisibility.Value;
-        if (entity.CommentsEnabled.HasValue)
-            blog.CommentsEnabled = entity.CommentsEnabled.Value;
         if (entity.Status.HasValue)
             blog.Status = entity.Status.Value;
         if (entity.ClosedReason.HasValue)
@@ -556,14 +555,31 @@ internal class BlogRepository : IBlogRepository
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The subscriptions to the blog go with it, in the same transaction. Nothing
+    /// brings a deleted blog back, so a subscription that outlived it could never
+    /// deliver anything: it only stood in the reader's list as a nameless row
+    /// ("Блог n/a") that was theirs to clean up.
+    /// </remarks>
     public async Task DeleteBlog(Guid blogId, Guid deletedByUserId, CancellationToken ct = default)
     {
-        var blog = await _dbContext.Blogs.FirstOrDefaultAsync(b => b.BlogId == blogId, ct);
-        if (blog != null)
+        await RetryableWrite.Run(_dbContext, async cancellation =>
         {
-            SoftDelete.Mark(blog, deletedByUserId, _dateTimeProvider.Now);
-            await _dbContext.SaveChangesAsync(ct);
-        }
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellation);
+
+            var blog = await _dbContext.Blogs.FirstOrDefaultAsync(b => b.BlogId == blogId, cancellation);
+            if (blog != null)
+            {
+                SoftDelete.Mark(blog, deletedByUserId, _dateTimeProvider.Now);
+                await _dbContext.SaveChangesAsync(cancellation);
+
+                await _dbContext.Subscriptions
+                    .Where(s => s.TargetType == SubscriptionTargetType.Blog && s.TargetId == blogId)
+                    .ExecuteDeleteAsync(cancellation);
+            }
+
+            await transaction.CommitAsync(cancellation);
+        }, ct);
     }
 
     /// <inheritdoc />

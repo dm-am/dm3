@@ -22,11 +22,10 @@ internal class PasswordResetMailSender : AccountMailSender, IPasswordResetMailSe
     }
 
     /// <inheritdoc />
-    public Task Send(string email, string username, Guid token)
+    public Task Send(string email, Guid token)
     {
-        var subject = $"Dungeon Master: подтверждение сброса пароля для {username}";
+        const string subject = "Dungeon Master: восстановление пароля";
         return Send(email, subject, new PasswordResetConfirmationViewModel(
-            Username: username,
             ConfirmationLinkUrl: ConfirmationLink("reset-password", token)));
     }
 }

@@ -149,9 +149,9 @@ function toggleExpand() {
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
 
+// A content card: square corners, as every card of the site.
 .character-card
   background-color: $bg-element
-  border-radius: $border-radius
   overflow: hidden
 
 .character-header
@@ -168,18 +168,15 @@ function toggleExpand() {
   width: $grid-step * 15
   height: $grid-step * 15
   object-fit: cover
-  border-radius: $border-radius
 
 .character-info
   flex: 1
   min-width: 0
 
+// A long name wraps, whole, rather than losing its end under "...".
 .character-name
   font-weight: bold
   margin: 0
-  white-space: nowrap
-  overflow: hidden
-  text-overflow: ellipsis
 
 .character-status
   font-size: $secondary-font-size

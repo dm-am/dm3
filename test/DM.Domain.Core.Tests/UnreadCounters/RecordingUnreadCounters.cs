@@ -102,7 +102,7 @@ internal sealed class RecordingUnreadCounters : IUnreadCountersRepository
 
     public Task FlushAllAsync(Guid userId, UnreadEntryType entryType, Guid parentId) => Unexpected<object>();
 
-    public Task ChangeParentAsync(Guid parentId, UnreadEntryType entryType, Guid newParentId) =>
+    public Task ChangeParentAsync(Guid entityId, UnreadEntryType entryType, Guid newParentId) =>
         Unexpected<object>();
 
     public Task<DateTime?> GetLastReadTimeAsync(Guid userId, Guid entityId, UnreadEntryType entryType) =>

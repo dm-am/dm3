@@ -25,3 +25,20 @@ export function reviewSignName(sign: number): string {
   if (sign < 0) return "Negative";
   return "Neutral";
 }
+
+/** A sign as a segment of the toggle the create and edit forms show. */
+export interface ReviewSignOption {
+  value: "1" | "0" | "-1";
+  label: string;
+}
+
+/**
+ * The signs a reviewer may pick, in the order the forms offer them. A newbie
+ * rates neutral only: the server takes "+" and "−" from 100 posts on.
+ */
+export function reviewSignOptions(canSign: boolean): ReviewSignOption[] {
+  const neutral: ReviewSignOption = { value: "0", label: "=" };
+  return canSign
+    ? [{ value: "1", label: "+" }, neutral, { value: "-1", label: "−" }]
+    : [neutral];
+}

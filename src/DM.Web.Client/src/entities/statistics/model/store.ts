@@ -61,17 +61,28 @@ export const useStatisticsStore = defineStore("statistics", () => {
     loaded.value = true;
   }
 
-  function startPolling(interval = DEFAULT_POLL_INTERVAL) {
-    stopPolling();
+  /**
+   * The statistics blocks on screen that asked for the polling. The header and
+   * the right column of a phone each draw one while the shell switches between
+   * them, and the block that goes must not stop the polling of the one that
+   * stays. A set and not a count: a block mounted in a hidden tab starts once
+   * on mount and once more when the tab is shown, and a count would never come
+   * back down to zero for it, polling a hidden tab from then on.
+   */
+  const pollers = new Set<object>();
+
+  function startPolling(poller: object, interval = DEFAULT_POLL_INTERVAL) {
+    pollers.add(poller);
+    if (pollIntervalId) return;
     fetch(); // Fetch immediately
     pollIntervalId = setInterval(fetch, interval);
   }
 
-  function stopPolling() {
-    if (pollIntervalId) {
-      clearInterval(pollIntervalId);
-      pollIntervalId = null;
-    }
+  function stopPolling(poller: object) {
+    pollers.delete(poller);
+    if (pollers.size > 0 || !pollIntervalId) return;
+    clearInterval(pollIntervalId);
+    pollIntervalId = null;
   }
 
   return {

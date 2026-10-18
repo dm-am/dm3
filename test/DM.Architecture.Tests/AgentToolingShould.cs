@@ -261,6 +261,69 @@ public class AgentToolingShould
             "scripts/gates.sh exists to answer before the push what the hook answers during it");
     }
 
+    /// <summary>
+    /// The end-to-end suite runs only after its stand has been checked, and its
+    /// report never holds the run open.
+    /// </summary>
+    /// <remarks>
+    /// The suite is the dearest gate and the only one that needs something a
+    /// clone does not carry: an API standing, seeded, with rate limiting off.
+    /// The check goes ahead of every gate that costs anything, so a missing
+    /// stand is a refusal in a second that names the command to fix it, rather
+    /// than a wall of red locators twenty minutes in. And Playwright opens its
+    /// HTML report after a failure whenever it sees a terminal, which from
+    /// scripts/gates.sh would leave the run waiting on Ctrl+C instead of ending.
+    /// </remarks>
+    [Theory]
+    [InlineData("hooks/pre-push")]
+    [InlineData("gates.sh")]
+    public void CheckTheStandBeforeTheEndToEndSuite(string script)
+    {
+        var code = File.ReadAllLines(Path.Combine(RepositoryRoot, "scripts", script))
+            .Where(line => !line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+            .ToList();
+
+        var suite = code.FindIndex(line => line.Contains("npm run test:e2e:fast", StringComparison.Ordinal));
+        var check = code.FindIndex(line => line.Contains("check-e2e-stand.sh", StringComparison.Ordinal));
+        var firstCostlyGate = code.FindIndex(line => line.Contains("check-shell-scripts.sh", StringComparison.Ordinal));
+
+        suite.Should().BeGreaterThan(-1, $"scripts/{script} runs the end-to-end suite");
+        firstCostlyGate.Should().BeGreaterThan(-1, $"scripts/{script} runs shellcheck");
+        check.Should().BeGreaterThan(-1,
+            $"scripts/{script} runs a suite that needs a stand, and has to say so before it starts");
+        check.Should().BeLessThan(firstCostlyGate,
+            "a missing stand is learnt before the gates that take minutes, not after them");
+        code[suite].Should().Contain("PLAYWRIGHT_HTML_OPEN=never",
+            "a failed run that opens its report waits on Ctrl+C instead of ending");
+    }
+
+    /// <summary>
+    /// The stand check reads the stack and changes nothing in it.
+    /// </summary>
+    /// <remarks>
+    /// The hook refuses and names the command; it does not run it. A push that
+    /// recreated the API on its own would restart the stack under whatever tab
+    /// is open on it, rebuild an image nobody asked for, and do it on a machine
+    /// whose owner only wanted to push.
+    /// </remarks>
+    [Fact]
+    public void LeaveTheStandAsTheCheckFoundIt()
+    {
+        var code = File.ReadAllLines(Path.Combine(RepositoryRoot, "scripts", "check-e2e-stand.sh"))
+            .Where(line => !line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+            .ToArray();
+
+        var acting = code
+            .Where(line =>
+                Regex.IsMatch(line, @"\bdocker\s+(?:compose|start|restart|run|rm|stop|kill|exec|container|network|volume)\b") ||
+                (Regex.IsMatch(line, @"\bdm\.(?:ps1|sh)\b") && !line.Contains("echo", StringComparison.Ordinal)))
+            .Select(line => line.Trim());
+
+        Named(acting).Should().BeEmpty(
+            "scripts/check-e2e-stand.sh reads the stand and names the command that prepares it; " +
+            "running that command is the developer's call");
+    }
+
     private static readonly string[] Workflows = { "dotnet.yml", "security.yml" };
 
     private static string WorkflowPath(string workflow) =>
@@ -350,18 +413,25 @@ public class AgentToolingShould
                 "a local build restores as it goes; CI splits it out so that the build step " +
                 "after it can pass --no-restore on a checkout that has no packages at all",
 
-            // e2e - the suite itself, and the stack it needs standing
+            // e2e - the stack the suite needs standing. The suite itself, "Run the
+            // suite", is a local gate: the hook runs the same test:e2e:fast
+            // against the local stand once scripts/check-e2e-stand.sh has
+            // found that stand up and with rate limiting off.
             ["Generate the throwaway secrets compose refuses to start without"] =
                 "invents the values compose declares with ${...:?}; a machine here has " +
                 "docker/.env with values of its own",
             ["Create .env for Docker Compose"] =
                 "the same file, which on this machine exists and is not a copy of the example",
             ["Overlay that turns rate limiting off and lets the preview origin in"] =
-                "writes the compose overlay the end-to-end job runs under",
+                "writes the compose overlay the end-to-end job runs under; the stand here " +
+                "gets the same switch from dm.ps1 e2e or dm.sh e2e, and the hook refuses a " +
+                "stand without it",
             ["Start the stack"] =
-                "brings the whole stack up under docker",
+                "brings the whole stack up under docker; the hook never starts one, it " +
+                "names the command that does",
             ["Wait for API health"] =
-                "waits on the stack the step before it started",
+                "waits on the stack the step before it started; the hook asks the same " +
+                "route once, in scripts/check-e2e-stand.sh",
             ["Seed the database"] =
                 "fills a database the suite reads; the stand here is seeded already",
             ["Install dependencies"] =
@@ -369,9 +439,6 @@ public class AgentToolingShould
                 "file still describes them is the gate the local set runs instead",
             ["Install Chromium"] =
                 "downloads a browser",
-            ["Run the suite"] =
-                "the end-to-end tier: a stack standing and twenty minutes, which is the price " +
-                "at which a gate stops being run at all",
             ["Flaky tests of this run"] =
                 "writes the retry summary onto the run page",
             ["API logs on failure"] =

@@ -53,6 +53,8 @@ const {
   mockDeleteGameComment,
   mockSubscribe,
   mockUnsubscribe,
+  mockGetFirstUnreadRoomPost,
+  mockGetPost,
 } = vi.hoisted(() => ({
   mockGetParticipatingGames: vi.fn(),
   mockGetModerationGames: vi.fn(),
@@ -71,6 +73,8 @@ const {
   mockDeleteGameComment: vi.fn(),
   mockSubscribe: vi.fn(),
   mockUnsubscribe: vi.fn(),
+  mockGetFirstUnreadRoomPost: vi.fn(),
+  mockGetPost: vi.fn(),
 }));
 
 vi.mock("../api/gameApi", () => ({
@@ -92,6 +96,8 @@ vi.mock("../api/gameApi", () => ({
     deleteGameComment: mockDeleteGameComment,
     subscribe: mockSubscribe,
     unsubscribe: mockUnsubscribe,
+    getFirstUnreadRoomPost: mockGetFirstUnreadRoomPost,
+    getPost: mockGetPost,
   },
 }));
 
@@ -150,7 +156,6 @@ const createMockGame = (id: string, title: string): Game => ({
   info: "",
   tagIds: [],
   privacySettings: createMockPrivacySettings(),
-  schema: null,
   unreadCharactersCount: asServed(0),
 });
 
@@ -321,7 +326,10 @@ describe("useGamesStore", () => {
       const store = useGamesStore();
       await store.searchGames({ search: "Found" });
 
-      expect(mockSearchGames).toHaveBeenCalledWith({ search: "Found" });
+      expect(mockSearchGames).toHaveBeenCalledWith(
+        { search: "Found" },
+        { ownsRefusal: true, ownsRateLimit: true },
+      );
       expect(store.searchResult?.resources).toEqual(mockGames);
     });
 
@@ -375,6 +383,53 @@ describe("useGamesStore", () => {
       await store.searchGames({ search: "test" });
 
       expect(store.searchError).toBeTruthy();
+    });
+
+    /**
+     * One carrier for a refused search.
+     *
+     * The failure is already on screen: GamesDataTable draws searchError as a
+     * strip standing where the rows would be. The response interceptor used to
+     * put the same sentence on a plate in the corner as well — on a 500 it was
+     * word for word the same one, because both sides read it out of the same
+     * problem document. The request says here that the strip answers for it,
+     * and the interceptor reads that flag off the request that failed.
+     */
+    it("takes the refusal of a search over from the interceptor", async () => {
+      mockSearchGames.mockResolvedValue({
+        data: { resources: [], paging: null },
+        error: null,
+      });
+
+      const store = useGamesStore();
+      await store.searchGames({ search: "test" });
+
+      expect(mockSearchGames).toHaveBeenCalledWith(
+        { search: "test" },
+        { ownsRefusal: true, ownsRateLimit: true },
+      );
+    });
+
+    // Taking the wait over costs the reader nothing only if the strip says what
+    // the plate would have said: the seconds the server asked for. The title the
+    // API sends with a rate limit names no number at all, so relaying it as it
+    // stands would have dropped the one part of the sentence a reader acts on.
+    it("names the wait in the strip when the search is rate limited", async () => {
+      mockSearchGames.mockResolvedValue({
+        data: null,
+        error: {
+          status: 429,
+          title: "Слишком много запросов",
+          retryAfterSeconds: 30,
+        },
+      });
+
+      const store = useGamesStore();
+      await store.searchGames({ search: "test" });
+
+      expect(store.searchError).toBe(
+        "Слишком много попыток, попробуйте через 30 секунд",
+      );
     });
   });
 
@@ -635,10 +690,14 @@ describe("useGameDetailsStore", () => {
       const store = useGameDetailsStore();
       await store.loadPosts("room-1", 2);
 
-      expect(mockGetPosts).toHaveBeenCalledWith("room-1", {
-        number: 2,
-        take: DEFAULT_PAGE_SIZES.postsPerPage,
-      });
+      expect(mockGetPosts).toHaveBeenCalledWith(
+        "room-1",
+        {
+          number: 2,
+          take: DEFAULT_PAGE_SIZES.postsPerPage,
+        },
+        undefined,
+      );
     });
 
     // The "posts per page" preference was saved and never read: the room asked
@@ -655,10 +714,14 @@ describe("useGameDetailsStore", () => {
       const store = useGameDetailsStore();
       await store.loadPosts("room-1");
 
-      expect(mockGetPosts).toHaveBeenCalledWith("room-1", {
-        number: 1,
-        take: 50,
-      });
+      expect(mockGetPosts).toHaveBeenCalledWith(
+        "room-1",
+        {
+          number: 1,
+          take: 50,
+        },
+        undefined,
+      );
     });
 
     // 200 is a legal preference and an illegal page: unclamped it reaches the
@@ -678,10 +741,14 @@ describe("useGameDetailsStore", () => {
       const store = useGameDetailsStore();
       await store.loadPosts("room-1");
 
-      expect(mockGetPosts).toHaveBeenCalledWith("room-1", {
-        number: 1,
-        take: MAX_API_PAGE_SIZE,
-      });
+      expect(mockGetPosts).toHaveBeenCalledWith(
+        "room-1",
+        {
+          number: 1,
+          take: MAX_API_PAGE_SIZE,
+        },
+        undefined,
+      );
     });
   });
 
@@ -1011,7 +1078,11 @@ describe("useGameDetailsStore", () => {
       await Promise.all([roomPage, shell]);
 
       expect(mockGetRooms).toHaveBeenCalledTimes(1);
-      expect(mockGetPosts).toHaveBeenCalledWith("room-1", expect.anything());
+      expect(mockGetPosts).toHaveBeenCalledWith(
+        "room-1",
+        expect.anything(),
+        undefined,
+      );
       expect(store.posts).toEqual(POSTS);
       expect(store.postsError).toBeNull();
       expect(store.currentRoom?.id).toBe("room-1");
@@ -1117,6 +1188,105 @@ describe("useGameDetailsStore", () => {
 
       expect(error).toBe(refusal);
       expect(store.comments[0].text).toBe("Текст");
+    });
+  });
+
+  /**
+   * The room page asks the store where a room opens and what a filtered page
+   * holds. The filter goes to the API as it came, and both locations are
+   * counted at the reader's own page size, the same size the page is then
+   * listed at: a page counted at another size lands on the wrong page.
+   */
+  describe("room opening and filters", () => {
+    const ROOMS = [
+      { id: "room-1", title: "Главная сцена", roomNumber: 1 },
+    ] as unknown as Room[];
+
+    beforeEach(() => {
+      mockGetRooms.mockResolvedValue({
+        data: { resources: ROOMS },
+        error: null,
+      });
+      mockGetPosts.mockResolvedValue({
+        data: { resources: [], paging: null },
+        error: null,
+      });
+      useAuthStore().user = {
+        settings: { paging: { postsPerPage: 25 } },
+      } as never;
+    });
+
+    it("hands the filter of the page to the API", async () => {
+      const store = useGameDetailsStore();
+      await store.loadPostsByRoomNumber("game-1", 1, 2, {
+        search: "при",
+        withoutCharacter: true,
+      });
+
+      expect(mockGetPosts).toHaveBeenCalledWith(
+        "room-1",
+        { number: 2, take: 25 },
+        { search: "при", withoutCharacter: true },
+      );
+    });
+
+    it("asks where the room opens at the reader's page size", async () => {
+      mockGetFirstUnreadRoomPost.mockResolvedValue({
+        data: {
+          resource: {
+            postId: "post-51",
+            postNumber: 51,
+            page: 3,
+            pageSize: 25,
+            totalUnreadCount: 4,
+            hasUnread: true,
+          },
+        },
+        error: null,
+      });
+
+      const found = await useGameDetailsStore().locateFirstUnreadPost(
+        "game-1",
+        1,
+      );
+
+      expect(mockGetFirstUnreadRoomPost).toHaveBeenCalledWith("room-1", 25);
+      expect(found).toEqual({ page: 3, postId: "post-51", hasUnread: true });
+    });
+
+    it("has nowhere to land in an empty room or without an answer", async () => {
+      const store = useGameDetailsStore();
+      mockGetFirstUnreadRoomPost.mockResolvedValue({
+        data: {
+          resource: {
+            postNumber: 0,
+            page: 1,
+            pageSize: 25,
+            totalUnreadCount: 0,
+            hasUnread: false,
+          },
+        },
+        error: null,
+      });
+      expect(await store.locateFirstUnreadPost("game-1", 1)).toBeNull();
+
+      mockGetFirstUnreadRoomPost.mockResolvedValue({
+        data: null,
+        error: { status: 500 },
+      });
+      expect(await store.locateFirstUnreadPost("game-1", 1)).toBeNull();
+    });
+
+    it("finds the page of a post from its number in the room", async () => {
+      mockGetPost.mockResolvedValue({
+        data: { resource: { id: "post-51", number: 51 } },
+        error: null,
+      });
+      const store = useGameDetailsStore();
+
+      expect(await store.locatePostPage("post-51")).toBe(3);
+      expect(store.pageOfPostNumber(50)).toBe(2);
+      expect(store.pageOfPostNumber(1)).toBe(1);
     });
   });
 });

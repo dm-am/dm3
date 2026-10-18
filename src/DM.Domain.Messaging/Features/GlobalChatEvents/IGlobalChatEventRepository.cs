@@ -78,16 +78,28 @@ public interface IGlobalChatEventRepository
     // ═══ LIFECYCLE ═══
 
     /// <summary>
-    /// Update event status
+    /// Move an event from one status to the next
     /// </summary>
+    /// <remarks>
+    /// The status the move starts from is carried into the write, so a move that
+    /// somebody else made a moment earlier is not made a second time: the caller
+    /// is told it changed nothing rather than stamping its own moment over theirs
+    /// and announcing the same transition again. Only the timestamps a move
+    /// carries are written; the others keep what they hold.
+    /// </remarks>
     /// <param name="eventId">Event identifier</param>
+    /// <param name="expectedStatus">Status the event has to be in for the move to happen</param>
     /// <param name="status">New status</param>
     /// <param name="startedAt">Started timestamp (for Live transition)</param>
     /// <param name="endedAt">Ended timestamp (for Ended transition)</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns>Updated event</returns>
-    Task<GlobalChatEvent> UpdateStatus(
+    /// <returns>Updated event, or null when the event was no longer in the expected status</returns>
+    /// <exception cref="DM.Domain.Core.Exceptions.DuplicateEntityException">
+    /// Another event holds the live status this move asks for
+    /// </exception>
+    Task<GlobalChatEvent?> UpdateStatus(
         Guid eventId,
+        GlobalChatEventStatus expectedStatus,
         GlobalChatEventStatus status,
         DateTimeOffset? startedAt,
         DateTimeOffset? endedAt,
@@ -98,10 +110,15 @@ public interface IGlobalChatEventRepository
     /// <summary>
     /// Add participant to event
     /// </summary>
+    /// <remarks>
+    /// One row per (event, person), settled by the write itself: the answer is
+    /// null when the list already carried this person, whether it did before the
+    /// call or acquired them while it ran.
+    /// </remarks>
     /// <param name="participant">Participant data</param>
     /// <param name="ct">Cancellation token</param>
-    /// <returns>Created participant</returns>
-    Task<GlobalChatEventParticipant> AddParticipant(
+    /// <returns>Created participant, or null when the person was already on the list</returns>
+    Task<GlobalChatEventParticipant?> AddParticipant(
         CreateGlobalChatEventParticipantEntity participant,
         CancellationToken ct = default);
 

@@ -112,14 +112,14 @@ function pagingAnchor(): HTMLElement | null {
           v-for="(testimonial, index) in testimonials.resources"
           :key="testimonial.id"
         >
-          <!-- The card plus its own "Редактировать": the editor replaces the
-               text where it stands, which a control in #controls cannot do.
-               Deletion stays a separate control in that slot. -->
+          <!-- The card plus its own pencil: the editor replaces the text
+               where it stands, which a control in the bubble corner cannot
+               do. The trash is a separate control beside it. -->
           <TestimonialEditable
             :testimonial="testimonial"
             :search-query="filterState.search"
           >
-            <template #controls>
+            <template #actions>
               <TestimonialDeleteButton :testimonial="testimonial" />
             </template>
           </TestimonialEditable>

@@ -60,21 +60,21 @@ public class EmailTemplatesShould : IAsyncDisposable
     }
 
     /// <summary>
-    /// The mailbox is the one place a visitor can still be reached after the
-    /// address he uses stops answering, so a letter carries the addresses the
-    /// site answers on. A letter that names only the address it was built from
-    /// is no use to the reader who cannot open that one.
+    /// A letter talks about its errand and not about the doors of the site. The
+    /// line of addresses that used to stand under the card is gone; the reader
+    /// whose door will not open is served by the link under the button, which
+    /// carries the same step rather than the root of the site.
     /// </summary>
     [Fact]
-    public async Task NameEveryAddressOfTheSite()
+    public async Task NameNoAddressOfItsOwn()
     {
         var body = await _renderer.RenderAsync(
-            new PasswordChangeNotificationViewModel("Аллигатор"));
+            new PasswordChangeNotificationViewModel("https://example.test/support"));
 
-        foreach (var host in DM.Domain.Core.Site.SiteAddresses.Hosts)
+        foreach (var address in DM.Domain.Core.Site.SiteAddresses.All)
         {
-            body.Should().Contain(host,
-                $"a letter is read when {host} may be the only address that answers");
+            body.Should().NotContain(address.Name,
+                $"the footer of a letter has nothing to say about {address.Name}");
         }
     }
 
@@ -90,7 +90,10 @@ public class EmailTemplatesShould : IAsyncDisposable
         var templates = Directory
             .EnumerateFiles(TemplatesDirectory(), "*.razor")
             .Where(path => !Path.GetFileName(path).StartsWith('_'))
+            // The two shared components are not letters: one draws the frame,
+            // the other the button and the addresses under it.
             .Where(path => Path.GetFileNameWithoutExtension(path) != "EmailLayout")
+            .Where(path => Path.GetFileNameWithoutExtension(path) != "ActionButton")
             .ToList();
 
         templates.Should().HaveCountGreaterThanOrEqualTo(5,
@@ -101,6 +104,51 @@ public class EmailTemplatesShould : IAsyncDisposable
             File.ReadAllText(template).Should().Contain("<EmailLayout",
                 $"{Path.GetFileName(template)} draws its own frame and drops everything the shared one carries");
         }
+    }
+
+    /// <summary>
+    /// A letter heading stands on one line, like the heading of the card it is
+    /// drawn after.
+    /// </summary>
+    /// <remarks>
+    /// A letter carries no font of its own — a mailbox does not fetch one — so
+    /// the reader gets the fallback, and Arial is wider than the PT Sans the
+    /// site draws with. Two headings fit the mirror at 345 and 353 of the 382
+    /// points a card leaves, and took 393 and 394 in the letter itself, where
+    /// both wrapped. Nothing looked, because the mirror loads the web font.
+    ///
+    /// Counted in characters and not in points: a width needs a text engine,
+    /// and this project has none on the server. The cap is taken from the two
+    /// that broke — twenty-nine characters overflowed — with room left under
+    /// it, so it catches the next long heading rather than measuring this one.
+    /// </remarks>
+    [Fact]
+    public void KeepEveryLetterHeadingOnOneLine()
+    {
+        const int cap = 24;
+
+        var headings = Directory
+            .EnumerateFiles(TemplatesDirectory(), "*.razor")
+            .Select(path => (File: Path.GetFileName(path), Title: TitleOf(path)))
+            .Where(pair => pair.Title != null)
+            .ToList();
+
+        headings.Should().HaveCountGreaterThanOrEqualTo(5,
+            "a scan that stops matching turns this green by checking nothing");
+
+        foreach (var (file, title) in headings)
+        {
+            title!.Length.Should().BeLessThanOrEqualTo(cap,
+                $"{file} carries a heading of {title.Length} characters, and the card has room for {cap}");
+        }
+    }
+
+    /// <summary>The Title the template hands the shared layout, when it has one.</summary>
+    private static string? TitleOf(string template)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(
+            File.ReadAllText(template), "<EmailLayout Title=\"([^\"]*)\"");
+        return match.Success ? match.Groups[1].Value : null;
     }
 
     /// <summary>Templates are content, not build output, so they are read from the source tree.</summary>
@@ -154,6 +202,59 @@ public class EmailTemplatesShould : IAsyncDisposable
         html.Should().Contain("cid:logo", "the logo travels with the letter, not over the network");
     }
 
+    /// <summary>
+    /// The button of a letter names one address, and a reader whose address
+    /// stopped answering cannot rebuild the link by hand: the token sits after
+    /// the hash, where a browser bar never takes it. So the same path stands
+    /// under the button on every other address of the site.
+    /// </summary>
+    [Fact]
+    public async Task OfferTheSameStepThroughTheOtherAddressesOfTheSite()
+    {
+        var html = await _renderer.RenderAsync(
+            new RegistrationConfirmationViewModel("https://dm.am/activate#token=2f1c"));
+
+        html.Should().Contain("Ссылка через RU-прокси");
+        html.Should().Contain("https://ru.l.dm.am/activate#token=2f1c",
+            "the other door has to open the same step, token and all");
+    }
+
+    /// <summary>
+    /// A stand answers on an address nobody else does, and a letter from it that
+    /// pointed at the proxy would promise a page that is not there.
+    /// </summary>
+    [Fact]
+    public async Task OfferNothingWhenTheLetterComesFromAForeignAddress()
+    {
+        var html = await _renderer.RenderAsync(
+            new RegistrationConfirmationViewModel("http://localhost:5173/activate#token=2f1c"));
+
+        html.Should().NotContain("Ссылка через");
+    }
+
+    /// <summary>
+    /// The offer is drawn by the shared button, so a template that draws its own
+    /// anchor loses it silently. Same guard as the shared layout above.
+    /// </summary>
+    [Fact]
+    public void DrawEveryButtonWithTheSharedComponent()
+    {
+        var templates = Directory
+            .EnumerateFiles(TemplatesDirectory(), "*.razor")
+            .Where(path => !Path.GetFileName(path).StartsWith('_'))
+            .Where(path => Path.GetFileNameWithoutExtension(path) != "ActionButton")
+            .ToList();
+
+        templates.Should().HaveCountGreaterThanOrEqualTo(5,
+            "a directory scan that stops matching turns this green by checking nothing");
+
+        foreach (var template in templates)
+        {
+            File.ReadAllText(template).Should().NotContain("EmailConstants.ButtonStyles",
+                $"{Path.GetFileName(template)} draws its own button and drops the other addresses");
+        }
+    }
+
     [Theory]
     [MemberData(nameof(LettersWithALink))]
     public async Task CarryTheLinkOfEveryLetterThatHasOne(object model, string url)
@@ -167,9 +268,50 @@ public class EmailTemplatesShould : IAsyncDisposable
     public static TheoryData<object, string> LettersWithALink() => new()
     {
         { new RegistrationConfirmationViewModel("https://dm.am/activate/a"), "https://dm.am/activate/a" },
-        { new PasswordResetConfirmationViewModel("user", "https://dm.am/reset/b"), "https://dm.am/reset/b" },
-        { new EmailChangeConfirmationViewModel("user", "https://dm.am/email/c"), "https://dm.am/email/c" },
-        { new UsernameChangeApprovalViewModel("user", "https://dm.am/username/d"), "https://dm.am/username/d" },
+        { new PasswordResetConfirmationViewModel("https://dm.am/reset/b"), "https://dm.am/reset/b" },
+        { new EmailChangeConfirmationViewModel("https://dm.am/email/c"), "https://dm.am/email/c" },
+        { new UsernameChangeApprovalViewModel("https://dm.am/username/d"), "https://dm.am/username/d" },
+    };
+
+    /// <summary>
+    /// The two letters about a move of the mailbox show the addresses first and
+    /// say what to do under them, so the line stands below the box.
+    /// </summary>
+    /// <remarks>
+    /// Rendered order is what the reader gets, and nothing else in this file
+    /// looks at it. The line is a warning about what the box holds, so it reads
+    /// as a warning only once the box has been read: standing first, it warned
+    /// about something the reader had not been shown yet.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(LettersWithABoxOfAddresses))]
+    public async Task SayWhatToDoBelowTheBoxOfAddresses(object model, string line, string firstLabel)
+    {
+        var html = await Render(model);
+
+        var lineAt = html.IndexOf(line, StringComparison.Ordinal);
+        // The label cell rather than the words, which also stand in the comment
+        // the template carries — the comment is not rendered, but the assertion
+        // should not depend on that.
+        var boxAt = html.IndexOf($">{firstLabel}</td>", StringComparison.Ordinal);
+
+        lineAt.Should().BeGreaterThanOrEqualTo(0, "the letter says what to do");
+        boxAt.Should().BeGreaterThanOrEqualTo(0, "the letter shows the addresses");
+        lineAt.Should().BeGreaterThan(boxAt, "the warning reads over the addresses it is about");
+    }
+
+    public static TheoryData<object, string, string> LettersWithABoxOfAddresses() => new()
+    {
+        {
+            new EmailChangeWarningViewModel("now@dm.am", "next@dm.am"),
+            "срочно обновите пароль",
+            "Текущий адрес"
+        },
+        {
+            new EmailChangeCompletedViewModel("before@dm.am", "next@dm.am", "https://dm.am/support"),
+            "срочно обратитесь в поддержку",
+            "Прежний адрес"
+        },
     };
 
     [Theory]
@@ -186,12 +328,18 @@ public class EmailTemplatesShould : IAsyncDisposable
     public static TheoryData<object> EveryLetter() => new()
     {
         new RegistrationConfirmationViewModel("https://dm.am/activate/a"),
-        new PasswordResetConfirmationViewModel("user", "https://dm.am/reset/b"),
-        new EmailChangeConfirmationViewModel("user", "https://dm.am/email/c"),
-        new PasswordChangeNotificationViewModel("user"),
-        new SuspiciousLoginViewModel("user", "203.0.113.9", "Firefox", "30.07.2026 15:00"),
-        new UsernameChangeApprovalViewModel("user", "https://dm.am/username/d"),
-        new UsernameChangeRejectionViewModel("user", "имя занято"),
+        new PasswordResetConfirmationViewModel("https://dm.am/reset/b"),
+        new EmailChangeConfirmationViewModel("https://dm.am/email/c"),
+        new PasswordChangeNotificationViewModel("https://example.test/support"),
+        new SuspiciousLoginViewModel("203.0.113.9", "Firefox", "30.07.2026 15:00"),
+        new UsernameChangeApprovalViewModel("https://dm.am/username/d"),
+        new UsernameChangeRejectionViewModel("имя занято"),
+        new EmailChangeWarningViewModel("now@dm.am", "next@dm.am"),
+        new EmailChangeCompletedViewModel("before@dm.am", "next@dm.am", "https://dm.am/support"),
+        new AccountRemovedViewModel("https://dm.am/support"),
+        // A letter of one button: the line it used to carry said the account is
+        // back, which the title says already.
+        new AccountRestoredViewModel("https://dm.am/login"),
     };
 
     /// <summary>
@@ -203,7 +351,7 @@ public class EmailTemplatesShould : IAsyncDisposable
     public async Task EscapeWhatComesFromTheUser()
     {
         var html = await _renderer.RenderAsync(
-            new PasswordChangeNotificationViewModel("<script>alert(1)</script>"));
+            new UsernameChangeRejectionViewModel(Reason: "<script>alert(1)</script>"));
 
         html.Should().NotContain("<script>");
         html.Should().Contain("&lt;script&gt;");
@@ -218,27 +366,82 @@ public class EmailTemplatesShould : IAsyncDisposable
     [Fact]
     public async Task WriteRussianNamesAsLettersRatherThanNumericReferences()
     {
-        var html = await _renderer.RenderAsync(new PasswordChangeNotificationViewModel("Аллигатор"));
+        var html = await _renderer.RenderAsync(new UsernameChangeRejectionViewModel(Reason: "Аллигатор"));
 
         html.Should().Contain("Аллигатор");
         html.Should().NotContain("&#x41");
     }
 
     /// <summary>
-    /// The unfamiliar-device letter takes address and device as optional: the
-    /// detector may have neither. A row printing "Устройство:" and nothing else
-    /// reads as broken, so the row is not printed.
+    /// The country stands under the address it explains, not over it.
+    /// </summary>
+    /// <remarks>
+    /// The address is what the row is about, and the country is what makes it
+    /// readable: few people know their own address, and on a phone it changes
+    /// with the connection. Read the other way round, the country would be a
+    /// fact of its own and the address underneath it an unexplained repeat.
+    /// </remarks>
+    [Fact]
+    public async Task PutTheCountryUnderTheAddressItExplains()
+    {
+        var html = await Render(new SuspiciousLoginViewModel(
+            IpAddress: "203.0.113.42",
+            DeviceInfo: "Chrome на Windows",
+            Timestamp: "30.07.2026 15:00",
+            Country: "Россия"));
+
+        var countryAt = html.IndexOf(">Страна</td>", StringComparison.Ordinal);
+        var addressAt = html.IndexOf(">IP-адрес</td>", StringComparison.Ordinal);
+
+        countryAt.Should().BeGreaterThanOrEqualTo(0, "the letter names the country");
+        addressAt.Should().BeGreaterThanOrEqualTo(0, "the letter names the address");
+        addressAt.Should().BeLessThan(countryAt, "the country explains the address above it");
+        html.Should().Contain("Россия");
+    }
+
+    /// <summary>
+    /// A letter that names a country ends where one that names none does, on the
+    /// footnote: the country table is published into the public domain (PDDL),
+    /// and its publisher is owed no line under the card.
+    /// </summary>
+    /// <remarks>
+    /// The tail of the letter is compared, not only the words of the line that
+    /// used to stand there: a credit brought back with some other table would
+    /// carry some other publisher's name.
+    /// </remarks>
+    [Fact]
+    public async Task EndOnTheFootnoteWhenItNamesACountry()
+    {
+        var named = await Render(new SuspiciousLoginViewModel(
+            "203.0.113.42", "Chrome на Windows", "30.07.2026 15:00", Country: "Россия"));
+        var unnamed = await Render(new SuspiciousLoginViewModel(
+            "203.0.113.42", "Chrome на Windows", "30.07.2026 15:00"));
+
+        named.Should().Contain("Россия");
+        named.Should().NotContain("db-ip");
+        named.Should().NotContain("Geolocation");
+        AfterTheFootnote(named).Should().Be(AfterTheFootnote(unnamed),
+            "nothing is printed under the footnote, the country named or not");
+    }
+
+    /// <summary>
+    /// The unfamiliar-device letter takes country, address and device as
+    /// optional: the detector may have none of them, and no table may know the
+    /// country. A row printing "Устройство:" and nothing else reads as broken,
+    /// so the row is not printed.
     /// </summary>
     [Fact]
     public async Task LeaveOutTheFactsTheDetectorDidNotHave()
     {
         var html = await _renderer.RenderAsync(
-            new SuspiciousLoginViewModel("user", IpAddress: null, DeviceInfo: null, "30.07.2026 15:00"));
+            new SuspiciousLoginViewModel(IpAddress: null, DeviceInfo: null, "30.07.2026 15:00"));
+
+        html.Should().NotContain(">Страна</td>");
 
         // The label cell, not the word: a bare substring over the whole document
         // also matched the footer, which names the addresses of the site and has
         // nothing to do with the row this test is about.
-        html.Should().NotContain(">Адрес</td>");
+        html.Should().NotContain(">IP-адрес</td>");
         html.Should().NotContain(">Устройство</td>");
         html.Should().Contain("30.07.2026 15:00");
     }
@@ -254,7 +457,7 @@ public class EmailTemplatesShould : IAsyncDisposable
     public async Task EscapeTheModeratorsCommentExactlyOnce()
     {
         var html = await _renderer.RenderAsync(
-            new UsernameChangeRejectionViewModel("user", "<b>имя занято</b>"));
+            new UsernameChangeRejectionViewModel("<b>имя занято</b>"));
 
         html.Should().Contain("&lt;b&gt;имя занято&lt;/b&gt;",
             "a comment is text, and the tag a moderator typed is shown as typed");
@@ -263,17 +466,18 @@ public class EmailTemplatesShould : IAsyncDisposable
     }
 
     /// <summary>
-    /// A request may be rejected without a comment, and a line reading "Причина:"
-    /// with nothing after it looks broken, so the missing reason is named instead.
+    /// A request may be rejected without a comment, and an empty box under the
+    /// title looks broken, so the letter says in words that there was no comment.
     /// </summary>
     [Fact]
-    public async Task NameTheMissingReasonRatherThanPrintAnEmptyOne()
+    public async Task NameTheMissingReasonRatherThanDrawAnEmptyBox()
     {
         var html = await _renderer.RenderAsync(
-            new UsernameChangeRejectionViewModel("user", Reason: null));
+            new UsernameChangeRejectionViewModel(Reason: null));
 
-        html.Should().Contain("Причина не указана.");
-        html.Should().NotContain("Причина:");
+        html.Should().Contain("Модератор не назвал причину");
+        html.Should().NotContain(EmailConstants.BoxStyles,
+            "the box holds the moderator word, and there is none");
     }
 
     /// <summary>
@@ -312,16 +516,24 @@ public class EmailTemplatesShould : IAsyncDisposable
         await using (var scope = provider.CreateAsyncScope())
         {
             first = await scope.ServiceProvider.GetRequiredService<ITemplateRenderer>()
-                .RenderAsync(new PasswordChangeNotificationViewModel("user"));
+                .RenderAsync(new PasswordChangeNotificationViewModel("https://example.test/support"));
         }
 
         await using var second = provider.CreateAsyncScope();
         var afterwards = await second.ServiceProvider.GetRequiredService<ITemplateRenderer>()
-            .RenderAsync(new PasswordChangeNotificationViewModel("user"));
+            .RenderAsync(new PasswordChangeNotificationViewModel("https://example.test/support"));
 
         first.Should().NotBeEmpty();
         afterwards.Should().NotBeEmpty("the first scope must not take the renderer with it");
         afterwards.Should().Be(first);
+    }
+
+    private static string AfterTheFootnote(string html)
+    {
+        const string footnote = "не требует ответа</p>";
+        var at = html.IndexOf(footnote, StringComparison.Ordinal);
+        at.Should().BeGreaterThanOrEqualTo(0, "every letter carries the footnote");
+        return html[(at + footnote.Length)..];
     }
 
     private Task<string> Render(object model)

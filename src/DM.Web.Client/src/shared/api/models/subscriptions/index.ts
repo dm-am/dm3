@@ -1,3 +1,5 @@
+import type { ModuleStatus } from "../common";
+
 // Subscription target types
 export enum SubscriptionTargetType {
   Game = 1,
@@ -67,6 +69,19 @@ export interface Subscription {
   targetTitle?: string;
   /** Username of a User target — the profile route is addressed by name. */
   targetUsername?: string;
+  /**
+   * Status of a Game or Blog target, resolved server-side: the page names a
+   * game or a blog in the colour of its status, as the site does everywhere.
+   * Absent for a topic, a user and a target that is gone.
+   */
+  targetStatus?: ModuleStatus;
+  /**
+   * When a Game or Blog target was first activated (ISO date string): what a
+   * "new" game or blog is counted from, as activatedUtc of GameRef and
+   * BlogRef. Absent for a topic, a user, a target that is gone and one never
+   * activated.
+   */
+  targetActivatedUtc?: string;
   settings: SubscriptionSettings;
   createdUtc: string;
 }

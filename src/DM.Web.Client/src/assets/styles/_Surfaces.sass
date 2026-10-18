@@ -12,10 +12,13 @@
 @use "Themes" as *
 @use "Variables" as *
 
-/// A framed surface with padding: list rows, cards, answer blocks.
+/// A framed surface with padding: list rows, cards, answer blocks. Square:
+/// a rounded corner is the mark of a control the reader operates (a button, a
+/// field, a pill, a dropdown), and a card of content is not one (owner's
+/// standard, 27 September 2026). The card of a window keeps its radius; it is
+/// drawn by _DialogSurface.sass and not here.
 =card($padding: $medium)
   border: 1px solid $border
-  border-radius: $border-radius
   padding: $padding
   background: $bg-element
 

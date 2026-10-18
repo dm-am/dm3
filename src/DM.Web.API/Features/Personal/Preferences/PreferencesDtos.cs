@@ -25,6 +25,14 @@ public class Preferences
     /// Paging settings for various list views
     /// </summary>
     public Paging Paging { get; set; } = new();
+
+    /// <summary>
+    /// IANA name of the reader's time zone ("Europe/Moscow"), used by letters
+    /// and by the site itself: a signed-in reader sees every date and time on
+    /// the site in this zone (a guest, in the zone of the device).
+    /// Null or empty means UTC.
+    /// </summary>
+    public string? TimeZoneId { get; set; }
 }
 
 /// <summary>
@@ -70,7 +78,7 @@ public class Paging : IValidatableObject
             yield return new ValidationResult("Недопустимое значение комментариев на страницу", new[] { nameof(CommentsPerPage) });
 
         if (!IsAllowed(TopicsPerPage))
-            yield return new ValidationResult("Недопустимое значение тем на страницу", new[] { nameof(TopicsPerPage) });
+            yield return new ValidationResult("Недопустимое значение топиков на страницу", new[] { nameof(TopicsPerPage) });
 
         if (!IsAllowed(MessagesPerPage))
             yield return new ValidationResult("Недопустимое значение сообщений на страницу", new[] { nameof(MessagesPerPage) });

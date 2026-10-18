@@ -25,6 +25,15 @@
  * store's selectedBoard: the alias always matches the page being viewed,
  * while a stale selectedBoard from a previous visit could highlight the
  * wrong item.
+ *
+ * Every width wraps the strip at the separators, a phone's too: a row of the
+ * page never scrolls sideways (owner, 12 October 2026), so where the column
+ * is narrow the strip takes the lines it needs. A board and the bar after it
+ * are one unbreakable item, and the line breaks at the space after the bar
+ * only: a bar closes a line and never opens one. A no-break space before the
+ * bar would not do it, since the link is an inline-block (it has to be, for
+ * the FLIP transform), and Chrome breaks after an inline-block whatever text
+ * follows it.
  */
 import { computed, ref } from "vue";
 import { useRoute } from "vue-router";
@@ -61,34 +70,42 @@ useFlipReorder({
   itemSelector: ".board-link",
   focusSelector: ".board-link.active",
 });
+
+/** Whether a board has another after it, and so a bar. */
+const hasNext = (idx: number) => idx < orderedBoards.value.length - 1;
 </script>
 
 <template>
   <nav
-    v-if="boards?.length"
+    v-if="orderedBoards.length"
     ref="root"
     class="board-navigation"
     aria-label="Разделы форума"
   >
-    <!-- The separator is a real " | " text node, so a select-all copy of
-         the strip reads "Общий | Игровые системы | ..." with actual
-         spaces. Those spaces are also the strip's only wrap opportunities
-         (items themselves are nowrap): the strip wraps, never scrolls. -->
-    <template v-for="(board, idx) in orderedBoards" :key="board.id">
-      <span v-if="idx > 0" class="separator" aria-hidden="true">{{
-        " | "
-      }}</span>
-      <router-link
-        :to="{ name: 'forum', params: { alias: board.alias } }"
-        :class="['board-link', { active: activeAlias === board.alias }]"
-        :aria-current="activeAlias === board.alias ? 'page' : undefined"
-        >{{ board.title }}</router-link
-      >
-    </template>
+    <!-- One inline run: the separators are real text nodes, so a select-all
+         copy of the strip reads "Общий | Игровые системы | ..." on one line.
+         The space after a bar is the strip's only wrap opportunity (a board
+         and its bar are one nowrap item): the strip wraps, never scrolls. -->
+    <template v-for="(board, idx) in orderedBoards" :key="board.id"
+      ><span class="board-item"
+        ><router-link
+          :to="{ name: 'forum', params: { alias: board.alias } }"
+          :class="['board-link', { active: activeAlias === board.alias }]"
+          :aria-current="activeAlias === board.alias ? 'page' : undefined"
+          >{{ board.title }}</router-link
+        ><span v-if="hasNext(idx)" class="separator" aria-hidden="true">{{
+          " |"
+        }}</span></span
+      ><span v-if="hasNext(idx)" class="separator" aria-hidden="true">{{
+        " "
+      }}</span></template
+    >
   </nav>
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 // Inline formatting context, NOT flex: flex blockifies its items, so a
 // select-all copy would serialize each item on its own line. With inline
 // items the copy reads "Общий | Игровые системы | ..." on one line.
@@ -103,7 +120,7 @@ useFlipReorder({
   margin-bottom: $medium
   // FORUM-2: sub-pixel tracking shave so the 11-board strip holds one line
   // a little longer as the content column narrows. No scroll/clip/ellipsis
-  // — wrapping at the separator spaces stays the narrow-column fallback.
+  // — wrapping at the separator spaces is the narrow-column fallback.
   letter-spacing: -0.01em
 
 .separator
@@ -113,31 +130,30 @@ useFlipReorder({
   // (5 short items, tons of room) uses the larger $font-size — full size
   // unification is impossible without wrapping this longer strip.
   font-size: 15px
-  // The visible width of the literal " | " spaces, and the only knob that
+  // The visible width of the spaces around the bar, and the only knob that
   // widens the strip without touching the copy: it stays "Общий | Игровые
-  // системы | ..." with one ordinary space on each side (FORUM-1). Two literal
-  // spaces in the markup do nothing (they collapse in both the paint and the
+  // системы | ..." with one space on each side (FORUM-1). Two literal spaces
+  // in the markup do nothing (they collapse in both the paint and the
   // clipboard) and a flex gap breaks the copy into a column. At +2px the
   // effective space goes from 2.3px to 5.8px, and the 11-board strip still
   // holds one line down to a 1869px window.
   word-spacing: 2px
 
+// A board and the bar after it: the line never breaks between the two.
+.board-item
+  white-space: nowrap
+
 .board-link
   display: inline-block
-  color: $link
-  text-decoration: none
   // Multi-word titles never break internally — the strip only wraps at
   // the separator spaces.
   white-space: nowrap
   font-size: 15px
-  &:hover
-    color: $link-hover
-    text-decoration: underline
-  // Active item: link color + semibold; underline stays hover-only
-  // (underlines are never an active-state indicator on this site).
+  +link-tone($link)
+  // Active item: link color + the site's one bold; underline stays
+  // hover-only (underlines are never an active-state indicator on this site).
   &.active
-    font-weight: 600
-  &:focus-visible
-    outline: 2px solid $border-focus
-    outline-offset: 2px
+    font-weight: 700
+  // Keyboard focus is the text link's ring from Reset.sass: the item is an
+  // <a> and a bare word, nothing here to draw differently.
 </style>

@@ -22,9 +22,10 @@ public class GameDetails : Game
     public GamePrivacySettings PrivacySettings { get; set; } = null!;
 
     /// <summary>
-    /// Attribute schema details
+    /// The character sheet of this game and the version to send back with a
+    /// replacement of it
     /// </summary>
-    public AttributeSchema? Schema { get; set; }
+    public GameAttributeSchema Schema { get; set; } = null!;
 
     /// <summary>
     /// Game assistants (lightweight references for detail page)
@@ -70,6 +71,47 @@ public class GameDetails : Game
     /// Game characters (short info)
     /// </summary>
     public IEnumerable<CharacterShortInfo> Characters { get; set; } = [];
+
+    /// <summary>
+    /// Whether the viewer is on the game's blacklist. False for a guest.
+    /// </summary>
+    /// <remarks>
+    /// Lets the page leave out what the list closes - the application, the edit
+    /// of one's own comment or application - instead of offering it and
+    /// refusing it after. The server asks the same rule on both writes
+    /// (GameRoleExtensions.IsBlacklisted), so the flag decides what is offered,
+    /// never what is allowed. On the details only: every page that offers one of
+    /// them reads the game's details. The comment form goes by
+    /// <see cref="Viewer" />, which answers for every reason at once.
+    /// </remarks>
+    public bool ViewerBlacklisted { get; set; }
+
+    /// <summary>
+    /// What the viewer may do in this game, answered by the same code that
+    /// refuses the request
+    /// </summary>
+    public GameViewer Viewer { get; set; } = new();
+}
+
+/// <summary>
+/// What the viewer may do in a game. Each flag is asked by the same code the
+/// write it stands for is refused by, so a page that offers by it offers only
+/// what the server takes; the server refuses all the same.
+/// </summary>
+public class GameViewer
+{
+    /// <summary>
+    /// Whether the viewer may write a new comment in the game's discussion:
+    /// the mode of the discussion with the viewer's roles, the game's blacklist
+    /// and the ban, all at once. False for a guest
+    /// </summary>
+    public bool CanComment { get; set; }
+
+    /// <summary>
+    /// Whether the viewer may review the game: past the probation, with a post
+    /// of his in it, and no review of his there yet. False for a guest
+    /// </summary>
+    public bool CanReview { get; set; }
 }
 
 /// <summary>

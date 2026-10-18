@@ -1,6 +1,7 @@
-using System.Net;
+using System;
 using System.Text;
 using System.Text.RegularExpressions;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Parsing;
 using DM.Infrastructure.Core.Parsing;
@@ -19,11 +20,10 @@ namespace DM.Infrastructure.Persistence.Repositories.Search;
 /// sometimes ending in the middle of a tag.
 /// </para>
 /// <para>
-/// The surface matters and is not a detail. [private] is the one tag filtered by
-/// audience, and it is only a node of the tree on the surfaces that declare it —
-/// rendered on the wrong surface it survives as a literal, and its contents would
-/// then reach both the index and the preview. So the surface here must be the one
-/// the body is displayed on.
+/// The surface matters and is not a detail: the tag set differs between surfaces
+/// ([mod] is markup on some and text on others), so the surface here must be the
+/// one the body is displayed on. [private] is a node on every surface, and the
+/// plain text drops it on every one.
 /// </para>
 /// <para>
 /// The regexp in the generated column stays as a second lock. Two spellings of
@@ -34,9 +34,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Search;
 internal static class SearchTextProjection
 {
     private static readonly IBbParserProvider Provider = new BbParserProvider();
-
-    /// <summary>Line breaks the renderer emits as tags rather than as characters.</summary>
-    private static readonly Regex Breaks = new(@"<(?:br|hr)\s*/?>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
 
@@ -59,18 +56,38 @@ internal static class SearchTextProjection
         catch
         {
             // A body the parser refuses still has to be searchable, and the one
-            // thing that must not leak either way is the private block. The regexp
-            // is the same one the generated column applies.
-            return Collapse(SearchSnippet.StripPrivateBlocks(body));
+            // thing that must not leak either way is the private block. Without
+            // the tree nothing can say where a block ends: the pattern of the
+            // second lock ends one at the first [/private] and sees neither a
+            // block inside a block nor a [/private] shown as an example inside
+            // [noparse], so cutting blocks out with it left the rest of an outer
+            // block in the index. What is kept is the text before anything that
+            // could open a block, and nothing after it: a block starts at its
+            // opening, so no hidden word stands before the first one. The text is
+            // the one the parser would have read: a character the parser removes
+            // joins what stood around it, and "[pri" U+0001 "vate]" is a hidden
+            // block on the page.
+            return Collapse(BeforeHidingMarkup(ParserInput.Of(body)));
         }
 
-        // The plain-text render is not plain text: it emits the line breaks as
-        // tags and leaves entities encoded, so "a < b" comes back as "a &lt; b"
-        // and would be indexed and previewed that way.
-        rendered = Breaks.Replace(rendered, " ");
-        rendered = WebUtility.HtmlDecode(rendered);
-
+        // The plain text is text: no entities to read back and no markup for
+        // the line breaks, which Collapse turns into spaces with the rest.
         return Collapse(rendered);
+    }
+
+    /// <summary>
+    /// The text up to the first "[private" in any case, or all of it.
+    /// </summary>
+    /// <remarks>
+    /// Compared ignoring case the way the runtime does it, which folds more than
+    /// A-Z: a spelling it reads as the tag and the grammar does not ("[prıvate",
+    /// with a dotless i) cuts the text sooner than needed. Here that errs the safe
+    /// way, towards indexing less.
+    /// </remarks>
+    private static string BeforeHidingMarkup(string text)
+    {
+        var at = text.IndexOf("[private", StringComparison.OrdinalIgnoreCase);
+        return at < 0 ? text : text[..at];
     }
 
     /// <summary>

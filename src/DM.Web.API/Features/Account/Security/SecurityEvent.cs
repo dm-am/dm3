@@ -98,12 +98,6 @@ public enum SecurityEventType
     TwoFactorRemovedByAdmin = 18,
 
     /// <summary>
-    /// A mailed request to take the second factor off was refused because the
-    /// rank owes a factor
-    /// </summary>
-    TwoFactorRemovalRefused = 19,
-
-    /// <summary>
     /// A code offered while setting the second factor up did not match
     /// </summary>
     TwoFactorSetupFailure = 20

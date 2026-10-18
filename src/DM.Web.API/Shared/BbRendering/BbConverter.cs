@@ -63,7 +63,7 @@ internal class BbConverterFactory : JsonConverterFactory
             JsonSerializerOptions options)
         {
             var raw = bbText.Value ?? string.Empty;
-            var requestedAudience = ReadAudienceHeader();
+            var requestedAudience = bbText.FollowsAudience ? ReadAudienceHeader() : RenderAudience.Display;
             var viewer = ResolveViewerFromRequest();
             // AuthorEdit emits unfiltered round-trip source (every [private] and
             // [mod] block). The audience arrives as a client-controlled header
@@ -254,12 +254,6 @@ internal class BbConverterFactory : JsonConverterFactory
         private static string ParseLegacy(BBCodeParser.IBbParser parser, string raw, RenderAudience audience)
         {
             var tree = parser.Parse(raw);
-            if (tree is BbParserWrapper.WrappedNodeTree wrapped)
-                return audience switch
-                {
-                    RenderAudience.PlainText => wrapped.ToText(),
-                    _ => wrapped.ToHtml()
-                };
             return audience switch
             {
                 RenderAudience.PlainText => tree.ToText(),

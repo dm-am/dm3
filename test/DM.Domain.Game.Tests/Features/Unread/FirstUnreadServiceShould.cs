@@ -8,6 +8,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Rooms;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Unread;
 using DM.Testing.Dsl;
@@ -39,6 +40,7 @@ public class FirstUnreadServiceShould : UnitTestBase
         _service = new FirstUnreadService(
             _firstUnreadRepository,
             _gameService,
+            Mock<IRoomService>(),
             _unreadCountersRepository,
             _identityProvider,
             _intentionManager);
@@ -154,7 +156,7 @@ public class FirstUnreadServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task AuthorizeGetFirstUnreadCommentAction()
+    public async Task FindTheFirstUnreadCommentOfWhateverGameTheReaderMayOpen()
     {
         var gameId = Guid.NewGuid();
         var game = new GameDto
@@ -169,7 +171,9 @@ public class FirstUnreadServiceShould : UnitTestBase
 
         await _service.GetFirstUnreadComment(gameId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.ReadComments, game);
+        // The discussion is read by whoever may read the game: nothing is asked after.
+        await _gameService.Received(1).GetAsync(gameId);
+        _intentionManager.ReceivedCalls().Should().BeEmpty();
     }
 
     [Fact]

@@ -63,7 +63,12 @@ internal static class ForumMappers
             ViewPolicy = b.ViewPolicy,
             TopicsCount = b.TopicsCount,
             ModeratorIds = b.Moderators.Select(m => m.UserId).ToList(),
+            // Spelled out rather than left to the account filter: the board is
+            // nested under a topic, and the topic read lifts that filter to keep
+            // what removed accounts wrote (see RemovedAuthors). A removed
+            // moderator moderates nothing and is named nowhere.
             Moderators = b.Moderators
+                .Where(m => !m.User.IsRemoved)
                 .Select(m => BoardUserStub.Splice(m.User))
                 .ToList(),
             LastTopic = b.LastTopicId.HasValue
@@ -73,7 +78,7 @@ internal static class ForumMappers
                     TopicNumber = b.LastTopicNumber ?? 0,
                     Title = b.LastTopicTitle ?? string.Empty,
                     CreatedUtc = b.LastTopicCreatedUtc!.Value,
-                    Author = b.LastTopicAuthor != null
+                    Author = b.LastTopicAuthor != null && !b.LastTopicAuthor.IsRemoved
                         ? BoardUserStub.Splice(b.LastTopicAuthor)
                         : null
                 }
@@ -93,9 +98,12 @@ internal static class ForumMappers
     /// generate one correlated <c>SELECT COUNT(*)</c> per row; the repository
     /// fills them in a single batched <c>GROUP BY</c> pass after the main
     /// projection, and Likes/LikesCount follow the same rule.
+    ///
+    /// Keeps the topics of removed accounts, signed by nobody
+    /// (<see cref="RemovedAuthors"/>).
     /// </summary>
     public static IQueryable<Topic> ProjectToTopic(this IQueryable<TopicEntity> query) =>
-        query.Select(ExpressionSplicer.Expand<Func<TopicEntity, Topic>>(t => new Topic
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<TopicEntity, Topic>>(t => new Topic
         {
             Id = t.TopicId,
             TopicNumber = t.TopicNumber,
@@ -105,14 +113,16 @@ internal static class ForumMappers
             IsAttached = t.IsAttached,
             AttachOrder = t.AttachOrder,
             IsClosed = t.IsClosed,
+            ClosedByAuthor = t.ClosedByAuthor,
             LastActivityUtc = t.LastComment == null ? t.CreatedUtc : t.LastComment.CreatedUtc,
             Author = GeneralUserProjections.Projection.Splice(t.Author),
-            // The last comment keeps its default identifier on purpose - the
-            // AutoMapper map never carried it, and no consumer reads it.
+            // The identifier is what the topic lists link to (#comment-<id>):
+            // left at its default, every "last comment" link led nowhere.
             LastComment = t.LastComment == null
                 ? null!
                 : new LastComment
                 {
+                    Id = t.LastComment.CommentId,
                     CreatedUtc = t.LastComment.CreatedUtc,
                     Author = GeneralUserProjections.Projection.Splice(t.LastComment.Author)
                 },
@@ -122,10 +132,10 @@ internal static class ForumMappers
     /// <summary>
     /// EF projection for the delete path: the comment shape (see
     /// <see cref="Shared.Comments.CommentProjections"/>) into the derived
-    /// DTO; IsLastComment is set by the repository afterwards.
+    /// DTO, which adds nothing to it but a name for the topic identifier.
     /// </summary>
     public static IQueryable<TopicCommentToDelete> ProjectToTopicCommentToDelete(
         this IQueryable<DbComment> query) =>
-        query.Select(ExpressionSplicer.Expand(
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(
             CommentProjections.WithCommentFields<TopicCommentToDelete>(c => new TopicCommentToDelete())));
 }

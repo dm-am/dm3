@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -51,7 +52,8 @@ public class HoneypotRefusalShould : UnitTestBase
     {
         var registration = Mock<IRegistrationApiService>();
         var activation = Mock<IActivationApiService>();
-        var controller = new RegistrationController(registration, activation);
+        var controller = new RegistrationController(
+            registration, activation, NullLogger<RegistrationController>.Instance);
 
         var refusal = await Assert.ThrowsAsync<HttpBadRequestException>(
             () => controller.Register(new RegistrationRequest

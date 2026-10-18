@@ -6,8 +6,8 @@ namespace DM.Domain.Core.Dto;
 /// Base query for pagination
 /// </summary>
 /// <remarks>
-/// Standard pagination: ?skip=0&amp;take=20
-/// Max take: 100
+/// Standard pagination: ?skip=0&amp;take=20; the largest take any endpoint serves is
+/// <see cref="PagingPolicy.MaxPageSize"/>.
 /// </remarks>
 public class PagingQuery
 {

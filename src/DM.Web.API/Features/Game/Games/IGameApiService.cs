@@ -78,6 +78,15 @@ public interface IGameApiService
     Task<Envelope<GameDetails>> Update(Guid gameId, UpdateGameRequest request);
 
     /// <summary>
+    /// Replace the character sheet of a game
+    /// </summary>
+    /// <param name="gameId">Game identifier</param>
+    /// <param name="request">The whole new set and the version it was read at</param>
+    /// <returns>Envelope for the stored sheet and its new version</returns>
+    Task<Envelope<GameAttributeSchema>> ReplaceAttributeSchema(
+        Guid gameId, ReplaceGameAttributeSchemaRequest request);
+
+    /// <summary>
     /// Apply a game status transition (start / freeze / finish / close / reopen)
     /// </summary>
     /// <param name="gameId">Game identifier</param>

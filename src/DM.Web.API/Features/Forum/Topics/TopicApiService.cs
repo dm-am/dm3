@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Forum.Features.Topics;
-using DM.Web.API.Shared.BbRendering;
+using DM.Web.API.Features.Forum.Boards;
 using DM.Web.API.Shared.Dto;
+using DomainTopic = DM.Domain.Forum.Features.Topics.Topic;
 
 namespace DM.Web.API.Features.Forum.Topics;
 
@@ -12,18 +14,18 @@ namespace DM.Web.API.Features.Forum.Topics;
 internal class TopicApiService : ITopicApiService
 {
     private readonly ITopicService _topicService;
+    private readonly ITopicCommentService _commentService;
     private readonly TopicMapper _mapper;
-    private readonly IQuoteSourceService _quoteSourceService;
 
     /// <inheritdoc />
     public TopicApiService(
         ITopicService topicService,
-        TopicMapper mapper,
-        IQuoteSourceService quoteSourceService)
+        ITopicCommentService commentService,
+        TopicMapper mapper)
     {
         _topicService = topicService;
+        _commentService = commentService;
         _mapper = mapper;
-        _quoteSourceService = quoteSourceService;
     }
 
     /// <inheritdoc />
@@ -51,7 +53,7 @@ internal class TopicApiService : ITopicApiService
     {
         var topic = await _topicService.GetBestUserTopicAsync(username);
         if (topic == null) return new Envelope<Topic?>(null);
-        var mapped = _mapper.ToTopic(topic);
+        var mapped = TopicForViewer(topic);
         await EnrichPeriodDigests([mapped]);
         return new Envelope<Topic?>(mapped);
     }
@@ -60,29 +62,35 @@ internal class TopicApiService : ITopicApiService
     public async Task<Envelope<Topic>> Get(Guid topicId)
     {
         var topic = await _topicService.GetAsync(topicId);
-        var mapped = _mapper.ToTopic(topic);
+        var mapped = TopicForViewer(topic);
         await EnrichPeriodDigests([mapped]);
         return new Envelope<Topic>(mapped);
-    }
-
-    /// <inheritdoc />
-    public async Task<Envelope<QuoteSource>> GetQuote(Guid topicId)
-    {
-        // Read through the same service the ordinary read goes through: a topic
-        // in a board this reader cannot open is refused by that read, and there
-        // is no second permission rule here to keep in step with the first.
-        var topic = await _topicService.GetAsync(topicId);
-        var mapped = _mapper.ToTopic(topic);
-        return _quoteSourceService.Build(mapped.Description, topic.Author?.Username);
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Topic>> GetByBoardAndNumber(string boardAlias, int topicNumber)
     {
         var topic = await _topicService.GetByBoardAndNumberAsync(boardAlias, topicNumber);
-        var mapped = _mapper.ToTopic(topic);
+        var mapped = TopicForViewer(topic);
         await EnrichPeriodDigests([mapped]);
         return new Envelope<Topic>(mapped);
+    }
+
+    /// <summary>
+    /// One topic as the viewer gets it: the topic, and what he may do under it.
+    /// The reads of one topic and the writes that return one come through here;
+    /// a list of topics offers nothing to write and leaves it out. The edit
+    /// matters most: closing the topic is a PATCH, and the page replaces the
+    /// topic it holds with the one the PATCH returns. The topic's board carries
+    /// what the viewer may do on it as well: the forum page takes it for the
+    /// board it holds when the topic is opened first.
+    /// </summary>
+    private Topic TopicForViewer(DomainTopic topic)
+    {
+        var mapped = _mapper.ToTopic(topic);
+        mapped.Viewer = new TopicViewer { CanComment = _commentService.MayCreate(topic) };
+        mapped.Board.Viewer = BoardApiService.ViewerOf(_topicService, topic.Board);
+        return mapped;
     }
 
     /// <summary>
@@ -115,7 +123,7 @@ internal class TopicApiService : ITopicApiService
         var createTopic = _mapper.ToCreateTopic(request);
         createTopic.BoardTitle = boardId;
         var createdTopic = await _topicService.CreateAsync(createTopic);
-        return new Envelope<Topic>(_mapper.ToTopic(createdTopic));
+        return new Envelope<Topic>(TopicForViewer(createdTopic));
     }
 
     /// <inheritdoc />
@@ -124,7 +132,7 @@ internal class TopicApiService : ITopicApiService
         var updateTopic = _mapper.ToUpdateTopic(request);
         updateTopic.TopicId = topicId;
         var updatedTopic = await _topicService.UpdateAsync(updateTopic);
-        var mapped = _mapper.ToTopic(updatedTopic);
+        var mapped = TopicForViewer(updatedTopic);
         // The client stores commit PATCH responses wholesale — without the
         // marker a digest topic would lose its boards until a reload.
         await EnrichPeriodDigests([mapped]);

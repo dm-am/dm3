@@ -14,17 +14,18 @@ public interface IPostRepository
     #region Read
 
     /// <summary>
-    /// Count posts in room
+    /// Count the posts of the room the query admits
     /// </summary>
-    Task<int> Count(Guid roomId, Guid userId);
+    Task<int> Count(Guid roomId, RoomPostsQuery query, Guid userId);
 
     /// <summary>
-    /// Get posts in room with paging
+    /// Get a page of the posts of the room the query admits, in the order it asks
+    /// for, each carrying its <see cref="Post.Number"/> in the room
     /// </summary>
-    Task<IEnumerable<Post>> Get(Guid roomId, PagingData paging, Guid userId);
+    Task<IEnumerable<Post>> Get(Guid roomId, RoomPostsQuery query, PagingData paging, Guid userId);
 
     /// <summary>
-    /// Get single post
+    /// Get single post, carrying its <see cref="Post.Number"/> in the room
     /// </summary>
     Task<Post?> Get(Guid postId, Guid userId);
 
@@ -60,9 +61,17 @@ public interface IPostRepository
     /// <summary>
     /// Delete post
     /// </summary>
+    /// <remarks>
+    /// The author's post count and the post's attachments travel with the mark,
+    /// and the mark is conditional on the post still being there: the answer says
+    /// whether this call is the removal that happened, so a caller that has
+    /// counters or events of its own does not repeat them for a post somebody
+    /// else removed first.
+    /// </remarks>
     /// <param name="postId">Post identifier</param>
     /// <param name="deletedByUserId">User who removed the post</param>
-    Task Delete(Guid postId, Guid deletedByUserId);
+    /// <returns>Whether this call is the one that removed the post</returns>
+    Task<bool> Delete(Guid postId, Guid deletedByUserId);
 
     #endregion
 }

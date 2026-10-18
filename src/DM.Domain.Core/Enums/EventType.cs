@@ -292,10 +292,16 @@ public enum EventType
     TicketCreated = 81,
 
     /// <summary>
-    /// Moderation ticket has been assigned to moderator
+    /// A moderator has written in the conversation of a ticket. The entity is the
+    /// comment.
     /// </summary>
-    [EventRoutingKey("moderation.ticket.assigned")]
-    TicketAssigned = 82,
+    /// <remarks>
+    /// The number belonged to the assignment of a ticket, which nobody announced
+    /// and which is gone: any moderator who sees a ticket answers it, and the
+    /// conversation shows who did.
+    /// </remarks>
+    [EventRoutingKey("moderation.ticket.answered")]
+    TicketAnswered = 82,
 
     /// <summary>
     /// Moderation ticket has been resolved
@@ -326,6 +332,25 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("community.award.granted")]
     AwardGranted = 87,
+
+    /// <summary>
+    /// Points of a warning have been changed by a moderator.
+    /// </summary>
+    /// <remarks>
+    /// A warning is never withdrawn, so the correction of its points is the only
+    /// thing that can happen to it after it is issued, and until this event the
+    /// correction happened in silence: the person whose points a moderator took
+    /// off by mistake learned of it by opening the log himself.
+    /// </remarks>
+    [EventRoutingKey("moderation.warning.points-changed")]
+    WarningPointsChanged = 88,
+
+    /// <summary>
+    /// The author of a ticket has written in its conversation, from his account or
+    /// as the guest holding its tracking token. The entity is the comment.
+    /// </summary>
+    [EventRoutingKey("moderation.ticket.replied")]
+    TicketReplied = 89,
 
     // ========================================
     // Security audit events (91-99)
@@ -688,11 +713,9 @@ public enum EventType
     [EventRoutingKey("game.character.status.left")]
     StatusCharacterLeft = 375,
 
-    /// <summary>
-    /// Character has returned to the game
-    /// </summary>
-    [EventRoutingKey("game.character.status.returned")]
-    StatusCharacterReturned = 376,
+    // Slot 376 was StatusCharacterReturned — removed with the transition that
+    // raised it: a character its player took out of the game comes back by no
+    // move (CharacterStatusTransition).
 
     /// <summary>
     /// Character has been exiled from the game by GM
@@ -705,6 +728,12 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("game.character.status.retired")]
     StatusCharacterRetired = 378,
+
+    /// <summary>
+    /// Exiled character has been brought back into the game by GM
+    /// </summary>
+    [EventRoutingKey("game.character.status.readmitted")]
+    StatusCharacterReadmitted = 379,
 
     /// <summary>
     /// New room has been created

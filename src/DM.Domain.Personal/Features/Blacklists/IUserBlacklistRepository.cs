@@ -39,11 +39,6 @@ public interface IUserBlacklistRepository : IUserBlacklistChecker
     Task Delete(Guid entryId, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blacklist settings for a user
-    /// </summary>
-    Task<UserBlacklistSettings> GetSettings(Guid userId, CancellationToken ct = default);
-
-    /// <summary>
     /// Update blacklist settings for a user
     /// </summary>
     Task<UserBlacklistSettings> UpdateSettings(Guid userId, UserBlacklistSettings settings, CancellationToken ct = default);

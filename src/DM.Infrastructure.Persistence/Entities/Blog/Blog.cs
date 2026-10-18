@@ -94,11 +94,6 @@ public class Blog : ISoftDeletable
     public DraftVisibility DraftVisibility { get; set; } = DraftVisibility.Public;
 
     /// <summary>
-    /// Whether comments are enabled
-    /// </summary>
-    public bool CommentsEnabled { get; set; } = true;
-
-    /// <summary>
     /// Total publication count (denormalized for performance)
     /// </summary>
     public int PublicationCount { get; set; }

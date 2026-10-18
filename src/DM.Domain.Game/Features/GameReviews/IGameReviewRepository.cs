@@ -40,17 +40,19 @@ public interface IGameReviewRepository
     Task<GameReview?> GetByAuthorAsync(Guid gameId, Guid authorId);
 
     /// <summary>
-    /// Get count of all game reviews with optional filter
+    /// Get count of the reviews of the games the reader may open, with optional filter
     /// </summary>
+    /// <param name="viewerId">Reader, whose scope of games applies</param>
     /// <param name="filter">Optional filter parameters</param>
-    Task<int> CountAllAsync(GameReviewFilter? filter = null);
+    Task<int> CountAllAsync(Guid viewerId, GameReviewFilter? filter = null);
 
     /// <summary>
-    /// Get all game reviews with optional filter
+    /// Get the reviews of the games the reader may open, with optional filter
     /// </summary>
+    /// <param name="viewerId">Reader, whose scope of games applies</param>
     /// <param name="paging">Paging parameters</param>
     /// <param name="filter">Optional filter parameters</param>
-    Task<IEnumerable<GameReview>> GetAllAsync(PagingData paging, GameReviewFilter? filter = null);
+    Task<IEnumerable<GameReview>> GetAllAsync(Guid viewerId, PagingData paging, GameReviewFilter? filter = null);
 
     // ═══ WRITE ═══
 

@@ -43,7 +43,6 @@ internal class AvailabilityApiService : IAvailabilityApiService
             Reason = result.Reason switch
             {
                 ServiceUsernameReason.Taken => UsernameUnavailableReason.Taken,
-                ServiceUsernameReason.Reserved => UsernameUnavailableReason.Reserved,
                 ServiceUsernameReason.InvalidFormat => UsernameUnavailableReason.InvalidFormat,
                 null => null
             }

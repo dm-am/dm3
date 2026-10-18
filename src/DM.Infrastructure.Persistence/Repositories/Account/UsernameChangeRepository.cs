@@ -238,7 +238,23 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
 
         // All three rows are tracked, so one SaveChanges is the transaction and an
         // explicit one here would be machinery around a guarantee already given.
-        await _dbContext.SaveChangesAsync(ct);
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            // Two unique structures stand over this write and either can refuse
+            // it. The index over lower("Username") refuses a name taken between
+            // the service's check and here; the unique index over the history's
+            // OldUsername refuses a name the account is leaving behind for the
+            // second time, which needs no race at all - only an account that
+            // once took its previous name back. Translated the way Add above
+            // translates it, because the untranslated failure of the storage
+            // engine reached the reader as a 500.
+            _dbContext.ChangeTracker.Clear();
+            throw new DuplicateEntityException("Duplicate username or username history entry", ex);
+        }
     }
 
     /// <inheritdoc />

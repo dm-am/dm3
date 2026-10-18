@@ -7,7 +7,6 @@ using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using DomainComment = DM.Domain.Core.Comments.Comment;
 
@@ -59,11 +58,22 @@ internal static class CommentReading
     /// may do with each comment, the likes on the page, and whether he may add
     /// a comment at all.
     /// </summary>
+    /// <param name="comments">The page of comments</param>
+    /// <param name="paging">Paging of the page</param>
+    /// <param name="identity">The reader</param>
+    /// <param name="mapper">Comment mapper</param>
+    /// <param name="canComment">
+    /// Whether the reader may add a comment: the answer of the surface's comment
+    /// service, the one its write is refused by. It used to be read off the
+    /// session alone, and told a banned reader and the reader of a closed topic
+    /// that they could write.
+    /// </param>
     public static DiscussionResponse ToDiscussion(
         IEnumerable<DomainComment> comments,
         PagingResult paging,
         IIdentity identity,
-        DiscussionMapper mapper)
+        DiscussionMapper mapper,
+        bool canComment)
     {
         // Through AnonymousIdentity rather than the empty Guid: a visitor who
         // is nobody carries the empty id, and so does a field nobody filled in,
@@ -94,25 +104,6 @@ internal static class CommentReading
             discussionComments,
             new PagingInfo(paging),
             discussionComments.Sum(c => c.LikesCount),
-            isAuthenticated);
+            canComment);
     }
-
-    /// <summary>
-    /// One domain comment as the source of a quotation of it.
-    /// </summary>
-    /// <remarks>
-    /// Here for the same reason the two above are: four surfaces own their
-    /// comments and their permissions, and the shape of a quotation is not one
-    /// of the things they own. Outside a game the header carries the login, so
-    /// there is nothing per-surface left to decide.
-    ///
-    /// The caller has already read the comment through the service that
-    /// authorizes reading it. Nothing here checks permissions, and nothing here
-    /// should: a second rule beside the first is a second rule to keep in step.
-    /// </remarks>
-    public static Envelope<QuoteSource> ToQuote(
-        DomainComment comment,
-        CommentMapper mapper,
-        IQuoteSourceService quoteSourceService) =>
-        quoteSourceService.Build(mapper.ToComment(comment).Text, comment.Author?.Username);
 }

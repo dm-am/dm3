@@ -100,6 +100,13 @@ export const icons = {
     fill: "currentColor",
   },
 
+  /** Menu (the compact view with one line fewer: three lines) */
+  menu: {
+    viewBox: "0 0 16 12",
+    path: '<rect x="0" y="0" width="16" height="2"/><rect x="0" y="5" width="16" height="2"/><rect x="0" y="10" width="16" height="2"/>',
+    fill: "currentColor",
+  },
+
   // ===== 5. Sections =====
 
   /** Expand all sections (plus in three nested frames) */
@@ -227,6 +234,19 @@ export const icons = {
     stroke: "currentColor",
     strokeWidth: 2,
     strokeLinejoin: "round",
+  },
+
+  /**
+   * Paper clip (the files attached to a post), a silhouette.
+   *
+   * The outline is glyph U+E045 of the same DM Iconic font roomLocked was
+   * taken from, and the viewBox is cut to its ink, so the box of the svg is the
+   * box of the clip and the corner of the post card can place it by its edges.
+   */
+  attachment: {
+    viewBox: "179.07 414 1471.93 1267.28",
+    path: '<path d="M1396 1116L1552 972Q1651 873 1651 733.5Q1651 594 1552 504Q1462 414 1330 414Q1198 414 1108 504L544 1068Q481 1131 481 1206Q481 1281 544 1344Q598 1398 677.5 1398Q757 1398 820 1344L1216 936L1228 936L1228 924Q1240 912 1240 888Q1240 861 1223.5 844.5Q1207 828 1180 828Q1144 828 1132 840L736 1236Q718 1254 688 1254Q658 1254 640 1236Q622 1218 622 1188Q622 1158 640 1140L1000 792L1192 612Q1256 548 1334.5 543Q1413 538 1468 600Q1530 655 1525 739.5Q1520 824 1456 888L1312 1032L868 1464Q774 1550 640 1536Q506 1522 412 1428Q323 1337 328 1224Q333 1111 424 1020L868 588Q892 564 892 528Q892 502 870 485Q848 468 820 468Q784 468 772 480L316 924Q228 1006 196 1115Q164 1224 192.5 1332.5Q221 1441 304 1524Q389 1615 502.5 1656Q616 1697 741 1671.5Q866 1646 964 1548Z" fill="currentColor"/>',
+    fill: "currentColor",
   },
 
   // ===== 10. User =====
@@ -377,11 +397,6 @@ export const symbols = {
   // monochrome glyphs; the registry above already has a clock outline, and a
   // clock is an icon rather than a symbol.
   returnArrow: "\u21A9",
-  // The Quote action in the chat toolbars, which is a strip of icons and has no
-  // room for a word. The registry above carries no quotation drawing, and one
-  // is not drawn for it: the typographic quotation mark is the sign for this and
-  // is already the treatment the warning and the return arrow next to it get.
-  quote: "\u201C",
   arrowUp: "\u2191",
   arrowDown: "\u2193",
   arrowLeft: "\u2190",

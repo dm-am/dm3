@@ -1,7 +1,7 @@
 #!/bin/bash
 # DM3 Management Script (Linux/Mac)
 # Usage: ./scripts/dm.sh <command>
-# Commands: start, stop, reset, seed, status, logs
+# Commands: start, stop, reset, seed, e2e, status, logs
 
 set -e
 
@@ -20,6 +20,7 @@ Commands:
   stop      Stop all Docker services
   reset     Stop, clear databases, and restart
   seed      Run seed scripts (requires running API)
+  e2e       Recreate the API the way the e2e suite needs it: rate limiting off
   status    Show status of all services
   logs      Show logs (optionally for specific service)
   help      Show this help
@@ -29,6 +30,7 @@ Examples:
   ./scripts/dm.sh stop           # Stop everything
   ./scripts/dm.sh reset          # Fresh start with clean DB
   ./scripts/dm.sh seed           # Populate test data
+  ./scripts/dm.sh e2e            # Stand for the e2e suite and the pre-push hook
   ./scripts/dm.sh logs dm-api    # Show API logs
   ./scripts/dm.sh status         # Check what's running
 
@@ -151,6 +153,40 @@ run_seed() {
     echo -e "\033[36mPassword: Test123!\033[0m"
 }
 
+# The API the way the end-to-end suite meets it in CI: this tree's build, with
+# rate limiting off. One page load is a dozen and more API requests against a
+# budget of a hundred per address per minute, so under the limits the suite
+# fails on 429s that read exactly like stale selectors. CI switches them off
+# with a compose overlay written in the e2e job of .github/workflows/dotnet.yml;
+# this hands compose the same switch on stdin rather than as a file in docker/,
+# because the files there are the set that gets deployed and a switch that must
+# never reach a server does not belong among them.
+#
+# The preview origin the CI overlay also lets in needs nothing here: the local
+# stack runs Development, and the API admits both development ports there.
+#
+# Only the API is recreated. The next "start" recreates it without the overlay,
+# which is how the limits come back. scripts/check-e2e-stand.sh reads the same
+# variable off the running container before the pre-push hook runs the suite.
+e2e_stand() {
+    echo -e "\033[36mRecreating the API for the e2e suite (rate limiting off)...\033[0m"
+
+    # The commit the image is built on, written into the container for
+    # scripts/check-e2e-stand.sh: nothing rebuilds the API after this, and a
+    # server change committed later would be pushed without the suite ever
+    # meeting it.
+    local source_commit
+    source_commit="$(git -C "$PROJECT_ROOT" rev-parse HEAD 2> /dev/null || echo unknown)"
+
+    cd "$DOCKER_DIR"
+    printf 'services:\n  dmapi:\n    environment:\n      DM_RateLimiting__Enabled: "false"\n      E2E_SOURCE_COMMIT: "%s"\n' "$source_commit" |
+        docker compose -f docker-compose.yml -f - up -d --build --no-deps --wait dmapi
+
+    echo ""
+    echo -e "\033[32mRate limiting is off until the next start.\033[0m"
+    echo "Suite: npm --prefix \"$PROJECT_ROOT/src/DM.Web.Client\" run test:e2e:fast"
+}
+
 show_status() {
     echo -e "\033[36mDM3 Service Status\033[0m"
     echo "=================="
@@ -177,6 +213,7 @@ case "${1:-help}" in
     stop)   stop_services ;;
     reset)  reset_services ;;
     seed)   run_seed ;;
+    e2e)    e2e_stand ;;
     status) show_status ;;
     logs)   show_logs "$2" ;;
     help|*) show_help ;;

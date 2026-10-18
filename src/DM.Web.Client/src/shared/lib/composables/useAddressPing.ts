@@ -17,16 +17,26 @@
  * fetch that rejects — network refusal or the timeout's abort — is the other
  * fact.
  *
- * Measured on mount and again when the tab regains focus, at most once per
- * REMEASURE_MIN_INTERVAL_MS. Deliberately no interval timer: a tab pinging
- * two hosts forever is traffic nobody reads, and the reading is only worth
- * refreshing when somebody is about to look at it. Not measured at all under
- * `navigator.connection.saveData` — two extra requests are exactly what that
- * flag asks to avoid; the rows then keep their reserved dash.
+ * Each host is asked twice in a row and the second round trip is the one
+ * reported: the first carries the DNS lookup and the TLS handshake and reads
+ * about twice the working figure, which is the number a visitor would then
+ * compare the other address against. The first request still decides the
+ * fact that matters most — whether the address answers at all.
+ *
+ * Measured on mount, again when the tab regains focus (at most once per
+ * REMEASURE_MIN_INTERVAL_MS), and again when the network itself changes —
+ * the device leaving wifi for mobile data, a VPN switched on or off — because
+ * that is the one moment the answer actually changes and the tab would
+ * otherwise not learn of it until its next return. Deliberately no interval
+ * timer: a tab pinging two hosts forever is traffic nobody reads, and the
+ * reading is only worth refreshing when somebody is about to look at it. Not
+ * measured at all under `navigator.connection.saveData` — the extra requests
+ * are exactly what that flag asks to avoid; the rows then keep their reserved
+ * dash.
  */
 import { onMounted, onUnmounted, reactive } from "vue";
 import { SITE_ADDRESSES } from "@/shared/config/site";
-import { savingData } from "@/shared/lib/utils/connection";
+import { savingData, onConnectionChange } from "@/shared/lib/utils/connection";
 
 /** What the block knows about one address at any moment. */
 export interface AddressPing {
@@ -51,6 +61,50 @@ const PING_TIMEOUT_MS = 5_000;
 const REMEASURE_MIN_INTERVAL_MS = 3 * 60 * 1000;
 
 /**
+ * A network change re-measures past the three-minute rule — it is the event
+ * the rule exists to approximate — but the browser can report one change as
+ * several events in a row, and this keeps them from becoming several rounds.
+ */
+const NETWORK_CHANGE_GUARD_MS = 5_000;
+
+/** One round trip to the host, timed. Rejects when the host does not answer. */
+async function roundTrip(host: string, signal: AbortSignal): Promise<number> {
+  const started = performance.now();
+  await fetch(`https://${host}/favicon.ico?ping=${Date.now()}`, {
+    mode: "no-cors",
+    cache: "no-store",
+    signal,
+  });
+  return Math.round(performance.now() - started);
+}
+
+/**
+ * Whether one address answers this reader right now.
+ *
+ * The same fact the block measures, asked once and outside any component: the
+ * failure interceptor needs it the moment a request comes back with nothing,
+ * and what it does with the answer is decide whether offering the other
+ * address is help or a wild goose chase. A request that never reached the
+ * server means one of two things - the server is down, or the road to THIS
+ * address is closed - and only the second one the other address can fix.
+ */
+export async function addressAnswers(
+  host: string,
+  timeoutMs: number = PING_TIMEOUT_MS,
+): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await roundTrip(host, controller.signal);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
  * Reachability of every site address, keyed by host, live-updated as the
  * measurements land. Must be called during setup: the measurement starts on
  * mount and the focus listener is released in `onUnmounted`.
@@ -69,17 +123,12 @@ export function useAddressPing(): Record<string, AddressPing> {
   let round: AbortController | null = null;
 
   async function probe(host: string, signal: AbortSignal): Promise<void> {
-    const started = performance.now();
     try {
-      await fetch(`https://${host}/favicon.ico?ping=${Date.now()}`, {
-        mode: "no-cors",
-        cache: "no-store",
-        signal,
-      });
-      pings[host] = {
-        status: "up",
-        latencyMs: Math.round(performance.now() - started),
-      };
+      // The first trip settles whether the address answers and pays for the
+      // connection; the second is the figure a visitor can compare.
+      await roundTrip(host, signal);
+      const warm = await roundTrip(host, signal);
+      pings[host] = { status: "up", latencyMs: warm };
     } catch {
       // Includes the unmount abort: writing "down" into state nobody reads
       // any more is harmless, and cheaper than telling the cases apart.
@@ -106,13 +155,25 @@ export function useAddressPing(): Record<string, AddressPing> {
     measure();
   }
 
+  function onNetworkChange(): void {
+    if (Date.now() - lastMeasuredAt < NETWORK_CHANGE_GUARD_MS) return;
+    // A round already in flight was measuring the network that just went
+    // away; its answers would be about the wrong network.
+    round?.abort();
+    measure();
+  }
+
+  let stopNetworkListener: (() => void) | null = null;
+
   onMounted(() => {
     measure();
     document.addEventListener("visibilitychange", onVisibilityChange);
+    stopNetworkListener = onConnectionChange(onNetworkChange);
   });
 
   onUnmounted(() => {
     document.removeEventListener("visibilitychange", onVisibilityChange);
+    stopNetworkListener?.();
     round?.abort();
   });
 

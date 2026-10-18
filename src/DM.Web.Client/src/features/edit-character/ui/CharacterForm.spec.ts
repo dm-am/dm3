@@ -11,19 +11,22 @@
  *  - list-with-modifier display (TextNumberList option labels and view mode)
  *  - hidden attributes absent from the payload are NOT fabricated client-side
  *  - submit payload maps only non-empty values
+ *  - how a save is reported, which on this screen is the submit button
+ *  - what the unsaved-work guard asks about after that save
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
-import { nextTick } from "vue";
+import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
+import { defineComponent, h, nextTick } from "vue";
+import { createMemoryHistory, createRouter, RouterView } from "vue-router";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import { CHARACTER_NAME_MAX_LENGTH } from "@/shared/lib/constants/game";
+import { useToast } from "@/shared/lib/composables/useToast";
+import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
 import CharacterForm from "./CharacterForm.vue";
 import {
   gameApi,
-  AttributeSchemaType,
   AttributeSpecificationType,
-  type AttributeSchema,
   type AttributeSpecification,
   type Character,
 } from "@/entities/game";
@@ -62,21 +65,16 @@ function makeSpec(seed: SpecSeed): AttributeSpecification {
     isDescriptor: false,
     isHidden: false,
     maxLength: null,
-    values: null,
+    values: [],
     ...seed,
   };
 }
 
 /** Full 6-type schema: one specification per AttributeSpecificationType. */
-function makeSchema(
-  specs?: AttributeSpecification[],
-  title = "Тестовая схема",
-): AttributeSchema {
+function makeSchema(specs?: AttributeSpecification[]): {
+  specifications: AttributeSpecification[];
+} {
   return {
-    id: "schema-1",
-    title,
-    author: null,
-    type: AttributeSchemaType.Public,
     specifications: specs ?? [
       makeSpec({
         id: "text-spec",
@@ -425,5 +423,418 @@ describe("CharacterForm", () => {
       // Saved character is emitted back to the caller, unwrapped
       expect(wrapper.emitted("saved")?.[0]).toEqual([created]);
     });
+  });
+});
+
+// ============================================================================
+// HOW A SAVE IS REPORTED
+// ============================================================================
+
+/**
+ * The sheet after a save holds the values the reader typed, the form stays
+ * open and the page does not move, so nothing on screen says the save
+ * happened - and a message in the corner is what used to say it instead.
+ * The submit button says it now: "Сохранено" and inert while the sheet
+ * matches the one the server has, "Сохранить" again the moment a field moves.
+ *
+ * What each test below catches, given that a button reading "Сохранить"
+ * forever looks perfectly normal:
+ *  - the label written as a constant again: the button never answers;
+ *  - `:valid="isValid"` without `&& !saved`: the sheet can be sent twice with
+ *    nothing between the two sends;
+ *  - the saved snapshot taken above the error return: a refused save reads as
+ *    a good one;
+ *  - a snapshot that never moves after the first save: the button stays
+ *    "Сохранено" over a sheet the reader has since rewritten;
+ *  - a toast put back beside the button: one save announced twice.
+ */
+
+const toast = useToast();
+const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
+
+/** A one-field sheet: this half of the file is about the button, not the fields. */
+const SHEET = () =>
+  makeSchema([
+    makeSpec({
+      id: "text-spec",
+      title: "Род занятий",
+      type: AttributeSpecificationType.Text,
+      order: 1,
+    }),
+  ]);
+
+/** The props of a sheet that exists — the surface where a save reports itself. */
+const editProps = () => ({
+  schema: SHEET(),
+  characterId: "character-1",
+  initialName: "Арагорн",
+  initialValues: { "text-spec": "Следопыт" },
+});
+
+/** The server accepts the save and answers with the character it stored. */
+function serveUpdate() {
+  return vi.spyOn(gameApi, "updateCharacter").mockResolvedValue({
+    data: { resource: makeCharacter([]) },
+    error: null,
+  } as unknown as Awaited<ReturnType<typeof gameApi.updateCharacter>>);
+}
+
+/** The submit button of the form, the one control that answers for the save. */
+const submitButton = (wrapper: VueWrapper) => wrapper.find(".controls button");
+
+/** What the button says, and whether it can still be pressed. */
+const answer = (wrapper: VueWrapper) => ({
+  label: submitButton(wrapper).text(),
+  inert: submitButton(wrapper).attributes("disabled") !== undefined,
+});
+
+/** Press the submit and let the request settle. */
+async function save(wrapper: VueWrapper) {
+  await wrapper.find("form").trigger("submit");
+  await flushPromises();
+}
+
+describe("CharacterForm save confirmation", () => {
+  beforeEach(() => {
+    [...toast.toasts.value].forEach((t) => toast.dismiss(t.id));
+  });
+
+  it("does not claim a save the reader has not made", () => {
+    const wrapper = mount(CharacterForm, { props: editProps() });
+
+    expect(answer(wrapper)).toEqual({ label: "Сохранить", inert: false });
+  });
+
+  it("reads Сохранено and takes no press once the server confirms", async () => {
+    serveUpdate();
+    const wrapper = mount(CharacterForm, { props: editProps() });
+
+    await save(wrapper);
+
+    expect(answer(wrapper)).toEqual({ label: "Сохранено", inert: true });
+  });
+
+  it("says nothing in the corner about the save it has just shown", async () => {
+    serveUpdate();
+    const wrapper = mount(CharacterForm, { props: editProps() });
+
+    await save(wrapper);
+
+    expect(saidOutLoud()).toEqual([]);
+  });
+
+  it("offers the save again as soon as an attribute changes", async () => {
+    serveUpdate();
+    const wrapper = mount(CharacterForm, { props: editProps() });
+    await save(wrapper);
+
+    await wrapper.find("input#spec-text-spec").setValue("Следопыт из Арнора");
+
+    expect(answer(wrapper)).toEqual({ label: "Сохранить", inert: false });
+  });
+
+  // The name is held apart from the attribute values, so it is asked for
+  // separately: a comparison written over the values alone leaves a renamed
+  // character reading "Сохранено".
+  it("offers the save again as soon as the name changes", async () => {
+    serveUpdate();
+    const wrapper = mount(CharacterForm, { props: editProps() });
+    await save(wrapper);
+
+    await wrapper.find("input#character-name").setValue("Странник");
+
+    expect(answer(wrapper)).toEqual({ label: "Сохранить", inert: false });
+  });
+
+  it("keeps offering the save after the server refuses it", async () => {
+    vi.spyOn(gameApi, "updateCharacter").mockResolvedValue({
+      data: null,
+      error: { status: 400, type: "", title: "", traceId: "t" },
+    } as unknown as Awaited<ReturnType<typeof gameApi.updateCharacter>>);
+    const wrapper = mount(CharacterForm, { props: editProps() });
+
+    await save(wrapper);
+
+    expect(answer(wrapper)).toEqual({ label: "Сохранить", inert: false });
+    expect(wrapper.find(".form-error").text()).toBe(
+      "Не удалось сохранить персонажа",
+    );
+    expect(saidOutLoud()).toEqual([]);
+  });
+
+  // A sheet that does not exist yet is not reported here at all: the create
+  // leaves this form for the character it made, and that page is the answer.
+  it("keeps its own word on a character that has no id yet", async () => {
+    vi.spyOn(gameApi, "createCharacter").mockResolvedValue({
+      data: { resource: makeCharacter([]) },
+      error: null,
+    } as unknown as Awaited<ReturnType<typeof gameApi.createCharacter>>);
+    const wrapper = mount(CharacterForm, {
+      props: { schema: SHEET(), gameId: "game-1", initialName: "Арагорн" },
+    });
+
+    expect(answer(wrapper)).toEqual({
+      label: "Создать персонажа",
+      inert: false,
+    });
+
+    await save(wrapper);
+
+    expect(submitButton(wrapper).text()).toBe("Создать персонажа");
+  });
+});
+
+// ============================================================================
+// LEAVING THE PAGE AFTER A SAVE
+// ============================================================================
+
+/**
+ * The guard against losing a half-written sheet used to read a latch: one
+ * boolean, set by the first save and never cleared. Everything typed after
+ * that save left the page in silence - which is the very loss the guard was
+ * added for, and the saved-state comparison is what fixes both answers at
+ * once.
+ *
+ * A real router is used because the guard registers against the matched route
+ * record; with a stub it would register against nothing and pass regardless.
+ */
+const Elsewhere = defineComponent({ setup: () => () => h("div", "elsewhere") });
+
+const SheetPage = defineComponent({
+  setup() {
+    // Built once: a fresh schema object on every render would hand the form a
+    // new prop identity for nothing.
+    const props = editProps();
+    return () => h(CharacterForm, props);
+  },
+});
+
+async function mountAtSheet() {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/sheet", component: SheetPage },
+      { path: "/elsewhere", component: Elsewhere },
+    ],
+  });
+  router.push("/sheet");
+  await router.isReady();
+
+  const wrapper = mount(defineComponent({ setup: () => () => h(RouterView) }), {
+    global: { plugins: [router] },
+  });
+  await flushPromises();
+
+  return { router, wrapper };
+}
+
+describe("CharacterForm unsaved-work guard", () => {
+  it("lets an untouched sheet go without a word", async () => {
+    const { router } = await mountAtSheet();
+
+    await router.push("/elsewhere");
+
+    expect(router.currentRoute.value.path).toBe("/elsewhere");
+  });
+
+  it("asks again about leaving when the sheet is edited after a save", async () => {
+    serveUpdate();
+    const { router, wrapper } = await mountAtSheet();
+    await save(wrapper);
+
+    await wrapper.find("input#spec-text-spec").setValue("Следопыт из Арнора");
+    const leaving = router.push("/elsewhere");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/sheet");
+    expect(document.body.textContent).toContain("Уйти со страницы?");
+
+    wrapper.findComponent(UnsavedChangesGuard).vm.answer(true);
+    await leaving;
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/elsewhere");
+  });
+
+  it("lets the sheet go without a word while it matches the save", async () => {
+    serveUpdate();
+    const { router, wrapper } = await mountAtSheet();
+
+    await wrapper.find("input#spec-text-spec").setValue("Следопыт из Арнора");
+    await save(wrapper);
+    await router.push("/elsewhere");
+
+    expect(router.currentRoute.value.path).toBe("/elsewhere");
+  });
+});
+
+// ============================================================================
+// WHO SAYS THE REFUSAL
+// ============================================================================
+
+/**
+ * A refused save has one carrier, and on this screen it is the strip under the
+ * fields: it holds the sentence the server sent, it stays until the reader
+ * corrects something, and it is where the rest of the form's answers already
+ * are. The response interceptor used to raise a plate over it saying the same
+ * thing - on a 5xx the identical sentence, because both sides read it out of
+ * the same problem document.
+ *
+ * The flag on the request is what the interceptor reads to know it must keep
+ * quiet, so that is what these check: the interceptor itself lives below the
+ * api double this file installs, and never runs here.
+ */
+describe("CharacterForm refusal", () => {
+  const OWNED = { ownsRefusal: true, ownsRateLimit: true };
+
+  it("sends a save of an existing sheet with the refusal taken over", async () => {
+    const update = serveUpdate();
+    const wrapper = mount(CharacterForm, { props: editProps() });
+
+    await save(wrapper);
+
+    expect(update).toHaveBeenCalledWith(
+      "character-1",
+      expect.any(Object),
+      OWNED,
+    );
+  });
+
+  it("sends the creation of a sheet the same way", async () => {
+    const create = vi.spyOn(gameApi, "createCharacter").mockResolvedValue({
+      data: { resource: makeCharacter([]) },
+      error: null,
+    } as unknown as Awaited<ReturnType<typeof gameApi.createCharacter>>);
+    const wrapper = mount(CharacterForm, {
+      props: { schema: SHEET(), gameId: "game-1", initialName: "Арагорн" },
+    });
+
+    await save(wrapper);
+
+    expect(create).toHaveBeenCalledWith("game-1", expect.any(Object), OWNED);
+  });
+
+  // Taking the wait over costs the reader nothing only if the strip says what
+  // the plate would have: the seconds the server asked for. The title the API
+  // sends with a rate limit names no number at all.
+  it("names the wait under the fields when the save is rate limited", async () => {
+    vi.spyOn(gameApi, "updateCharacter").mockResolvedValue({
+      data: null,
+      error: {
+        status: 429,
+        type: "",
+        title: "Слишком много запросов",
+        traceId: "t",
+        retryAfterSeconds: 30,
+      },
+    } as unknown as Awaited<ReturnType<typeof gameApi.updateCharacter>>);
+    const wrapper = mount(CharacterForm, { props: editProps() });
+
+    await save(wrapper);
+
+    expect(wrapper.find(".form-error").text()).toBe(
+      "Слишком много попыток, попробуйте через 30 секунд",
+    );
+  });
+
+  // The reason a refusal names is the whole point of keeping it here. The
+  // interceptor relays that same reason - both sides read it out of one problem
+  // document with describeFailure - so what the strip changes is the carrier
+  // and not the sentence: it stands under the fields the reader is about to
+  // correct, and it stays there until something is corrected.
+  it("reads out the reason the server named for a refusal", async () => {
+    vi.spyOn(gameApi, "updateCharacter").mockResolvedValue({
+      data: null,
+      error: {
+        status: 403,
+        type: "",
+        title: "Мастер закрыл правку листов",
+        traceId: "t",
+      },
+    } as unknown as Awaited<ReturnType<typeof gameApi.updateCharacter>>);
+    const wrapper = mount(CharacterForm, { props: editProps() });
+
+    await save(wrapper);
+
+    expect(wrapper.find(".form-error").text()).toBe(
+      "Мастер закрыл правку листов",
+    );
+  });
+
+  // The status a reader can correct nothing about, and the one a screen that
+  // took the refusal over is likeliest to drop on the floor. The API titles a
+  // 500 "Ошибка сервера" (ExceptionProblemDetailsFactoryExtensions.CreateFrom,
+  // and generalRefusal.spec.ts holds the client copy of those words equal to
+  // it), so that is the sentence the plate would have carried and the sentence
+  // the strip has to carry in its place. A strip left empty here is the save
+  // failing in silence.
+  it("says a broken server in the words the server titled it with", async () => {
+    vi.spyOn(gameApi, "updateCharacter").mockResolvedValue({
+      data: null,
+      error: {
+        status: 500,
+        type: "",
+        title: "Ошибка сервера",
+        traceId: "t",
+      },
+    } as unknown as Awaited<ReturnType<typeof gameApi.updateCharacter>>);
+    const wrapper = mount(CharacterForm, { props: editProps() });
+
+    await save(wrapper);
+
+    expect(wrapper.find(".form-error").text()).toBe("Ошибка сервера");
+  });
+
+  // The two statuses no flag reaches: the interceptor raises its plate for an
+  // expired session and for a request that never came back before it looks at
+  // what the request claimed. The strip used to add a second sentence under
+  // that plate - "Не удалось сохранить персонажа" beside "Сессия истекла,
+  // войдите снова" - one event told twice in two wordings. What the strip
+  // would have added is on screen anyway: the button still reads "Сохранить".
+  it.each([
+    ["an expired session", 401, "Сессия истекла"],
+    ["a request that never came back", 0, ""],
+  ])(
+    "leaves %s to the plate and says nothing under the fields",
+    async (_, status, title) => {
+      vi.spyOn(gameApi, "updateCharacter").mockResolvedValue({
+        data: null,
+        error: { status, type: "", title, traceId: "t" },
+      } as unknown as Awaited<ReturnType<typeof gameApi.updateCharacter>>);
+      const wrapper = mount(CharacterForm, { props: editProps() });
+
+      await save(wrapper);
+
+      expect(wrapper.find(".form-error").exists()).toBe(false);
+      expect(wrapper.text()).not.toContain("Не удалось сохранить персонажа");
+      expect(answer(wrapper)).toEqual({ label: "Сохранить", inert: false });
+    },
+  );
+
+  // Whoever ends up carrying the sentence, a refusal takes nothing off the
+  // screen: the text the reader typed is still in the fields and the button
+  // takes the next press. Without both, the answer to a refusal is retyping
+  // the sheet.
+  it("keeps the typed sheet and takes another press after a refusal", async () => {
+    vi.spyOn(gameApi, "updateCharacter").mockResolvedValue({
+      data: null,
+      error: {
+        status: 403,
+        type: "",
+        title: "Мастер закрыл правку листов",
+        traceId: "t",
+      },
+    } as unknown as Awaited<ReturnType<typeof gameApi.updateCharacter>>);
+    const wrapper = mount(CharacterForm, { props: editProps() });
+    await wrapper.find("input#character-name").setValue("Странник");
+    await wrapper.find("input#spec-text-spec").setValue("Следопыт из Арнора");
+
+    await save(wrapper);
+
+    const typed = (selector: string) =>
+      (wrapper.find(selector).element as HTMLInputElement).value;
+
+    expect(typed("input#character-name")).toBe("Странник");
+    expect(typed("input#spec-text-spec")).toBe("Следопыт из Арнора");
+    expect(answer(wrapper)).toEqual({ label: "Сохранить", inert: false });
   });
 });

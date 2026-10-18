@@ -29,7 +29,6 @@ import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import {
   characterStatusLabel,
-  createEmptySchema,
   gameApi,
   useGameDetailsStore,
   type Character,
@@ -43,7 +42,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { NotepadBoard, type NotepadAdapter } from "@/widgets/notepad";
 import { useZoneSection } from "@/shared/lib/composables/useZoneSection";
-import { describeFailure } from "@/shared/lib/errors";
+import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
@@ -66,7 +65,7 @@ useZoneSection(() => character.value?.name);
 // stored attribute values into named rows. The shell renders this page only
 // once the game has loaded, so the empty schema is a guard and not a state
 // anybody sees.
-const schema = computed(() => game.value?.schema ?? createEmptySchema());
+const schema = computed(() => game.value?.schema ?? { specifications: [] });
 
 const statusLabel = computed(() =>
   character.value ? characterStatusLabel(character.value) : null,
@@ -100,7 +99,8 @@ const playerNotesAdapter: NotepadAdapter = {
   create: (input) => gameApi.createCharacterNote(characterId.value, input),
   update: (id, input) =>
     gameApi.updateCharacterNote(characterId.value, id, input),
-  remove: (id) => gameApi.deleteCharacterNote(characterId.value, id),
+  remove: (id, options) =>
+    gameApi.deleteCharacterNote(characterId.value, id, options),
 };
 
 const masterNotesAdapter: NotepadAdapter = {
@@ -109,23 +109,43 @@ const masterNotesAdapter: NotepadAdapter = {
     gameApi.createCharacterMasterNote(characterId.value, input),
   update: (id, input) =>
     gameApi.updateCharacterMasterNote(characterId.value, id, input),
-  remove: (id) => gameApi.deleteCharacterMasterNote(characterId.value, id),
+  remove: (id, options) =>
+    gameApi.deleteCharacterMasterNote(characterId.value, id, options),
 };
 
 const LOAD_FAILURE = "Не удалось загрузить персонажа";
+
+/**
+ * The page answers a failed read itself, in the card below, so the read takes
+ * the refusal over and the interceptor says nothing about a 403, a 429 or a
+ * 5xx. Without that the same sentence stood twice: once on the card in the
+ * middle of the page, once on a plate in the corner. The plate alone would not
+ * do — a sheet that failed to load leaves an empty page, and the card is what
+ * says which page is empty and offers the read again.
+ *
+ * An expired session and a dead connection stay with the interceptor: neither
+ * is about this character, and only the interceptor knows the other address of
+ * the site.
+ */
+const OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
 
 async function load() {
   const id = characterId.value;
   if (!id) return;
   loading.value = true;
   failure.value = null;
-  const { data, error } = await gameApi.getCharacter(id);
+  const { data, error } = await gameApi.getCharacter(id, OWNS_REFUSAL);
   // A late answer for a character the reader has already left.
   if (characterId.value !== id) return;
   loading.value = false;
   if (error) {
     character.value = null;
-    failure.value = describeFailure(error, LOAD_FAILURE);
+    // A wait is said in the shared wording, the one the interceptor would have
+    // raised: it is the only one that names the seconds the server asked for.
+    failure.value =
+      error.status === 429
+        ? describeRateLimit(error.retryAfterSeconds)
+        : describeFailure(error, LOAD_FAILURE);
     return;
   }
   // A 200 with nothing in it: no sentence to read out of the server, so the
@@ -202,7 +222,7 @@ watch(characterId, () => load(), { immediate: true });
           :viewer-id="user?.id ?? null"
           title="Заметки игрока"
           empty-text="Нет записей в заметках игрока"
-          empty-hint="Записи видите только вы: ни мастер, ни другие игроки их не читают."
+          empty-hint="Записи о персонаже видите только вы"
           load-error-text="Не удалось загрузить заметки игрока"
         />
       </section>
@@ -214,7 +234,7 @@ watch(characterId, () => load(), { immediate: true });
           :can-delete-others="isMaster"
           title="Заметки мастера"
           empty-text="Нет записей в заметках мастера"
-          empty-hint="Записи о персонаже видят только мастер и ассистенты игры."
+          empty-hint="Записи о персонаже видят только мастер и ассистенты игры"
           load-error-text="Не удалось загрузить заметки мастера"
         />
       </section>
@@ -233,11 +253,6 @@ watch(characterId, () => load(), { immediate: true });
   align-items: center
   gap: $tiny
   margin-bottom: $medium
-  color: $link
-  text-decoration: none
-
-  &:hover
-    text-decoration: underline
 
 .character-head
   display: flex
@@ -249,7 +264,6 @@ watch(characterId, () => load(), { immediate: true });
   width: $grid-step * 30
   height: $grid-step * 30
   object-fit: cover
-  border-radius: $border-radius
 
 .character-meta
   flex: 1
@@ -282,13 +296,14 @@ watch(characterId, () => load(), { immediate: true });
   height: $grid-step * 6
   +skeleton-shimmer
 
-// No border-radius of its own: the shimmer mixin sets one, and it has to be
-// called last (a declaration after it trips the sass mixed-decls warning).
+// Square, as the portrait it stands for: a picture is never rounded. The
+// mixin is called last (a declaration after it trips the sass mixed-decls
+// warning).
 .skeleton-portrait
   flex-shrink: 0
   width: $grid-step * 30
   height: $grid-step * 30
-  +skeleton-shimmer
+  +skeleton-shimmer($square: true)
 
 .skeleton-meta
   flex: 1

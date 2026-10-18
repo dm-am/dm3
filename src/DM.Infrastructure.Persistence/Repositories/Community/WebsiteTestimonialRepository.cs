@@ -5,9 +5,11 @@ using System.Threading.Tasks;
 using DM.Domain.Community.Features.WebsiteTestimonials;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using DbWebsiteTestimonial = DM.Infrastructure.Persistence.Entities.Community.WebsiteTestimonial;
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
@@ -129,7 +131,18 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
         };
 
         _dbContext.WebsiteTestimonials.Add(dbTestimonial);
-        await _dbContext.SaveChangesAsync();
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        {
+            // The caller pre-checks for an existing testimonial; this is the race
+            // where two concurrent requests both pass that check. Translated here
+            // so the domain does not have to know the storage engine's error codes.
+            _dbContext.ChangeTracker.Clear();
+            throw new DuplicateEntityException("Duplicate website testimonial", ex);
+        }
 
         return await _dbContext.WebsiteTestimonials
             .Where(t => t.WebsiteTestimonialId == dbTestimonial.WebsiteTestimonialId)

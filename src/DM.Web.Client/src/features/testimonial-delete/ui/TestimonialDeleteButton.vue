@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * TestimonialDeleteButton — admin-only delete control for a website
- * testimonial, rendered into the testimonial card footer via its #controls
- * slot. Self-gates on admin (renders nothing otherwise) and confirms through
- * ConfirmDialog before removing.
+ * testimonial: the trash in the top right corner of the bubble, rendered into
+ * the card's #actions slot. Self-gates on admin (renders nothing otherwise)
+ * and confirms through ConfirmDialog before removing.
  *
  * Deletion is intentionally admin-only (stricter than the moderator-level
  * create barrier) — testimonials are a curated, public-facing trust signal,
@@ -12,10 +12,9 @@
 import { ref, computed } from "vue";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { symbols } from "@/shared/lib/utils/icons";
+import { BubbleAction } from "@/shared/ui/SpeechBubble";
 import { useTestimonialStore } from "@/entities/testimonial";
 import { useAuthStore, userIsAdmin } from "@/entities/user";
-import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   testimonial: WebsiteTestimonial;
@@ -25,67 +24,27 @@ const userStore = useAuthStore();
 const testimonialStore = useTestimonialStore();
 
 const canAdministrate = computed(() => userIsAdmin(userStore.user));
-const loading = ref(false);
 const showConfirm = ref(false);
 
-async function confirmRemove() {
-  loading.value = true;
-  const { error } = await testimonialStore.removeTestimonial(
-    props.testimonial.id,
-  );
-  loading.value = false;
-  if (error) {
-    // Keep the entry in place (the store only drops it on success) and
-    // surface the failure so the delete stays available for a retry.
-    notifyFailure(error, "Не удалось удалить отзыв");
-  } else {
-    showConfirm.value = false;
-  }
-}
+// The confirmation's action. The store drops the entry on success alone, and a
+// refusal stays in the window with the delete ready for a retry.
+const removeTestimonial = () =>
+  testimonialStore.removeTestimonial(props.testimonial.id, {
+    ownsRefusal: true,
+    ownsRateLimit: true,
+  });
 </script>
 
 <template>
-  <template v-if="canAdministrate"
-    ><span class="copy-space">{{ " " }}</span
-    ><secondary-text class="testimonial-controls"
-      ><button
-        type="button"
-        class="testimonial-remove"
-        @click="showConfirm = true"
-      >
-        {{ symbols.close }} Удалить
-      </button></secondary-text
-    >
+  <template v-if="canAdministrate">
+    <BubbleAction icon="trash" label="Удалить" @click="showConfirm = true" />
     <ConfirmDialog
-      :show="showConfirm"
-      title="Удалить отзыв"
-      message="Отзыв будет удален без возможности восстановления."
+      v-model:show="showConfirm"
+      title="Удалить отзыв?"
+      message="Отзыв будет удален без возможности восстановления"
       confirm-label="Удалить"
-      danger
-      :loading="loading"
-      @confirm="confirmRemove"
-      @cancel="showConfirm = false"
-      @update:show="showConfirm = $event"
+      failure="Не удалось удалить отзыв"
+      :action="removeTestimonial"
     />
   </template>
 </template>
-
-<style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
-
-// Zero-width preserved space: invisible in layout (font-size: 0) but
-// Selection.toString() still emits a real " " before the delete control.
-.copy-space
-  white-space: pre
-  font-size: 0
-
-.testimonial-controls
-  display: inline
-  margin-left: $small
-
-// Admin "× Удалить" — a real <button> reset to the inline link appearance
-// (global $link blue, underline on hover). font-size inherited from the
-// surrounding secondary-text.
-.testimonial-remove
-  +inline-link-button
-</style>

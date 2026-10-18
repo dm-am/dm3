@@ -48,5 +48,5 @@ export const uploadPreviewColumn: Column = {
   align: "center",
 };
 
-/** File-name column, identical across upload tables. */
+/** File-name column, identical across upload tables: the main one. */
 export const uploadFileColumn: Column = { key: "file", label: "Файл" };

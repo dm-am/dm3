@@ -20,6 +20,18 @@ public class HttpException : Exception
     /// <param name="statusCode">HTTP status code</param>
     /// <param name="message">Client message</param>
     public HttpException(HttpStatusCode statusCode, string message) : base(message) => StatusCode = statusCode;
+
+    /// <summary>
+    /// What the refusal carries besides its sentence, written into the problem
+    /// document as it is.
+    /// </summary>
+    /// <remarks>
+    /// One refusal needs it today: a ban names the day it runs out, and the day
+    /// is a value rather than a sentence, so the screen can spell it in its own
+    /// words and in the reader's own time zone.
+    /// </remarks>
+    public IReadOnlyDictionary<string, object?> Extensions { get; init; } =
+        new Dictionary<string, object?>();
 }
 
 /// <summary>

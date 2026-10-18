@@ -22,17 +22,10 @@ public class UsernameAvailabilityResult
         new() { IsAvailable = true };
 
     /// <summary>
-    /// Username is taken by existing user
+    /// Username is held, by a live user or by a reservation
     /// </summary>
     public static UsernameAvailabilityResult Taken() =>
         new() { IsAvailable = false, Reason = UsernameUnavailableReason.Taken };
-
-    /// <summary>
-    /// Username is reserved (used by former user)
-    /// </summary>
-    public static UsernameAvailabilityResult Reserved() =>
-        new() { IsAvailable = false, Reason = UsernameUnavailableReason.Reserved };
-
     /// <summary>
     /// Username has invalid format
     /// </summary>
@@ -46,15 +39,11 @@ public class UsernameAvailabilityResult
 public enum UsernameUnavailableReason
 {
     /// <summary>
-    /// Username is taken by another user
+    /// Username is held: by a user, by a former user, or by a name somebody
+    /// once wore. One reason for all three, because telling them apart tells
+    /// a guest who was here and left (SECURITY.md).
     /// </summary>
     Taken,
-
-    /// <summary>
-    /// Username is reserved (used by former user in username history)
-    /// </summary>
-    Reserved,
-
     /// <summary>
     /// Username format is invalid
     /// </summary>

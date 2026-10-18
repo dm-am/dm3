@@ -77,15 +77,13 @@ internal class RegistrationService : IRegistrationService
             AcceptedRules = registration.AcceptedRules
         };
 
-        // If pending already exists for this email, replace it (re-registration with possibly new password)
-        if (await _repository.PendingExists(registration.Email, CancellationToken.None))
-        {
-            await _repository.ReplacePending(pending);
-        }
-        else
-        {
-            await _repository.AddPending(pending);
-        }
+        // One write, whether or not the address already has a pending row: AddPending
+        // replaces whatever is there. Asking first and branching on the answer is a
+        // read that stops being true the moment it returns - two submissions of the
+        // form arriving together both heard "nothing pending", both inserted, and the
+        // one that lost was answered with a failure of the storage engine on the very
+        // first screen of the site.
+        await _repository.AddPending(pending);
 
         // Send confirmation email (no username yet)
         await _mailSender.Send(registration.Email, pending.Secret);

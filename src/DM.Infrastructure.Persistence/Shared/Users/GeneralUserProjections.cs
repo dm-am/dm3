@@ -65,11 +65,19 @@ public static class GeneralUserProjections
     /// <summary>
     /// The nested-user formula, null-guarded for optional navigations
     /// (an absent editor or addressee projects as null, not as an empty
-    /// user). Splice it wherever a projection nests a user; the projection
-    /// root must then go through <see cref="ExpressionSplicer.Expand{TDelegate}"/>.
+    /// user) and for removed accounts. Splice it wherever a projection nests
+    /// a user; the projection root must then go through
+    /// <see cref="ExpressionSplicer.Expand{TDelegate}"/>.
     /// </summary>
+    /// <remarks>
+    /// The removed-account half is what lets a content read keep the rows a
+    /// removed account wrote (<see cref="RemovedAuthors" />): with the account
+    /// filter lifted the join reaches the removed row, and this is the one
+    /// place that decides nothing of it is read. Under the filter it costs one
+    /// column and answers what the filter already did.
+    /// </remarks>
     public static readonly Expression<Func<DbUser?, GeneralUser>> Projection =
-        u => u == null ? null! : RowFields.Splice(u!);
+        u => u == null || u.IsRemoved ? null! : RowFields.Splice(u!);
 
     /// <summary>
     /// The authenticated tier: the row fields plus the credential columns

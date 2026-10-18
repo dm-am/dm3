@@ -31,9 +31,7 @@ internal class TwoFactorApiService : ITwoFactorApiService
             EnabledUtc = status.EnabledUtc,
             LastVerifiedUtc = status.LastVerifiedUtc,
             RecoveryCodesLeft = status.RecoveryCodesLeft,
-            RemovalDueUtc = status.RemovalDueUtc,
-            Required = status.Required,
-            PrivilegeWithheld = status.PrivilegeWithheld
+            RemovalDueUtc = status.RemovalDueUtc
         };
     }
 

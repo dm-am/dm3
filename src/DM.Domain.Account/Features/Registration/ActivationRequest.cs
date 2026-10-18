@@ -18,8 +18,12 @@ public class ActivationRequest
     public string Username { get; set; } = null!;
 
     /// <summary>
-    /// Optional: email from sessionStorage for idempotent retry detection.
-    /// If activation already completed for this email+username, returns success instead of error.
+    /// IANA zone of the device the account is created on, or null
     /// </summary>
-    public string? RetryEmail { get; set; }
+    /// <remarks>
+    /// The account keeps it for its letters, which have no browser to ask. One
+    /// this machine does not know, or none, is left out and the account keeps UTC:
+    /// a zone is no reason to refuse an account.
+    /// </remarks>
+    public string? TimeZoneId { get; set; }
 }

@@ -5,6 +5,11 @@ namespace DM.Domain.Game.Features.PostPendencies;
 /// <summary>
 /// DTO model for creating post pendencies
 /// </summary>
+/// <remarks>
+/// No user in it. The one who waits is whoever asks, and the one waited for is
+/// the player of the character: both are facts the server holds, and a body
+/// that named them as well could only disagree with them.
+/// </remarks>
 public class CreatePostPendency
 {
     /// <summary>
@@ -16,9 +21,4 @@ public class CreatePostPendency
     /// Character identifier (whose turn it is to post)
     /// </summary>
     public Guid CharacterId { get; set; }
-
-    /// <summary>
-    /// Username who is expected to post
-    /// </summary>
-    public string WaitingForUsername { get; set; } = null!;
 }

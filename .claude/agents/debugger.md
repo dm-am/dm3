@@ -28,11 +28,12 @@ Reference: [SYSTEM.md](../../docs/architecture/SYSTEM.md)
 ```bash
 # Docker logs
 docker logs dm-api --tail 100
+docker logs dm-migration --tail 50
 docker logs dm-pg --tail 50
 docker logs dm-rmq --tail 50
 
-# Service status
-.\scripts\dm.ps1 status
+# Service status, docker and host processes alike
+powershell -File .\scripts\dm.ps1 status
 
 # Run tests — the whole solution, or one project by path
 dotnet test DM.sln
@@ -41,14 +42,12 @@ dotnet test test/DM.Domain.Game.Tests
 
 A glob over the test projects is not a shortcut for the first line: PowerShell
 passes it through as a literal path that does not exist, and a shell that does
-expand it hands `dotnet test` ten arguments where it takes one.
+expand it hands `dotnet test` one argument per project where it takes one.
 
-`.\scripts\dm.ps1 reset` is absent from that list on purpose. It is
-`compose down -v`: it deletes the volumes, so Postgres comes back
-empty and every account, game and post on the owner's stand is gone. Read from
-the stand, restart, reset and reseed nothing — the same rule the frontend brief
-states for the dev server and the API. If a diagnosis genuinely needs a clean
-database, say so and let the owner run it.
+The stand is the owner's: read from it, and restart, reset or reseed
+nothing. `dm.ps1 reset` is `compose down -v`: Postgres comes back empty and
+every account, game and post on it is gone. If a diagnosis genuinely needs a
+clean database, say so and let the owner run it.
 
 ## Key Paths
 
@@ -62,9 +61,11 @@ database, say so and let the owner run it.
 ## Common Issues
 
 ### EF Core / PostgreSQL
-- Connection string in `appsettings.json`
-- Migration not applied: `dotnet ef database update`. Never `migrations add` — the
-  project has exactly one migration, schema changes go into it (see CLAUDE.md)
+- Connection string: `DM_ConnectionStrings__Rdb` in `docker/docker-compose.yml`
+  for the containers, `appsettings.Development.json` for a host run
+- Schema not applied: the one-shot `dm-migration` container migrates before
+  the API starts, read its log. Never `migrations add` — the project has
+  exactly one migration, schema changes go into it (see CLAUDE.md)
 - N+1 queries: Check `.Include()` usage
 - Nullable reference warnings
 

@@ -16,6 +16,7 @@ powershell -File .\scripts\dm.ps1 stop     # Остановка
 powershell -File .\scripts\dm.ps1 reset    # Сброс БД и перезапуск
 powershell -File .\scripts\dm.ps1 status   # Статус сервисов
 powershell -File .\scripts\dm.ps1 logs     # Логи (или logs dm-api)
+powershell -File .\scripts\dm.ps1 e2e      # API для e2e и хука перед пушем (лимит запросов выключен до следующего start)
 
 # Linux/Mac — те же команды через ./scripts/dm.sh
 

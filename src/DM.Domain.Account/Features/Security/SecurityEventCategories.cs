@@ -67,7 +67,6 @@ public static class SecurityEventCategories
         SecurityEventType.TwoFactorRecoveryCodeUsed,
         SecurityEventType.TwoFactorRecoveryCodesReissued,
         SecurityEventType.TwoFactorRemovalScheduled,
-        SecurityEventType.TwoFactorRemovalRefused,
         SecurityEventType.TwoFactorRemovalCancelled,
         SecurityEventType.TwoFactorRemovedByAdmin,
         SecurityEventType.TwoFactorSetupFailure

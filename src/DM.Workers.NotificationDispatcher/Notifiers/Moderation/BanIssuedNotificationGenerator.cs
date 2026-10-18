@@ -59,6 +59,10 @@ internal class BanIssuedNotificationGenerator : BaseNotificationGenerator
             Metadata = new
             {
                 BanId = banData.BanId,
+                // The name of the banned reader: the notification leads to the
+                // profile, where the length of the ban stands, and both the list
+                // and the letter build that address out of this field.
+                Username = banData.TargetUsername,
                 Reason = banData.Comment,
                 ModeratorUsername = banData.ModeratorUsername,
                 EndedUtc = banData.EndedUtc,

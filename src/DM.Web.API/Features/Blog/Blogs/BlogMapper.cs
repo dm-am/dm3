@@ -1,3 +1,6 @@
+using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Identity;
 using DM.Web.API.Features.Blog.Publications;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.BbRendering;
@@ -27,9 +30,12 @@ internal partial class BlogMapper
     [UseMapper]
     private readonly UserMapper _userMapper;
 
-    public BlogMapper(UserMapper userMapper)
+    private readonly IIdentityProvider _identityProvider;
+
+    public BlogMapper(UserMapper userMapper, IIdentityProvider identityProvider)
     {
         _userMapper = userMapper;
+        _identityProvider = identityProvider;
     }
 
     /// <summary>
@@ -61,6 +67,8 @@ internal partial class BlogMapper
         }
 
         var result = ToBlogCore(blog);
+        result.ViewerBlacklisted = AnonymousIdentity.Of(_identityProvider.Current?.User) is { } viewerId &&
+                                   blog.IsBlacklisted(viewerId);
         if (result.Description is not null && blog.Author is not null)
         {
             result.Description.Context = new RenderContextEnvelope
@@ -136,13 +144,19 @@ internal partial class BlogMapper
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial BlogRef ToBlogRefCore(SvcBlog blog);
 
-    // The description envelope is composed in the wrapper.
+    // The description envelope and the viewer's standing are composed in the
+    // wrapper; what the viewer may do is the domain's answer, composed by
+    // BlogApiService on the reads of one blog.
+    [MapperIgnoreTarget(nameof(Blog.ViewerBlacklisted))]
+    [MapperIgnoreTarget(nameof(Blog.Viewer))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial Blog ToBlogCore(SvcBlog blog);
 
     // A publication without a rubric hands a null over from a `= null!`
-    // member; the guard keeps null flowing through.
+    // member; the guard keeps null flowing through. What the viewer may do is
+    // the domain's answer, composed by BlogApiService on the reads of one.
     [MapProperty(nameof(SvcPublication.Rubric), nameof(Publication.Rubric), Use = nameof(ToRubricOrNull))]
+    [MapperIgnoreTarget(nameof(Publication.Viewer))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial Publication ToPublicationCore(SvcPublication publication);
 

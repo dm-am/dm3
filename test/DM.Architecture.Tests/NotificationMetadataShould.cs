@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using DM.Domain.Personal.Features.Notifications;
 using AwesomeAssertions;
 using Xunit;
 
@@ -28,26 +29,12 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class NotificationMetadataShould
 {
-    private const string SharedType =
-        "DM.Workers.NotificationDispatcher.Dispatching.NotificationText";
-
-    /// <summary>The project that owns both the generators and the words.</summary>
+    /// <summary>The project that owns the generators.</summary>
     private static readonly string DispatcherSource =
         Path.Combine("src", "DM.Workers.NotificationDispatcher");
 
     /// <summary>The assignment every payload is written through.</summary>
     private const string PayloadAssignment = "Metadata = new";
-
-    private static readonly Assembly Dispatcher =
-        typeof(DM.Workers.NotificationDispatcher.Startup).Assembly;
-
-    private static readonly Type Wording = Dispatcher.GetType(SharedType, throwOnError: true)!;
-
-    private static readonly MethodInfo LabelOf =
-        Wording.GetMethod("FormatPropertyName", BindingFlags.Public | BindingFlags.Static)!;
-
-    private static readonly MethodInfo HiddenFrom =
-        Wording.GetMethod("IsHiddenFromText", BindingFlags.Public | BindingFlags.Static)!;
 
     [Fact]
     public void NameEveryFieldItShowsTheReader()
@@ -83,18 +70,18 @@ public class NotificationMetadataShould
             "nothing and outlives the reason it was listed");
     }
 
-    private static string Label(string key) => (string)LabelOf.Invoke(null, new object[] { key })!;
+    private static string Label(string key) => NotificationWording.FormatPropertyName(key);
 
-    private static bool Hidden(string key) => (bool)HiddenFrom.Invoke(null, new object[] { key })!;
+    private static bool Hidden(string key) => NotificationWording.IsHiddenFromText(key);
 
     /// <summary>
     /// The fields the channels carry and never print, matched by type rather than
     /// by name the way the title table is: the list is private and this suite is
-    /// not on the worker's InternalsVisibleTo list.
+    /// not on the domain's InternalsVisibleTo list.
     /// </summary>
     private static IReadOnlyCollection<string> HiddenFields()
     {
-        var lists = Wording
+        var lists = typeof(NotificationWording)
             .GetFields(BindingFlags.Static | BindingFlags.Public |
                        BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
             .Where(field => field.FieldType == typeof(HashSet<string>))

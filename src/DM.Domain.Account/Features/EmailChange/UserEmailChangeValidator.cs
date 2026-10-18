@@ -11,6 +11,13 @@ internal class UserEmailChangeValidator : AbstractValidator<UserEmailChange>
 {
     private const string FoundUserKey = nameof(FoundUserKey);
 
+    /// <summary>
+    /// Set once the password matched; the availability of the new address is
+    /// checked only after it. Asked before, "taken" went out to a caller who
+    /// had proven nothing but a session (SECURITY.md).
+    /// </summary>
+    private const string PasswordVerifiedKey = nameof(PasswordVerifiedKey);
+
     /// <inheritdoc />
     public UserEmailChangeValidator(
         IEmailChangeRepository repository,
@@ -33,9 +40,17 @@ internal class UserEmailChangeValidator : AbstractValidator<UserEmailChange>
         RuleFor(u => u.Password)
             .NotEmpty().WithMessage(ValidationError.Empty)
             .Must((model, password, context) =>
-                context.RootContextData.TryGetValue(FoundUserKey, out var userWrapper) &&
-                userWrapper is AuthenticatedUser user &&
-                securityManager.ComparePasswords(password, user.Salt, user.PasswordHash))
+            {
+                var matched =
+                    context.RootContextData.TryGetValue(FoundUserKey, out var userWrapper) &&
+                    userWrapper is AuthenticatedUser user &&
+                    securityManager.ComparePasswords(password, user.Salt, user.PasswordHash);
+                if (matched)
+                {
+                    context.RootContextData[PasswordVerifiedKey] = true;
+                }
+                return matched;
+            })
             .WithMessage(ValidationError.Invalid);
 
         RuleFor(u => u.Email)
@@ -49,6 +64,8 @@ internal class UserEmailChangeValidator : AbstractValidator<UserEmailChange>
             })
             .WithMessage(ValidationError.Unchanged)
             .MustAsync(async (email, ct) => await repository.IsEmailFree(email, ct))
+            .When((model, context) => context.RootContextData.ContainsKey(PasswordVerifiedKey),
+                ApplyConditionTo.CurrentValidator)
             .WithMessage(ValidationError.Taken);
     }
 }

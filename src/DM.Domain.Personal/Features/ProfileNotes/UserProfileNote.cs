@@ -39,7 +39,7 @@ public class UserProfileNote
 }
 
 /// <summary>
-/// Entity DTO for creating a user profile note (repository level)
+/// Entity DTO for writing a user profile note, new or existing (repository level)
 /// </summary>
 public class CreateUserProfileNoteEntity
 {
@@ -64,28 +64,8 @@ public class CreateUserProfileNoteEntity
     public string Text { get; set; } = string.Empty;
 
     /// <summary>
-    /// Creation timestamp
+    /// Moment of the write: the creation date of a new note, the modification
+    /// date of one the pair already has
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
-}
-
-/// <summary>
-/// Entity DTO for updating a user profile note (repository level)
-/// </summary>
-public class UpdateUserProfileNoteEntity
-{
-    /// <summary>
-    /// Note identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Note text
-    /// </summary>
-    public string? Text { get; set; }
-
-    /// <summary>
-    /// Update timestamp
-    /// </summary>
-    public DateTimeOffset ModifiedUtc { get; set; }
 }

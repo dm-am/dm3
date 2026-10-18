@@ -51,7 +51,7 @@ withDefaults(
   flex-shrink: 0
   width: 72px
   height: 72px
-  +skeleton-shimmer
+  +skeleton-shimmer($square: true)
 
 .skeleton-body
   flex: 1

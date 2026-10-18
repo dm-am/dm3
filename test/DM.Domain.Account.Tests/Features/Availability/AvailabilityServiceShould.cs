@@ -113,8 +113,13 @@ public class AvailabilityServiceShould : UnitTestBase
         result.Reason.Should().Be(UsernameUnavailableReason.Taken);
     }
 
+    /// <summary>
+    /// A name a former user left behind answers as taken, not as reserved: the
+    /// guest surface gives out one bit, and telling the two apart tells a
+    /// caller somebody was here and left (SECURITY.md).
+    /// </summary>
     [Fact]
-    public async Task ReturnReservedForHistoricalUsername()
+    public async Task AnswerTakenForAHistoricalUsername()
     {
         var username = "FormerUser";
         _usernameChangeRepository.IsUsernameAvailable(username, null, Arg.Any<CancellationToken>()).Returns(true);
@@ -123,6 +128,6 @@ public class AvailabilityServiceShould : UnitTestBase
         var result = await _service.CheckUsernameAvailability(username);
 
         result.IsAvailable.Should().BeFalse();
-        result.Reason.Should().Be(UsernameUnavailableReason.Reserved);
+        result.Reason.Should().Be(UsernameUnavailableReason.Taken);
     }
 }

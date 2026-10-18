@@ -59,12 +59,17 @@ public interface ITwoFactorRepository
     /// Replace rather than return the old one: somebody who abandoned a QR on
     /// one device and started again on another must not be left with two live
     /// secrets, and the abandoned one may have been read over a shoulder.
+    ///
+    /// One write decides, rather than a read the caller made first: two setups
+    /// started at the same moment both saw no factor, and the second insert
+    /// answered the owner with a failure of the storage engine.
     /// </remarks>
     /// <param name="userId">Account</param>
     /// <param name="encryptedSecret">Secret in its AEAD envelope</param>
     /// <param name="createdUtc">Moment the secret is issued at</param>
+    /// <returns>Whether the account was without a confirmed factor and now holds this secret</returns>
     /// <param name="cancellationToken">Cancellation token</param>
-    Task IssueSecret(
+    Task<bool> IssueSecret(
         Guid userId, string encryptedSecret, DateTimeOffset createdUtc,
         CancellationToken cancellationToken = default);
 
@@ -83,14 +88,22 @@ public interface ITwoFactorRepository
     /// each other cannot both report having switched it on. The time step of
     /// the confirming code is already recorded by the verification that
     /// preceded this call.
+    ///
+    /// Conditional on the issue moment as well, and that is the second half of
+    /// the same rule: a setup started on another device between the caller's
+    /// read and this write replaces the secret in place, and without the moment
+    /// in the predicate the stamp would switch the account on to a secret its
+    /// owner has never seen.
     /// </remarks>
     /// <param name="userId">Account</param>
+    /// <param name="createdUtc">Issue moment of the secret the caller verified against</param>
     /// <param name="confirmedUtc">Moment of confirmation, and of the set's issue</param>
     /// <param name="recoveryCodeHashes">Hashes of the set issued with the confirmation</param>
-    /// <returns>Whether the factor was off and is now on</returns>
+    /// <returns>Whether that secret was still there, off, and is now on</returns>
     /// <param name="cancellationToken">Cancellation token</param>
     Task<bool> Confirm(
-        Guid userId, DateTimeOffset confirmedUtc, IReadOnlyList<byte[]> recoveryCodeHashes,
+        Guid userId, DateTimeOffset createdUtc, DateTimeOffset confirmedUtc,
+        IReadOnlyList<byte[]> recoveryCodeHashes,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -122,9 +135,32 @@ public interface ITwoFactorRepository
     /// <summary>
     /// Remove the factor and every recovery code with it.
     /// </summary>
+    /// <remarks>
+    /// The factor row is written first and the codes after it, and every write
+    /// that touches both keeps that order: taken the other way round, a removal
+    /// and a reissue running together each hold the row the other is waiting for.
+    /// </remarks>
     /// <param name="userId">Account</param>
     /// <param name="cancellationToken">Cancellation token</param>
     Task Remove(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Remove the factor, and only if its waiting period has run out.
+    /// </summary>
+    /// <remarks>
+    /// The due date is in the write rather than in a read the sweep made first.
+    /// A cancellation - the second link out of the letter, or any successful
+    /// sign-in with the factor - clears the due date, and it lands between the
+    /// listing and the removal often enough to matter: the person who called the
+    /// removal off would otherwise lose the factor anyway, told nothing, on the
+    /// path that exists to give the account back to its owner.
+    /// </remarks>
+    /// <param name="userId">Account</param>
+    /// <param name="now">Moment the sweep runs at</param>
+    /// <returns>Whether a due removal was there and the factor is now gone</returns>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task<bool> RemoveIfDue(
+        Guid userId, DateTimeOffset now, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Replace the whole set of recovery codes.
@@ -132,12 +168,19 @@ public interface ITwoFactorRepository
     /// <remarks>
     /// The previous set goes as a whole: half old and half new means a code
     /// crossed off on paper still opens the account.
+    ///
+    /// Conditional on the factor still being there, and that is what the answer
+    /// reports: the caller read the state before it asked, and a removal - which
+    /// needs no code of its own - lands between the two often enough to matter.
+    /// Told nothing, this handed the owner ten codes for a factor that was off
+    /// and left them in the table behind a factor nobody could see.
     /// </remarks>
     /// <param name="userId">Account</param>
     /// <param name="codeHashes">Hashes of the new set</param>
     /// <param name="issuedUtc">Moment the set is issued at</param>
+    /// <returns>Whether the factor was there and now holds this set</returns>
     /// <param name="cancellationToken">Cancellation token</param>
-    Task ReplaceRecoveryCodes(
+    Task<bool> ReplaceRecoveryCodes(
         Guid userId, IReadOnlyList<byte[]> codeHashes, DateTimeOffset issuedUtc,
         CancellationToken cancellationToken = default);
 
@@ -224,10 +267,18 @@ public interface ITwoFactorRepository
     /// <summary>
     /// Schedule the mailed removal of the factor.
     /// </summary>
+    /// <remarks>
+    /// Only a confirmed factor can be scheduled for removal, and the answer says
+    /// whether one was there. Written as a call whose result nobody read, a link
+    /// followed after the factor had been switched off ended every session, wrote
+    /// the journal entry and mailed a waiting period that had never started.
+    /// </remarks>
     /// <param name="userId">Account</param>
     /// <param name="dueUtc">Moment the removal takes effect</param>
+    /// <returns>Whether a confirmed factor was there and is now due for removal</returns>
     /// <param name="cancellationToken">Cancellation token</param>
-    Task ScheduleRemoval(Guid userId, DateTimeOffset dueUtc, CancellationToken cancellationToken = default);
+    Task<bool> ScheduleRemoval(
+        Guid userId, DateTimeOffset dueUtc, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Call off a scheduled removal.

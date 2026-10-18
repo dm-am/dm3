@@ -166,8 +166,19 @@ describe("what the control offers", () => {
   });
 });
 
+/**
+ * Success is not announced, and these are where that is held.
+ *
+ * Every endpoint answers with the whole event, the store keeps that answer,
+ * and the control is drawn from it — so each press rewrites the word it was
+ * made on, and a plate in the corner would only repeat the word. The pairs
+ * below are therefore always both halves at once: the plate is gone AND the
+ * control now reads the other thing. Asserting only the silence would let the
+ * answer disappear from the screen unnoticed, which is the failure the rule in
+ * UI_STANDARDS, "Всплывающие сообщения", is about.
+ */
 describe("what the control does", () => {
-  it("joins through the endpoint and says it went through", async () => {
+  it("signs up, and the offer flips instead of a plate", async () => {
     stand("Astrellan", event());
     const joined = event({ participants: [member("Astrellan")] });
     api.joinEvent.mockResolvedValue(answered(joined));
@@ -177,13 +188,53 @@ describe("what the control does", () => {
     await flushPromises();
 
     expect(api.joinEvent).toHaveBeenCalledWith(EVENT_ID);
-    expect(said()).toContain("Вы записаны на эвент");
     // The answer is what the cache now holds, so the same card immediately
-    // offers the opposite action.
+    // offers the opposite action. That IS the confirmation.
     expect(control(wrapper).text()).toBe("Отменить участие");
+    expect(said()).toEqual([]);
   });
 
-  it("re-reads the events list, because the strip is drawn from it", async () => {
+  it("leaves, and the offer flips back instead of a plate", async () => {
+    stand("Astrellan", event({ participants: [member("Astrellan")] }));
+    api.leaveEvent.mockResolvedValue(answered(event({ participants: [] })));
+
+    const wrapper = render();
+    expect(control(wrapper).text()).toBe("Отменить участие");
+    await control(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(api.leaveEvent).toHaveBeenCalledWith(EVENT_ID);
+    expect(control(wrapper).text()).toBe("Участвовать");
+    expect(said()).toEqual([]);
+  });
+
+  /**
+   * A closed event has no offer to flip back to: nobody signs themselves up
+   * for one. The control leaves and the line that explains the closed event
+   * takes its place, so the press is still answered where it was made.
+   */
+  it("replaces the control with its reason on a closed event", async () => {
+    const closed = event({
+      isOpen: false,
+      participants: [member("Astrellan")],
+    });
+    stand("Astrellan", closed);
+    api.leaveEvent.mockResolvedValue(
+      answered(event({ isOpen: false, participants: [] })),
+    );
+
+    const wrapper = render();
+    await control(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(control(wrapper).exists()).toBe(false);
+    expect(wrapper.find(".event-note").text()).toBe(
+      "Участников закрытого эвента приглашает организатор",
+    );
+    expect(said()).toEqual([]);
+  });
+
+  it("starts it, and the offer becomes its end, not a plate", async () => {
     stand("SolohinLex", event({ participants: [member("SolohinLex", true)] }));
     api.startEvent.mockResolvedValue(
       answered(
@@ -191,24 +242,43 @@ describe("what the control does", () => {
       ),
     );
 
-    await control(render()).trigger("click");
+    const wrapper = render();
+    await control(wrapper).trigger("click");
     await flushPromises();
 
     expect(api.startEvent).toHaveBeenCalledWith(EVENT_ID);
+    expect(control(wrapper).text()).toBe("Закончить");
+    expect(said()).toEqual([]);
+    // The strip above the feed is drawn from the summary list, and the status
+    // it prints lives only there: "Скоро" becomes "Идет" on this re-read.
     expect(api.getEvents).toHaveBeenCalledTimes(1);
   });
 
-  it("ends a live event through the endpoint", async () => {
+  /**
+   * Ending is the one action with nothing to flip to: the event is over, so
+   * the row goes away entirely. The list re-read finishes the answer — the API
+   * hands out Live and Scheduled events only, so the ended one also leaves the
+   * strip the organizer was looking at.
+   */
+  it("ends it, and the control goes away, not a plate", async () => {
     stand(
       "SolohinLex",
       event({ status: "Live", participants: [member("SolohinLex", true)] }),
     );
-    api.endEvent.mockResolvedValue(answered(event({ status: "Ended" })));
+    api.endEvent.mockResolvedValue(
+      answered(
+        event({ status: "Ended", participants: [member("SolohinLex", true)] }),
+      ),
+    );
 
-    await control(render()).trigger("click");
+    const wrapper = render();
+    await control(wrapper).trigger("click");
     await flushPromises();
 
     expect(api.endEvent).toHaveBeenCalledWith(EVENT_ID);
+    expect(wrapper.find(".event-actions").exists()).toBe(false);
+    expect(said()).toEqual([]);
+    expect(api.getEvents).toHaveBeenCalledTimes(1);
   });
 
   it("blocks the control while the request is out", async () => {
@@ -244,7 +314,7 @@ describe("what the control does", () => {
       data: null,
       error: {
         type: "",
-        title: "Сейчас уже идет другой эвент",
+        title: "Уже идет другой эвент",
         status: 409,
         traceId: "t",
       },
@@ -254,7 +324,9 @@ describe("what the control does", () => {
     await control(wrapper).trigger("click");
     await flushPromises();
 
-    expect(said()).toEqual(["Сейчас уже идет другой эвент"]);
+    // Under the control in the card, where the press was; no plate.
+    expect(wrapper.get(".event-refusal").text()).toBe("Уже идет другой эвент");
+    expect(said()).toEqual([]);
     // Refused, so nothing moved: the same offer stands and is clickable again.
     expect(control(wrapper).text()).toBe("Начать");
     expect(control(wrapper).attributes("disabled")).toBeUndefined();
@@ -267,9 +339,13 @@ describe("what the control does", () => {
       error: { type: "", title: "", status: 404, traceId: "t" },
     });
 
-    await control(render()).trigger("click");
+    const wrapper = render();
+    await control(wrapper).trigger("click");
     await flushPromises();
 
-    expect(said()).toEqual(["Не удалось записаться на эвент"]);
+    expect(wrapper.get(".event-refusal").text()).toBe(
+      "Не удалось записаться на эвент",
+    );
+    expect(said()).toEqual([]);
   });
 });

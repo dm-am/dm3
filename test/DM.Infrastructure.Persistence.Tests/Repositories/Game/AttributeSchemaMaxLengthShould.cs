@@ -5,7 +5,6 @@ using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence.Repositories.Game;
 using AwesomeAssertions;
 using Xunit;
-using DbSchema = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema;
 using DbSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
 using DtoSpecification = DM.Domain.Game.Features.Games.AttributeSpecification;
 
@@ -20,8 +19,12 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Game;
 /// plain int, the write path filled it with zero, and zero read back as a cap of
 /// zero characters. After that the server refused every value for the attribute
 /// and the browser rendered its field with maxlength="0", so the attribute could
-/// not be filled at all. The seeded schema writes 30 by hand, which is the only
-/// reason nothing on a developer machine ever showed it.
+/// not be filled at all. The seeded sheet writes a limit by hand, which is the
+/// only reason nothing on a developer machine ever showed it.
+///
+/// Over the document conversion itself, which every store of specifications goes
+/// through: the sheet of a game and a template of the catalogue both read and
+/// write through it, so the round trip is checked once for both.
 ///
 /// Asserted on the specification that comes back rather than on the stored
 /// constraint. The number is nullable on both sides of the round trip, so a zero
@@ -30,28 +33,23 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Game;
 public class AttributeSchemaMaxLengthShould
 {
     private static DtoSpecification RoundTrip(AttributeSpecificationType type, int? maxLength) =>
-        new DbSchema
-        {
-            AttributeSchemaId = Guid.NewGuid(),
-            Title = "Схема",
-            Specifications =
-            [
-                new DbSpecification
-                {
-                    Id = Guid.NewGuid(),
-                    Title = "Race",
-                    Order = 0,
-                    Constraints = AttributeSchemaRepository.BuildConstraints(
-                        new CreateAttributeSpecification
-                        {
-                            Title = "Race",
-                            Type = type,
-                            MaxLength = maxLength
-                        },
-                        required: false)
-                }
-            ]
-        }.ToAttributeSchema().Specifications.Single();
+        AttributeSpecificationDocument.ToSpecifications(
+        [
+            new DbSpecification
+            {
+                Id = Guid.NewGuid(),
+                Title = "Race",
+                Order = 0,
+                Constraints = AttributeSpecificationDocument.BuildConstraints(
+                    new CreateAttributeSpecification
+                    {
+                        Title = "Race",
+                        Type = type,
+                        MaxLength = maxLength
+                    },
+                    required: false)
+            }
+        ]).Single();
 
     [Theory]
     [InlineData(AttributeSpecificationType.Text)]

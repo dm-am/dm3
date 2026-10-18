@@ -108,6 +108,9 @@ public class AuthenticationServiceShould : UnitTestBase
 
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.AccountLocked);
+        // The wait travels with the refusal: the screen spells it out of this
+        // number, next to the title.
+        result.LockoutSecondsRemaining.Should().Be(300);
     }
 
     [Fact]
@@ -255,6 +258,10 @@ public class AuthenticationServiceShould : UnitTestBase
         result.Error.Should().Be(AuthenticationError.Banned);
         // No session is minted for a banned account
         await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
+        // A refusal after a proven password is the one line in the journal
+        // that says the password itself is known to somebody (SECURITY.md).
+        await _auditService.Received(1).LogAsync(user.UserId, SecurityEventType.LoginFailure,
+            Arg.Any<string?>(), Arg.Any<string?>(), "Account banned");
     }
 
     /// <summary>
@@ -317,6 +324,9 @@ public class AuthenticationServiceShould : UnitTestBase
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.Removed);
         await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
+        // Same line in the journal as for a ban: the password was proven first.
+        await _auditService.Received(1).LogAsync(user.UserId, SecurityEventType.LoginFailure,
+            Arg.Any<string?>(), Arg.Any<string?>(), "Account removed");
     }
 
     [Fact]
@@ -382,6 +392,82 @@ public class AuthenticationServiceShould : UnitTestBase
         // next request, not at session expiry
         result.User.IsAuthenticated.Should().BeFalse();
         result.Error.Should().Be(AuthenticationError.Banned);
+    }
+
+    /// <summary>
+    /// A removal takes effect on the next request, the way a ban does.
+    /// </summary>
+    /// <remarks>
+    /// The session is a day from its end and the account has no activity stamp,
+    /// so a token path that let the account through would both refresh the
+    /// session and stamp the account: the refusal has to stop before either.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseTokenOfARemovedAccount()
+    {
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var user = Create.User(userId).WithRole(UserRole.RegularUser).Please();
+        user.IsRemoved = true;
+        user.LastActivityUtc = null;
+
+        _cryptoService.Decrypt("token").Returns($"{{\"userId\":\"{userId}\",\"sessionId\":\"{sessionId}\"}}");
+        _repository.FindUser(userId).Returns(user);
+        _repository.FindUserSession(userId, sessionId).Returns(new Session
+        {
+            Id = sessionId,
+            CreatedUtc = DateTimeOffset.UtcNow.AddDays(-1),
+            ExpirationUtc = DateTimeOffset.UtcNow.AddMinutes(10),
+            Persistent = true
+        });
+        _repository.FindUserSettings(userId).Returns(UserSettings.Default);
+
+        var result = await _service.Authenticate("token");
+
+        result.User.IsAuthenticated.Should().BeFalse();
+        result.Error.Should().Be(AuthenticationError.Removed);
+        await _repository.DidNotReceive().RefreshSession(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
+        await _repository.DidNotReceive().UpdateActivity(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
+    }
+
+    /// <summary>
+    /// The path that mints a session without a password answers to the state of
+    /// the account like the other two do.
+    /// </summary>
+    /// <remarks>
+    /// Everything a session needs is stubbed, so the refusal holds against an
+    /// account that would otherwise be signed in. Nothing in the signature of
+    /// the path says which callers reach it, so the rule has to be in the path.
+    /// </remarks>
+    [Theory]
+    [InlineData(true, AccessPolicy.NotSpecified, AuthenticationError.Removed)]
+    [InlineData(false, AccessPolicy.FullBan, AuthenticationError.Banned)]
+    public async Task RefuseADirectSignInToARemovedOrBannedAccount(
+        bool isRemoved, AccessPolicy accessPolicy, AuthenticationError expected)
+    {
+        var userId = Guid.NewGuid();
+        var user = Create.User(userId)
+            .WithRole(UserRole.RegularUser)
+            .WithAccessPolicy(accessPolicy)
+            .Please();
+        user.IsRemoved = isRemoved;
+
+        _repository.FindUser(userId).Returns(user);
+        _repository.FindUserSettings(userId).Returns(UserSettings.Default);
+        _sessionFactory.Create(Arg.Any<bool>(), Arg.Any<SessionContext?>())
+            .Returns(new CreateSession { Id = Guid.NewGuid() });
+        _repository.AddSession(userId, Arg.Any<CreateSession>()).Returns(new Session { Id = Guid.NewGuid() });
+        _cryptoService.Encrypt(Arg.Any<string>()).Returns("encrypted-token");
+
+        var result = await _service.Authenticate(userId);
+
+        result.User.IsAuthenticated.Should().BeFalse();
+        result.Error.Should().Be(expected);
+        await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
+        await _repository.DidNotReceive().UpdateActivity(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
+        await _auditService.DidNotReceive().LogAsync(userId, SecurityEventType.LoginSuccess,
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
     [Fact]
@@ -508,6 +594,9 @@ public class AuthenticationServiceShould : UnitTestBase
         result.User.IsAuthenticated.Should().BeFalse();
         // A ban that comes from a row refuses exactly like the flag does
         result.Error.Should().Be(AuthenticationError.Banned);
+        // The day the ban runs out travels with the refusal, for the screen to
+        // spell in the reader's own time zone.
+        result.BanEndsUtc.Should().Be(now.AddHours(1));
     }
 
     [Fact]

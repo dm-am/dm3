@@ -6,7 +6,6 @@ using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Comments;
 using DM.Domain.Game.Features.Comments;
 using DM.Web.API.Shared.Comments;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Comment = DM.Web.API.Shared.Dto.Comment;
 using CreateCommentRequest = DM.Web.API.Shared.Dto.CreateCommentRequest;
@@ -20,21 +19,18 @@ internal class GameCommentApiService : IGameCommentApiService
     private readonly IIdentityProvider _identityProvider;
     private readonly IUserBlacklistChecker _blacklistChecker;
     private readonly CommentMapper _mapper;
-    private readonly IQuoteSourceService _quoteSourceService;
 
     /// <inheritdoc />
     public GameCommentApiService(
         IGameCommentService commentService,
         IIdentityProvider identityProvider,
         IUserBlacklistChecker blacklistChecker,
-        CommentMapper mapper,
-        IQuoteSourceService quoteSourceService)
+        CommentMapper mapper)
     {
         _commentService = commentService;
         _identityProvider = identityProvider;
         _blacklistChecker = blacklistChecker;
         _mapper = mapper;
-        _quoteSourceService = quoteSourceService;
     }
 
     /// <inheritdoc />
@@ -60,16 +56,6 @@ internal class GameCommentApiService : IGameCommentApiService
     {
         var comment = await _commentService.GetAsync(commentId);
         return new Envelope<Comment>(_mapper.ToComment(comment));
-    }
-
-    /// <inheritdoc />
-    public async Task<Envelope<QuoteSource>> GetQuote(Guid commentId)
-    {
-        // Read through the same service the ordinary read goes through: a
-        // comment this reader may not have is refused by that read, and there is
-        // no second permission rule here to keep in step with the first.
-        var comment = await _commentService.GetAsync(commentId);
-        return CommentReading.ToQuote(comment, _mapper, _quoteSourceService);
     }
 
     /// <inheritdoc />

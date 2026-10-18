@@ -374,7 +374,6 @@ internal sealed partial class DataSeeder
                 ClosedUtc = gameClosedUtc,
                 MasterId = master.UserId,
                 MentorId = isNewbieMaster ? mentor.UserId : null,
-                AttributeSchemaId = SystemSchemaId,
                 Title = template.Title,
                 SystemName = template.System,
                 NarrativeSetting = template.Setting,
@@ -469,7 +468,7 @@ internal sealed partial class DataSeeder
                 _ => ("Главная сцена", "За ширмой", "Тайная комната"),
             };
 
-            // Create rooms (without linking - links will be set after SaveChanges)
+            // Create rooms, in the order their OrderNumber gives them
             var mainRoom = new Room
             {
                 RoomId = _guidFactory.Create(),
@@ -523,6 +522,13 @@ internal sealed partial class DataSeeder
             // so the closed examples differ by room type and by nothing else.
             var restrictedRooms = new List<Room> { privateRoom };
 
+            // Openness is about reading: an open room is read by everybody who
+            // sees the game and written in only by the characters added to it,
+            // the same as a closed one. The open rooms add the same characters
+            // the closed ones do; without the rows nobody but the leads would
+            // write in them.
+            var openRooms = new List<Room> { mainRoom, chatRoom };
+
             // UI test fixtures for the room list. The archived room gives the
             // "archived rooms" spoiler something to hide and reveal here while
             // every other seeded game keeps zero archived rooms. The closed chat
@@ -549,6 +555,7 @@ internal sealed partial class DataSeeder
                     IsRemoved = false
                 };
                 _dbContext.Set<Room>().Add(archivedRoom);
+                openRooms.Add(archivedRoom);
 
                 // The open chat room field for field, access aside: the pair is
                 // there to be compared. The title echoes the closed post room of
@@ -574,8 +581,6 @@ internal sealed partial class DataSeeder
 
             // Create characters - use variation.activeChars for active character count
             var characterNames = new[] { "Арагорн Следопыт", "Эльвира Чародейка", "Горим Железный Кулак", "Лиара Тенебраум", "Кассандра Видящая", "Торин Дубощит", "Леголас Зеленый Лист", "Гимли сын Глоина" };
-            var races = new[] { "Человек", "Эльф", "Дварф", "Полуэльф", "Тифлинг", "Гном", "Полуорк", "Драконорожденный" };
-            var classes = new[] { "Следопыт", "Маг", "Воин", "Плут", "Жрец", "Паладин", "Бард", "Варвар" };
 
             var playersForGame = users.Where(u => u.UserId != master.UserId).OrderBy(_ => _random.Next()).Take(variation.activeChars + 2).ToList();
             var createdCharacters = new List<Character>();
@@ -611,9 +616,7 @@ internal sealed partial class DataSeeder
 
                 _dbContext.Set<Character>().Add(character);
                 AddLegacyCharacterAttributes(character.CharacterId,
-                    race: isDiopsideChar ? "Кристаллическая сущность" : races[ci % races.Length],
-                    @class: isDiopsideChar ? "Аберрация" : classes[ci % classes.Length],
-                    alignmentIndex: template.System != "Cyberpunk RED" ? ci % AlignmentNames.Length : null,
+                    alignmentIndex: template.System != "Cyberpunk RED" ? ci % AlignmentNames.Count : null,
                     appearance: isDiopsideChar
                         ? "Полупрозрачное существо из живого кристалла. Отростки вдоль позвоночника мерцают приглушенным светом. Тело переливается оттенками зеленого и голубого."
                         : "Высокий, крепкого телосложения, с проницательным взглядом.",
@@ -649,25 +652,27 @@ internal sealed partial class DataSeeder
                     _dbContext.Set<DM.Infrastructure.Persistence.Entities.Shared.Upload>().Add(upload);
                 }
 
-                // Add room access for active characters — except the last active
-                // character of the UI test data game, so that game's closed
-                // rooms show both a granted player (green lock) and a denied
-                // one (grey lock) instead of everyone having access.
-                var denyPrivateAccessForUiTest = isUiTestDataGame &&
+                // Add room access for active characters, in the closed rooms and
+                // in the open ones — except the last active character of the UI
+                // test data game. That game's closed rooms then show both a
+                // granted player (green lock) and a denied one (grey lock)
+                // instead of everyone having access, and its open rooms show a
+                // player who reads them and was not added to write in them.
+                var leaveOutForUiTest = isUiTestDataGame &&
                     ci == Math.Min(variation.activeChars, playersForGame.Count) - 1;
-                if (!denyPrivateAccessForUiTest)
+                if (!leaveOutForUiTest)
                 {
-                    foreach (var restrictedRoom in restrictedRooms)
+                    foreach (var grantedRoom in restrictedRooms.Concat(openRooms))
                     {
                         _dbContext.Set<RoomAccess>().Add(new RoomAccess
                         {
                             AccessId = _guidFactory.Create(),
-                            RoomId = restrictedRoom.RoomId,
+                            RoomId = grantedRoom.RoomId,
                             CharacterId = character.CharacterId,
                             ReaderUserId = null,
                             // The enum defaults to NoAccess and the policy is what
-                            // admits writing: without it the members of the closed
-                            // rooms read them and cannot post in them.
+                            // admits writing: without it the members of a room
+                            // read it and cannot write in it.
                             Policy = RoomAccessPolicy.Full
                         });
                     }
@@ -700,9 +705,7 @@ internal sealed partial class DataSeeder
 
                 _dbContext.Set<Character>().Add(character);
                 AddLegacyCharacterAttributes(character.CharacterId,
-                    race: races[ci % races.Length],
-                    @class: classes[ci % classes.Length],
-                    alignmentIndex: template.System != "Cyberpunk RED" ? ci % AlignmentNames.Length : null,
+                    alignmentIndex: template.System != "Cyberpunk RED" ? ci % AlignmentNames.Count : null,
                     appearance: "Среднего роста, ничем не примечательный.",
                     temper: "Спокойный и рассудительный.",
                     story: "История еще пишется...",

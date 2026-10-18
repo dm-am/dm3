@@ -16,6 +16,10 @@
  * the topic endpoint spends it. Both readings stay pinned here rather than left
  * to whoever writes the fourth copy: the default has to survive a 410 from an
  * endpoint that has no business sending one.
+ *
+ * The map used to send every other 4xx to "не найдено" as well, and the rate
+ * limit of the API was one of them: a reader who asked too often was told the
+ * address was wrong and sent to check a link that was right.
  */
 import { describe, it, expect } from "vitest";
 import { errorCodeForStatus, getErrorConfig } from "./errorConfig";
@@ -24,10 +28,11 @@ describe("errorCodeForStatus", () => {
   const cases: [number | undefined, number][] = [
     [403, 403],
     [404, 404],
-    // No page of its own: "not found" is the only honest thing left to say.
-    [400, 404],
-    [401, 404],
-    [409, 404],
+    // A page of its own, and that is the page.
+    [400, 400],
+    [401, 401],
+    [409, 409],
+    [429, 429],
     [500, 500],
     [502, 500],
     [503, 500],
@@ -53,18 +58,21 @@ describe("errorCodeForStatus", () => {
     expect(errorCodeForStatus(410, { goneMeansRemoved: true })).toBe(410);
   });
 
-  it("only ever names a code the error page has a page for", () => {
-    const produced = new Set(
-      [undefined, 400, 401, 403, 404, 409, 410, 418, 500, 503].flatMap((s) => [
-        errorCodeForStatus(s),
-        errorCodeForStatus(s, { goneMeansRemoved: true }),
-      ]),
-    );
-    for (const code of produced) {
-      // getErrorConfig falls back to a generic sentence for anything unknown,
-      // and an error page that says "Неизвестная ошибка" is the outcome this
-      // map exists to avoid.
-      expect(getErrorConfig(code).title).not.toBe("Неизвестная ошибка");
+  it("says the rate limit in its own words, not as a wrong address", () => {
+    const page = getErrorConfig(errorCodeForStatus(429));
+    expect(page.title).toBe("Слишком много запросов");
+    expect(page.description).toBe("Подождите немного и обновите страницу.");
+  });
+
+  it("never reads a status it has no page for as not found", () => {
+    // Nothing on the wire says the address is wrong; the general page says
+    // that something went wrong and no more.
+    for (const status of [402, 405, 408, 413, 418, 422]) {
+      const code = errorCodeForStatus(status);
+      expect(code, `status ${status}`).not.toBe(404);
+      expect(getErrorConfig(code).title, `status ${status}`).toBe(
+        "Неизвестная ошибка",
+      );
     }
   });
 });

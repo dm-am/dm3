@@ -47,8 +47,9 @@ const viewer = (id: string, role: UserRole) =>
   ({ id, username: id, role }) as unknown as User;
 
 /**
- * The card is stubbed down to its #controls slot: this file is about the
- * control, and the real card drags in the bubble, the avatar and the router.
+ * The card is stubbed down to its #actions slot, the corner of the bubble the
+ * pencil stands in: this file is about the control, and the real card drags in
+ * the bubble, the avatar and the router.
  */
 const render = () =>
   mount(TestimonialEditable, {
@@ -56,9 +57,8 @@ const render = () =>
     global: {
       stubs: {
         TestimonialCard: {
-          template: '<div class="card-stub"><slot name="controls" /></div>',
+          template: '<div class="card-stub"><slot name="actions" /></div>',
         },
-        "secondary-text": { template: "<span><slot /></span>" },
         TextArea: {
           props: ["modelValue"],
           template:
@@ -68,7 +68,10 @@ const render = () =>
     },
   });
 
-const offered = () => render().find("button.testimonial-edit-btn").exists();
+/** The pencil: an icon button, found by the name a screen reader reads. */
+const PENCIL = 'button[aria-label="Редактировать"]';
+
+const offered = () => render().find(PENCIL).exists();
 
 describe("TestimonialEditable access", () => {
   beforeEach(() => {
@@ -119,7 +122,7 @@ describe("TestimonialEditable editing", () => {
     });
 
     const wrapper = render();
-    await wrapper.find("button.testimonial-edit-btn").trigger("click");
+    await wrapper.find(PENCIL).trigger("click");
 
     const field = wrapper.find("textarea");
     expect(field.exists()).toBe(true);
@@ -142,7 +145,7 @@ describe("TestimonialEditable editing", () => {
     useAuthStore().user = viewer(STRANGER_ID, UserRole.Admin);
 
     const wrapper = render();
-    await wrapper.find("button.testimonial-edit-btn").trigger("click");
+    await wrapper.find(PENCIL).trigger("click");
     await wrapper.find("textarea").setValue("Передумал");
     await wrapper.findAll("button.action-btn").at(-1)!.trigger("click");
 

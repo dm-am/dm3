@@ -371,10 +371,10 @@ public class User : IUser, IRemovable
     public virtual ICollection<Ticket> TicketsAgainst { get; set; } = [];
 
     /// <summary>
-    /// Tickets answered by user
+    /// Tickets closed by user
     /// </summary>
-    [InverseProperty(nameof(Ticket.AnswerAuthor))]
-    public virtual ICollection<Ticket> TicketsAnswered { get; set; } = [];
+    [InverseProperty(nameof(Ticket.ResolvedBy))]
+    public virtual ICollection<Ticket> TicketsResolved { get; set; } = [];
 
     /// <summary>
     /// Warnings received

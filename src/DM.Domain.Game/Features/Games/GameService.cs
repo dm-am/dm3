@@ -1,9 +1,11 @@
+using DM.Domain.Core.Content;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Caching;
 using DM.Domain.Core.Dto;
@@ -14,7 +16,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Statuses;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
-using DM.Domain.Game.Features.AttributeSchemas;
+using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Subscriptions;
@@ -32,14 +34,15 @@ internal class GameService : IGameService
     private readonly IValidator<GamesQuery> _gamesQueryValidator;
     private readonly IValidator<UpdateGame> _updateGameValidator;
     private readonly IGameCreationValidator _creationValidator;
-    private readonly IGameCreationDataResolver _dataResolver;
+    private readonly IGameTagResolver _tagResolver;
     private readonly IIntentionManager _intentionManager;
-    private readonly IAttributeSchemaService _schemaService;
+    private readonly IGameAttributeSchemaRepository _gameSchemaRepository;
     private readonly IGameRepository _repository;
     private readonly IGameUserRepository _userRepository;
     private readonly IGameInvitationService _invitationService;
     private readonly IIdentityProvider _identityProvider;
     private readonly IGameBlacklistRepository _gameBlacklistRepository;
+    private readonly IUserBlacklistChecker _userBlacklistChecker;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IGameSubscriptionService _subscriptionService;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -47,6 +50,7 @@ internal class GameService : IGameService
     private readonly IEventProducer _producer;
     private readonly ICache _cache;
     private readonly ILogger<GameService> _logger;
+    private readonly IBbTagNameCase _tagNames;
 
     private const string TagListCacheKey = nameof(TagListCacheKey);
     private const string GamesByStatusCacheKeyPrefix = "GamesByStatus_";
@@ -55,33 +59,36 @@ internal class GameService : IGameService
         IValidator<GamesQuery> gamesQueryValidator,
         IValidator<UpdateGame> updateGameValidator,
         IGameCreationValidator creationValidator,
-        IGameCreationDataResolver dataResolver,
+        IGameTagResolver tagResolver,
         IIntentionManager intentionManager,
-        IAttributeSchemaService schemaService,
+        IGameAttributeSchemaRepository gameSchemaRepository,
         IGameRepository repository,
         IGameUserRepository userRepository,
         IGameInvitationService invitationService,
         IIdentityProvider identityProvider,
         IGameBlacklistRepository gameBlacklistRepository,
+        IUserBlacklistChecker userBlacklistChecker,
         IUnreadCountersRepository unreadCountersRepository,
         IGameSubscriptionService subscriptionService,
         IDateTimeProvider dateTimeProvider,
         IGuidFactory guidFactory,
         IEventProducer producer,
         ICache cache,
-        ILogger<GameService> logger)
+        ILogger<GameService> logger,
+        IBbTagNameCase tagNames)
     {
         _gamesQueryValidator = gamesQueryValidator;
         _updateGameValidator = updateGameValidator;
         _creationValidator = creationValidator;
-        _dataResolver = dataResolver;
+        _tagResolver = tagResolver;
         _intentionManager = intentionManager;
-        _schemaService = schemaService;
+        _gameSchemaRepository = gameSchemaRepository;
         _repository = repository;
         _userRepository = userRepository;
         _invitationService = invitationService;
         _identityProvider = identityProvider;
         _gameBlacklistRepository = gameBlacklistRepository;
+        _userBlacklistChecker = userBlacklistChecker;
         _unreadCountersRepository = unreadCountersRepository;
         _subscriptionService = subscriptionService;
         _dateTimeProvider = dateTimeProvider;
@@ -89,6 +96,7 @@ internal class GameService : IGameService
         _producer = producer;
         _cache = cache;
         _logger = logger;
+        _tagNames = tagNames;
     }
 
     #region Create
@@ -104,13 +112,7 @@ internal class GameService : IGameService
         // The master picks tags by short id — the alias the tag list serves and
         // the game filters take. The link table keys on the tags' own
         // identifiers, so the translation happens where the catalog is read.
-        var validTagIds = await _dataResolver.ResolveTagIds(createGame.Tags);
-
-        if (createGame.AttributeSchemaId.HasValue)
-        {
-            var allowedSchemaId = await _dataResolver.GetAllowedSchemaId(createGame.AttributeSchemaId.Value);
-            createGame.AttributeSchemaId = allowedSchemaId;
-        }
+        var validTagIds = await _tagResolver.ResolveTagIds(createGame.Tags);
 
         var now = _dateTimeProvider.Now;
         var gameId = _guidFactory.Create();
@@ -123,7 +125,7 @@ internal class GameService : IGameService
             Title = createGame.Title,
             SystemName = createGame.SystemName,
             NarrativeSetting = createGame.NarrativeSetting,
-            Info = createGame.Info,
+            Info = _tagNames.ToLowerCase(createGame.Info, BbTagSet.Common),
             Status = createGame.Draft ? ModuleStatus.Draft : ModuleStatus.Active,
             // Whether the game is premoderated is decided by who is creating it,
             // by the same rule a blog is decided by. Until this line existed the
@@ -136,7 +138,7 @@ internal class GameService : IGameService
             ShowPrivateMessages = createGame.ShowPrivateMessages,
             HidePostStats = createGame.HidePostStats,
             CommentsAccessMode = createGame.CommentsAccessMode,
-            AttributeSchemaId = createGame.AttributeSchemaId,
+            AttributeSpecifications = createGame.AttributeSpecifications,
             IsRecruitmentOpen = !createGame.Draft,
             RecruitmentStartedUtc = createGame.Draft ? null : now,
             RecruitmentCount = createGame.Draft ? 0 : 1,
@@ -153,8 +155,7 @@ internal class GameService : IGameService
             AccessType = RoomAccessType.Open,
             ViewPrivateText = false,
             ViewDiceResults = true,
-            DiceEnabled = true,
-            OrderNumber = 1
+            DiceEnabled = true
         };
 
         // Markers first, row second, commit on the line after it returns — see
@@ -175,6 +176,11 @@ internal class GameService : IGameService
         // The game is committed by now, so nothing below it may turn a created
         // game into a 500: the caller would try again and end up with two. Each
         // step below therefore states what its own failure costs.
+        await CopyBlacklistOnCreation(createGame, createdGame.Id, userId);
+
+        // After the copy, on purpose: an assistant named from the master's own
+        // blacklist is refused by the game's list instead of being invited into a
+        // game whose list already holds him.
         if (!string.IsNullOrEmpty(createGame.AssistantUsername))
         {
             try
@@ -188,23 +194,6 @@ internal class GameService : IGameService
             }
         }
 
-        // One statement instead of a round trip per blocked user, the way the
-        // blog side already copies the same list. A lost copy costs the master a
-        // list they can refill from the game's own blacklist screen.
-        if (createGame.CopyBlacklist)
-        {
-            try
-            {
-                var copied = await _gameBlacklistRepository.CopyFromPersonalBlacklist(createdGame.Id, userId);
-                _logger.LogDebug("Copied personal blacklist to game blacklist with {Count} users", copied);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogWarning(exception,
-                    "Failed to copy the personal blacklist into game {GameId}", createdGame.Id);
-            }
-        }
-
         // A lost event costs the subscribers one notification, which SYSTEM.md
         // allows — an event is not the carrier of the fact. The producer swallows
         // and counts a refusal, so this needs no guard of its own.
@@ -214,6 +203,37 @@ internal class GameService : IGameService
             createdGame.Id, createGame.Title, userId);
 
         return createdGame;
+    }
+
+    /// <summary>
+    /// Copy the master's personal blacklist into a game just created.
+    /// </summary>
+    /// <remarks>
+    /// One statement instead of a round trip per blocked user, the way the blog
+    /// side copies the same list. A lost copy costs the master a list they can
+    /// refill from the game's own blacklist screen, so a failure is logged and
+    /// not thrown. The request decides when it says anything; silent, the
+    /// master's account setting does, so the setting holds for every way a game
+    /// gets created.
+    /// </remarks>
+    private async Task CopyBlacklistOnCreation(CreateGame createGame, Guid gameId, Guid masterId)
+    {
+        try
+        {
+            var copyBlacklist = createGame.CopyBlacklist ??
+                                (await _userBlacklistChecker.GetSettings(masterId))
+                                .HasFlag(UserBlacklistSettings.AutoPopulateContentBlacklist);
+            if (copyBlacklist)
+            {
+                var copied = await _gameBlacklistRepository.CopyFromPersonalBlacklist(gameId, masterId);
+                _logger.LogDebug("Copied personal blacklist to game blacklist with {Count} users", copied);
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception,
+                "Failed to copy the personal blacklist into game {GameId}", gameId);
+        }
     }
 
     #endregion
@@ -245,6 +265,13 @@ internal class GameService : IGameService
         var currentUserId = identity.User.UserId;
         var isAnonymous = !identity.User.IsAuthenticated;
         var pageSize = identity.Settings.Paging.EntitiesPerPage;
+
+        if (!isAnonymous && IsDiscoveryListing(query))
+        {
+            var hiddenMasters = await _userBlacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
+                currentUserId, UserBlacklistSettings.HideGames);
+            query.ExcludedMasterIds = hiddenMasters.Count > 0 ? hiddenMasters : null;
+        }
 
         if (isAnonymous && IsCacheableAnonymousQuery(query))
         {
@@ -304,14 +331,8 @@ internal class GameService : IGameService
         // Authenticated users: show actual unread counts
         await _unreadCountersRepository.FillEntityCounters(games, currentUserId,
             g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
-        var gamesWithAvailableComments = games
-            .Where(g => _intentionManager.IsAllowed(GameIntention.ReadComments, g))
-            .ToArray();
-        if (gamesWithAvailableComments.Length > 0)
-        {
-            await _unreadCountersRepository.FillEntityCounters(gamesWithAvailableComments, currentUserId,
-                g => g.Id, g => g.UnreadCommentsCount);
-        }
+        await _unreadCountersRepository.FillEntityCounters(games, currentUserId,
+            g => g.Id, g => g.UnreadCommentsCount);
 
         // Identifiers, which is all the sum below reads. The method this replaces
         // returned whole room rows with their pendencies and two whole users per
@@ -421,15 +442,31 @@ internal class GameService : IGameService
     }
 
     /// <summary>
-    /// What the details read adds on top: the attribute schema the characters are
-    /// described by, and the subscriber list.
+    /// A write answers with the details of the game as the details read gives
+    /// them: the repository hands back the row it wrote without the sheet and the
+    /// subscribers, and the answer of every write goes out through the details
+    /// mapping, which requires the sheet.
     /// </summary>
+    private async Task<GameDetails> Answered(GameDetails written)
+    {
+        await FillDetails(written, _identityProvider.Current.User.UserId);
+        return written;
+    }
+
+    /// <summary>
+    /// What the details read adds on top: the character sheet the game describes
+    /// its characters by, and the subscriber list.
+    /// </summary>
+    /// <remarks>
+    /// Unconditional, and it throws when the row is missing. Every writer of a
+    /// game writes its sheet in the same save, so a game without one is a defect
+    /// of that write; answering with an empty sheet instead would show every
+    /// character of that game as having no attributes and let the next save
+    /// store that as the truth.
+    /// </remarks>
     private async Task FillDetails(GameDetails game, Guid currentUserId)
     {
-        if (game.AttributeSchemaId.HasValue)
-        {
-            game.AttributeSchema = await _schemaService.GetAsync(game.AttributeSchemaId.Value);
-        }
+        game.AttributeSchema = await _gameSchemaRepository.Get(game.Id);
 
         game.Subscribers = await _subscriptionService.GetSubscribersAsync(game.Id);
         await FillCounters(game, currentUserId);
@@ -491,7 +528,7 @@ internal class GameService : IGameService
         // whose tags nobody touched; see ResolveTagIds for why that matters.
         var tagIds = updateGame.Tags is null
             ? null
-            : await _dataResolver.ResolveTagIds(updateGame.Tags);
+            : await _tagResolver.ResolveTagIds(updateGame.Tags);
 
         var updateEntity = new UpdateGameEntity
         {
@@ -502,7 +539,7 @@ internal class GameService : IGameService
             Title = updateGame.Title,
             SystemName = updateGame.SystemName,
             NarrativeSetting = updateGame.NarrativeSetting,
-            Info = updateGame.Info,
+            Info = _tagNames.ToLowerCase(updateGame.Info, BbTagSet.Common),
             HideDiceResult = updateGame.HideDiceResult,
             ShowPrivateMessages = updateGame.ShowPrivateMessages,
             HidePostStats = updateGame.HidePostStats,
@@ -511,7 +548,7 @@ internal class GameService : IGameService
             UpdatedUtc = _dateTimeProvider.Now
         };
 
-        var result = await _repository.Update(updateEntity);
+        var result = await Answered(await _repository.Update(updateEntity));
 
         await _producer.SendAsync(invokedEvents, game.Id);
 
@@ -566,7 +603,7 @@ internal class GameService : IGameService
             IsRecruitmentOpen = change.Status == ModuleStatus.Closed ? false : (bool?)null
         };
 
-        var result = await _repository.Update(update);
+        var result = await Answered(await _repository.Update(update));
         await _producer.SendAsync(new List<EventType> { EventType.ChangedGame, statusEvent }, gameId);
         return result;
     }
@@ -636,7 +673,7 @@ internal class GameService : IGameService
             PremoderationStatus = change.Status
         };
 
-        var result = await _repository.Update(update);
+        var result = await Answered(await _repository.Update(update));
         await _producer.SendAsync(new List<EventType> { EventType.ChangedGame, EventType.StatusGameModeration }, gameId);
         return result;
     }
@@ -653,7 +690,7 @@ internal class GameService : IGameService
             ClearRecruitmentStartedUtc = true
         };
 
-        var result = await _repository.Update(update);
+        var result = await Answered(await _repository.Update(update));
         await _producer.SendAsync(EventType.ChangedGame, gameId);
         return result;
     }
@@ -673,7 +710,7 @@ internal class GameService : IGameService
         // Master self-delete is restricted (SeniorModerator+ bypasses it): a
         // master may only delete a game while it is still a draft, or while it
         // is barely started — fewer than 10 posts and none of them rated.
-        if (!isPrivilegedModerator && gameToRemove.Master.UserId == currentUser.UserId &&
+        if (!isPrivilegedModerator && gameToRemove.Master?.UserId == currentUser.UserId &&
             gameToRemove.Status != ModuleStatus.Draft)
         {
             var postCounts = await _repository.GetTotalPostCounts(new[] { gameId });
@@ -759,6 +796,9 @@ internal class GameService : IGameService
         // not worth an exception to it.
         && query.Participating is null
         && query.PremoderationStatuses is null or { Count: 0 }
+        // Filled for a signed-in viewer alone; a listing cleaned for somebody
+        // must never become the entry every guest is served.
+        && query.ExcludedMasterIds is null or { Count: 0 }
         && !query.CreatedFromUtc.HasValue && !query.CreatedToUtc.HasValue
         && !query.ActivatedFromUtc.HasValue && !query.ActivatedToUtc.HasValue
         && !query.ClosedFromUtc.HasValue && !query.ClosedToUtc.HasValue
@@ -802,6 +842,25 @@ internal class GameService : IGameService
     }
 
     /// <summary>
+    /// Whether the list is one the viewer browses rather than one they asked
+    /// about somebody by name: the lists "Скрывать игры" cleans.
+    /// </summary>
+    /// <remarks>
+    /// The switch hides the games of the people on the viewer's personal list
+    /// from the listings that offer games to read: the catalogue, the sidebars,
+    /// a search. It does not take away the viewer's own games, where they may
+    /// play under a master they blocked, nor answer "nothing" to a list the
+    /// viewer asked for by the master's or a player's name - that is a question
+    /// about the person, asked on purpose. The moderation queue is a worklist
+    /// and is never cleaned.
+    /// </remarks>
+    private static bool IsDiscoveryListing(GamesQuery query) =>
+        query.Participating != true &&
+        query.OwnerUsernames is not { Count: > 0 } &&
+        string.IsNullOrEmpty(query.PlayerUsername) &&
+        query.PremoderationStatuses is not { Count: > 0 };
+
+    /// <summary>
     /// Build the query part of a cache key
     /// </summary>
     private static string GetQueryKey(GamesQuery query)
@@ -831,7 +890,8 @@ internal class GameService : IGameService
             query.ClosedToUtc?.ToString("O") ?? "",
             query.RecruitmentStartedFromUtc?.ToString("O") ?? "",
             query.RecruitmentStartedToUtc?.ToString("O") ?? "",
-            query.PremoderationStatuses != null ? string.Join(",", query.PremoderationStatuses) : ""
+            query.PremoderationStatuses != null ? string.Join(",", query.PremoderationStatuses) : "",
+            query.ExcludedMasterIds != null ? string.Join(",", query.ExcludedMasterIds.Order()) : ""
         };
         // The key carries the values themselves: a 32-bit hash of them lets two
         // different queries of one user share a cached page. Parts are

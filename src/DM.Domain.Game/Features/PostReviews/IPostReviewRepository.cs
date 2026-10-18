@@ -60,11 +60,11 @@ public interface IPostReviewRepository
     // ═══ WRITE ═══
 
     /// <summary>
-    /// Check if user already has a review for the post
+    /// Which of these posts the user has a review of (removed reviews aside)
     /// </summary>
     /// <param name="authorId">Author ID</param>
-    /// <param name="postId">Post ID</param>
-    Task<bool> ExistsAsync(Guid authorId, Guid postId);
+    /// <param name="postIds">Post IDs</param>
+    Task<IReadOnlyCollection<Guid>> SelectReviewedPostIdsAsync(Guid authorId, IReadOnlyCollection<Guid> postIds);
 
     /// <summary>
     /// Create new post review, moving the post author's quality rating with it
@@ -79,13 +79,15 @@ public interface IPostReviewRepository
     /// <summary>
     /// Update post review, moving the post author's quality rating with it
     /// </summary>
-    /// <param name="entity">Update data</param>
-    /// <param name="qualityRatingDelta">
-    /// What the change is worth to the post author's quality rating: the
-    /// difference between the new sign and the old one on an edit, the sign
-    /// taken back on a removal, zero when neither moves
-    /// </param>
-    Task<PostReview> UpdateAsync(UpdatePostReviewEntity entity, int qualityRatingDelta);
+    /// <remarks>
+    /// What the counter owes is not passed in: an edit and a removal are the same
+    /// arithmetic over the row, and a caller can only compute it from the review
+    /// it read before the write, which two concurrent changes both do. The write
+    /// locks the row and takes the difference itself, so the change that arrives
+    /// second pays for the state it actually found.
+    /// </remarks>
+    /// <param name="entity">Update data: what the review becomes</param>
+    Task<PostReview> UpdateAsync(UpdatePostReviewEntity entity);
 
     // ═══ ELIGIBILITY ═══
 
@@ -97,12 +99,14 @@ public interface IPostReviewRepository
     Task<PostInfo?> GetPostInfoAsync(Guid postId, Guid userId);
 
     /// <summary>
-    /// Check if user has a recent post review in the specified game
+    /// Which of these games the user has reviewed a post in since the cutoff
+    /// (removed reviews aside)
     /// </summary>
     /// <param name="authorId">Author ID</param>
-    /// <param name="gameId">Game ID</param>
+    /// <param name="gameIds">Game IDs</param>
     /// <param name="cutoffDate">Cutoff date for "recent"</param>
-    Task<bool> HasRecentReviewInGameAsync(Guid authorId, Guid gameId, DateTimeOffset cutoffDate);
+    Task<IReadOnlyCollection<Guid>> SelectGamesReviewedSinceAsync(
+        Guid authorId, IReadOnlyCollection<Guid> gameIds, DateTimeOffset cutoffDate);
 
     /// <summary>
     /// Get user's total post count in games (for newbie check)

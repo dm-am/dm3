@@ -80,21 +80,10 @@ async function toggleSubscribe() {
 .muted
   color: $text-muted
 
+// A word of the sidebar menu, drawn as every other link of it, out of reach
+// included.
 .strip-action
-  padding: 0
-  border: none
-  background: none
-  font: inherit
-  color: $link
-  cursor: pointer
-
-  &:hover:not(:disabled)
-    color: $link-hover
-    text-decoration: underline
-
-  &:disabled
-    opacity: 0.6
-    cursor: default
+  +inline-link-button
 
 .join-buttons
   display: flex

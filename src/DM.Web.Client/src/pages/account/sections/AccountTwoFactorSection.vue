@@ -1,6 +1,6 @@
 <template>
   <section class="section">
-    <h2 class="section-title">Второй фактор</h2>
+    <h2 class="section-title">Двухфакторная аутентификация</h2>
 
     <div class="two-factor-content">
       <!-- The set of recovery codes, on screen for the only time they exist.
@@ -15,14 +15,16 @@
         <h3 class="subsection-title">
           {{ issuedByReissue ? "Новые резервные коды" : "Резервные коды" }}
         </h3>
-        <p v-if="!issuedByReissue" class="codes-note">Второй фактор включен.</p>
+        <p v-if="!issuedByReissue" class="codes-note">
+          Двухфакторная аутентификация включена
+        </p>
         <p class="codes-warning">
           Коды показываются один раз и больше не откроются. Сохраните их: каждый
           код срабатывает только один раз и заменяет код из приложения, когда
           телефона нет под рукой.
         </p>
         <p v-if="issuedByReissue" class="codes-note">
-          Коды перевыпущены. Прежний набор кодов больше не работает.
+          Коды перевыпущены. Новый набор заменил прежний.
         </p>
 
         <ul class="codes-grid">
@@ -31,26 +33,32 @@
           </li>
         </ul>
 
-        <Button @click="copyCodes">Скопировать все</Button>
+        <Button @click="copyCodes">{{ codesCaption }}</Button>
 
         <label class="codes-saved">
           <input v-model="codesSaved" type="checkbox" />
           Коды сохранены
         </label>
 
-        <Button :disabled="!codesSaved" @click="dismissCodes">Готово</Button>
+        <Button
+          type="button"
+          variant="primary"
+          :disabled="!codesSaved"
+          @click="dismissCodes"
+        >
+          Готово
+        </Button>
       </div>
 
       <div v-else-if="loading" class="loading-state">Загрузка...</div>
 
       <!-- The state could not be read. Offering "Включить" here would promise
-           an operation the server may already have refused as "уже включен". -->
+           an operation the server may already have refused as "уже включена". -->
       <div v-else-if="loadError" class="status-card status-card--failed">
         <div class="status-header">
-          <span class="status-icon">{{ symbols.cross }}</span>
           <span class="status-title">{{ loadError }}</span>
         </div>
-        <p class="status-note">Обновите страницу, чтобы попробовать снова.</p>
+        <p class="status-note">Обновите страницу, чтобы попробовать снова</p>
       </div>
 
       <template v-else-if="status">
@@ -61,15 +69,14 @@
           class="status-card status-card--scheduled"
         >
           <div class="status-header">
-            <SvgIcon name="clock" class="status-icon" />
             <span class="status-title">
-              Снятие второго фактора назначено на
+              Отключение двухфакторной аутентификации назначено на
               {{ formatDateFull(status.removalDueUtc) }}
             </span>
           </div>
           <p class="status-note">
-            Любой вход со вторым фактором отменяет снятие. Отменить его можно и
-            ссылкой из письма.
+            Любой вход с кодом отменяет отключение. Отменить его можно и ссылкой
+            из письма.
           </p>
         </div>
 
@@ -77,21 +84,22 @@
         <template v-if="status.enabled">
           <div class="status-card status-card--enabled">
             <div class="status-header">
-              <SvgIcon name="locked" class="status-icon" />
-              <span class="status-title">Второй фактор включен</span>
+              <span class="status-title">
+                Двухфакторная аутентификация включена
+              </span>
             </div>
+            <!-- Lines of text and not flex rows, so each copies as
+                 "Включена: 01.09.2026 в 09:37"; a value is never broken in
+                 two, and where a line has no room for it beside its label
+                 it goes under the label whole. -->
             <div class="status-details">
-              <div class="status-row">
-                <span class="status-label">Включен:</span>
-                <span>{{ formatDateFull(status.enabledUtc) }}</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Последнее подтверждение:</span>
-                <span>{{ formatDateFull(status.lastVerifiedUtc) }}</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Резервных кодов осталось:</span>
-                <span>{{ status.recoveryCodesLeft }}</span>
+              <div
+                v-for="row in factorRows"
+                :key="row.label"
+                class="status-row"
+              >
+                <span class="status-label">{{ row.label }}</span
+                >{{ " " }}<span class="status-value">{{ row.value }}</span>
               </div>
             </div>
             <!-- Named in words, not only painted: a reader who cannot tell the
@@ -110,9 +118,7 @@
 
           <div v-if="!action" class="two-factor-actions">
             <Button @click="open('reissue')">Перевыпустить коды</Button>
-            <Button class="action-danger" @click="open('disable')">
-              Отключить
-            </Button>
+            <Button @click="open('disable')">Отключить</Button>
           </div>
 
           <!-- Both operations cost the same and ask for the same pair, so they
@@ -124,8 +130,8 @@
                 <p class="form-description">
                   {{
                     action === "disable"
-                      ? "Чтобы отключить второй фактор, введите пароль и код."
-                      : "Чтобы перевыпустить коды, введите пароль и код. Прежний набор перестанет работать."
+                      ? "Чтобы отключить двухфакторную аутентификацию, введите пароль и код"
+                      : "Чтобы перевыпустить коды, введите пароль и код. Новый набор заменит прежний."
                   }}
                 </p>
 
@@ -168,7 +174,7 @@
                 <div class="form-actions">
                   <Button
                     type="submit"
-                    :class="{ 'action-danger': action === 'disable' }"
+                    variant="primary"
                     :loading="actionBusy"
                     :disabled="!actionReady"
                   >
@@ -185,9 +191,11 @@
              does not exist until the second, so the fields appear in that
              order rather than all at once. -->
         <template v-else>
-          <div class="state-line">Второй фактор выключен</div>
+          <div class="state-line">Двухфакторная аутентификация выключена</div>
 
-          <Button v-if="!setupOpen" @click="openSetup">Включить</Button>
+          <Button v-if="!setupOpen" variant="primary" @click="openSetup">
+            Включить
+          </Button>
 
           <!-- Revealed in place and not in a dialog: confirming takes minutes,
                a dialog closes on a stray click, and a secret closed away half
@@ -197,9 +205,8 @@
               <div class="setup-form">
                 <form v-if="!setup" @submit.prevent="issueSecret">
                   <p class="form-description">
-                    Пароль спрашивается еще раз, чтобы второй фактор нельзя было
-                    поставить с чужого устройства, где вход в аккаунт уже
-                    открыт.
+                    Пароль подтверждает, что двухфакторную аутентификацию
+                    включает владелец аккаунта
                   </p>
 
                   <FormField
@@ -219,6 +226,7 @@
                   <div class="form-actions">
                     <Button
                       type="submit"
+                      variant="primary"
                       :loading="setupBusy"
                       :disabled="!setupPassword"
                     >
@@ -238,7 +246,7 @@
 
                   <QrCode
                     :value="setup.otpAuthUri"
-                    label="Код для приложения-аутентификатора"
+                    label="Секрет для приложения-аутентификатора"
                     class="setup-qr"
                   />
 
@@ -250,7 +258,7 @@
                       class="copy-btn"
                       @click="copySecret(setup.secret)"
                     >
-                      Скопировать
+                      {{ secretCaption }}
                     </button>
                   </div>
 
@@ -279,6 +287,7 @@
                   <div class="form-actions">
                     <Button
                       type="submit"
+                      variant="primary"
                       :loading="confirmBusy"
                       :disabled="!confirmCode.trim()"
                     >
@@ -301,12 +310,14 @@ import { computed, onMounted, ref } from "vue";
 import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
-import { SvgIcon } from "@/shared/ui/Icon";
 import { QrCode } from "@/shared/ui/QrCode";
-import { symbols } from "@/shared/lib/utils/icons";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { describeFailure } from "@/shared/lib/errors";
+import { useCopyFeedback } from "@/shared/lib/composables/useCopyFeedback";
+import {
+  describeFailure,
+  describeRateLimit,
+  refusalHere,
+} from "@/shared/lib/errors";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
 import type {
   TwoFactorSetup,
@@ -314,9 +325,26 @@ import type {
 } from "@/shared/api/models/account";
 import type { BadRequestError, GeneralError } from "@/shared/api/models/common";
 
-const toast = useToast();
+// The clipboard is the one result the screen cannot show, so each copy control
+// answers for itself in its own caption. One instance per control: a shared one
+// would have a press on either of them answer in both captions at once.
+const secretClip = useCopyFeedback();
+const secretCaption = secretClip.label("Скопировать");
+const codesClip = useCopyFeedback();
+const codesCaption = codesClip.label("Скопировать все");
 
-const LOAD_FAILED = "Не удалось узнать состояние второго фактора";
+const LOAD_FAILED = "Не удалось узнать состояние двухфакторной аутентификации";
+
+/**
+ * The read this section answers for itself.
+ *
+ * A failed read is drawn as a card standing in place of the whole block, and
+ * the way in to switching the factor on goes with it, so the card is where the
+ * reader is looking and there is nothing for a plate in the corner to add. Set
+ * here and not inside the request: the same endpoint read from a screen that
+ * shows nothing must keep its plate.
+ */
+const OWNED_BY_CARD = { ownsRefusal: true, ownsRateLimit: true } as const;
 
 /** Below this many codes left the row stops being a fact and becomes a warning. */
 const LOW_CODES = 2;
@@ -324,6 +352,19 @@ const LOW_CODES = 2;
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const status = ref<TwoFactorStatus | null>(null);
+
+/** What the factor knows about itself, a line each under its state. */
+const factorRows = computed(() => [
+  { label: "Включена:", value: formatDateFull(status.value?.enabledUtc) },
+  {
+    label: "Последнее подтверждение:",
+    value: formatDateFull(status.value?.lastVerifiedUtc),
+  },
+  {
+    label: "Резервных кодов осталось:",
+    value: String(status.value?.recoveryCodesLeft ?? 0),
+  },
+]);
 
 // Switching the factor on.
 const setupOpen = ref(false);
@@ -364,12 +405,38 @@ const grouped = (code: string) => code.replace(/(.{4})(?=.)/g, "$1-");
 
 onMounted(loadStatus);
 
+/**
+ * What the card says about a read that failed.
+ *
+ * The server's own sentence wherever there is one. The card stands instead of
+ * the whole block, so it is the one carrier of the failure, and a refusal names
+ * something the section cannot work out for itself - a rank this block is
+ * closed for, a state the account is in. There is no plate over it saying the
+ * same thing a line higher: the request took the refusal and the limit over.
+ *
+ * Two statuses keep the section's own line, because the interceptor still
+ * speaks for them and knows more about them than this block does: a session
+ * that ended is about the session and not about the factor, and a request that
+ * never went out has no sentence of its own to relay.
+ *
+ * The wait is built rather than relayed. The seconds the server named travel in
+ * Retry-After and the transport copies them onto the failure; the title of a
+ * 429 carries no number at all, and a wait with no number is the one thing the
+ * reader cannot act on.
+ */
+function describeLoadFailure(failure: GeneralError): string {
+  if (failure.status === 0 || failure.status === 401) return LOAD_FAILED;
+  if (failure.status === 429)
+    return describeRateLimit(failure.retryAfterSeconds);
+  return describeFailure(failure, LOAD_FAILED);
+}
+
 async function loadStatus() {
   loading.value = true;
-  const { data, error } = await accountApi.getTwoFactorStatus();
+  const { data, error } = await accountApi.getTwoFactorStatus(OWNED_BY_CARD);
   loading.value = false;
 
-  loadError.value = error ? describeFailure(error, LOAD_FAILED) : null;
+  loadError.value = error ? describeLoadFailure(error) : null;
   status.value = data?.resource ?? null;
 }
 
@@ -405,9 +472,11 @@ async function issueSecret() {
       await loadStatus();
       return;
     }
-    setupError.value = describeFailure(
+    // Under the field, the refusals the interceptor speaks for included: the
+    // password field is still there, and its plate is taken down.
+    setupError.value = refusalHere(
       error,
-      "Не удалось получить код. Попробуйте еще раз.",
+      "Не удалось получить код, попробуйте еще раз",
     );
     return;
   }
@@ -425,9 +494,11 @@ async function confirmSetup() {
   confirmBusy.value = false;
 
   if (error) {
-    confirmError.value = describeFailure(
+    // Same rule as the password above: the code field stays on screen, and
+    // the line under it says what the plate used to.
+    confirmError.value = refusalHere(
       error,
-      "Не удалось включить второй фактор",
+      "Не удалось включить двухфакторную аутентификацию",
     );
     return;
   }
@@ -466,12 +537,18 @@ function reportActionFailure(
   failure: GeneralError | BadRequestError,
   fallback: string,
 ) {
+  // Neither field for an expired session or a dead connection, which stay with
+  // the plate. Every other refusal is said here, and the plate the interceptor
+  // held for it is taken down.
+  const text = refusalHere(failure, fallback);
+  if (text === null) return;
+
   const named = getFieldError(parseApiErrors(failure), "password");
   if (named) {
     actionPasswordError.value = named;
     return;
   }
-  actionCodeError.value = describeFailure(failure, fallback);
+  actionCodeError.value = text;
 }
 
 async function runAction() {
@@ -492,14 +569,15 @@ async function runAction() {
       error,
       reissuing
         ? "Не удалось перевыпустить коды"
-        : "Не удалось отключить второй фактор",
+        : "Не удалось отключить двухфакторную аутентификацию",
     );
     return;
   }
 
   closeAction();
+  // Only the reissue branch has something to show; switching the factor off
+  // says so by itself - loadStatus swaps the section to its disabled state.
   if (reissuing) showCodes(data?.resource?.codes ?? [], true);
-  else toast.success("Второй фактор отключен");
   await loadStatus();
 }
 
@@ -515,24 +593,13 @@ function dismissCodes() {
 }
 
 async function copySecret(secret: string) {
-  try {
-    await navigator.clipboard.writeText(secret);
-    toast.success("Секрет скопирован");
-  } catch {
-    toast.error("Не удалось скопировать");
-  }
+  await secretClip.copy(secret);
 }
 
 async function copyCodes() {
   if (!issuedCodes.value) return;
-  try {
-    await navigator.clipboard.writeText(
-      issuedCodes.value.map(grouped).join("\n"),
-    );
-    toast.success("Резервные коды скопированы");
-  } catch {
-    toast.error("Не удалось скопировать");
-  }
+  // Copied the way they are read: grouped by four, one code to a line.
+  await codesClip.copy(issuedCodes.value.map(grouped).join("\n"));
 }
 </script>
 
@@ -543,7 +610,6 @@ async function copyCodes() {
 .two-factor-content
   padding: $medium
   background-color: $bg-element
-  border-radius: $border-radius
 
 .loading-state
   padding: $medium
@@ -556,50 +622,22 @@ async function copyCodes() {
   margin: 0 0 $small
   color: $heading
 
-// Status cards — the same recipe the neighbouring sections use.
+// The state of the factor is written in words, as a state is across the site,
+// and not drawn as a panel: no fill, no frame, no mark beside it, the same as
+// the username change further down. Green for a factor in force, red for a
+// state that could not be read; a removal that is only scheduled keeps the
+// text's own colour, and its date says the rest.
 .status-card
-  padding: $medium
-  border-radius: $border-radius
   margin-bottom: $medium
 
-  &--enabled
-    +tint($accent-green, 15%)
-    border: 1px solid $accent-green
-
-  &--scheduled
-    +tint($accent-yellow, 15%)
-    border: 1px solid $accent-yellow
-
-  &--failed
-    +tint($accent-red, 15%)
-    border: 1px solid $accent-red
-
 .status-header
-  display: flex
-  align-items: center
-  gap: $small
   margin-bottom: $small
-
-.status-icon
-  font-size: 1.2em
-
-  .status-card--enabled &
-    color: $accent-green
-
-  .status-card--scheduled &
-    color: $accent-yellow
-
-  .status-card--failed &
-    color: $accent-red
 
 .status-title
   font-weight: 600
 
   .status-card--enabled &
     color: $accent-green
-
-  .status-card--scheduled &
-    color: $accent-yellow
 
   .status-card--failed &
     color: $accent-red
@@ -610,13 +648,14 @@ async function copyCodes() {
   gap: $tiny
 
 .status-row
-  display: flex
-  gap: $small
   font-size: $secondary-font-size
 
 .status-label
+  margin-right: $tiny
   color: $text-muted
-  flex-shrink: 0
+
+.status-value
+  white-space: nowrap
 
 .status-note
   margin: 0
@@ -635,12 +674,6 @@ async function copyCodes() {
   display: flex
   flex-wrap: wrap
   gap: $small
-
-// Switching the factor off is destructive, and it is marked the way the rest
-// of the site marks a destructive control: the shared danger fill. The class
-// lands on the shared Button, whose root carries this scope as well.
-.action-danger
-  +button-danger
 
 // Forms
 .setup-form,
@@ -677,7 +710,6 @@ async function copyCodes() {
   gap: $small
   padding: $small $medium
   background-color: $bg
-  border-radius: $border-radius
   font-family: monospace
 
   code
@@ -703,7 +735,7 @@ async function copyCodes() {
   margin: 0
   padding: $small $medium
   +tint($accent-yellow, 15%)
-  border: 1px solid $accent-yellow
+  border: 1px solid $border-accent-yellow
   color: $text
 
 .codes-note
@@ -720,13 +752,9 @@ async function copyCodes() {
   padding: 0
   list-style: none
 
-  @media (max-width: $bp-mobile)
-    grid-template-columns: minmax(0, 1fr)
-
 .code-item
   padding: $small $medium
   background-color: $bg
-  border-radius: $border-radius
   font-family: monospace
   user-select: all
 

@@ -51,6 +51,26 @@ vi.mock("@/shared/api", () => ({
 import { useBlogsStore } from "./store";
 import { useBlogDetailsStore } from "./detailsStore";
 
+/**
+ * The last request the store sent, read slot by slot.
+ *
+ * The client takes the url, the query params, the render audience and its own
+ * options as four positional arguments, and a check written as one call shape
+ * breaks whenever a slot behind the one it cares about gains a value — which is
+ * how the filter checks below would have answered for the refusal flag.
+ */
+const lastRequest = () => {
+  const [url, params, audience, options] = mockApiGet.mock.calls.at(-1) ?? [];
+  return {
+    url: url as string | undefined,
+    params: params as Record<string, unknown> | undefined,
+    audience: audience as string | undefined,
+    options: options as
+      | { ownsRefusal?: boolean; ownsRateLimit?: boolean }
+      | undefined,
+  };
+};
+
 const createMockBlogRef = (id: string, title: string): BlogRef =>
   ({
     id: id as BlogId,
@@ -70,7 +90,6 @@ const createMockBlog = (id: string, title: string): Blog =>
     createdUtc: "2024-01-01",
     subscribersCount: 0,
     draftVisibility: "Private",
-    commentsEnabled: true,
     publicationCount: 0,
     commentsCount: 0,
   }) as Blog;
@@ -208,8 +227,8 @@ describe("useBlogsStore", () => {
       const store = useBlogsStore();
       await store.searchBlogs({ search: "Found" });
 
-      expect(mockApiGet).toHaveBeenCalledWith(
-        "blogs",
+      expect(lastRequest().url).toBe("blogs");
+      expect(lastRequest().params).toEqual(
         expect.objectContaining({ search: "Found" }),
       );
       expect(store.searchResult?.resources).toEqual(mockBlogs);
@@ -231,8 +250,8 @@ describe("useBlogsStore", () => {
         size: 10,
       });
 
-      expect(mockApiGet).toHaveBeenCalledWith(
-        "blogs",
+      expect(lastRequest().url).toBe("blogs");
+      expect(lastRequest().params).toEqual(
         expect.objectContaining({
           search: "test",
           // Plural and repeatable on the wire, the same name /v1/games takes.
@@ -301,21 +320,33 @@ describe("useBlogsStore", () => {
     // Every failure of this list used to arrive as one sentence, "Ошибка
     // загрузки данных" — a rate limit, a broken server and a dead connection
     // call for three different things to do. The API names what it can in the
-    // problem document's title (the global limiter answers 429 with "Слишком
-    // много запросов", the error middleware answers an unhandled exception
-    // with "Ошибка сервера") and names nothing when the request never got a
-    // response. Both halves are asserted because both are the point: the
+    // problem document's title (the error middleware answers an unhandled
+    // exception with "Ошибка сервера") and names nothing when the request never
+    // got a response. Both halves are asserted because both are the point: the
     // server's own sentence when it sent one, the page's own when it did not.
-    it("shows the title the API sent with a refusal", async () => {
+    // The first half is asserted a few lines down, where the strip answers a
+    // 500 alone.
+    it("says the wait itself, with the seconds the server asked for", async () => {
+      // The limiter answers 429 with "Слишком много запросов" and puts the wait
+      // in a header, which the transport copies into the document. The strip is
+      // now the only carrier of this refusal, so it says the wording that
+      // carries the number — the one the interceptor's plate used to hold.
       mockApiGet.mockResolvedValue({
         data: null,
-        error: { status: 429, title: "Слишком много запросов" },
+        error: {
+          status: 429,
+          title: "Слишком много запросов",
+          retryAfterSeconds: 30,
+        },
       });
 
       const store = useBlogsStore();
       await store.searchBlogs({ search: "test" });
 
-      expect(store.searchError).toBe("Слишком много запросов");
+      expect(store.searchError).toBe(
+        "Слишком много попыток, попробуйте через 30 секунд",
+      );
+      expect(lastRequest().options?.ownsRateLimit).toBe(true);
     });
 
     it("falls back to its own sentence when nothing was named", async () => {
@@ -331,6 +362,26 @@ describe("useBlogsStore", () => {
       expect(store.searchError).toBe("Не удалось загрузить блоги");
     });
 
+    // The strip where the rows would be is where this failure is read, and the
+    // response interceptor puts a plate of its own over a 403 and a 5xx unless
+    // the request says the page owns the refusal. Until it did, a broken server
+    // was announced twice on one screen — the API's sentence in the strip and
+    // the same sentence in the corner — and only the strip said which list was
+    // empty. The flag is asserted rather than the absent toast because the
+    // interceptor lives in the client this store's test replaces.
+    it("takes the refusal over, so the strip is the only place it is said", async () => {
+      mockApiGet.mockResolvedValue({
+        data: null,
+        error: { type: "", title: "Ошибка сервера", status: 500, traceId: "t" },
+      });
+
+      const store = useBlogsStore();
+      await store.searchBlogs({ search: "test" });
+
+      expect(store.searchError).toBe("Ошибка сервера");
+      expect(lastRequest().options?.ownsRefusal).toBe(true);
+    });
+
     it("includes host usernames in search", async () => {
       mockApiGet.mockResolvedValue({
         data: { resources: [], paging: null },
@@ -340,8 +391,7 @@ describe("useBlogsStore", () => {
       const store = useBlogsStore();
       await store.searchBlogs({ hostUsernames: ["user1", "user2"] });
 
-      expect(mockApiGet).toHaveBeenCalledWith(
-        "blogs",
+      expect(lastRequest().params).toEqual(
         expect.objectContaining({
           hostUsernames: ["user1", "user2"],
         }),
@@ -360,8 +410,7 @@ describe("useBlogsStore", () => {
         createdToUtc: "2024-12-31",
       });
 
-      expect(mockApiGet).toHaveBeenCalledWith(
-        "blogs",
+      expect(lastRequest().params).toEqual(
         expect.objectContaining({
           createdFromUtc: "2024-01-01",
           createdToUtc: "2024-12-31",

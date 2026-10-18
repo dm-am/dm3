@@ -22,7 +22,8 @@ export type CommentId = Id<string>;
  */
 export type Comment = {
   id: Served<CommentId>;
-  author: Served<User>;
+  /** Null when the author's account was removed: the comment stays, unsigned. */
+  author: Served<User | null>;
   createdUtc: Served<string>;
   modifiedUtc: Served<string | null>;
   text: string;

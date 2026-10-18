@@ -28,12 +28,6 @@ public class TwoFactorStatusResponse
 
     /// <summary>When a removal requested by mail takes effect, if one is pending</summary>
     public DateTimeOffset? RemovalDueUtc { get; set; }
-
-    /// <summary>Whether this account's rank owes a factor</summary>
-    public bool Required { get; set; }
-
-    /// <summary>Whether the rank is withheld for want of a factor</summary>
-    public bool PrivilegeWithheld { get; set; }
 }
 
 /// <summary>

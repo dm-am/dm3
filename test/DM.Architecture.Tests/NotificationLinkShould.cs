@@ -6,45 +6,46 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Personal.Features.Notifications;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Architecture.Tests;
 
 /// <summary>
-/// A notification the client turns into a link carries the field that link is
+/// A notification the server turns into a link carries the field that link is
 /// built from.
 /// </summary>
 /// <remarks>
 /// The payload is an anonymous object on one side and an untyped bag on the
-/// other. A generator writes BlogId, the API answers with blogId — the payload
-/// is the one property serialized with a camel-case key policy — and the client
-/// reads payload.blogId to decide where the notification points. Nothing between
-/// the two ends is typed, so renaming the field in the generator compiles,
-/// deploys and turns the notification into a line of text nobody can click.
-/// Nothing fails and nothing is logged: the notification still arrives, with its
-/// title and its wording and no way to reach the thing it is about.
+/// other. A generator writes BlogId, and the table of paths in the domain reads
+/// BlogId off the bag to decide where the notification points, for the letter,
+/// the two bots and the list in the application alike. Nothing between the two
+/// ends is typed, so renaming the field in the generator compiles, deploys and
+/// turns the notification into a line of text nobody can click. Nothing fails
+/// and nothing is logged: the notification still arrives, with its title and its
+/// wording and no way to reach the thing it is about.
 ///
 /// The rule ties the two ends together by name instead. For every event the
-/// client builds a link for, every notification carrying that event has to write
-/// the field the client reads off it. Typing the bag is the other answer to the
+/// table builds a link for, every notification carrying that event has to write
+/// the field the table reads off it. Typing the bag is the other answer to the
 /// same question, and it is a contract per generator across all of them; this is
 /// one file, and it fails on the rename that matters.
 ///
-/// Read from the sources on both sides, because there is no type to ask on
-/// either: the payload is an anonymous object built inside a method body, and on
-/// the client it arrives as an any. Which generator answers which event is asked
-/// of the assembly, the way the processor asks it, and the answer is not always
-/// what the notification carries — a subscription generator renames the event on
-/// the way out. What a generator writes is read from its file, found by the name
-/// of the type, so a generator whose file is named after something else fails the
-/// rule instead of dropping out of it.
+/// The table is asked directly, and the generators are read from the sources,
+/// because there is no type to ask on that side: the payload is an anonymous
+/// object built inside a method body. Which generator answers which event is
+/// asked of the assembly, the way the processor asks it, and the answer is not
+/// always what the notification carries — a subscription generator renames the
+/// event on the way out. What a generator writes is read from its file, found by
+/// the name of the type, so a generator whose file is named after something else
+/// fails the rule instead of dropping out of it.
 ///
-/// The client is also ready for events that nothing puts on a notification.
-/// Those are listed by name: the day one of them starts arriving it falls under
-/// the rule rather than staying an exception, and a branch added for an event
-/// nobody raises has to be written down here instead of passing for a working
-/// link.
+/// The rule used to be held from the client's copy of the table, which linked
+/// fewer events than the server does and was ready for seven that nothing carries.
+/// The server table carries no such row, and the second rule keeps it that way:
+/// a destination no notification can reach is a feature that stopped halfway or
+/// a name that drifted.
 /// </remarks>
 public class NotificationLinkShould
 {
@@ -55,26 +56,11 @@ public class NotificationLinkShould
     private const string NotifiersDirectory =
         "src/DM.Workers.NotificationDispatcher/Notifiers";
 
-    /// <summary>The one place the client turns a notification into a link.</summary>
-    private const string LinkSource =
-        "src/DM.Web.Client/src/entities/notification/lib/notificationLink.ts";
-
     /// <summary>The notification a generator hands back.</summary>
     private const string EmissionStart = "new CreateNotification";
 
-    /// <summary>The end of a branch of the link table.</summary>
-    private const string BranchEnd = "return";
-
     private static readonly Assembly Dispatcher =
         typeof(DM.Workers.NotificationDispatcher.Startup).Assembly;
-
-    /// <summary>"case NotificationType.X:" — an event the client answers for.</summary>
-    private static readonly Regex FollowedEvent = new(
-        @"case\s+NotificationType\.(\w+)\s*:", RegexOptions.Compiled);
-
-    /// <summary>"payload.x" — a field the client reads off the notification.</summary>
-    private static readonly Regex FollowedKey = new(
-        @"payload\.([A-Za-z_]\w*)", RegexOptions.Compiled);
 
     /// <summary>The event a generator renames its notification to.</summary>
     private static readonly Regex RenamesTheEvent = new(
@@ -84,137 +70,70 @@ public class NotificationLinkShould
     private static readonly Regex WritesThePayload = new(
         @"^\s*Metadata\s*=\s*new\b", RegexOptions.Compiled);
 
-    /// <summary>
-    /// Events the client links and no notification carries. Three shapes, none of
-    /// them a broken contract: NewGame, NewTopic and NewTopicComment are answered
-    /// and renamed on the way out, so the subscription name is what arrives;
-    /// BlogInvitationAccepted and BlogInvitationRejected are published by the blog
-    /// module and answered by no generator; NewTopicInSubscribedBoard and
-    /// NewPostInSubscribedGame are named by nobody but the client.
-    /// </summary>
-    private static readonly string[] NeverCarried =
-    {
-        "BlogInvitationAccepted",
-        "BlogInvitationRejected",
-        "NewGame",
-        "NewPostInSubscribedGame",
-        "NewTopic",
-        "NewTopicComment",
-        "NewTopicInSubscribedBoard"
-    };
-
     private static readonly string[] GeneratorSources = Directory.GetFiles(
         Path.Combine(RepositoryRoot, NotifiersDirectory), "*.cs", SearchOption.AllDirectories);
 
     [Fact]
-    public void CarryTheFieldTheClientBuildsTheLinkFrom()
+    public void CarryTheFieldTheLinkIsBuiltFrom()
     {
-        var followed = KeysTheClientFollows();
-        followed.Should().HaveCountGreaterThan(15,
-            "a rule that matches nothing passes: the client links notifications of most kinds");
+        var followed = FieldsTheTableFollows();
+        followed.Should().HaveCountGreaterThan(40,
+            "a rule that matches nothing passes: the table links notifications of most kinds");
 
         var emissions = Emissions();
         emissions.Should().HaveCountGreaterThan(30,
             "a rule that matches nothing passes: the dispatcher carries dozens of generators");
 
         emissions.SelectMany(emission => emission.Events).Intersect(followed.Keys)
-            .Should().HaveCountGreaterThan(5,
-                "a rule that matches nothing passes: most of what the client links is raised");
+            .Should().HaveCountGreaterThan(30,
+                "a rule that matches nothing passes: most of what the table links is raised");
 
         var unwritten = new List<string>();
         foreach (var emission in emissions)
         {
             foreach (var carried in emission.Events.Where(followed.ContainsKey))
             {
-                unwritten.AddRange(followed[carried]
-                    .Select(Member)
-                    .Except(emission.Keys, StringComparer.Ordinal)
-                    .Select(key => $"{emission.Generator} carries {carried} without {key}"));
+                // The table finds the field whatever its case, so this does too.
+                if (!emission.Keys.Contains(followed[carried], StringComparer.OrdinalIgnoreCase))
+                {
+                    unwritten.Add($"{emission.Generator} carries {carried} without {followed[carried]}");
+                }
             }
         }
 
         unwritten.Should().BeEmpty(
-            "the client reads the field by name and shows a notification it cannot " +
-            "find one in as text nobody can follow, so a renamed field takes the link with it");
+            "the table reads the field by name and leaves a notification it cannot find " +
+            "one in as text nobody can follow, so a renamed field takes the link with it");
     }
 
     [Fact]
-    public void KeepTheListOfEventsNobodyCarriesHonest()
+    public void LinkOnlyEventsANotificationCarries()
     {
-        var followed = KeysTheClientFollows();
         var carried = Emissions()
             .SelectMany(emission => emission.Events)
             .ToHashSet(StringComparer.Ordinal);
 
-        NeverCarried.Except(followed.Keys).Should().BeEmpty(
-            "an exemption for an event the client no longer links guards nothing " +
-            "and outlives the reason it was written down");
-
-        NeverCarried.Intersect(carried).Should().BeEmpty(
-            "an event a notification started carrying has to leave the list, or the " +
-            "field its link is built from is held by nobody");
-
-        followed.Keys.Except(carried).Except(NeverCarried).Should().BeEmpty(
-            "a branch of the link table no notification ever reaches is either a " +
-            "feature that stopped halfway or a name that drifted, and the client " +
-            "shows neither");
+        FieldsTheTableFollows().Keys.Except(carried).Should().BeEmpty(
+            "a row of the table no notification ever reaches is either a feature that " +
+            "stopped halfway or a name that drifted, and nobody is ever sent there");
     }
 
     /// <summary>
-    /// The field the client reads to build a link, by the event it reads it for.
+    /// The field the table reads to build a link, by the event it reads it for.
     /// </summary>
-    private static IReadOnlyDictionary<string, IReadOnlyCollection<string>> KeysTheClientFollows()
+    private static IReadOnlyDictionary<string, string> FieldsTheTableFollows()
     {
-        var source = SourceText.ReadCode(Path.Combine(RepositoryRoot, LinkSource));
-        var followed = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
-        var pending = new List<string>();
-
-        foreach (var line in source.Split('\n'))
+        var followed = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var eventType in Enum.GetValues<EventType>())
         {
-            var label = FollowedEvent.Match(line);
-            if (label.Success)
+            var field = NotificationDestination.FieldOf(eventType);
+            if (field != null)
             {
-                pending.Add(label.Groups[1].Value);
-                continue;
+                followed.Add(eventType.ToString(), field);
             }
-
-            if (!line.Contains(BranchEnd, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var keys = FollowedKey.Matches(line)
-                .Select(match => match.Groups[1].Value)
-                .ToHashSet(StringComparer.Ordinal);
-
-            if (keys.Count > 0)
-            {
-                foreach (var followedEvent in pending)
-                {
-                    if (!followed.TryGetValue(followedEvent, out var read))
-                    {
-                        read = new SortedSet<string>(StringComparer.Ordinal);
-                        followed.Add(followedEvent, read);
-                    }
-
-                    read.UnionWith(keys);
-                }
-            }
-
-            pending.Clear();
         }
 
-        FollowedEvent.Matches(source)
-            .Select(match => match.Groups[1].Value)
-            .Except(followed.Keys, StringComparer.Ordinal)
-            .Should().BeEmpty(
-                "a branch that reads nothing off the payload in the line it returns is " +
-                "a link this rule cannot see, and an unseen branch is an unheld one");
-
-        return followed.ToDictionary(
-            pair => pair.Key,
-            pair => (IReadOnlyCollection<string>)pair.Value,
-            StringComparer.Ordinal);
+        return followed;
     }
 
     /// <summary>
@@ -311,12 +230,6 @@ public class NotificationLinkShould
             .Select(candidate => candidate.ToString())
             .ToArray();
     }
-
-    /// <summary>
-    /// The member behind a key of the payload: the API writes the payload, and only
-    /// the payload, with a camel-case key policy.
-    /// </summary>
-    private static string Member(string key) => char.ToUpperInvariant(key[0]) + key[1..];
 
     private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 

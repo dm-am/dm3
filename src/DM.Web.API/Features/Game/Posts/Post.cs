@@ -73,9 +73,45 @@ public class Post
     public int ReviewCount { get; set; }
 
     /// <summary>
+    /// 1-based place of the post in its room, in the order the room is written in.
+    /// The same whatever filters and order the list was read with; null on the
+    /// rated feed (GET /v1/posts), which does not number posts
+    /// </summary>
+    public int? Number { get; set; }
+
+    /// <summary>
     /// Files attached to the post, oldest first
     /// </summary>
     public IEnumerable<PostAttachment> Attachments { get; set; } = [];
+
+    /// <summary>
+    /// The game the post was written in. Its rules span the game: a review of
+    /// one post closes the reviews of the others there for three days, and a
+    /// page holding posts of several games keeps that apart by this
+    /// </summary>
+    public Guid GameId { get; set; }
+
+    /// <summary>
+    /// What the viewer may do with this post, answered by the same code that
+    /// refuses the request
+    /// </summary>
+    public PostViewer Viewer { get; set; } = new();
+}
+
+/// <summary>
+/// What the viewer may do with a post. Each flag is asked by the same code the
+/// write it stands for is refused by, so a page that offers by it offers only
+/// what the server takes; the server refuses all the same.
+/// </summary>
+public class PostViewer
+{
+    /// <summary>
+    /// Whether the viewer may review the post: not his own, not reviewed by him
+    /// already, and no review of his in the same game during the last three
+    /// days. False for a guest. The probation is not in it: a newbie is offered
+    /// the neutral review
+    /// </summary>
+    public bool CanReview { get; set; }
 }
 
 /// <summary>

@@ -84,6 +84,12 @@ public class Topic : ILikable
     public bool IsClosed { get; set; }
 
     /// <summary>
+    /// Closed by its author, who may then reopen it; a topic closed by a moderator
+    /// or an administrator stays closed to the author
+    /// </summary>
+    public bool ClosedByAuthor { get; set; }
+
+    /// <summary>
     /// Last comment creation moment or (if none) topic creation moment (UTC)
     /// </summary>
     public DateTimeOffset LastActivityUtc { get; set; }

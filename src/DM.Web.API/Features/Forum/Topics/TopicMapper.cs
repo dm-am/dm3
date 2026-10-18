@@ -64,8 +64,10 @@ internal partial class TopicMapper
     [MapProperty(nameof(DomainTopic.Text), nameof(Topic.Description))]
     [MapProperty(nameof(DomainTopic.LastComment), nameof(Topic.LastComment), Use = nameof(ToLastTopicComment))]
     // Filled by TopicApiService.EnrichPeriodDigests (one batch marker lookup
-    // per response), not by the per-entity mapping.
+    // per response), not by the per-entity mapping. What the viewer may do is
+    // the domain's answer, composed by TopicApiService on the reads of one.
     [MapperIgnoreTarget(nameof(Topic.PeriodDigest))]
+    [MapperIgnoreTarget(nameof(Topic.Viewer))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial Topic ToTopicCore(DomainTopic topic);
 

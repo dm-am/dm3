@@ -65,6 +65,34 @@ public class PostRepositoryShould : IntegrationTestBase
         ordered[1].Rating.Should().Be(1);
     }
 
+    /// <summary>
+    /// hasReviews is a filter both ways, as on a room's list: false asks for the
+    /// posts nobody reviewed. It used to mean no filter at all, so the same name
+    /// answered two different questions on two neighbouring lists.
+    /// </summary>
+    [Fact]
+    public async Task KeepOnlyThePostsNobodyReviewedWhenAskedForNoReviews()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        await AddRatedPostAsync(dbContext, context, positiveReviews: 2);
+        // A removed review is no review: the post counts as not reviewed.
+        var unreviewed = await AddRatedPostAsync(dbContext, context, positiveReviews: 0, removedReviews: 1);
+
+        var (posts, total) = await repository.GetRated(new PostsQuery
+        {
+            Take = 10,
+            GameId = context.GameId,
+            HasReviews = false,
+        }, Guid.Empty);
+
+        total.Should().Be(1);
+        posts.Select(p => p.Id).Should().Equal(unreviewed);
+    }
+
     [Fact]
     public async Task SortByLastReviewOrdersByMostRecentReview()
     {
@@ -397,6 +425,59 @@ public class PostRepositoryShould : IntegrationTestBase
         author.QuantityRating.Should().Be(7);
     }
 
+    /// <summary>
+    /// One post removed twice at once costs its author one post, not two.
+    /// </summary>
+    /// <remarks>
+    /// Two hands reach the same post — the author pressing delete twice on a slow
+    /// answer, the master and a moderator clearing the same thing. The post used
+    /// to be read, checked and marked over three steps with nothing holding the
+    /// row, so both removals found it live and both lowered QuantityRating. That
+    /// column feeds the user rating and the stored IsNewbie flag, nothing
+    /// recomputes it, and the row that would say what the right number is is the
+    /// one that was just removed.
+    ///
+    /// A scope apiece, as two requests would have, and a timeout on the pair: the
+    /// second removal waits on the row lock, and a wait that never ends has to
+    /// fail rather than hang the suite.
+    /// </remarks>
+    [Fact]
+    public async Task TakeTheAuthorsPostCountDownOnceWhenTwoRemovalsRaceForOnePost()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+        var context = await AddGameWithRoomAsync(dbContext);
+        var characterId = await AddPostByNewCharacterAsync(dbContext, context);
+        var postId = await dbContext.Posts.AsNoTracking()
+            .Where(p => p.CharacterId == characterId)
+            .Select(p => p.PostId)
+            .SingleAsync();
+
+        await dbContext.Users.Where(u => u.UserId == context.UserId)
+            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, 7));
+
+        var removals = await Task
+            .WhenAll(Remove(postId, context.UserId), Remove(postId, context.UserId))
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        removals.Count(removed => removed).Should().Be(1,
+            "the mark is conditional on the post still being there, so one of the two " +
+            "calls is the removal and the other found nothing to remove");
+
+        var author = await dbContext.Users.AsNoTracking().FirstAsync(u => u.UserId == context.UserId);
+        author.QuantityRating.Should().Be(6,
+            "QuantityRating is a stored column that nothing recomputes, so a second " +
+            "decrement for one post is a drift with nothing left to catch it");
+    }
+
+    /// <summary>One removal on a scope of its own, as a request would have.</summary>
+    private Task<bool> Remove(Guid postId, Guid deletedByUserId) => Task.Run(async () =>
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IPostRepository>()
+            .Delete(postId, deletedByUserId);
+    });
+
     private static async Task<Guid> AddSubscriberAsync(DmDbContext dbContext, Guid gameId)
     {
         var subscriberId = Guid.NewGuid();
@@ -451,6 +532,7 @@ public class PostRepositoryShould : IntegrationTestBase
 
         var posts = (await repository.Get(
             context.RoomId,
+            new RoomPostsQuery(),
             new PagingData(new PagingQuery { Skip = 0, Take = 10 }, 10, 1),
             context.UserId)).ToList();
 
@@ -487,6 +569,7 @@ public class PostRepositoryShould : IntegrationTestBase
 
         var posts = (await repository.Get(
             context.RoomId,
+            new RoomPostsQuery(),
             new PagingData(new PagingQuery { Skip = 0, Take = 10 }, 10, 1),
             context.UserId)).ToList();
 
@@ -538,10 +621,12 @@ public class PostRepositoryShould : IntegrationTestBase
 
         var firstPage = (await repository.Get(
             context.RoomId,
+            new RoomPostsQuery(),
             new PagingData(new PagingQuery { Skip = 0, Take = 2 }, 2, 4),
             context.UserId)).Select(p => p.Id).ToArray();
         var secondPage = (await repository.Get(
             context.RoomId,
+            new RoomPostsQuery(),
             new PagingData(new PagingQuery { Skip = 2, Take = 2 }, 2, 4),
             context.UserId)).Select(p => p.Id).ToArray();
 
@@ -575,9 +660,9 @@ public class PostRepositoryShould : IntegrationTestBase
             PostId = Guid.NewGuid(),
             RoomId = context.RoomId,
             AuthorId = context.UserId,
-            GameText = "[private=Анна]секрет[/private]",
+            GameText = "[private=\"Анна\"]секрет[/private]",
             PrivateAddresseeSnapshotJson = PrivateAddresseeSnapshot.Build(
-                "[private=Анна]секрет[/private]",
+                "[private=\"Анна\"]секрет[/private]",
                 new[] { new PrivateAddressee(Guid.NewGuid(), "Анна", annaOwner) }),
             CreatedUtc = DateTimeOffset.UtcNow,
         });
@@ -589,9 +674,9 @@ public class PostRepositoryShould : IntegrationTestBase
         await repository.Update(new UpdatePostEntity
         {
             PostId = created.Id,
-            GameText = "[private=Борис]секрет[/private]",
+            GameText = "[private=\"Борис\"]секрет[/private]",
             PrivateAddresseeSnapshotJson = PrivateAddresseeSnapshot.Build(
-                "[private=Борис]секрет[/private]",
+                "[private=\"Борис\"]секрет[/private]",
                 new[] { new PrivateAddressee(Guid.NewGuid(), "Борис", borisOwner) }),
         });
 
@@ -614,6 +699,7 @@ public class PostRepositoryShould : IntegrationTestBase
         // A guest, because that is the reader the room page failed for.
         var posts = await repository.Get(
             context.RoomId,
+            new RoomPostsQuery(),
             new PagingData(new PagingQuery { Skip = 0, Take = 10 }, 10, 1),
             Guid.Empty);
 

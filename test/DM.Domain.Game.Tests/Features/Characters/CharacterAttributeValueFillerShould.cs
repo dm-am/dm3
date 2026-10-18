@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Game.Features.AttributeSchemas;
+using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using GameDto = DM.Domain.Game.Features.Games.Game;
@@ -17,11 +17,11 @@ namespace DM.Domain.Game.Tests.Features.Characters;
 
 public class CharacterAttributeValueFillerShould : UnitTestBase
 {
-    private readonly IAttributeSchemaService _schemaService;
+    private readonly IGameAttributeSchemaRepository _gameSchemas;
     private readonly IAttributeValueValidator _validator;
     private readonly CharacterAttributeValueFiller _filler;
 
-    private readonly Guid _schemaId = Guid.NewGuid();
+    private readonly Guid _gameId = Guid.NewGuid();
     private readonly Guid _masterId = Guid.NewGuid();
     private readonly Guid _ownerId = Guid.NewGuid();
     private readonly Guid _visibleSpecId = Guid.NewGuid();
@@ -29,25 +29,24 @@ public class CharacterAttributeValueFillerShould : UnitTestBase
 
     public CharacterAttributeValueFillerShould()
     {
-        _schemaService = Mock<IAttributeSchemaService>();
+        _gameSchemas = Mock<IGameAttributeSchemaRepository>();
         _validator = Mock<IAttributeValueValidator>();
         _validator.Validate(Arg.Any<string>(), Arg.Any<AttributeSpecification>()).Returns((true, (string?)null));
 
-        _filler = new CharacterAttributeValueFiller(_schemaService, _validator);
+        _filler = new CharacterAttributeValueFiller(_gameSchemas, _validator);
     }
 
     private GameDto Game() => new()
     {
-        Id = Guid.NewGuid(),
-        AttributeSchemaId = _schemaId,
+        Id = _gameId,
         Master = new GeneralUser { UserId = _masterId, Username = "Master" },
         Assistants = [],
         Players = []
     };
 
     private void SetupSchema(params AttributeSpecification[] specifications) =>
-        _schemaService.GetAsync(_schemaId)
-            .Returns(new AttributeSchema { Id = _schemaId, Specifications = specifications });
+        _gameSchemas.Get(_gameId)
+            .Returns(new GameAttributeSchema { Specifications = specifications });
 
     private Character OwnedCharacter(params CharacterAttribute[] attributes) => new()
     {

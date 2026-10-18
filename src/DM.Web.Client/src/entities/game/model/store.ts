@@ -5,7 +5,7 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { Game, GameRef, Tag } from "./types";
-import type { ListEnvelope } from "@/shared/api/models/common";
+import type { GeneralError, ListEnvelope } from "@/shared/api/models/common";
 import gameApi, { type GamesSearchParams } from "../api/gameApi";
 import {
   useApiList,
@@ -16,7 +16,42 @@ import {
   createKeyedCache,
   stableCacheKey,
 } from "@/shared/lib/utils/keyedCache";
-import { describeFailure } from "@/shared/lib/errors";
+import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
+
+/**
+ * The search takes its own refusals over.
+ *
+ * A failed search is shown by GamesDataTable as a strip standing where the rows
+ * would be, so the failure is already on screen and in the place the reader is
+ * looking; the interceptor's plate in the corner repeated it word for word on a
+ * 403 and a 5xx. With these flags the interceptor stays quiet about 403, 429
+ * and 5xx for this request, and the strip is the one carrier.
+ *
+ * An expired session and a dead connection are not in here on purpose: the
+ * interceptor speaks for both, because neither is about the search — one is
+ * about the reader's session, the other about the road to the site, and only
+ * the interceptor can offer the other address. The strip beside them says a
+ * different thing: that this list is empty.
+ */
+const SEARCH_OWNS_REFUSAL = {
+  ownsRefusal: true,
+  ownsRateLimit: true,
+} as const;
+
+/**
+ * The one sentence the strip shows for a failed search.
+ *
+ * A wait is worded by the shared sentence rather than by the title the API sent
+ * with it: that one is the only wording carrying the seconds the server asked
+ * for, and it is the wording the interceptor would have raised, so taking the
+ * refusal over costs the reader nothing. Everything else the API named is
+ * relayed as it stands.
+ */
+function searchFailure(error: GeneralError, fallback: string): string {
+  return error.status === 429
+    ? describeRateLimit(error.retryAfterSeconds)
+    : describeFailure(error, fallback);
+}
 
 /**
  * Store for game lists (menu/sidebar, pagination)
@@ -96,7 +131,10 @@ export const useGamesStore = defineStore("games", () => {
     searchLoading.value = true;
     lastSearchParams.value = params;
 
-    const { data, error } = await gameApi.searchGames(params);
+    const { data, error } = await gameApi.searchGames(
+      params,
+      SEARCH_OWNS_REFUSAL,
+    );
 
     // Ignore stale responses
     if (!requestGuard.isCurrent(requestId)) {
@@ -104,7 +142,7 @@ export const useGamesStore = defineStore("games", () => {
     }
 
     if (error) {
-      searchError.value = describeFailure(error, "Не удалось загрузить игры");
+      searchError.value = searchFailure(error, "Не удалось загрузить игры");
       // Keep stale data on error if available
       if (!stale) {
         searchResult.value = null;

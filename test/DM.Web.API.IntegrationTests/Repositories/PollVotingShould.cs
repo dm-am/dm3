@@ -23,8 +23,9 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// and writes, and two requests arriving together both read a ballot without
 /// this voter on it. Asserted against a live Postgres because the key and the
 /// conflict clause are the only place the rule runs at all — the domain tests
-/// mock the repository and see nothing. The foreign keys are INV-2: a vote by
-/// a voter, for an option or in a poll that does not exist is unrepresentable.
+/// mock the repository and see nothing. The foreign keys hold the rest: a
+/// vote by a voter, for an option or in a poll that does not exist is
+/// unrepresentable.
 /// </remarks>
 public class PollVotingShould : IntegrationTestBase
 {
@@ -97,7 +98,7 @@ public class PollVotingShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// INV-2: the voter is a foreign key. A ghost vote — one pointing at a user
+    /// The voter is a foreign key. A ghost vote — one pointing at a user
     /// the database does not hold — is refused by the constraint, which is what
     /// buried the seeder's self-healing block.
     /// </summary>

@@ -1,4 +1,5 @@
 using System;
+using DM.Web.API.Shared.BbRendering;
 
 namespace DM.Web.API.Features.Moderation.Tags;
 
@@ -69,9 +70,15 @@ public class Tag
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
-    /// Description
+    /// Description as typed, the markup included: what the edit window is filled with
     /// </summary>
     public string? Description { get; set; }
+
+    /// <summary>
+    /// The same description rendered, as a reader sees it in the tag's tooltip:
+    /// what the card of the tag shows
+    /// </summary>
+    public HintBbText? DescriptionHtml { get; set; }
 
     /// <summary>
     /// Sort order within group

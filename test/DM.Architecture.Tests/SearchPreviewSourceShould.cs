@@ -66,8 +66,7 @@ public class SearchPreviewSourceShould
     [Fact]
     public void BuildEveryVectorFromTheSameProjection()
     {
-        var context = SourceText.ReadCode(Path.Combine(RepositoryRoot,
-            "src", "DM.Infrastructure.Persistence", "DmDbContext.cs"));
+        var context = string.Join("\n", SchemaSources.ModelFiles.Select(SourceText.ReadCode));
 
         // One spelling of the expression and four uses of it, so the assertion is
         // over the spelling and over what each use hands it.

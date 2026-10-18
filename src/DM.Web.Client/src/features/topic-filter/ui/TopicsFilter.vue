@@ -226,11 +226,14 @@ function handleSearchKeydown(event: KeyboardEvent) {
           </template>
 
           <!-- Author multi-select (suppressed when the host page locks
-               the author scope — e.g. the profile "Topics" tab). -->
+               the author scope — e.g. the profile "Topics" tab).
+               include-inactive, so the author of an old topic who has not
+               been here for 30 days stays findable. -->
           <UserMultiSelect
             v-if="!hideAuthor && navPath?.filter === 'author'"
             :selected-users="filterState.authors"
             placeholder="Поиск автора"
+            include-inactive
             @add="handleAddAuthor"
             @remove="handleRemoveAuthor"
           />

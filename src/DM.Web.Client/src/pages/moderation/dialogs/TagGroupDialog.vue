@@ -3,6 +3,10 @@
  * TagGroupDialog — create or edit a game tag group (title / description /
  * sortOrder). Dialog twin of the former hand-rolled modal in
  * ModerationTags.vue.
+ *
+ * The window runs the request (Dialog `action`): it waits for the answer,
+ * prints a refusal in itself and closes on success alone. A typed description
+ * is multi-line text, so the window asks before it is dropped.
  */
 import { ref, computed } from "vue";
 import { gameTagApi, type ModerationTagGroup } from "@/entities/game";
@@ -33,9 +37,6 @@ const maxTagsPerGame = ref(
   props.group?.maxTagsPerGame != null ? String(props.group.maxTagsPerGame) : "",
 );
 
-const saving = ref(false);
-const error = ref<string | null>(null);
-
 const maxTagsPerGameValue = computed<number | null>(() => {
   const raw = maxTagsPerGame.value.trim();
   if (raw === "") return null;
@@ -50,58 +51,49 @@ const canSubmit = computed(
       (maxTagsPerGameValue.value !== null && maxTagsPerGameValue.value >= 1)),
 );
 
-async function submit() {
-  if (!canSubmit.value || saving.value) return;
-  saving.value = true;
-  error.value = null;
-  try {
-    if (props.group) {
-      await gameTagApi.updateTagGroup(props.group.id, {
-        title: title.value,
-        description: description.value || undefined,
-        sortOrder: sortOrder.value,
-        maxTagsPerGame: maxTagsPerGameValue.value,
-      });
-    } else {
-      await gameTagApi.createTagGroup({
-        title: title.value,
-        description: description.value || undefined,
-        sortOrder: sortOrder.value,
-        maxTagsPerGame: maxTagsPerGameValue.value,
-      });
-    }
-    emit("success");
-  } catch {
-    error.value = "Не удалось сохранить группу";
-  } finally {
-    saving.value = false;
-  }
+/** The description differs from what the window opened with. */
+const dirty = computed(
+  () => description.value !== (props.group?.description ?? ""),
+);
+
+async function send() {
+  const body = {
+    title: title.value,
+    description: description.value || undefined,
+    sortOrder: sortOrder.value,
+    maxTagsPerGame: maxTagsPerGameValue.value,
+  };
+  const flags = { ownsRefusal: true, ownsRateLimit: true };
+  const result = props.group
+    ? await gameTagApi.updateTagGroup(props.group.id, body, flags)
+    : await gameTagApi.createTagGroup(body, flags);
+  if (!result.error) emit("success");
+  return result;
 }
 </script>
 
 <template>
-  <Dialog narrow>
+  <Dialog
+    :action="send"
+    failure="Не удалось сохранить группу"
+    :dirty="dirty"
+    @close="emit('cancel')"
+  >
     <DialogTitle>{{
       group ? "Редактировать группу" : "Новая группа"
     }}</DialogTitle>
 
-    <Form
-      :valid="canSubmit"
-      :loading="saving"
-      action="Сохранить"
-      cancel="Отмена"
-      @submit="submit"
-      @cancel="emit('cancel')"
-    >
-      <FormField
-        label="Название"
-        name="tag-group-title"
-        :errors="error ? [error] : []"
-      >
+    <Form :valid="canSubmit" action="Сохранить" cancel="Отмена">
+      <FormField label="Название" name="tag-group-title" field="title">
         <input id="tag-group-title" v-model="title" type="text" required />
       </FormField>
 
-      <FormField label="Описание" name="tag-group-description" optional>
+      <FormField
+        label="Описание"
+        name="tag-group-description"
+        field="description"
+        optional
+      >
         <textarea
           id="tag-group-description"
           v-model="description"
@@ -109,7 +101,11 @@ async function submit() {
         ></textarea>
       </FormField>
 
-      <FormField label="Порядок сортировки" name="tag-group-sort">
+      <FormField
+        label="Порядок сортировки"
+        name="tag-group-sort"
+        field="sortOrder"
+      >
         <input
           id="tag-group-sort"
           v-model.number="sortOrder"
@@ -118,7 +114,12 @@ async function submit() {
         />
       </FormField>
 
-      <FormField label="Максимум тегов в игре" name="tag-group-max" optional>
+      <FormField
+        label="Максимум тегов в игре"
+        name="tag-group-max"
+        field="maxTagsPerGame"
+        optional
+      >
         <input
           id="tag-group-max"
           v-model="maxTagsPerGame"

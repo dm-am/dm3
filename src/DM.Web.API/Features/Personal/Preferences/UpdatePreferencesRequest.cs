@@ -26,6 +26,18 @@ public class UpdatePreferencesRequest
     /// Paging settings for various list views
     /// </summary>
     public UpdatePagingRequest? Paging { get; set; }
+
+    /// <summary>
+    /// IANA name of the reader's time zone ("Europe/Moscow"), used by letters.
+    /// </summary>
+    /// <remarks>
+    /// Omitted keeps the zone the account has; an empty string clears it, which
+    /// is how a reader asks for UTC. Null and empty have to mean different
+    /// things here: with one spelling for both, a zone once set could never be
+    /// taken off again.
+    /// </remarks>
+    [StringLength(64, ErrorMessage = "Название часового пояса не должно превышать 64 символа")]
+    public string? TimeZoneId { get; set; }
 }
 
 /// <summary>

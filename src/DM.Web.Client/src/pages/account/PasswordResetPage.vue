@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+/**
+ * The page the password-recovery letter points at.
+ *
+ * Four answers on one card: the link is being checked, the link is good and
+ * asks for a password, the link has expired, the link is not a link. The card
+ * names itself in every one of them, so there is no page heading above it.
+ */
+import { ref, computed, onMounted, nextTick, watch } from "vue";
 import { useRouter } from "vue-router";
 import { readConfirmationToken } from "@/shared/lib/utils/confirmationToken";
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
 import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
-import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import {
   PasswordInput,
   PasswordStrengthIndicator,
 } from "@/shared/ui/PasswordInput";
-import StatusIcon from "@/shared/ui/Icon/StatusIcon.vue";
+import { symbols } from "@/shared/lib/utils/icons";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
+import { supportFor } from "@/entities/ticket";
 
 const router = useRouter();
 
@@ -22,6 +29,11 @@ const submitting = ref(false);
 
 // Password field with HIBP check
 const { password: newPassword, isValid } = useNewPasswordField();
+
+// Not `passwordInput`: the template writes the component in kebab case, and
+// <script setup> resolves <password-input> against the camel-cased bindings
+// first. A ref by that name wins the lookup and the field renders as nothing.
+const newPasswordInput = ref<InstanceType<typeof PasswordInput> | null>(null);
 
 // The value arrives in the fragment and is cleared as it is read, so it is read
 // once and kept: in the path it went into browser history and into the access log
@@ -41,15 +53,38 @@ onMounted(async () => {
 
   if (data.status === "expired") {
     pageState.value = "expired";
-  } else {
-    pageState.value = "ready";
+    return;
   }
+
+  pageState.value = "ready";
+  // The card holds one field and the reader came here to fill it in. The check
+  // answers first, so the field is a render away from the mount.
+  await nextTick();
+  newPasswordInput.value?.focus();
 });
 
 const passwordError = ref("");
 
+// A refusal is about the password that earned it - a breach index, above all
+// else. The moment the field is edited the server has not seen what is in it,
+// so the line goes back to the strength scale instead of holding a verdict on
+// a password that is no longer there. Same rule as the registration form's.
+watch(newPassword, () => {
+  if (passwordError.value) passwordError.value = "";
+});
+
+/**
+ * Whether the password may be sent.
+ *
+ * A refusal already on screen shuts the button: the server turned this exact
+ * password down - a breach index, above all else - and pressing again would
+ * hand it the very same one. The first edit drops the refusal and the button
+ * opens with it. The registration form's second step is shut the same way.
+ */
+const canSubmit = computed(() => isValid.value && !passwordError.value);
+
 const submit = async () => {
-  if (!isValid.value) return;
+  if (!canSubmit.value) return;
 
   submitting.value = true;
   passwordError.value = "";
@@ -84,210 +119,175 @@ const submit = async () => {
   }
 };
 
+// Every way out of this card leads to a guest dialog, and the guest dialogs
+// live in the header: the home page opens the right one from the query, the
+// same way the support page hands the reader to recovery.
+function goGuest(action: string) {
+  router.push({ path: "/", query: { action } });
+}
+
+// The one way out of a dead link, and the same one on every screen that answers
+// one. See AccountActivationPage: a card that offers a choice asks the reader
+// to name the cause of a failure he cannot see.
 function goHome() {
   router.push("/");
 }
 </script>
 
 <template>
-  <div
-    class="reset-page"
-    :class="{ 'reset-page--wide': pageState === 'invalid' }"
-  >
-    <div class="reset-card">
+  <div class="auth-surface reset-page">
+    <!-- The card says how wide it wants to be, because the sheet cannot work
+         that out from what stands inside it. The wide measure is kept for the
+         password field; the answers that state an outcome in a line take the
+         narrow one. -->
+    <div
+      class="auth-card auth-card--framed"
+      :class="{
+        'auth-card--center': pageState !== 'ready',
+        'auth-card--compact': pageState !== 'ready',
+      }"
+    >
       <!-- Checking the link — see AccountActivationPage: the state existed and
            the template had no branch for it, so the page from the letter was a
            blank card with a link to support under it. -->
-      <div v-if="pageState === 'loading'" class="reset-loading">
-        <p class="loading-text">Проверяем ссылку...</p>
-      </div>
+      <p v-if="pageState === 'loading'" class="auth-note">
+        Проверяем ссылку...
+      </p>
 
-      <!-- Success state -->
+      <!-- The password was accepted. No redirect of its own: the reader chooses
+           when to sign in. -->
       <template v-else-if="pageState === 'completed'">
-        <status-icon type="success" />
-        <dialog-title>Пароль изменен</dialog-title>
-        <p class="status-description">
-          Теперь вы можете войти с новым паролем.
-        </p>
-        <div class="status-actions">
-          <Button @click="goHome">На главную</Button>
+        <div class="auth-status auth-status--ok" aria-hidden="true">
+          {{ symbols.checkmark }}
         </div>
+        <h1 class="auth-title">Новый пароль сохранен</h1>
+        <!-- The line the changed address ends on, in the same place: a heading
+             names the outcome and the line under it says it happened. -->
+        <p class="auth-text">Ваш пароль был успешно обновлен</p>
+        <Button
+          class="auth-button auth-button--spaced"
+          type="button"
+          variant="primary"
+          @click="goGuest('login')"
+        >
+          Войти
+        </Button>
       </template>
 
-      <!-- Expired token -->
+      <!-- The link ran out of time. It is the one failure with a way forward,
+           so the way forward is a control and not a word inside a sentence:
+           the same shape the expired activation link wears. -->
       <template v-else-if="pageState === 'expired'">
-        <status-icon type="warning" />
-        <dialog-title>Токен сброса пароля устарел</dialog-title>
-        <p class="status-description">
-          Срок действия токена истек.
-          <router-link :to="{ path: '/', query: { action: 'recovery' } }"
-            >Запросите новый</router-link
-          >.
-        </p>
-      </template>
-
-      <!-- Invalid token -->
-      <template v-else-if="pageState === 'invalid'">
-        <status-icon type="error" />
-        <dialog-title>Токен сброса пароля недействителен</dialog-title>
-
-        <div class="error-info">
-          <p><strong>Возможные причины:</strong></p>
-          <ul>
-            <li>
-              Пароль уже был изменен, попробуйте
-              <router-link :to="{ path: '/', query: { action: 'login' } }"
-                >войти</router-link
-              >
-            </li>
-            <li>Был запрошен новый токен, проверьте последнее письмо</li>
-          </ul>
+        <!-- The warning sign by the rule at .auth-status--warn in
+             AuthSurface.sass: the site can take the next step for the reader,
+             and the button under the card is that step. -->
+        <div class="auth-status auth-status--warn" aria-hidden="true">
+          {{ symbols.warning }}
         </div>
+        <h1 class="auth-title">Ссылка устарела</h1>
+        <p class="auth-text">Срок действия сброса пароля истек</p>
+        <Button
+          class="auth-button auth-button--spaced"
+          type="button"
+          variant="primary"
+          @click="goGuest('recovery')"
+        >
+          Запросить новую ссылку
+        </Button>
       </template>
 
-      <!-- Form (ready state) -->
-      <template v-else-if="pageState === 'ready'">
-        <dialog-title>Новый пароль</dialog-title>
+      <!-- Not a link this server issued, or not one any more. The reader cannot
+           tell those apart from where he stands, so the card lists what usually
+           happened instead of guessing. -->
+      <template v-else-if="pageState === 'invalid'">
+        <!-- The cross by the rule at .auth-status--warn in AuthSurface.sass:
+             a link that opens nothing leaves this card no next step, unlike the
+             expired one above it. -->
+        <div class="auth-status auth-status--error" aria-hidden="true" />
+        <h1 class="auth-title">Ссылка недействительна</h1>
 
-        <form @submit.prevent="submit" class="reset-form">
-          <div class="form-field">
-            <span class="field-hint">Минимум 8 символов</span>
-            <password-input
-              v-model="newPassword"
-              placeholder="Введите новый пароль"
-              autocomplete="new-password"
-              :disabled="submitting"
-            />
-            <PasswordStrengthIndicator :password="newPassword" />
-            <div v-if="passwordError" class="field-error">
-              {{ passwordError }}
-            </div>
-          </div>
-
-          <Button
-            type="submit"
-            :loading="submitting"
-            :disabled="!isValid"
-            class="submit-button"
-          >
-            Сохранить
-          </Button>
-        </form>
+        <!-- Two causes in one line, and one way out under it: the same control
+             the other five dead links carry. The card used to stand the sign-in
+             and a new letter side by side, which asks the reader to pick the
+             cause of a failure he cannot see. -->
+        <p class="auth-text">
+          Возможно ссылка уже была использована или срок ее действия истек
+        </p>
+        <Button
+          class="auth-button auth-button--spaced"
+          type="button"
+          variant="primary"
+          @click="goHome"
+        >
+          На главную
+        </Button>
       </template>
 
-      <div class="help-section">
+      <!-- The form. A label and not a placeholder: a placeholder disappears at
+           the first keystroke, and what the field is for disappears with it.
+           The rule the password has to meet is written on the strength line,
+           which stands there from the start. -->
+      <form v-else-if="pageState === 'ready'" @submit.prevent="submit">
+        <h1 class="auth-title">Новый пароль</h1>
+
+        <!-- "Пароль" and not "Новый пароль": the heading one line above says
+             which password this is, and a label that repeats it makes the
+             reader read the same two words twice. A bare noun is what every
+             other label of the guest contour is ("Почта", "Пароль"). -->
+        <label class="auth-label" for="reset-new-password">Пароль</label>
+        <div class="auth-field">
+          <!-- The line under the field is the field's own: the rule while
+               nothing is typed, the strength once something is, the server's
+               refusal once it has answered. Named as the description of the
+               input, and the refusal marks the input invalid, so a reader who
+               cannot see the red bar is told the same three things. -->
+          <password-input
+            id="reset-new-password"
+            ref="newPasswordInput"
+            v-model="newPassword"
+            autocomplete="new-password"
+            aria-describedby="reset-password-message"
+            :aria-invalid="passwordError ? 'true' : undefined"
+            :disabled="submitting"
+          />
+        </div>
+        <PasswordStrengthIndicator
+          id="reset-password-message"
+          class="auth-meter"
+          :password="newPassword"
+          :error="passwordError || null"
+          always
+        />
+
+        <Button
+          class="auth-button"
+          type="submit"
+          variant="primary"
+          :loading="submitting"
+          :disabled="!canSubmit"
+        >
+          Сохранить
+        </Button>
+      </form>
+
+      <!-- Everywhere but the terminal success: there the errand is over and
+           there is nothing left to need help with. The second class is what
+           tokenPages.spec.ts finds the line by. -->
+      <p
+        v-if="pageState !== 'completed' && pageState !== 'loading'"
+        class="auth-footnote help-section"
+      >
         Нужна помощь? Обратитесь в
-        <router-link to="/support?reason=access">поддержку</router-link>
-      </div>
+        <router-link :to="supportFor('AccessRecovery')">поддержку</router-link>
+      </p>
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
+// Everything inside the card is drawn by AuthSurface.sass. What is left here is
+// where the card stands on the page.
 .reset-page
-  max-width: 380px
   margin: $major auto
   padding: 0 $medium
-
-  &--wide
-    max-width: 480px
-
-.reset-loading
-  padding: $big 0
-
-.loading-text
-  color: $text-muted
-
-.reset-card
-  text-align: center
-  background: $bg-element
-  border-radius: $border-radius
-  padding: $big
-  box-shadow: 0 2px 12px $shadow-color
-
-.status-description
-  margin: 0 0 $medium
-  font-size: $font-size
-  line-height: 1.6
-  color: $text
-
-.status-actions
-  margin-top: $big
-
-  :deep(.button)
-    min-width: 200px
-
-// Form
-.reset-form
-  display: flex
-  flex-direction: column
-  gap: $small
-
-.form-field
-  text-align: left
-
-.field-hint
-  display: block
-  margin-bottom: $tiny
-  font-size: $secondary-font-size
-  color: $text-muted
-
-:deep(.password-input input)
-  width: 100%
-  padding: $minor $small
-  border: 1px solid $border
-  background: $bg-element
-  color: $text
-  box-sizing: border-box
-
-  &:focus:not(:focus-visible)
-    outline: none
-    border-color: $link
-
-  &:disabled
-    opacity: 0.6
-
-.field-error
-  margin-top: $tiny
-  font-size: $secondary-font-size
-  color: $accent-red
-
-.submit-button
-  margin-top: $medium
-
-// Error info box
-.error-info
-  margin: $medium 0
-  padding: $small $medium
-  border: 1px solid $border-accent-red
-  font-size: $secondary-font-size
-  line-height: 1.5
-  text-align: left
-
-  p
-    margin: $minor 0
-
-    &:first-child
-      margin-top: 0
-
-  ul
-    margin: $minor 0 0
-    padding-left: $medium
-
-    li
-      margin: $minor 0
-
-  a
-    font-weight: bold
-
-// Help section
-.help-section
-  margin-top: $big
-  padding-top: $medium
-  border-top: 1px solid $border
-  font-size: $secondary-font-size
-  color: $text-muted
-
-  a
-    font-weight: bold
 </style>

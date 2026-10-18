@@ -113,11 +113,37 @@ public class BlogNotepadServiceShould : UnitTestBase
 
         _identityProvider.Current.Returns(identity);
         _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _blogService.IsVisibleToViewerAsync(blogId, default).Returns(true);
 
         var act = async () => await _service.GetEntries(blogId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+    }
+
+    /// <summary>
+    /// A blog the reader may not even open answers as a blog that is not there:
+    /// a 403 on its notepad would tell him it exists.
+    /// </summary>
+    [Fact]
+    public async Task AnswerAStrangerOnTheNotepadOfAHiddenBlogAsOnNoBlogAtAll()
+    {
+        var blogId = Guid.NewGuid();
+        var blog = new BlogDto
+        {
+            Id = blogId,
+            Author = new GeneralUser { UserId = Guid.NewGuid() },
+            Assistants = new List<BlogAssistantInfo>()
+        };
+
+        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(Guid.NewGuid()));
+        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        _blogService.IsVisibleToViewerAsync(blogId, default).Returns(false);
+
+        var act = async () => await _service.GetEntries(blogId);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound && e.Message == RefusalMessage.BlogNotFound);
     }
 
     [Fact]

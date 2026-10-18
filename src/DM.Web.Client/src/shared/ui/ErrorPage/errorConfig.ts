@@ -75,6 +75,14 @@ const errorDefaults: Record<number, ErrorConfig> = {
       "Этой страницы больше не существует. Возможно, она была удалена автором или модератором.",
     image: generalImage,
   },
+  // The rate limit of the API: the page is there, the reader only asked for
+  // it too often. Read as "не найдено", it sent him to check a link that was
+  // right all along.
+  429: {
+    title: "Слишком много запросов",
+    description: "Подождите немного и обновите страницу.",
+    image: generalImage,
+  },
   500: {
     title: "Произошла ошибка сервера",
     description: "Что-то сломалось на нашей стороне. Попробуйте немного позже.",
@@ -113,53 +121,17 @@ export function getErrorConfig(code: number): ErrorConfig {
  * 410 literally. The default keeps 410 as "не найдено" so a stray one from any
  * other endpoint never reports a deletion that did not happen.
  *
- * Everything else collapses on purpose: a status with no page of its own reads
- * as "not found", and a missing status or a 5xx as a fault on our side.
+ * Every other status with a page of its own gets that page: 429 is the rate
+ * limit and not a wrong address, 401 asks the reader to sign in. A status
+ * without one gets the general page, never "не найдено": collapsing every 4xx
+ * there sent a reader stopped by the rate limit off to check a link that was
+ * right. A missing status or a 5xx is a fault on our side.
  */
 export function errorCodeForStatus(
   status: number | undefined,
   options: { goneMeansRemoved?: boolean } = {},
 ): number {
   if (!status || status >= 500) return 500;
-  if (status === 403) return 403;
   if (status === 410) return options.goneMeansRemoved ? 410 : 404;
-  return 404;
-}
-
-/**
- * Symbolic (non-numeric) error codes surfaced at /error/:code and
- * /error?code= — chiefly OAuth-style authorization failures (doc 4.2.3.1.6).
- * Each borrows the illustration/behavior of a matching HTTP status via `code`
- * and carries a human-readable title/description.
- */
-export interface SymbolicErrorConfig {
-  /** HTTP status whose illustration/behavior this symbolic code reuses. */
-  code: number;
-  title: string;
-  description: string;
-}
-
-const symbolicErrors: Record<string, SymbolicErrorConfig> = {
-  expired_token: {
-    code: 410,
-    title: "Ссылка устарела",
-    description:
-      "Срок действия ссылки истек. Запросите новую и попробуйте снова.",
-  },
-  invalid_redirect_uri: {
-    code: 400,
-    title: "Неверный адрес перенаправления",
-    description:
-      "Адрес перенаправления не распознан. Вернитесь назад и попробуйте снова.",
-  },
-  access_denied: {
-    code: 403,
-    title: "Доступ не предоставлен",
-    description: "Запрос был отклонен или у вас нет прав на это действие.",
-  },
-};
-
-/** Resolves a symbolic error code, or null when it is not a known symbol. */
-export function getSymbolicError(code: string): SymbolicErrorConfig | null {
-  return symbolicErrors[code] ?? null;
+  return status;
 }

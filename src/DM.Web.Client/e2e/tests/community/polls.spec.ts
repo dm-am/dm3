@@ -1,4 +1,9 @@
-import { test, expect } from "../../fixtures/auth";
+import {
+  test,
+  expect,
+  API_BASE_URL,
+  authenticatedContext,
+} from "../../fixtures/auth";
 
 /**
  * ".polls-list" exists; ".poll-item", ".the-poll", ".sidebar-poll",
@@ -29,18 +34,16 @@ test.describe("Polls", () => {
     await expect(poll.locator(".poll-option-row").first()).toBeVisible();
   });
 
-  // Runs again, and gives the vote back. It was switched off because a vote is
-  // a write against the shared seed with nothing to undo it; the card carries
-  // the undo itself ("Отменить голос"), so the test casts the vote, checks it
-  // landed, retracts it and checks the retraction. A tier that cannot press its
-  // one write control is a tier that does not cover voting at all.
-  // Still off, and the reason is now narrower than it was. The write does have
-  // an inverse and the seed keeps an open poll the primary account has not
-  // voted in, so both former obstacles are gone; what remains is that the
-  // sidebar block renders no vote control for it in the browser, while the API
-  // reports the poll open and unvoted. Whatever decides that is above this test
-  // and has to be found before the test can mean anything.
-  test.skip("votes in a poll and takes the vote back", async ({
+  // Runs, and gives the vote back. A vote is a write against the shared seed,
+  // and the card carries its own undo ("Отменить голос"), so the test casts the
+  // vote, checks it landed, retracts it and checks the retraction. A tier that
+  // cannot press its one write control is a tier that does not cover voting.
+  //
+  // It was off with the note that the sidebar draws no vote control for an
+  // open poll the API reports unvoted. On the stand the block does draw it, for
+  // both open polls of the seed; what failed was the test's handle on the card,
+  // see below.
+  test("votes in a poll and takes the vote back", async ({
     authenticatedPage,
   }) => {
     await authenticatedPage.goto("/");
@@ -56,23 +59,55 @@ test.describe("Polls", () => {
     const voteControl = authenticatedPage.getByRole("button", {
       name: /^Проголосовать за:/,
     });
-    const poll = authenticatedPage
+    const offering = authenticatedPage
       .locator("#sidebar-list-ActivePolls .poll")
       .filter({ has: voteControl })
       .first();
-    await expect(poll).toBeVisible({ timeout: 10000 });
+    await expect(offering).toBeVisible({ timeout: 10000 });
 
-    await poll
-      .getByRole("button", { name: /^Проголосовать за:/ })
-      .first()
-      .click();
-    await expect(poll.locator(".poll-option-voted")).toBeVisible({
-      timeout: 5000,
-    });
+    // The card is held by its title from here on. A locator is read again on
+    // every use, and "the first card that offers the vote" stops being this
+    // card the moment the vote lands: it no longer offers one, so the same
+    // locator moved to the next open poll and looked there for the vote just
+    // cast.
+    const title = (await offering.locator(".poll-title").innerText()).trim();
+    const poll = authenticatedPage
+      .locator("#sidebar-list-ActivePolls .poll")
+      .filter({
+        has: authenticatedPage.locator(".poll-title", { hasText: title }),
+      });
 
-    await poll.getByRole("button", { name: "Отменить голос" }).click();
-    await expect(poll.locator(".poll-option-voted")).toHaveCount(0, {
-      timeout: 5000,
-    });
+    try {
+      await poll
+        .getByRole("button", { name: /^Проголосовать за:/ })
+        .first()
+        .click();
+      await expect(poll.locator(".poll-option-voted")).toBeVisible({
+        timeout: 5000,
+      });
+
+      await poll.getByRole("button", { name: "Отменить голос" }).click();
+      await expect(poll.locator(".poll-option-voted")).toHaveCount(0, {
+        timeout: 5000,
+      });
+    } finally {
+      // A vote left behind by a failure above is taken back through the API,
+      // so the next run finds the poll open for the primary account again.
+      const cleanup = await authenticatedContext();
+      const active = await cleanup.get(
+        `${API_BASE_URL}/v1/polls?status=Active&take=50`,
+      );
+      const polls: {
+        id: string;
+        title: string;
+        options: { voted?: boolean }[];
+      }[] = (await active.json()).resources ?? [];
+      const cast = polls.find(
+        (one) => one.title === title && one.options.some((o) => o.voted),
+      );
+      if (cast)
+        await cleanup.delete(`${API_BASE_URL}/v1/polls/${cast.id}/vote`);
+      await cleanup.dispose();
+    }
   });
 });

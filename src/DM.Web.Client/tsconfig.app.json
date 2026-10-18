@@ -6,7 +6,12 @@
   // jsdom globals they need; here they would only pull those globals into the
   // project that stands for browser code, where a Node import has to stay an
   // error.
-  "exclude": ["src/**/*.spec.ts"],
+  //
+  // The second entry is the same rule one step out: shared/lib/testing holds
+  // what the specs compile a stylesheet with, so it reads sources off disk and
+  // imports the sass compiler. Nothing the browser bundle may reach imports
+  // it, and under this project its `node:fs` would have to be an error.
+  "exclude": ["src/**/*.spec.ts", "src/shared/lib/testing/**"],
   "compilerOptions": {
     "composite": true,
     "paths": {

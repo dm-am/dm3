@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SITE_ADDRESSES, otherSiteAddresses } from "./site";
+import { SITE_ADDRESSES, otherSiteAddresses, permalinkOrigin } from "./site";
 
 /**
  * The footer names the address a visitor is not reading, and it decides which
@@ -44,5 +44,17 @@ describe("the other addresses of the site", () => {
       expect(address.host).not.toContain(":");
       expect(address.name.trim()).toBe(address.name);
     }
+  });
+});
+
+/**
+ * "Скопировать ссылку" and the link a moderator quotes: always the RU proxy, or
+ * where the reader is? The owner chose where the reader is (5 October 2026).
+ */
+describe("the origin of a link that leaves the page", () => {
+  it("is the address being read, not one address for every reader", () => {
+    expect(permalinkOrigin()).toBe(window.location.origin);
+    for (const address of SITE_ADDRESSES)
+      expect(permalinkOrigin()).not.toBe(`https://${address.host}`);
   });
 });

@@ -1,38 +1,29 @@
+using System.Threading.Tasks;
+using DM.Domain.Account.Features.Mail;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Mail;
 using DM.Domain.Core.Mail.ViewModels;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Options;
 
 namespace DM.Domain.Account.Features.PasswordChange;
 
-/// <inheritdoc />
-internal class PasswordChangeMailSender : IPasswordChangeMailSender
+/// <inheritdoc cref="IPasswordChangeMailSender" />
+internal class PasswordChangeMailSender : AccountMailSender, IPasswordChangeMailSender
 {
-    private readonly ITemplateRenderer _renderer;
-    private readonly IMailSender _mailSender;
-    private readonly IEmailAssetsProvider _emailAssetsProvider;
-
-    /// <inheritdoc />
     public PasswordChangeMailSender(
         ITemplateRenderer renderer,
         IMailSender mailSender,
-        IEmailAssetsProvider emailAssetsProvider)
+        IEmailAssetsProvider emailAssetsProvider,
+        IOptions<SiteAddressConfiguration> siteAddresses)
+        : base(renderer, mailSender, emailAssetsProvider, siteAddresses)
     {
-        _renderer = renderer;
-        _mailSender = mailSender;
-        _emailAssetsProvider = emailAssetsProvider;
     }
 
     /// <inheritdoc />
-    public async Task Send(string email, string username)
+    public Task Send(string email)
     {
-        var emailBody = await _renderer.RenderAsync(new PasswordChangeNotificationViewModel(
-            Username: username));
-        await _mailSender.SendAsync(new EmailLetter
-        {
-            Address = email,
-            Subject = "Dungeon Master: пароль изменен",
-            Body = emailBody,
-            LinkedResources = [_emailAssetsProvider.GetLogo()]
-        });
+        const string subject = "Dungeon Master: пароль изменен";
+        return Send(email, subject, new PasswordChangeNotificationViewModel(
+            SupportUrl: SiteLink("support?reason=access")));
     }
 }

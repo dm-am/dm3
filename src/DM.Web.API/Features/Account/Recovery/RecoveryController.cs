@@ -111,7 +111,7 @@ public class RecoveryController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Resets password using token from email.
-    /// Token is valid for 24 hours.
+    /// Token is valid for 48 hours.
     ///
     /// After successful reset, user can login with new password.
     /// </remarks>

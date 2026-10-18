@@ -21,11 +21,10 @@ internal class UsernameChangeMailSender : AccountMailSender, IUsernameChangeMail
     }
 
     /// <inheritdoc />
-    public Task SendApprovalAsync(string email, string username, Guid approvalToken)
+    public Task SendApprovalAsync(string email, Guid approvalToken)
     {
-        var subject = "Dungeon Master: запрос на смену имени одобрен";
+        const string subject = "Dungeon Master: смена имени одобрена";
         return Send(email, subject, new UsernameChangeApprovalViewModel(
-            username,
             // The link used to sit in the path, which put the token in the access
             // log, in the Referer and in the browser history - and pointed at an
             // address the site does not route, so the letter led to a 404 besides.
@@ -33,9 +32,9 @@ internal class UsernameChangeMailSender : AccountMailSender, IUsernameChangeMail
     }
 
     /// <inheritdoc />
-    public Task SendRejectionAsync(string email, string username, string? reason)
+    public Task SendRejectionAsync(string email, string? reason)
     {
-        var subject = "Dungeon Master: запрос на смену имени отклонен";
+        const string subject = "Dungeon Master: смена имени отклонена";
         return Send(email, subject,
             // The moderator's comment travels as text. The template writes it
             // through Razor, which escapes it, so the sender no longer encodes it
@@ -45,6 +44,6 @@ internal class UsernameChangeMailSender : AccountMailSender, IUsernameChangeMail
             // with no validator on the way. The name above it cannot carry markup
             // in either case, because UsernamePolicy refuses angle brackets and
             // quotes.
-            new UsernameChangeRejectionViewModel(username, reason));
+            new UsernameChangeRejectionViewModel(reason));
     }
 }

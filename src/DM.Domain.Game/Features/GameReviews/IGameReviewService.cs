@@ -19,14 +19,25 @@ public interface IGameReviewService
     Task<GameReview> CreateAsync(CreateGameReview createReview);
 
     /// <summary>
-    /// Get single review by ID
+    /// Whether the current user may review the game: true exactly when
+    /// <see cref="CreateAsync" /> takes a review of it, the text aside. The page
+    /// offers the form by this answer instead of refusing what was typed.
     /// </summary>
-    /// <param name="id">Review ID</param>
-    /// <returns>Review or throws if not found</returns>
-    Task<GameReview> GetAsync(Guid id);
+    /// <param name="gameId">Game ID</param>
+    Task<bool> MayCreateAsync(Guid gameId);
 
     /// <summary>
-    /// Get reviews for a game
+    /// One review of the game, read inside the game: a game the reader may not
+    /// open answers as a game that is not there, and a review of another game
+    /// as a review that is not there
+    /// </summary>
+    /// <param name="gameId">Game ID</param>
+    /// <param name="reviewId">Review ID</param>
+    /// <returns>Review or throws if not found</returns>
+    Task<GameReview> GetAsync(Guid gameId, Guid reviewId);
+
+    /// <summary>
+    /// Get reviews for a game the reader may open
     /// </summary>
     /// <param name="gameId">Game ID</param>
     /// <param name="query">Paging query</param>
@@ -34,7 +45,7 @@ public interface IGameReviewService
     Task<(IEnumerable<GameReview> Reviews, PagingResult Paging)> GetListAsync(Guid gameId, PagingQuery query);
 
     /// <summary>
-    /// Get all game reviews with optional filtering
+    /// Get the reviews of the games the reader may open, with optional filtering
     /// </summary>
     /// <param name="query">Paging query</param>
     /// <param name="filter">Optional filter parameters</param>

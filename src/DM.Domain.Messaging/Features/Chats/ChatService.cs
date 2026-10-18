@@ -28,6 +28,7 @@ internal class ChatService : IChatService
     private readonly IGuidFactory _guidFactory;
     private readonly IIdentityProvider _identityProvider;
     private readonly IUserBlacklistChecker _userBlacklistChecker;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public ChatService(
         IValidator<CreateChat> createValidator,
@@ -38,7 +39,8 @@ internal class ChatService : IChatService
         IIntentionManager intentionManager,
         IGuidFactory guidFactory,
         IIdentityProvider identityProvider,
-        IUserBlacklistChecker userBlacklistChecker)
+        IUserBlacklistChecker userBlacklistChecker,
+        IDateTimeProvider dateTimeProvider)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -49,6 +51,7 @@ internal class ChatService : IChatService
         _guidFactory = guidFactory;
         _identityProvider = identityProvider;
         _userBlacklistChecker = userBlacklistChecker;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     // ═══ CREATE ═══
@@ -185,6 +188,21 @@ internal class ChatService : IChatService
     }
 
     /// <inheritdoc />
+    public async Task<long> CountUnreadAsync()
+    {
+        var currentUserId = _identityProvider.Current.User.UserId;
+
+        // The reader is their own parent here: a conversation has no container to
+        // be parented by, so the markers of every chat of one person share that
+        // person's identifier as ParentId. That is what makes "all of mine" a
+        // single aggregate rather than a page of chats added up.
+        var totals = await _unreadCountersRepository.SelectTotalUnreadByParentsAsync(
+            currentUserId, UnreadEntryType.Message, currentUserId);
+
+        return totals[currentUserId];
+    }
+
+    /// <inheritdoc />
     public async Task MarkAsReadAsync(Guid chatId)
     {
         var chat = await _repository.GetForUpdate(chatId);
@@ -266,7 +284,7 @@ internal class ChatService : IChatService
 
         await using var counters = await _unreadCountersRepository.ReserveAsync(joining);
 
-        var result = await _repository.Update(updateEntity);
+        var result = await _repository.Update(updateEntity, _identityProvider.Current.User.UserId);
         counters.Commit();
 
         // The other half of the same lifecycle. Without it a person removed from
@@ -284,6 +302,64 @@ internal class ChatService : IChatService
         }
 
         return result;
+    }
+
+    /// <inheritdoc />
+    public async Task LeaveAsync(Guid chatId)
+    {
+        var chat = await GetForCurrentUserAsync(chatId);
+        _intentionManager.ThrowIfForbidden(ChatIntention.LeaveChat, chat);
+
+        var userId = _identityProvider.Current.User.UserId;
+        await _repository.Leave(chat.Id, userId, _dateTimeProvider.Now);
+
+        // The marker goes with the link, as it does when another participant
+        // removes somebody (UpdateAsync): left live, every later message would
+        // count into a conversation the leaver can no longer open.
+        await _unreadCountersRepository.DeleteAsync(
+            chat.UnreadEntityId, UnreadEntryType.Message, new[] { userId });
+    }
+
+    /// <inheritdoc />
+    public async Task ClearHistoryAsync(Guid chatId)
+    {
+        var chat = await GetForCurrentUserAsync(chatId);
+        _intentionManager.ThrowIfForbidden(ChatIntention.ClearHistory, chat);
+
+        var userId = _identityProvider.Current.User.UserId;
+        await _repository.ClearHistory(chat.Id, userId, _dateTimeProvider.Now);
+
+        // Whatever was unread is now out of his reach, and a badge counting it
+        // would point at a conversation with nothing in it to read.
+        await _unreadCountersRepository.FlushAsync(userId, UnreadEntryType.Message, chat.UnreadEntityId);
+    }
+
+    /// <inheritdoc />
+    public bool MayLeave(Chat chat) =>
+        _intentionManager.IsAllowed(ChatIntention.LeaveChat, chat);
+
+    /// <inheritdoc />
+    public bool MayClearHistory(Chat chat) =>
+        _intentionManager.IsAllowed(ChatIntention.ClearHistory, chat);
+
+    /// <summary>
+    /// The chat as the current user reads it, for an action on his own part in it.
+    /// </summary>
+    /// <remarks>
+    /// The participation-filtered read, so a conversation of other people answers
+    /// "not found" here exactly as its every read does, and its existence is not
+    /// confirmed by a refusal of a different kind. The global chat is read by
+    /// everybody and is refused by the intention instead.
+    /// </remarks>
+    private async Task<Chat> GetForCurrentUserAsync(Guid chatId)
+    {
+        var chat = await _repository.Get(chatId, _identityProvider.Current.User.UserId);
+        if (chat == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
+        }
+
+        return chat;
     }
 
     // ═══ BLACKLIST ═══

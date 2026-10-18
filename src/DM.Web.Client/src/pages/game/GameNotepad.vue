@@ -34,7 +34,7 @@ const adapter: NotepadAdapter = {
   list: () => gameApi.getNotepad(gameId.value),
   create: (input) => gameApi.createNote(gameId.value, input),
   update: (id, input) => gameApi.updateNote(gameId.value, id, input),
-  remove: (id) => gameApi.deleteNote(gameId.value, id),
+  remove: (id, options) => gameApi.deleteNote(gameId.value, id, options),
 };
 </script>
 
@@ -50,7 +50,7 @@ const adapter: NotepadAdapter = {
     title="Заметки игры"
     denied-text="Заметки игры доступны только мастеру и ассистентам"
     empty-text="Нет записей в заметках игры"
-    empty-hint="Создайте первую запись для общих заметок мастера и ассистентов."
+    empty-hint="Создайте первую запись для общих заметок мастера и ассистентов"
     load-error-text="Не удалось загрузить заметки игры"
   />
 </template>

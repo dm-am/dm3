@@ -17,8 +17,9 @@
  * require unsafe casts, while this card accepts both domains structurally.
  */
 import { computed } from "vue";
+import { getActivePinia } from "pinia";
 import type { RouteLocationRaw } from "vue-router";
-import type { User, Username, UserRole } from "@/shared/api/models/community";
+import type { Username, UserRole } from "@/shared/api/models/community";
 import { getRoleBadge } from "@/shared/config/roles";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
@@ -26,12 +27,19 @@ import dayjs from "dayjs";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { SvgIcon } from "@/shared/ui/Icon";
 import {
+  CaptionLine,
+  CaptionPart,
+  CaptionAction,
+} from "@/shared/ui/CaptionLine";
+import { LikeBadge } from "@/shared/ui/LikeBadge";
+import {
   initBbcodeInteractive,
   cleanupBbcodeInteractive,
   trimHtmlWhitespace,
 } from "@/shared/lib/utils/bbcodeInteractive";
 import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
-import { getLikesTooltip } from "@/shared/lib/utils/chat";
+import { RemovedAccountLink } from "@/entities/user";
+import { useUiStore } from "@/shared/stores/ui";
 
 /** Minimal author shape the footer renders: profile link + role badge +
  * online indicator. Both User and UserRef satisfy it structurally. */
@@ -53,7 +61,7 @@ const props = withDefaults(
     titleTo?: RouteLocationRaw | null;
     /** Server-rendered BBCode HTML of the card body. */
     contentHtml: string;
-    /** Content author; null renders the "[удален]" placeholder. */
+    /** Content author; null renders the "Аккаунт удален" placeholder. */
     author?: CardAuthor | null;
     /** Creation/publication moment (UTC ISO). */
     createdUtc?: string | null;
@@ -75,17 +83,16 @@ const props = withDefaults(
     canLike?: boolean;
     /** Whether the current viewer already liked the content. */
     isLikedByMe?: boolean;
-    /** Whether the reader has a composer on this page to quote into. */
-    canQuote?: boolean;
     /** Whether the moderator warn action is available. */
     canWarn?: boolean;
     /** Topic is closed — renders the lock + "Топик закрыт" badge (doc 4.2.2.17). */
     isClosed?: boolean;
     /** Author/moderator lifecycle affordances (forum topic only). */
     canEdit?: boolean;
+    /** Edit page of the content: "Редактировать" is a link there instead
+     * of the `edit` event (a publication is edited on a page of its own). */
+    editTo?: RouteLocationRaw | null;
     canDelete?: boolean;
-    /** Moderator close/open toggle. */
-    canClose?: boolean;
     /** Enable content truncation (for embedded/list contexts) */
     truncatable?: boolean;
     /** Max height before truncation (px) */
@@ -93,9 +100,9 @@ const props = withDefaults(
     /** Heading level for the title — "h1" when the card owns the page's
      * main heading, "h3" (default) when embedded in a list. */
     headingLevel?: "h1" | "h2" | "h3";
-    /** Preview-only card: suppresses the interactive footer actions
-     * (like + warn). Used by the home news list, which shows topics as a
-     * plain read-only preview. */
+    /** Preview-only card: suppresses the footer actions and the like.
+     * Used by the home news list, which shows topics as a plain read-only
+     * preview. */
     previewOnly?: boolean;
   }>(),
   {
@@ -111,12 +118,11 @@ const props = withDefaults(
     likes: () => [],
     canLike: false,
     isLikedByMe: false,
-    canQuote: false,
     canWarn: false,
     isClosed: false,
     canEdit: false,
+    editTo: null,
     canDelete: false,
-    canClose: false,
     truncatable: false,
     maxHeight: 150,
     headingLevel: "h3",
@@ -129,13 +135,7 @@ const emit = defineEmits<{
   warn: [];
   edit: [];
   delete: [];
-  toggleClose: [];
-  quote: [];
 }>();
-
-// getLikesTooltip only reads usernames; its declared User[] parameter is
-// wider than what it consumes, hence the cast from the structural subset.
-const likersTooltip = computed(() => getLikesTooltip(props.likes as User[]));
 
 const formattedDate = computed(() =>
   props.createdUtc ? formatDateFull(props.createdUtc) : "",
@@ -147,7 +147,9 @@ const formattedEditDate = computed(() =>
 
 const isEdited = computed(() => !!props.modifiedUtc);
 
-const likesCount = computed(() => props.likes.length);
+// Nothing to press and nobody to list: a heart would stand for nothing, so
+// the author's own unliked content and a guest's view of it show none.
+const showLike = computed(() => props.canLike || props.likes.length > 0);
 
 const isAuthorOnline = computed(() => {
   const lastActivityUtc = props.author?.lastActivityUtc;
@@ -159,6 +161,15 @@ const isAuthorOnline = computed(() => {
 });
 
 const roleBadge = computed(() => getRoleBadge(props.author?.role));
+
+// "Перенос слов" of the settings panel, as over the text of a comment. The
+// switch lives in the store the app installs; a card drawn where none is
+// installed, a card on its own, keeps the switch's default, on.
+const pinia = getActivePinia();
+const ui = pinia ? useUiStore(pinia) : null;
+const typesetting = computed(() => ({
+  hyphenated: ui ? ui.hyphenateWords : true,
+}));
 
 // Card body, pre-trimmed of leading/trailing whitespace. Pure transform —
 // TruncatedContent never mutates slot DOM.
@@ -208,7 +219,11 @@ function initCardBbcode(el: HTMLElement) {
         :watch-key="cardContentHtml"
         :on-content-mounted="initCardBbcode"
       >
-        <div class="topic-text bbcode-content" v-html="cardContentHtml" />
+        <div
+          class="topic-text bbcode-content"
+          :class="typesetting"
+          v-html="cardContentHtml"
+        />
       </TruncatedContent>
     </div>
 
@@ -216,32 +231,37 @@ function initCardBbcode(el: HTMLElement) {
          period-digest leaderboards inside "Итоги …" topics). -->
     <slot name="after-content" />
 
-    <!-- Footer: Author info + Actions -->
+    <!-- Footer: one caption line, who and when, then what the viewer may do,
+         the like last of all. It wraps between parts at every width, as it
+         did on a desktop before 5 October: at 1366 a moderator's caption may
+         wrap, the like or the actions too going down by the length of the
+         name, and a phone breaks after the comma and keeps the date whole. Nothing of it is put away for want of room (owner,
+         12 October 2026). -->
     <div class="topic-footer">
-      <span class="author-info"
-        >Автор:
-        <router-link
-          v-if="author"
-          :to="{
-            name: 'profile',
-            params: { username: author.username },
-          }"
-          class="author-link"
-          >{{ author.username }}</router-link
-        ><span v-else class="author-deleted">[удален]</span
-        ><template v-if="roleBadge">
-          [<Tooltip :text="roleBadge.label"
-            ><b class="role-letter">{{ roleBadge.letter }}</b></Tooltip
-          >]</template
-        ><template v-if="author">
-          [<span :class="isAuthorOnline ? 'online' : 'offline'">{{
-            isAuthorOnline ? "online" : "offline"
-          }}</span
-          >]</template
-        >, {{ formattedDate
-        }}<template v-if="isEdited">
-          | Отредактировано {{ formattedEditDate }}</template
+      <CaptionLine>
+        <CaptionPart :joint="createdUtc ? ',' : undefined"
+          >Автор:
+          <router-link
+            v-if="author"
+            :to="{
+              name: 'profile',
+              params: { username: author.username },
+            }"
+            class="author-link"
+            >{{ author.username }}</router-link
+          ><RemovedAccountLink v-else /><template v-if="roleBadge">
+            [<Tooltip :text="roleBadge.label"
+              ><b class="role-letter">{{ roleBadge.letter }}</b></Tooltip
+            >]</template
+          ><template v-if="author">
+            [<span :class="isAuthorOnline ? 'online' : 'offline'">{{
+              isAuthorOnline ? "online" : "offline"
+            }}</span
+            >]</template
+          ></CaptionPart
         >
+        <span v-if="createdUtc">{{ formattedDate }}</span>
+        <span v-if="isEdited">Отредактировано {{ formattedEditDate }}</span>
         <!-- Product decision (2026-07-11): the card counter is the viewer's
              UNREAD count, including an honest 0 when everything is read.
              Guests have no read tracking, so for them (unreadTo is null)
@@ -252,86 +272,45 @@ function initCardBbcode(el: HTMLElement) {
              zeroed the moment the topic opens, so the second click on the same
              link always landed at the beginning. The resolver answers with the
              last comment instead. -->
-        | Комментарии (<router-link
-          v-if="unreadTo"
-          :to="unreadTo"
-          class="comments-link"
-          >{{ unreadCommentsCount }}</router-link
-        ><router-link
-          v-else-if="commentsTo"
-          :to="commentsTo"
-          class="comments-link"
-          >{{ commentsCount }}</router-link
-        ><span v-else>{{ commentsCount }}</span
-        >)</span
-      >
-
-      <!-- Actions (suppressed for preview-only cards, e.g. home news list) -->
-      <span v-if="!previewOnly" class="topic-actions">
-        <span v-if="canLike || likesCount > 0" class="likes-container">
-          <!-- The likers list is viewer-independent information: the
-               interactive button carries the same tooltip as the static
-               badge (suppressed while there is nobody to list). -->
-          <Tooltip
-            v-if="canLike"
-            :text="likersTooltip"
-            :disabled="likesCount === 0"
-          >
-            <button
-              class="like-btn"
-              :class="{ liked: isLikedByMe }"
-              :aria-label="
-                likesCount > 0 ? `Нравится: ${likesCount}` : 'Нравится'
-              "
-              @click="emit('toggleLike')"
-            >
-              <SvgIcon
-                :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
-                class="like-icon"
-              />
-              <span v-if="likesCount > 0" class="likes-count">{{
-                likesCount
-              }}</span>
-            </button>
-          </Tooltip>
-          <Tooltip
-            v-else
-            :text="likersTooltip"
-            focusable
-            class="like-static"
-            :aria-label="`Нравится: ${likesCount}`"
-          >
-            <SvgIcon
-              :name="isLikedByMe ? 'heartFilled' : 'heartEmpty'"
-              class="like-icon"
-            />
-            <span class="likes-count">{{ likesCount }}</span>
-          </Tooltip>
-        </span>
-        <button v-if="canQuote" class="action-btn" @click="emit('quote')">
-          Цитировать
-        </button>
-        <button v-if="canEdit" class="action-btn" @click="emit('edit')">
-          Редактировать
-        </button>
-        <button v-if="canClose" class="action-btn" @click="emit('toggleClose')">
-          {{ isClosed ? "Открыть" : "Закрыть" }}
-        </button>
-        <button
-          v-if="canDelete"
-          class="action-btn delete-btn"
-          @click="emit('delete')"
+        <span
+          >Комментарии (<router-link
+            v-if="unreadTo"
+            :to="unreadTo"
+            class="comments-link"
+            >{{ unreadCommentsCount }}</router-link
+          ><router-link
+            v-else-if="commentsTo"
+            :to="commentsTo"
+            class="comments-link"
+            >{{ commentsCount }}</router-link
+          ><span v-else>{{ commentsCount }}</span
+          >)</span
         >
-          Удалить
-        </button>
-        <button
-          v-if="canWarn"
-          class="action-btn warn-btn"
-          @click="emit('warn')"
-        >
-          Предупреждение
-        </button>
-      </span>
+        <!-- Actions and the like (none on a preview card, the home news). -->
+        <template v-if="!previewOnly">
+          <CaptionAction v-if="editTo" :to="editTo"
+            >Редактировать</CaptionAction
+          >
+          <CaptionAction v-else-if="canEdit" @click="emit('edit')"
+            >Редактировать</CaptionAction
+          >
+          <!-- No "Закрыть" here: whether a topic is closed is a setting of
+               the topic, changed where the rest of it is, in the edit form. -->
+          <CaptionAction v-if="canDelete" @click="emit('delete')"
+            >Удалить</CaptionAction
+          >
+          <CaptionAction v-if="canWarn" @click="emit('warn')"
+            >Предупреждение</CaptionAction
+          >
+          <LikeBadge
+            v-if="showLike"
+            :likes="likes"
+            :liked="isLikedByMe"
+            :interactive="canLike"
+            @toggle="emit('toggleLike')"
+          />
+        </template>
+      </CaptionLine>
     </div>
   </div>
 </template>
@@ -359,36 +338,35 @@ function initCardBbcode(el: HTMLElement) {
     &:hover
       color: $link-hover
 
+// The block of the text and of its "показать полностью" on the step of the text.
 .topic-description
   word-wrap: break-word
   word-break: break-word
   overflow-wrap: break-word
   color: $text
-  line-height: 1.6
+  line-height: 1.25
+
+// The text of a topic or a publication stands as the text of a comment
+// (CommentItem.vue, .comment-text), DM2 showing the topic as its comment No 1:
+// 16px on a step of 20, flush on both sides at every width, and hyphenated
+// while its switch is on.
+.topic-text
+  +body-text
 
 // .topic-text uses the global .bbcode-content class for typography.
 // Truncation & expand-link are owned by <TruncatedContent>.
 
+// The caption line owns its size and colour; the footer repeats the size so
+// the line it stands on is the caption's height and not the card text's.
 .topic-footer
-  display: flex
-  align-items: baseline
-  flex-wrap: wrap
-  gap: $small
   margin-top: $small
   font-size: $tertiary-font-size
-  color: $text-muted
-
-.author-info
-  color: $text-muted
 
 .author-link
   color: $link
 
   &:hover
     color: $link-hover
-
-.author-deleted
-  font-style: italic
 
 .role-letter
   font-weight: bold
@@ -408,64 +386,6 @@ function initCardBbcode(el: HTMLElement) {
   color: $link
   &:hover
     color: $link-hover
-
-.topic-actions
-  display: inline-flex
-  align-items: center
-  gap: $small
-  margin-left: $small
-
-.likes-container
-  position: relative
-  display: inline-flex
-
-.like-btn
-  display: inline-flex
-  align-items: center
-  gap: 2px
-  padding: 0 $tiny
-  border: none
-  background: transparent
-  cursor: pointer
-  color: $text-muted
-  font-size: $secondary-font-size
-
-  &:hover
-    color: $accent-red
-
-  &.liked
-    color: $accent-red
-
-// Non-interactive like indicator (own content / guest / preview): shows the
-// count without a clickable affordance, matching CommentItem.vue's .like-static.
-.like-static
-  display: inline-flex
-  align-items: center
-  gap: 2px
-  padding: 0 $tiny
-  color: $text-muted
-  font-size: $secondary-font-size
-  cursor: help
-
-.likes-count
-  font-weight: bold
-
-.action-btn
-  padding: 0 $tiny
-  font-size: $secondary-font-size
-  border: none
-  background: transparent
-  cursor: pointer
-  color: $text-muted
-
-  &:hover
-    color: $link
-
-  &.warn-btn:hover
-    color: $accent-red
-
-  &.delete-btn:hover
-    color: $accent-red
 
 // Closed-topic badge (lock + "Топик закрыт"), sits next to the heading. The gap
 // in front of it is the " " text node in the title, not a margin: a margin is

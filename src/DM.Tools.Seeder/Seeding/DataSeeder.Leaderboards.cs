@@ -239,7 +239,6 @@ internal sealed partial class DataSeeder
                     CreatedUtc = createdUtc,
                     IsPublished = true,
                     PublishedUtc = createdUtc,
-                    CommentsEnabled = true,
                     ViewCount = _random.Next(10, 500),
                     CommentCount = 0,
                     IsRemoved = false

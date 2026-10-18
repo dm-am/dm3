@@ -17,6 +17,15 @@ public interface IGameCommentService
     Task<Comment> CreateAsync(CreateComment createComment);
 
     /// <summary>
+    /// Whether the current user may write a new comment in the game's
+    /// discussion: true exactly when <see cref="CreateAsync" /> takes one, the
+    /// text aside. The page offers the form by this answer instead of refusing
+    /// what was typed.
+    /// </summary>
+    /// <param name="game">The game, read for the current user</param>
+    bool MayCreate(Games.Game game);
+
+    /// <summary>
     /// Get comments list for game with paging
     /// </summary>
     /// <param name="gameId">Game identifier</param>
@@ -26,7 +35,9 @@ public interface IGameCommentService
         IReadOnlyCollection<Guid>? excludeUserIds = null);
 
     /// <summary>
-    /// Get single comment by identifier
+    /// Get a single comment of a game by ID, refused the way the game's
+    /// comment listing refuses the current user. A comment of any other kind of
+    /// discussion is not found
     /// </summary>
     Task<Comment> GetAsync(Guid commentId);
 

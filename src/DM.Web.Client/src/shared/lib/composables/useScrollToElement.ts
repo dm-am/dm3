@@ -10,6 +10,14 @@ import { useRoute, useRouter } from "vue-router";
  */
 function reveal(element: Element): void {
   element.scrollIntoView({ behavior: "smooth", block: "center" });
+  markArrival(element);
+}
+
+/**
+ * The mark alone, for a page that brings the element into view its own way.
+ * The two seconds are the length of the pulse in Reset.sass.
+ */
+export function markArrival(element: Element): void {
   element.classList.add("highlight-unread");
   setTimeout(() => element.classList.remove("highlight-unread"), 2000);
 }
@@ -56,10 +64,10 @@ export function useScrollToElement(itemsLoaded: Ref<boolean>) {
  * Scroll to the comment named by the URL hash (#comment-{id}) once the page
  * holding it has rendered.
  *
- * Backs the permalink a comment copies. On the game and the blog that link used
- * to open the page and go nowhere, because the handler lived on the topic
- * alone; it was then copied to the discussion widget, which is the same defect
- * one screen further along.
+ * Backs the link the number of a comment is, and the link a warning quotes. On
+ * the game and the blog that link used to open the page and go nowhere,
+ * because the handler lived on the topic alone; it was then copied to the
+ * discussion widget, which is the same defect one screen further along.
  *
  * @param comments Getter for the rendered list — both what to wait for and the
  * proof that there is anything to look in.

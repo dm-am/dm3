@@ -212,6 +212,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<int>("Theme")
                         .HasColumnType("integer");
 
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<int>("TopicsPerPage")
                         .HasColumnType("integer");
 
@@ -775,9 +779,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<int>("CommentCount")
                         .HasColumnType("integer");
 
-                    b.Property<bool>("CommentsEnabled")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -899,7 +900,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("BlockedUserId");
 
-                    b.HasIndex("BlogId");
+                    b.HasIndex("BlogId", "BlockedUserId")
+                        .IsUnique();
 
                     b.ToTable("BlogBlacklists");
                 });
@@ -918,9 +920,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("CommentCount")
                         .HasColumnType("integer");
-
-                    b.Property<bool>("CommentsEnabled")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("Content")
                         .IsRequired()
@@ -976,7 +975,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AuthorId");
 
-                    b.HasIndex("BlogId");
+                    b.HasIndex("BlogId", "PublicationNumber")
+                        .IsUnique();
 
                     b.HasIndex("CreatedUtc")
                         .HasFilter("\"IsRemoved\" = false");
@@ -2506,6 +2506,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("BoardId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("ClosedByAuthor")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -2535,7 +2538,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || setweight(to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi')), 'B')", true);
+                        .HasComputedColumnSql("setweight(to_tsvector('russian', coalesce(\"Title\", '')), 'A') || setweight(to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[[Pp][Rr][Ii][Vv][Aa][Tt][Ee](?=[\\]=\\s]|$)(?:[^\\[]|\\[(?!/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\]))*(?:\\[/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\])?', ' ', 'g')), 'B')", true);
 
                     b.Property<string>("Text")
                         .IsRequired()
@@ -2572,6 +2575,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TopicId = new Guid("00000000-0000-0000-0000-000000000001"),
                             AuthorId = new Guid("00000000-0000-0000-0000-000000000001"),
                             BoardId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            ClosedByAuthor = false,
                             CreatedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsAttached = true,
                             IsClosed = false,
@@ -2585,6 +2589,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                             TopicId = new Guid("00000000-0000-0000-0000-000000000100"),
                             AuthorId = new Guid("00000000-0000-0000-0000-000000000001"),
                             BoardId = new Guid("00000000-0000-0000-0000-000000000001"),
+                            ClosedByAuthor = false,
                             CreatedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 1, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsAttached = true,
                             IsClosed = false,
@@ -2619,11 +2624,20 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.ToTable("TopicEdits");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchemaTemplate", b =>
                 {
-                    b.Property<Guid>("AttributeSchemaId")
+                    b.Property<Guid>("TemplateId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
@@ -2636,17 +2650,34 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+                    b.HasKey("TemplateId");
 
-                    b.HasKey("AttributeSchemaId");
+                    b.HasIndex("CreatedByUserId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("IsDefault")
+                        .IsUnique()
+                        .HasFilter("\"IsDefault\" = true and \"IsRemoved\" = false");
 
-                    b.ToTable("AttributeSchemata");
+                    b.HasIndex("Title")
+                        .IsUnique()
+                        .HasFilter("\"IsRemoved\" = false");
+
+                    b.ToTable("AttributeSchemaTemplates");
+
+                    b.HasData(
+                        new
+                        {
+                            TemplateId = new Guid("b1a5c0de-0000-4000-8000-000000000001"),
+                            CreatedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsDefault = true,
+                            IsRemoved = false,
+                            Specifications = "[{\"Id\":\"b1a5c0de-0000-4000-8000-000000000109\",\"Title\":\"HP\",\"Constraints\":{\"_t\":\"NumberAttributeConstraints\",\"MaxLength\":null,\"Required\":false},\"Order\":0,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000103\",\"Title\":\"\\u041C\\u0438\\u0440\\u043E\\u0432\\u043E\\u0437\\u0437\\u0440\\u0435\\u043D\\u0438\\u0435\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":0,\"Values\":[{\"Value\":\"\\u0417\\u0430\\u043A\\u043E\\u043D\\u043E\\u043F\\u043E\\u0441\\u043B\\u0443\\u0448\\u043D\\u044B\\u0439 \\u0434\\u043E\\u0431\\u0440\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u041D\\u0435\\u0439\\u0442\\u0440\\u0430\\u043B\\u044C\\u043D\\u044B\\u0439 \\u0434\\u043E\\u0431\\u0440\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u0425\\u0430\\u043E\\u0442\\u0438\\u0447\\u043D\\u044B\\u0439 \\u0434\\u043E\\u0431\\u0440\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u0417\\u0430\\u043A\\u043E\\u043D\\u043E\\u043F\\u043E\\u0441\\u043B\\u0443\\u0448\\u043D\\u044B\\u0439 \\u043D\\u0435\\u0439\\u0442\\u0440\\u0430\\u043B\\u044C\\u043D\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u041D\\u0435\\u0439\\u0442\\u0440\\u0430\\u043B\\u044C\\u043D\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u0425\\u0430\\u043E\\u0442\\u0438\\u0447\\u043D\\u044B\\u0439 \\u043D\\u0435\\u0439\\u0442\\u0440\\u0430\\u043B\\u044C\\u043D\\u044B\\u0439\",\"Modifier\":null},{\"Value\":\"\\u0417\\u0430\\u043A\\u043E\\u043D\\u043E\\u043F\\u043E\\u0441\\u043B\\u0443\\u0448\\u043D\\u044B\\u0439 \\u0437\\u043B\\u043E\\u0439\",\"Modifier\":null},{\"Value\":\"\\u041D\\u0435\\u0439\\u0442\\u0440\\u0430\\u043B\\u044C\\u043D\\u044B\\u0439 \\u0437\\u043B\\u043E\\u0439\",\"Modifier\":null},{\"Value\":\"\\u0425\\u0430\\u043E\\u0442\\u0438\\u0447\\u043D\\u044B\\u0439 \\u0437\\u043B\\u043E\\u0439\",\"Modifier\":null}],\"Required\":false},\"Order\":1,\"IsDescriptor\":true,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010a\",\"Title\":\"\\u0421\\u0438\\u043B\\u0430\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":2,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010b\",\"Title\":\"\\u041B\\u043E\\u0432\\u043A\\u043E\\u0441\\u0442\\u044C\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":3,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010c\",\"Title\":\"\\u0412\\u044B\\u043D\\u043E\\u0441\\u043B\\u0438\\u0432\\u043E\\u0441\\u0442\\u044C\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":4,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010d\",\"Title\":\"\\u0418\\u043D\\u0442\\u0435\\u043B\\u043B\\u0435\\u043A\\u0442\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":5,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010e\",\"Title\":\"\\u041C\\u0443\\u0434\\u0440\\u043E\\u0441\\u0442\\u044C\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":6,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-00000000010f\",\"Title\":\"\\u041E\\u0431\\u0430\\u044F\\u043D\\u0438\\u0435\",\"Constraints\":{\"_t\":\"ListAttributeConstraints\",\"Kind\":2,\"Values\":[{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-20},{\"Value\":\"\\u043F\\u043B\\u043E\\u0445\\u043E\",\"Modifier\":-10},{\"Value\":\"\\u0441\\u0440\\u0435\\u0434\\u043D\\u0435\",\"Modifier\":0},{\"Value\":\"\\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":10},{\"Value\":\"\\u043E\\u0447\\u0435\\u043D\\u044C \\u0445\\u043E\\u0440\\u043E\\u0448\\u043E\",\"Modifier\":20}],\"Required\":false},\"Order\":7,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000104\",\"Title\":\"\\u0412\\u043D\\u0435\\u0448\\u043D\\u043E\\u0441\\u0442\\u044C\",\"Constraints\":{\"_t\":\"BbCodeAttributeConstraints\",\"MaxLength\":20000,\"Required\":false},\"Order\":8,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000105\",\"Title\":\"\\u0425\\u0430\\u0440\\u0430\\u043A\\u0442\\u0435\\u0440\",\"Constraints\":{\"_t\":\"BbCodeAttributeConstraints\",\"MaxLength\":20000,\"Required\":false},\"Order\":9,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000106\",\"Title\":\"\\u0418\\u0441\\u0442\\u043E\\u0440\\u0438\\u044F\",\"Constraints\":{\"_t\":\"BbCodeAttributeConstraints\",\"MaxLength\":20000,\"Required\":false},\"Order\":10,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000107\",\"Title\":\"\\u041D\\u0430\\u0432\\u044B\\u043A\\u0438\",\"Constraints\":{\"_t\":\"BbCodeAttributeConstraints\",\"MaxLength\":20000,\"Required\":false},\"Order\":11,\"IsDescriptor\":false,\"IsHidden\":false},{\"Id\":\"b1a5c0de-0000-4000-8000-000000000108\",\"Title\":\"\\u0418\\u043D\\u0432\\u0435\\u043D\\u0442\\u0430\\u0440\\u044C\",\"Constraints\":{\"_t\":\"BbCodeAttributeConstraints\",\"MaxLength\":20000,\"Required\":false},\"Order\":12,\"IsDescriptor\":false,\"IsHidden\":false}]",
+                            Title = "Классическая схема",
+                            UpdatedUtc = new DateTimeOffset(new DateTime(2020, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute", b =>
@@ -2764,9 +2795,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("ActivatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("AttributeSchemaId")
-                        .HasColumnType("uuid");
-
                     b.Property<int>("ClosedReason")
                         .HasColumnType("integer");
 
@@ -2870,8 +2898,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("GameId");
 
-                    b.HasIndex("AttributeSchemaId");
-
                     b.HasIndex("DeletedByUserId");
 
                     b.HasIndex("MasterId");
@@ -2882,6 +2908,26 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Games");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.GameAttributeSchema", b =>
+                {
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Specifications")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("GameId");
+
+                    b.ToTable("GameAttributeSchemas");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.GameReview", b =>
@@ -2984,7 +3030,8 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("BlockedUserId");
 
-                    b.HasIndex("GameId");
+                    b.HasIndex("GameId", "BlockedUserId")
+                        .IsUnique();
 
                     b.ToTable("GameBlacklists");
                 });
@@ -3252,7 +3299,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", true);
+                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[[Pp][Rr][Ii][Vv][Aa][Tt][Ee](?=[\\]=\\s]|$)(?:[^\\[]|\\[(?!/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\]))*(?:\\[/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\])?', ' ', 'g'))", true);
 
                     b.Property<bool>("SharePrivateWithAll")
                         .HasColumnType("boolean");
@@ -3337,14 +3384,8 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsRemoved")
                         .HasColumnType("boolean");
 
-                    b.Property<Guid?>("NextRoomId")
-                        .HasColumnType("uuid");
-
                     b.Property<double>("OrderNumber")
                         .HasColumnType("double precision");
-
-                    b.Property<Guid?>("PreviousRoomId")
-                        .HasColumnType("uuid");
 
                     b.Property<int>("RoomNumber")
                         .HasColumnType("integer");
@@ -3365,10 +3406,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasKey("RoomId");
 
                     b.HasIndex("DeletedByUserId");
-
-                    b.HasIndex("NextRoomId");
-
-                    b.HasIndex("PreviousRoomId");
 
                     b.HasIndex("GameId", "RoomNumber")
                         .IsUnique();
@@ -3465,6 +3502,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
+                    b.HasIndex("Status")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 1");
+
                     b.ToTable("GlobalChatEvents");
                 });
 
@@ -3488,9 +3529,10 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("GlobalChatEventParticipantId");
 
-                    b.HasIndex("GlobalChatEventId");
-
                     b.HasIndex("UserId");
+
+                    b.HasIndex("GlobalChatEventId", "UserId")
+                        .IsUnique();
 
                     b.ToTable("GlobalChatEventParticipants");
                 });
@@ -3527,7 +3569,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", true);
+                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[[Pp][Rr][Ii][Vv][Aa][Tt][Ee](?=[\\]=\\s]|$)(?:[^\\[]|\\[(?!/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\]))*(?:\\[/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\])?', ' ', 'g'))", true);
 
                     b.Property<string>("Text")
                         .IsRequired()
@@ -3590,6 +3632,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("DeletedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("HistoryClearedUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsRemoved")
@@ -3661,18 +3706,6 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Answer")
-                        .HasColumnType("text");
-
-                    b.Property<Guid?>("AnswerAuthorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("AssignedModeratorId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("BanId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("Comment")
                         .IsRequired()
                         .HasColumnType("text");
@@ -3693,6 +3726,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("GuestEmail")
                         .HasColumnType("text");
+
+                    b.Property<Guid?>("ResolvedById")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("ResolvedUtc")
                         .HasColumnType("timestamp with time zone");
@@ -3715,40 +3751,28 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("WarningId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("TicketId");
 
-                    b.HasIndex("AnswerAuthorId");
-
-                    b.HasIndex("AssignedModeratorId");
-
-                    b.HasIndex("BanId");
+                    b.HasIndex("ResolvedById");
 
                     b.HasIndex("TargetId");
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("WarningId");
-
                     b.ToTable("Tickets");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Moderation.TicketResponse", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Moderation.TicketComment", b =>
                 {
-                    b.Property<Guid>("TicketResponseId")
+                    b.Property<Guid>("TicketCommentId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AuthorId")
+                    b.Property<Guid?>("AuthorId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedUtc")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsFromModerator")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("Text")
                         .IsRequired()
@@ -3757,13 +3781,13 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("TicketId")
                         .HasColumnType("uuid");
 
-                    b.HasKey("TicketResponseId");
+                    b.HasKey("TicketCommentId");
 
                     b.HasIndex("AuthorId");
 
-                    b.HasIndex("TicketId");
+                    b.HasIndex("TicketId", "CreatedUtc", "TicketCommentId");
 
-                    b.ToTable("TicketResponses");
+                    b.ToTable("TicketComments");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Moderation.Warning", b =>
@@ -3787,11 +3811,27 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<int>("EntityType")
                         .HasColumnType("integer");
 
-                    b.Property<bool>("IsRemoved")
-                        .HasColumnType("boolean");
+                    b.Property<int>("OriginalPoints")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Points")
                         .HasColumnType("integer");
+
+                    b.Property<string>("PointsChangeText")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("PointsChangedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("PointsChangedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ProfileAvatarUploadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProfileStatusSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<Guid>("TargetUserId")
                         .HasColumnType("uuid");
@@ -3803,6 +3843,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.HasKey("WarningId");
 
                     b.HasIndex("AuthorId");
+
+                    b.HasIndex("PointsChangedByUserId");
+
+                    b.HasIndex("ProfileAvatarUploadId");
 
                     b.HasIndex("TargetUserId");
 
@@ -3984,7 +4028,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
-                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[private(=[^\\]]*)??\\][\\s\\S]*?\\[/private\\]', ' ', 'gi'))", true);
+                        .HasComputedColumnSql("to_tsvector('russian', regexp_replace(coalesce(\"SearchText\", ''), '\\[[Pp][Rr][Ii][Vv][Aa][Tt][Ee](?=[\\]=\\s]|$)(?:[^\\[]|\\[(?!/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\]))*(?:\\[/[Pp][Rr][Ii][Vv][Aa][Tt][Ee]\\])?', ' ', 'g'))", true);
 
                     b.Property<string>("Text")
                         .IsRequired()
@@ -4723,7 +4767,7 @@ namespace DM.Infrastructure.Persistence.Migrations
                         new
                         {
                             TagId = new Guid("00000000-0000-0000-0000-00000000003f"),
-                            Description = "Erotic Role-Play: [tipimg:/images/erp-tooltip.gif]эротические сцены[/tipimg] как основа игрового процесса",
+                            Description = "Erotic Role-Play: [tip img=\"/images/erp-tooltip.gif\"]эротические сцены[/tip] как основа игрового процесса",
                             ShortId = 63,
                             SortOrder = 0,
                             TagGroupId = new Guid("00000000-0000-0000-0005-000000000008"),
@@ -5614,11 +5658,11 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("Topic");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchemaTemplate", b =>
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", null)
                         .WithMany()
-                        .HasForeignKey("UserId")
+                        .HasForeignKey("CreatedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 
@@ -5678,11 +5722,6 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.Game", b =>
                 {
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSchema", null)
-                        .WithMany()
-                        .HasForeignKey("AttributeSchemaId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "DeletedBy")
                         .WithMany()
                         .HasForeignKey("DeletedByUserId");
@@ -5702,6 +5741,15 @@ namespace DM.Infrastructure.Persistence.Migrations
                     b.Navigation("Master");
 
                     b.Navigation("Mentor");
+                });
+
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.GameAttributeSchema", b =>
+                {
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Game", null)
+                        .WithOne()
+                        .HasForeignKey("DM.Infrastructure.Persistence.Entities.Game.GameAttributeSchema", "GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Game.GameReview", b =>
@@ -5979,21 +6027,9 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Posts.Room", "NextRoom")
-                        .WithMany()
-                        .HasForeignKey("NextRoomId");
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Game.Posts.Room", "PreviousRoom")
-                        .WithMany()
-                        .HasForeignKey("PreviousRoomId");
-
                     b.Navigation("DeletedBy");
 
                     b.Navigation("Game");
-
-                    b.Navigation("NextRoom");
-
-                    b.Navigation("PreviousRoom");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Messaging.Chat", b =>
@@ -6132,17 +6168,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Moderation.Ticket", b =>
                 {
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "AnswerAuthor")
-                        .WithMany("TicketsAnswered")
-                        .HasForeignKey("AnswerAuthorId");
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "AssignedModerator")
-                        .WithMany()
-                        .HasForeignKey("AssignedModeratorId");
-
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Moderation.Ban", "Ban")
-                        .WithMany()
-                        .HasForeignKey("BanId");
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "ResolvedBy")
+                        .WithMany("TicketsResolved")
+                        .HasForeignKey("ResolvedById");
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Target")
                         .WithMany("TicketsAgainst")
@@ -6152,33 +6180,22 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .WithMany("TicketsFiled")
                         .HasForeignKey("UserId");
 
-                    b.HasOne("DM.Infrastructure.Persistence.Entities.Moderation.Warning", "Warning")
-                        .WithMany()
-                        .HasForeignKey("WarningId");
-
-                    b.Navigation("AnswerAuthor");
-
-                    b.Navigation("AssignedModerator");
-
                     b.Navigation("Author");
 
-                    b.Navigation("Ban");
+                    b.Navigation("ResolvedBy");
 
                     b.Navigation("Target");
-
-                    b.Navigation("Warning");
                 });
 
-            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Moderation.TicketResponse", b =>
+            modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Moderation.TicketComment", b =>
                 {
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "Author")
                         .WithMany()
                         .HasForeignKey("AuthorId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Moderation.Ticket", "Ticket")
-                        .WithMany("Responses")
+                        .WithMany("TicketComments")
                         .HasForeignKey("TicketId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -6196,6 +6213,15 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "PointsChangedBy")
+                        .WithMany()
+                        .HasForeignKey("PointsChangedByUserId");
+
+                    b.HasOne("DM.Infrastructure.Persistence.Entities.Shared.Upload", "ProfileAvatarUpload")
+                        .WithMany()
+                        .HasForeignKey("ProfileAvatarUploadId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("DM.Infrastructure.Persistence.Entities.Account.User", "TargetUser")
                         .WithMany("WarningsReceived")
                         .HasForeignKey("TargetUserId")
@@ -6203,6 +6229,10 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Author");
+
+                    b.Navigation("PointsChangedBy");
+
+                    b.Navigation("ProfileAvatarUpload");
 
                     b.Navigation("TargetUser");
                 });
@@ -6407,9 +6437,9 @@ namespace DM.Infrastructure.Persistence.Migrations
 
                     b.Navigation("TicketsAgainst");
 
-                    b.Navigation("TicketsAnswered");
-
                     b.Navigation("TicketsFiled");
+
+                    b.Navigation("TicketsResolved");
 
                     b.Navigation("Tokens");
 
@@ -6547,7 +6577,7 @@ namespace DM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Moderation.Ticket", b =>
                 {
-                    b.Navigation("Responses");
+                    b.Navigation("TicketComments");
                 });
 
             modelBuilder.Entity("DM.Infrastructure.Persistence.Entities.Personal.Notifications.Notification", b =>

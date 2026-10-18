@@ -128,13 +128,53 @@ describe("BBCode Code Blocks", () => {
       expectRoundTrip(bbcode);
     });
 
-    it("does not process BBCode tags inside code blocks", () => {
-      const bbcode = "[code][b]not bold[/b] [i]not italic[/i][/code]";
-      const html = bbcodeToHtml(bbcode);
-      expect(html).not.toContain("<strong");
-      expect(html).not.toContain("<em");
-      expect(html).toContain("[b]not bold[/b]");
+    // [code] changes the font and nothing else, as on DM2: the markup inside
+    // it works. It used to be an example, which showed the tags as typed.
+    it("draws the markup inside it, as [b] does", () => {
+      const bbcode = "[code][b]bold[/b] [i]italic[/i][/code]";
+      expect(bbcodeToHtml(bbcode)).toBe(
+        '<p><code data-bb-tag="code"><strong data-bb-tag="b">bold</strong> <em data-bb-tag="i">italic</em></code></p>',
+      );
       expectRoundTrip(bbcode);
+    });
+
+    it("stands in the line, and holds a block when one is written in it", () => {
+      expect(bbcodeToHtml("раз [code]два[/code] три")).toBe(
+        '<p>раз <code data-bb-tag="code">два</code> три</p>',
+      );
+      const bbcode = "раз [code][quote]два[/quote][/code] три";
+      expect(bbcodeToHtml(bbcode)).toContain(
+        '<code data-bb-tag="code" data-bb-glue-before="true" data-bb-glue-after="true"><blockquote class="bb-quote" data-bb-tag="quote"><p>два</p></blockquote></code>',
+      );
+      expectRoundTrip(bbcode);
+    });
+
+    // The DM2 way to show tags as typed in a monospace font.
+    it("holds a [noparse] example", () => {
+      const bbcode = "[code][noparse][b]пример[/b][/noparse][/code]";
+      expect(bbcodeToHtml(bbcode)).toBe(
+        '<p><code data-bb-tag="code"><span class="bb-noparse" data-bb-tag="noparse">[b]пример[/b]</span></code></p>',
+      );
+      expectRoundTrip(bbcode);
+    });
+
+    // Left open, it is a tag left open like any other: the [private] after it
+    // is a hidden block, and the save takes it.
+    it("left open, leaves a hidden block after it alone", () => {
+      const bbcode = '[code]пример [private="Вася"]секрет[/private]';
+      expect(bbcodeToHtml(bbcode, { context: "post" })).toContain(
+        'data-bb-tag="private"',
+      );
+      expect(
+        validateBBCode(bbcode, "post").map((issue) => issue.reason),
+      ).toEqual(["unclosed"]);
+    });
+
+    it("reads back from the markup of the server and of other pages", () => {
+      expect(
+        htmlToBbcode('<code class="code"><strong>x</strong> y</code>'),
+      ).toBe("[code][b]x[/b] y[/code]");
+      expect(htmlToBbcode("<pre>a  b</pre>")).toBe("[code]a  b[/code]");
     });
   });
 });
@@ -143,10 +183,10 @@ describe("BBCode Code Blocks", () => {
 // LINKS
 // ============================================================================
 
-describe("BBCode Links (DM3 format)", () => {
-  describe("[link=text]URL[/link] - custom text format", () => {
+describe("BBCode Links", () => {
+  describe('[link text="..."]URL[/link] - its own text', () => {
     it("converts to HTML with custom text displayed", () => {
-      const bbcode = "[link=Click here]https://example.com[/link]";
+      const bbcode = '[link text="Click here"]https://example.com[/link]';
       const html = bbcodeToHtml(bbcode);
       expect(html).toContain('data-bb-tag="link"');
       expect(html).toContain('data-bb-text="Click here"');
@@ -155,9 +195,15 @@ describe("BBCode Links (DM3 format)", () => {
     });
 
     it("survives round-trip", () => {
+      expectRoundTrip('[link text="Click here"]https://example.com[/link]');
+    });
+
+    // [link=text] was a spelling of DM3's own, never of DM2: it is a broken
+    // tag now, shown as typed, and the editor gives it back as typed.
+    it("leaves the old [link=text] as the text it is", () => {
       const bbcode = "[link=Click here]https://example.com[/link]";
-      const html = bbcodeToHtml(bbcode);
-      expect(htmlToBbcode(html)).toBe(bbcode);
+      expect(bbcodeToHtml(bbcode)).toBe(`<p>${bbcode}</p>`);
+      expectRoundTrip(bbcode);
     });
   });
 
@@ -179,7 +225,7 @@ describe("BBCode Links (DM3 format)", () => {
 
   describe("link attributes", () => {
     it('adds target="_blank" and rel="noopener"', () => {
-      const html = bbcodeToHtml("[link=text]https://example.com[/link]");
+      const html = bbcodeToHtml('[link text="text"]https://example.com[/link]');
       expect(html).toContain('target="_blank"');
       expect(html).toContain('rel="noopener"');
     });
@@ -234,6 +280,36 @@ describe("BBCode Lists", () => {
   // text here would move it out of the list in the author's own source the
   // first time they opened the post in visual mode. What the two sides owe is
   // the same thing, and it is what these pin: the text is never lost.
+  // A list that holds anything but items and the space between them is
+  // drawn as a block of what it holds: the visual mode holds items and
+  // nothing else in a list.
+  describe("a list that holds more than items", () => {
+    it.each([
+      [
+        "[ul]раз[/ul]",
+        '<div data-bb-tag="ul" data-bb-loose="true"><p>раз</p></div>',
+      ],
+      ["[ol][/ol]", '<div data-bb-tag="ol" data-bb-loose="true"></div>'],
+    ])("is a block of what it holds: %s", (bbcode, html) => {
+      expect(bbcodeToHtml(bbcode)).toBe(html);
+      expectRoundTrip(bbcode);
+    });
+
+    it("is a list when it holds items and the space between them", () => {
+      expect(bbcodeToHtml("[ul] [li]раз[/li]\n[/ul]")).toBe(
+        '<ul data-bb-tag="ul"> <li data-bb-tag="li"><p>раз</p></li>\n</ul>',
+      );
+    });
+
+    it("reads back from the markup of the visual mode", () => {
+      expect(
+        htmlToBbcode(
+          '<div data-bb-tag="ol" data-bb-loose="true"><p>раз</p><div data-bb-tag="li"><p>два</p></div></div>',
+        ),
+      ).toBe("[ol]раз\n[li]два[/li][/ol]");
+    });
+  });
+
   describe("text between items", () => {
     it("keeps text written between two items", () => {
       const bbcode = "[ul][li]item 1[/li]a word between[li]item 2[/li][/ul]";
@@ -272,7 +348,13 @@ describe("BBCode Special Blocks", () => {
     });
   });
 
-  // NOTE: [spoiler=title] is NOT supported - only simple [spoiler] is available
+  describe('[spoiler text="..."]', () => {
+    it("carries its caption to the button of the visual mode", () => {
+      const html = bbcodeToHtml('[spoiler text="Карта"]secret[/spoiler]');
+      expect(html).toContain('data-bb-text="Карта"');
+      expectRoundTrip('[spoiler text="Карта"]secret[/spoiler]');
+    });
+  });
 
   describe("[nsfw] (DM2 compatible)", () => {
     it("converts to HTML with marker", () => {
@@ -313,46 +395,143 @@ describe("BBCode Special Blocks", () => {
       expectRoundTrip("[quote]quoted text[/quote]");
     });
 
-    // The server has always rendered [quote=Author] with an attribution line.
-    // The converter used to drop the author in both directions, so an author
-    // who opened their own post in the editor and saved it without changing
-    // anything lost the attribution — silently, with no way to notice before
-    // the post was already stored that way.
-    //
-    // It comes back quoted whichever way it went in. That is the form the
-    // server composes a quotation in and the only one that carries a name
-    // whole: unquoted stops at a double quote, so a nickname written the
-    // ordinary way stopped being a tag at all. Both spellings render the same
-    // page, because the server normalises the value before the parser sees it.
-    it("[quote=X] keeps the author through a round-trip", () => {
-      expect(
-        htmlToBbcode(bbcodeToHtml("[quote=Username]quoted text[/quote]")),
-      ).toBe('[quote="Username"]quoted text[/quote]');
+    // A quote sets text apart, as in DM2: the block holds the text and there
+    // is no author line above it.
+    it("converts to a block with nothing but the text in it", () => {
+      expectToHtml(
+        "[quote]text[/quote]",
+        '<blockquote class="bb-quote" data-bb-tag="quote"><p>text</p></blockquote>',
+      );
     });
 
-    it('[quote="X"] survives a round-trip as written', () => {
-      expectRoundTrip('[quote="Username"]quoted text[/quote]');
+    // The tag declares no attribute, so a value on it is read the way a value
+    // on [spoiler] or [b] is (see "a value on a tag without an attribute"):
+    // the opening tag stays text, and the editor hands back what was written.
+    it("[quote=X] gives no author line", () => {
+      expectToHtml("[quote=Имя]text[/quote]", "<p>[quote=Имя]text[/quote]</p>");
+      expectRoundTrip("[quote=Имя]text[/quote]");
     });
 
-    it("a name carrying a double quote survives the round-trip", () => {
-      expectRoundTrip('[quote="Джон "Быстрый" Смит"]quoted text[/quote]');
+    it('[quote="X"] gives no author line either', () => {
+      expectToHtml(
+        '[quote="Имя"]text[/quote]',
+        '<p>[quote="Имя"]text[/quote]</p>',
+      );
+      expectRoundTrip('[quote="Имя"]text[/quote]');
     });
 
-    it("[quote=X] carries the author into the markup", () => {
-      const html = bbcodeToHtml("[quote=Username]quoted text[/quote]");
-      expect(html).toContain('data-bb-author="Username"');
+    it("reads a value on [quote] the way it reads one on [spoiler]", () => {
+      const asQuote = bbcodeToHtml("[quote=Имя]text[/quote]");
+      const asSpoiler = bbcodeToHtml("[spoiler=Имя]text[/spoiler]");
+      expect(asQuote).toBe(asSpoiler.replace(/spoiler/g, "quote"));
+    });
+  });
+
+  // The page draws no empty line for the one line break typed straight after a
+  // block (BBCODE_RENDERING.md, "Перевод строки после блока"), and the preview
+  // draws none either: that break is the edge of the paragraph under the
+  // block, as the break over a block is the edge of the paragraph above it.
+  describe("a line break after a block", () => {
+    it("puts the text on the line under a quote", () => {
+      const bbcode = "перед\n[quote]цитата[/quote]\nпосле";
+      expectToHtml(
+        bbcode,
+        '<p>перед</p><blockquote class="bb-quote" data-bb-tag="quote"><p>цитата</p></blockquote><p>после</p>',
+      );
+      expectRoundTrip(bbcode);
     });
 
-    it('[quote="X"] carries the author into the markup', () => {
-      const html = bbcodeToHtml('[quote="Username"]quoted text[/quote]');
-      expect(html).toContain('data-bb-author="Username"');
+    it("puts the text on the line under a hidden block", () => {
+      const bbcode = 'перед\n[private="Вася"]секрет[/private]\nпосле';
+      expect(bbcodeToHtml(bbcode, { context: "post" })).toBe(
+        '<p>перед</p><p><span class="bb-private" data-bb-tag="private" data-bb-character="Вася">секрет</span></p><p>после</p>',
+      );
+      expectRoundTrip(bbcode);
     });
 
-    it("converts to HTML with proper structure", () => {
-      const html = bbcodeToHtml("[quote]text[/quote]");
-      expect(html).toContain('data-bb-tag="quote"');
-      expect(html).not.toContain("data-bb-author");
+    it("keeps a second line break as the empty line it is", () => {
+      const bbcode = "[quote]цитата[/quote]\n\nпосле";
+      expectToHtml(
+        bbcode,
+        '<blockquote class="bb-quote" data-bb-tag="quote"><p>цитата</p></blockquote><p></p><p>после</p>',
+      );
+      expectRoundTrip(bbcode);
     });
+  });
+});
+
+// ============================================================================
+// A VALUE ON A TAG WITHOUT AN ATTRIBUTE
+// ============================================================================
+
+/**
+ * A tag that declares no parameter takes no value: [code="x"], [b=1] and
+ * [quote="Имя"] are broken tags, shown as typed with their closing tag, and
+ * what they hold is drawn as usual. That holds for [code] and [noparse] too: a
+ * broken one is no statement "show this as typed", so a tag inside it is a tag.
+ * The editor hands every such spelling back as it was typed.
+ */
+describe("a value on a tag without an attribute", () => {
+  const PAIRED = [
+    "b",
+    "i",
+    "u",
+    "strike",
+    "nsfw",
+    "mod",
+    "quote",
+    "ul",
+    "ol",
+    "li",
+    "code",
+    "noparse",
+  ];
+
+  it.each(PAIRED)("in quotes leaves [%s] as text", (tag) => {
+    const written = `[${tag}="Вася"]текст[/${tag}]`;
+    expect(bbcodeToHtml(written)).toBe(`<p>${written}</p>`);
+    expectRoundTrip(written);
+  });
+
+  it.each(PAIRED)("without quotes leaves [%s] as text", (tag) => {
+    const written = `[${tag}=Вася]текст[/${tag}]`;
+    expect(bbcodeToHtml(written)).toBe(`<p>${written}</p>`);
+    expectRoundTrip(written);
+  });
+
+  it("leaves [spoiler] with a value as text: its caption is text=", () => {
+    const written = '[spoiler="Подпись"]текст[/spoiler]';
+    expect(bbcodeToHtml(written)).toBe(`<p>${written}</p>`);
+    expectRoundTrip(written);
+  });
+
+  it("reads [tab], which has no closing tag, the same way", () => {
+    expect(bbcodeToHtml('раз[tab="Вася"]два')).toBe(
+      '<p>раз[tab="Вася"]два</p>',
+    );
+    expect(bbcodeToHtml("раз[tab=Вася]два")).toBe("<p>раз[tab=Вася]два</p>");
+  });
+
+  it("draws what a broken [code] holds, and a broken [noparse] too", () => {
+    const html = bbcodeToHtml('[code="x"][b]текст[/b][/code]');
+    expect(html).toBe(
+      '<p>[code="x"]<strong data-bb-tag="b">текст</strong>[/code]</p>',
+    );
+    expect(bbcodeToHtml("[noparse=x][b]текст[/b][/noparse]")).toContain(
+      '<strong data-bb-tag="b">',
+    );
+    expectRoundTrip('[code="x"][b]текст[/b][/code]');
+  });
+
+  it("leaves a value written inside [code] and [noparse] as written", () => {
+    expectRoundTrip('[noparse][b="Вася"]текст[/b][/noparse]');
+    expectRoundTrip('[code][quote="Вася"]текст[/quote][/code]');
+  });
+
+  it("does not close a tag with a closing tag that carries a value", () => {
+    expect(bbcodeToHtml('[b]текст[/b="x"][/b]')).toBe(
+      '<p><strong data-bb-tag="b">текст[/b="x"]</strong></p>',
+    );
   });
 });
 
@@ -365,7 +544,8 @@ describe("BBCode Tab and Cut", () => {
     it("converts to non-breaking spaces with marker", () => {
       const html = bbcodeToHtml("[tab]");
       expect(html).toContain('data-bb-tag="tab"');
-      expect(html).toContain("\u00A0"); // non-breaking space
+      // Three of them, the width the server draws it with.
+      expect(html).toContain(">&nbsp;&nbsp;&nbsp;</span>");
     });
 
     it("survives round-trip", () => {
@@ -381,24 +561,12 @@ describe("BBCode Tab and Cut", () => {
     });
   });
 
-  describe("[cut] - legacy stripper", () => {
-    // [cut] was an author-driven truncation marker. It has been removed in
-    // favour of the unified <TruncatedContent> height-based truncation.
-    // Existing content is rendered with the marker silently dropped.
-    it("standalone [cut] is silently stripped from rendered HTML", () => {
-      const html = bbcodeToHtml("before[cut]after");
-      expect(html).not.toContain("[cut]");
-      expect(html).not.toContain('data-bb-tag="cut"');
-      expect(html).toContain("before");
-      expect(html).toContain("after");
-    });
-
-    it("multiple [cut] markers are all stripped", () => {
-      const html = bbcodeToHtml("part1[cut]part2[cut]part3");
-      expect(html).not.toContain("[cut]");
-      expect(html).toContain("part1");
-      expect(html).toContain("part2");
-      expect(html).toContain("part3");
+  // [cut] is no tag, on the server or here: it is text, as typed.
+  describe("[cut]", () => {
+    it("stays in the text as typed", () => {
+      expectToHtml("before[cut]after", "<p>before[cut]after</p>");
+      expectRoundTrip("part1[cut]part2[cut]part3");
+      expectRoundTrip("[cut]раз[/cut]");
     });
   });
 });
@@ -474,21 +642,61 @@ describe("BBCode Images", () => {
 // ============================================================================
 
 describe("BBCode Private", () => {
-  describe("[private=character]", () => {
+  describe('[private="names"]', () => {
     it("converts to HTML with character marker", () => {
       const html = bbcodeToHtml(
-        "[private=CharacterName]secret message[/private]",
+        '[private="CharacterName"]secret message[/private]',
       );
       expect(html).toContain('data-bb-tag="private"');
       expect(html).toContain('data-bb-character="CharacterName"');
     });
 
     it("survives round-trip", () => {
-      expectRoundTrip("[private=MyCharacter]for character only[/private]");
+      expectRoundTrip('[private="MyCharacter"]for character only[/private]');
     });
 
-    it("handles character names with spaces", () => {
-      expectRoundTrip("[private=John Smith]message[/private]");
+    it("handles names with spaces, quotes and commas", () => {
+      expectRoundTrip('[private="John Smith"]message[/private]');
+      expectRoundTrip('[private="Вася "Кот" Пупкин, Петя"]message[/private]');
+    });
+  });
+
+  describe("[private] without names", () => {
+    it("is a hidden block addressed to nobody", () => {
+      const html = bbcodeToHtml("[private]secret[/private]");
+      expect(html).toContain('data-bb-tag="private"');
+      expect(html).not.toContain("data-bb-character");
+      expectRoundTrip("[private]secret[/private]");
+    });
+  });
+
+  // A name in capitals is the same name: the block is the one it would be in
+  // small letters, and it comes back as typed.
+  describe("in any case", () => {
+    it("is the block its spelling in small letters is", () => {
+      const html = bbcodeToHtml('[PRIVATE="Вася"]секрет[/Private] хвост', {
+        context: "post",
+      });
+      expect(html).toContain('data-bb-character="Вася"');
+      expect(html).not.toContain("data-bb-unclosed");
+      expect(html.endsWith("</span> хвост</p>")).toBe(true);
+      expectRoundTrip('[PRIVATE="Вася"]секрет[/Private] хвост');
+      expectRoundTrip("[private]секрет[/PRIVATE] хвост");
+    });
+  });
+
+  // A spelling the grammar does not know is still a hidden block, never text:
+  // shown to the whole room it would publish the secret.
+  describe("a broken spelling", () => {
+    it.each([
+      "[private=Вася]секрет[/private]",
+      '[private to="Вася"]секрет[/private]',
+      "текст [private",
+    ])("stays hidden and comes back as typed: %s", (bbcode) => {
+      const html = bbcodeToHtml(bbcode, { context: "post" });
+      expect(html).toContain('data-bb-tag="private"');
+      expect(html).not.toContain("data-bb-character");
+      expectRoundTrip(bbcode);
     });
   });
 });
@@ -513,10 +721,14 @@ describe("BBCode Newlines and Whitespace", () => {
       expect(result).toBe("a\n\nb");
     });
 
-    it("excessive newlines are normalized to 2", () => {
-      // 4 newlines = 3 blank lines, which get normalized to 2 blank lines = 2 newlines
-      const result = htmlToBbcode(bbcodeToHtml("a\n\n\n\nb"));
-      expect(result).toBe("a\n\nb");
+    // Every line the author typed comes back, blank ones included: the
+    // editor has no business shortening a text.
+    it("keeps any number of blank lines", () => {
+      expectRoundTrip("a\n\n\n\nb");
+    });
+
+    it("keeps the spaces a line starts with", () => {
+      expectRoundTrip("раз\n ___\n  два");
     });
   });
 });
@@ -572,6 +784,83 @@ describe("BBCode Nested Tags", () => {
 });
 
 // ============================================================================
+// BLOCKS INSIDE BLOCKS
+// ============================================================================
+
+/**
+ * Every pattern of a block stops at the first closing tag it meets, so a block
+ * holding another one comes back crossed unless each closing tag is paired
+ * with the element it closes. Text after the inner block is what shows it: a
+ * crossed pair moves that text out of the outer block.
+ */
+describe("blocks inside blocks", () => {
+  it.each([
+    "[spoiler][nsfw]раз[/nsfw] два[/spoiler]",
+    "[mod][spoiler]раз[/spoiler] два[/mod]",
+    "[spoiler][quote]раз[/quote] два[/spoiler]",
+    "[quote][spoiler]раз[/spoiler] два[/quote]",
+    "[quote][nsfw][spoiler]раз[/spoiler] два[/nsfw] три[/quote] четыре",
+  ])("come back nested: %s", (bbcode) => {
+    expectRoundTrip(bbcode);
+  });
+
+  // The markup the server renders for the author, where every block is a div.
+  const SERVER_BLOCKS: Array<[tag: string, opening: string]> = [
+    ["spoiler", '<div class="spoiler" data-bb-tag="spoiler">'],
+    ["nsfw", '<div class="nsfw-spoiler" data-bb-tag="nsfw">'],
+    ["mod", '<div class="mod-block" data-bb-tag="mod">'],
+    ["quote", '<div class="quote" data-bb-tag="quote">'],
+  ];
+
+  /** A nest of the blocks above, outermost first, with text after each. */
+  function serverNest(depth: number): { html: string; bbcode: string } {
+    let html = "текст";
+    let bbcode = "текст";
+    for (let level = depth - 1; level >= 0; level--) {
+      const [tag, opening] = SERVER_BLOCKS[level % SERVER_BLOCKS.length];
+      html = `${opening}${html} ${level}</div>`;
+      bbcode = `[${tag}]${bbcode} ${level}[/${tag}]`;
+    }
+    return { html, bbcode };
+  }
+
+  // Innermost first by pattern took one block name per pass and gave up after
+  // sixteen passes, and the order above, each block holding the one after it
+  // in that list, is the order that costs the most of them.
+  it("come back nested at any depth", () => {
+    const { html, bbcode } = serverNest(40);
+    expect(htmlToBbcode(html)).toBe(bbcode);
+  });
+
+  // The visual mode converts the whole text on every keystroke. Converting
+  // innermost first by pattern restarted the scan after each block, so the time
+  // grew with the square of their number. The HTML parser of the test
+  // environment costs a good deal in itself, so rather than a ceiling the check
+  // compares four times the blocks with the blocks: a square makes that
+  // sixteen times dearer, one walk four.
+  it("take one walk over the text however many there are", () => {
+    const { html, bbcode } = serverNest(2);
+    const cost = (count: number): number => {
+      let best = Infinity;
+      for (let run = 0; run < 2; run++) {
+        const started = performance.now();
+        htmlToBbcode(html.repeat(count));
+        best = Math.min(best, performance.now() - started);
+      }
+      return best;
+    };
+
+    cost(250);
+    const few = cost(1000);
+    const many = cost(4000);
+
+    // Blocks side by side come back a line apart.
+    expect(htmlToBbcode(html.repeat(3))).toBe(Array(3).fill(bbcode).join("\n"));
+    expect(many / few).toBeLessThan(8);
+  });
+});
+
+// ============================================================================
 // COMPLEX COMBINATIONS
 // ============================================================================
 
@@ -590,7 +879,7 @@ describe("BBCode Complex Combinations", () => {
 
   it("handles quote with link (DM3 format)", () => {
     expectRoundTrip(
-      "[quote][link=link in quote]https://example.com[/link][/quote]",
+      '[quote][link text="link in quote"]https://example.com[/link][/quote]',
     );
   });
 
@@ -630,10 +919,9 @@ describe("HTML to BBCode - Unmarked Elements", () => {
     expect(htmlToBbcode("<strike>text</strike>")).toBe("[strike]text[/strike]");
   });
 
-  it("converts unmarked links correctly (DM3 format)", () => {
-    // DM3: [link=text]URL[/link]
+  it("converts unmarked links with their own text", () => {
     expect(htmlToBbcode('<a href="https://example.com">text</a>')).toBe(
-      "[link=text]https://example.com[/link]",
+      '[link text="text"]https://example.com[/link]',
     );
   });
 
@@ -674,22 +962,329 @@ describe("validateBBCode", () => {
   });
 
   it("detects unclosed tags", () => {
-    const errors = validateBBCode("[b]text");
-    expect(errors).toContain("Unclosed tag: [b]");
+    expect(validateBBCode("[b]text")).toEqual([
+      {
+        reason: "unclosed",
+        line: 1,
+        text: "[b] не закрыт, добавьте [/b]",
+        message: "Строка 1: [b] не закрыт, добавьте [/b]",
+      },
+    ]);
   });
 
-  it("detects mismatched tags", () => {
-    const errors = validateBBCode("[b][i]text[/b][/i]");
-    expect(errors.some((e) => e.includes("Mismatched"))).toBe(true);
+  // A closing tag closes the nearest open tag of its name, and what was
+  // opened inside it stays unclosed; the closing tag after it closes nothing.
+  it("detects crossed tags", () => {
+    expect(
+      validateBBCode("[b][i]text[/b][/i]").map((issue) => issue.reason),
+    ).toEqual(["unclosed", "stray-closing"]);
   });
 
   it("detects unexpected closing tags", () => {
-    const errors = validateBBCode("text[/b]");
-    expect(errors.some((e) => e.includes("Unexpected"))).toBe(true);
+    expect(validateBBCode("text[/b]")).toEqual([
+      {
+        reason: "stray-closing",
+        line: 1,
+        text: "[/b] ничего не закрывает, уберите его или откройте [b] выше",
+        message:
+          "Строка 1: [/b] ничего не закрывает, уберите его или откройте [b] выше",
+      },
+    ]);
+  });
+
+  it("names the line a finding is on", () => {
+    expect(
+      validateBBCode(
+        "раз\nдва\n[img width=300]https://example.com/a.png[/img]",
+      ),
+    ).toEqual([
+      {
+        reason: "unquoted-value",
+        line: 3,
+        text: 'значение width пишется в прямых кавычках: width="..."',
+        message:
+          'Строка 3: значение width пишется в прямых кавычках: width="..."',
+      },
+    ]);
+  });
+
+  it("names a parameter as it was typed", () => {
+    expect(
+      validateBBCode('[img WIDTH="0"]https://example.com/a.png[/img]')[0].text,
+    ).toBe("значение WIDTH должно быть целым числом от 1 до 9999");
+  });
+
+  it("is silent on what the editor's windows write", () => {
+    for (const written of [
+      '[link text="Главная"]https://example.com/[/link]',
+      '[img width="300" height="200"]https://example.com/a.png[/img]',
+      '[img height="200"]https://example.com/a.png[/img]',
+      '[spoiler text="Карта"]текст[/spoiler]',
+      '[private="Вася, Петя"]текст[/private]',
+      "[private]текст[/private]",
+      "[ul]\n[li]пункт[/li]\n[/ul]",
+      "[code]текст[/code]",
+      "[noparse][b]текст[/b][/noparse]",
+    ]) {
+      expect(validateBBCode(written, "post"), written).toEqual([]);
+    }
+  });
+
+  // An image has no alt: a reader never sees it, and text nobody sees is
+  // where an insult goes unnoticed. The page prints such a tag as typed.
+  it("names an alt on an image, an empty one too", () => {
+    for (const written of [
+      '[img alt="кот"]https://example.com/a.png[/img]',
+      '[img alt=""]https://example.com/a.png[/img]',
+      '[img width="300" alt="кот"]https://example.com/a.png[/img]',
+    ]) {
+      expect(validateBBCode(written, "common"), written).toEqual([
+        {
+          reason: "unknown-param",
+          line: 1,
+          text: "у [img] нет параметра alt, есть только width и height",
+          message:
+            "Строка 1: у [img] нет параметра alt, есть только width и height",
+        },
+      ]);
+    }
+  });
+
+  it("speaks Russian and names the reason", () => {
+    const [issue] = validateBBCode('[code="x"]пример[/code]');
+    expect(issue.reason).toBe("value-after-name");
+    expect(issue.message).toBe(
+      "Строка 1: у [code] нет значения, пишется просто [code]",
+    );
   });
 
   it("handles complex valid nested structures", () => {
     expect(validateBBCode("[quote][b][i]text[/i][/b][/quote]")).toEqual([]);
+  });
+
+  it("has nothing to say about a name in capitals", () => {
+    expect(
+      validateBBCode("[B]текст[/b] [IMG]https://example.com/a.png[/IMG]"),
+    ).toEqual([]);
+  });
+
+  // A tag the surface does not have is text there, as on the page, and the
+  // check cannot know whether the author meant markup.
+  it("has nothing to say about a tag the surface does not have", () => {
+    expect(validateBBCode("[mod]текст", "post")).toEqual([]);
+    expect(validateBBCode("[mod=1]текст[/mod]", "direct")).toEqual([]);
+    expect(
+      validateBBCode("[mod]текст", "common").map((issue) => issue.reason),
+    ).toEqual(["unclosed"]);
+  });
+
+  // [code] only changes the font: left open, it is a tag left open, and the
+  // hidden block after it is a hidden block the save takes.
+  it("names a [code] left open and nothing after it", () => {
+    expect(
+      validateBBCode(
+        '[code][b]x[/b]\n[private="Вася"]секрет[/private]',
+        "post",
+      ),
+    ).toEqual([
+      {
+        reason: "unclosed",
+        line: 1,
+        text: "[code] не закрыт, добавьте [/code]",
+        message: "Строка 1: [code] не закрыт, добавьте [/code]",
+      },
+    ]);
+  });
+
+  // Without its closing tag a [noparse] is no example: the [private] after it
+  // is a hidden block like any other, and the save refuses it, since whoever
+  // wrote it almost always meant an example.
+  it("names a hidden block under a [noparse] left open", () => {
+    expect(
+      validateBBCode(
+        '[noparse][b]x[/b]\n[private="Вася"]секрет[/private]',
+        "post",
+      ),
+    ).toEqual([
+      {
+        reason: "unclosed",
+        line: 1,
+        text: "[noparse] не закрыт, добавьте [/noparse]",
+        message: "Строка 1: [noparse] не закрыт, добавьте [/noparse]",
+      },
+      {
+        reason: "private-spelling",
+        line: 2,
+        text: '[private="Вася"] не станет примером: [noparse] выше не закрыт тегом [/noparse]',
+        message:
+          'Строка 2: [private="Вася"] не станет примером: [noparse] выше не закрыт тегом [/noparse]',
+      },
+    ]);
+  });
+
+  // The save path reads no tag but [private] and [noparse], so it cannot tell
+  // where the block around a [noparse] left open ends, and refuses every
+  // hidden block after that [noparse]. The check names what the save will
+  // refuse.
+  it("names a hidden block after the block a [noparse] was left open in", () => {
+    expect(
+      validateBBCode(
+        "[quote][noparse]x[/quote] [private]секрет[/private]",
+        "post",
+      ).map((issue) => issue.reason),
+    ).toEqual(["unclosed", "private-spelling"]);
+  });
+
+  // A [/private] written as part of an example would end the block early and
+  // show the rest, so the closing tag of a block opened before the [noparse]
+  // is named too; a block opened after it is named once, at its opening.
+  it("names the closing tag of a block the [noparse] was left open in", () => {
+    expect(
+      validateBBCode(
+        '[private="Вася"]секрет [noparse]x\n[/private] хвост',
+        "post",
+      ).map((issue) => [issue.line, issue.text]),
+    ).toEqual([
+      [1, "[noparse] не закрыт, добавьте [/noparse]"],
+      [
+        2,
+        "[/private] не станет примером: [noparse] выше не закрыт тегом [/noparse]",
+      ],
+    ]);
+  });
+
+  it("names a hidden block inside another", () => {
+    expect(
+      validateBBCode(
+        '[private="Вася"]раз\n[private]два[/private][/private]',
+        "post",
+      ),
+    ).toEqual([
+      {
+        reason: "private-nested",
+        line: 2,
+        text: "скрытый текст внутри скрытого не работает, закройте первый тегом [/private]",
+        message:
+          "Строка 2: скрытый текст внутри скрытого не работает, закройте первый тегом [/private]",
+      },
+    ]);
+  });
+
+  it("names a broken spelling of a hidden block as typed", () => {
+    expect(
+      validateBBCode(
+        '[private=Вася]секрет[/private="x"][/private]',
+        "post",
+      ).map((issue) => issue.text),
+    ).toEqual([
+      '[private=Вася] записан неверно, скрытый текст пишется [private="Имя"] или [private]',
+      '[/private="x"] не закрывает скрытый текст, закрывает только [/private]',
+    ]);
+    expect(validateBBCode("текст [private]секрет", "post")[0].text).toBe(
+      "скрытый текст не закрыт, добавьте [/private]",
+    );
+  });
+
+  it("cuts a long spelling at 40 characters", () => {
+    const typed = `[private=${"а".repeat(50)}]`;
+    expect(validateBBCode(`${typed}x[/private]`, "post")[0].text).toBe(
+      `${typed.slice(0, 40)}... записан неверно, скрытый текст пишется [private="Имя"] или [private]`,
+    );
+  });
+
+  // The page prints the tag as typed and the address in its place: the
+  // author is told why before the send, not after.
+  it("names an address the page refuses", () => {
+    expect(
+      validateBBCode("[link]mailto:a@example.com[/link]").map(
+        (issue) => issue.text,
+      ),
+    ).toEqual(["адрес в [link] должен начинаться с http:// или https://"]);
+    expect(
+      validateBBCode("[img]http://192.168.0.1/a.png[/img]").map(
+        (issue) => issue.text,
+      ),
+    ).toEqual([
+      "адрес в [img] указывает на локальную сеть или записан с ошибкой",
+    ]);
+  });
+
+  // Only [/private] ends a hidden block, so a closing tag of an outer tag
+  // written inside one closes nothing; the check says where it has to go.
+  it("names a closing tag that stands inside a hidden block", () => {
+    expect(
+      validateBBCode("[b]раз [private]два[/b] три[/private][/b]", "post").map(
+        (issue) => issue.text,
+      ),
+    ).toEqual([
+      "[/b] не закрывает [b] снаружи скрытого текста, перенесите его за [/private]",
+    ]);
+  });
+
+  // The save path of every surface but the game post refuses a text with a
+  // hidden block in it (PrivateBlockMarkup.DescribeSurfaceRefusal), and the
+  // page erases such a block for every reader. The check used to read every
+  // surface as a game post and said nothing about it.
+  it("names a hidden block on a surface that has none, once", () => {
+    expect(
+      validateBBCode(
+        'раз\n[private="Вася"]секрет[/private] [private]x',
+        "common",
+      ).map((issue) => issue.message),
+    ).toEqual([
+      "Строка 2: скрытый текст работает только в игровых постах, для примера оберните его в [noparse]",
+      "Строка 2: скрытый текст не закрыт, добавьте [/private]",
+    ]);
+  });
+
+  it("names a lone closing tag of a hidden block off its surface too", () => {
+    expect(
+      validateBBCode("текст [/private]", "direct").map((issue) => issue.reason),
+    ).toEqual(["private-outside-game", "stray-closing"]);
+  });
+
+  it("leaves a hidden block alone in a game post and in an example", () => {
+    expect(validateBBCode('[private="Вася"]секрет[/private]', "post")).toEqual(
+      [],
+    );
+    expect(
+      validateBBCode('[noparse][private="Вася"]x[/private][/noparse]', "info"),
+    ).toEqual([]);
+  });
+});
+
+// ============================================================================
+// THE TEXT AS THE SERVER READS IT
+// ============================================================================
+
+// The server removes the control characters but tab, line feed and carriage
+// return before it reads a text, and the removal joins what stood around one:
+// "[nopa" U+0001 "rse]" is an example on the page. The editor used to read the
+// stored text and drew a hidden block the page printed as an example to the
+// whole room.
+describe("the text the editor reads", () => {
+  it("is read without the control characters, as the server reads it", () => {
+    const html = bbcodeToHtml(
+      '[nopa\u0001rse][private="Вася"]пример[/private][/noparse]',
+      { context: "post" },
+    );
+    expect(html).toContain('data-bb-tag="noparse"');
+    expect(html).not.toContain('data-bb-tag="private"');
+    expect(validateBBCode('[private="Вася"]a[/priv\u0001ate] b')).toEqual([]);
+  });
+
+  it("keeps tab and line feed", () => {
+    expect(htmlToBbcode(bbcodeToHtml("раз\tдва\nтри"))).toBe("раз\tдва\nтри");
+  });
+
+  // Built from code points: a file that carries U+FFFD itself fails
+  // SourceEncodingShould, which reads it as the trace of a broken decoder.
+  it("reads a surrogate with no partner as U+FFFD and keeps a pair", () => {
+    const lone = String.fromCharCode(0xd800);
+    const pair = String.fromCodePoint(0x1f600);
+    const html = bbcodeToHtml(`а${lone}б ${pair}`);
+    expect(html).toContain(`а${String.fromCharCode(0xfffd)}б ${pair}`);
+    expect(html).not.toContain(lone);
   });
 });
 
@@ -698,7 +1293,13 @@ describe("validateBBCode", () => {
 // ============================================================================
 
 describe("CONTEXT_TAGS structure", () => {
-  const contexts: BBCodeContext[] = ["common", "post", "info", "message"];
+  const contexts: BBCodeContext[] = [
+    "common",
+    "post",
+    "info",
+    "message",
+    "direct",
+  ];
 
   it("all contexts have basic formatting tags", () => {
     const basicTags = ["b", "i", "u", "strike", "code"];
@@ -728,19 +1329,128 @@ describe("CONTEXT_TAGS structure", () => {
     });
   });
 
-  it("no context exposes the removed [cut] tag", () => {
-    // [cut] was removed in favour of unified height-based truncation
-    // via <TruncatedContent>. It is silently stripped from legacy content
-    // by the parser, and no context should advertise it as available.
-    expect(CONTEXT_TAGS.common).not.toContain("cut");
-    expect(CONTEXT_TAGS.post).not.toContain("cut");
-    expect(CONTEXT_TAGS.message).not.toContain("cut");
-    expect(CONTEXT_TAGS.info).not.toContain("cut");
+  it("no context exposes [cut], which is no tag", () => {
+    contexts.forEach((ctx) => {
+      expect(CONTEXT_TAGS[ctx]).not.toContain("cut");
+    });
+  });
+
+  // Private messages do not render [mod]; the global chat does.
+  it("direct has neither mod nor private", () => {
+    expect(CONTEXT_TAGS.direct).not.toContain("mod");
+    expect(CONTEXT_TAGS.direct).not.toContain("private");
+    expect(bbcodeToHtml("[mod]текст[/mod]", { context: "direct" })).toBe(
+      "<p>[mod]текст[/mod]</p>",
+    );
+    expect(bbcodeToHtml("[mod]текст[/mod]", { context: "message" })).toContain(
+      'data-bb-tag="mod"',
+    );
+  });
+
+  it("draws a tag of no other context as text", () => {
+    expect(
+      bbcodeToHtml('[private="Вася"]секрет[/private]', { context: "common" }),
+    ).toBe('<p>[private="Вася"]секрет[/private]</p>');
   });
 
   it("info does not have mod or private", () => {
     expect(CONTEXT_TAGS.info).not.toContain("mod");
     expect(CONTEXT_TAGS.info).not.toContain("private");
+  });
+});
+
+// ============================================================================
+// THE COST OF READING
+// ============================================================================
+
+/**
+ * The reader is linear in the text, as the server's is (BbParserCostShould):
+ * the visual mode reads the whole text on every switch and the markup check on
+ * every pause in typing. Each form below makes a reader that looks for the end
+ * of a tag by trying again from every position pay with the square of the
+ * length; one that reads each character a bounded number of times pays four
+ * times as much for four times the text.
+ */
+describe("the cost of reading", () => {
+  const FORMS: Array<[string, (n: number) => string]> = [
+    ["a name and spaces", (n) => "[img" + " ".repeat(n) + "x"],
+    ["pairs of parameters", (n) => "[img" + ' a="1"'.repeat(n) + " x"],
+    ["openings in a value", (n) => '[img alt="'.repeat(n) + "x"],
+    ["quotes in a row", (n) => '[spoiler text="' + '"'.repeat(n) + " x"],
+    ["hidden blocks never ended", (n) => '[private="a'.repeat(n)],
+    ["tags never closed", (n) => "[b]".repeat(n)],
+    ["closing tags with nothing open", (n) => "[/b]".repeat(n)],
+    [
+      "a verbatim block never closed",
+      (n) => "[noparse]" + "[private ".repeat(n),
+    ],
+    // Every [noparse] looks ahead for its closing tag, past every "[/" there
+    // is: a reader that looked again from each of them would pay the square.
+    ["examples never closed", (n) => "[b][noparse][/b]".repeat(n)],
+    [
+      "closing tags inside a hidden block",
+      (n) => "[b][private]" + "[/b]".repeat(n),
+    ],
+  ];
+
+  /**
+   * A read of the smaller text this slow is no linear reader, and timing the
+   * larger one would take minutes: the run stops there and the form fails at
+   * once. A linear reader gets through the smaller text two orders of
+   * magnitude under it.
+   */
+  const CEILING_MS = 1_000;
+
+  /**
+   * The shortest time a ratio is taken against. A linear reader gets through
+   * the smaller text in about that, and a run that short is mostly the noise
+   * of whatever else the machine does: timed against itself, one pause of the
+   * collector turned a linear reader into a square one, a different form on
+   * every run. A square reader is far past the floor on the larger text, so
+   * the floor costs the check nothing.
+   */
+  const FLOOR_MS = 5;
+
+  const cost = (read: () => unknown): number => {
+    let best = Infinity;
+    for (let run = 0; run < 5; run++) {
+      const started = performance.now();
+      read();
+      const took = performance.now() - started;
+      best = Math.min(best, took);
+      if (took > CEILING_MS) break;
+    }
+    return best;
+  };
+
+  const ratio = (
+    read: (text: string) => unknown,
+    small: string,
+    large: string,
+  ): number => {
+    const few = cost(() => read(small));
+    if (few > CEILING_MS) return Infinity;
+    return cost(() => read(large)) / Math.max(few, FLOOR_MS);
+  };
+
+  it.each(FORMS)("grows with the text: %s", (_name, form) => {
+    const small = form(10_000);
+    const large = form(40_000);
+    cost(() => bbcodeToHtml(small));
+
+    // Four times the text; a square would make it sixteen times dearer.
+    expect(ratio(bbcodeToHtml, small, large)).toBeLessThan(8);
+    expect(ratio(validateBBCode, small, large)).toBeLessThan(8);
+  });
+
+  // Deeper than the server takes, the text is shown as typed (TreeMaxDepth).
+  it("reads a tree deeper than the server takes as the text it is", () => {
+    const deep = "[b]".repeat(600) + "x" + "[/b]".repeat(600);
+    expect(bbcodeToHtml(deep)).toBe(`<p>${deep}</p>`);
+    expect(validateBBCode(deep).map((issue) => issue.reason)).toEqual([
+      "too-deep",
+    ]);
+    expectRoundTrip(deep);
   });
 });
 
@@ -776,17 +1486,64 @@ describe("Edge Cases", () => {
   });
 
   it("handles tags with numbers in attribute", () => {
-    expectRoundTrip("[private=Character123]text[/private]");
+    expectRoundTrip('[private="Character123"]text[/private]');
   });
 
-  it("handles URLs with special characters (DM3 format)", () => {
-    expectRoundTrip("[link=link]https://example.com/path?a=1&b=2[/link]");
+  it("handles URLs with special characters", () => {
+    expectRoundTrip(
+      '[link text="link"]https://example.com/path?a=1&b=2[/link]',
+    );
   });
 
-  it("handles case insensitive tags", () => {
-    const html = bbcodeToHtml("[B]bold[/B]");
-    expect(html).toContain("<strong");
-    expect(htmlToBbcode(html)).toBe("[b]bold[/b]");
+  // Names compare in any case, as on the server, and the preview keeps the
+  // spelling the author typed so that switching modes does not rewrite it.
+  it("reads a tag written in capitals and gives it back as typed", () => {
+    expect(bbcodeToHtml("[B]bold[/B]")).toBe(
+      '<p><strong data-bb-tag="b" data-bb-open="[B]" data-bb-close="[/B]">bold</strong></p>',
+    );
+    expectRoundTrip("[B]bold[/B]");
+    expect(bbcodeToHtml("[CODE][b]x[/b][/Code]")).toBe(
+      '<p><code data-bb-tag="code" data-bb-open="[CODE]" data-bb-close="[/Code]"><strong data-bb-tag="b">x</strong></code></p>',
+    );
+    expectRoundTrip("[CODE][b]x[/b][/Code]");
+    expectRoundTrip("[Quote]раз [I]два[/i][/QUOTE]");
+    expectRoundTrip('[Spoiler TEXT="Карта"]текст[/SPOILER]');
+    expectRoundTrip("[UL][Li]раз[/LI][/ul]");
+    expectRoundTrip("раз[TAB]два");
+  });
+
+  // Only A-Z fold, and a name is read from A-Z and a-z alone. A letter that a
+  // language's own case folding turns into a Latin one (toLowerCase and /iu
+  // turn the Kelvin sign into k, toUpperCase and /iu the long s into S, and
+  // .NET folds the Kelvin sign as well) ends the name instead, so the server
+  // and the editor cannot read one text two ways.
+  it("folds A-Z and nothing else", () => {
+    expect(bbcodeToHtml("[LINK]https://example.com/[/LINK]")).toContain(
+      'data-bb-tag="link"',
+    );
+    for (const typed of [
+      "[lin\u212A]https://example.com/[/lin\u212A]",
+      "[\u017Ftrike]x[/\u017Ftrike]",
+      "[\u0130]x[/\u0130]",
+    ]) {
+      expect(bbcodeToHtml(typed), typed).toBe(`<p>${typed}</p>`);
+      expect(validateBBCode(typed), typed).toEqual([]);
+    }
+  });
+
+  // The editor writes a name in small letters when it builds the tag anew; a
+  // spelling the author typed is kept only while it still names the tag.
+  it("keeps a typed spelling only while it names the tag", () => {
+    expect(
+      htmlToBbcode(
+        '<p><strong data-bb-tag="b" data-bb-open="[B]" data-bb-close="[/B]">x</strong></p>',
+      ),
+    ).toBe("[B]x[/B]");
+    expect(
+      htmlToBbcode(
+        '<p><strong data-bb-tag="b" data-bb-open="[I]" data-bb-close="[/b\u212A]">x</strong></p>',
+      ),
+    ).toBe("[b]x[/b]");
   });
 });
 
@@ -811,7 +1568,7 @@ describe("Regression Tests", () => {
   });
 
   it("[link] preserves format after round-trip", () => {
-    const original = "[link=text]https://example.com[/link]";
+    const original = '[link text="text"]https://example.com[/link]';
     const html = bbcodeToHtml(original);
     const result = htmlToBbcode(html);
     expect(result).toBe(original);
@@ -819,16 +1576,16 @@ describe("Regression Tests", () => {
   });
 
   // Escaping round-trip tests (prevent entity accumulation)
-  it("[link=Tom's Page] preserves apostrophe after round-trip", () => {
-    const original = "[link=Tom's Page]https://example.com[/link]";
+  it('[link text="Tom\'s Page"] preserves apostrophe after round-trip', () => {
+    const original = '[link text="Tom\'s Page"]https://example.com[/link]';
     const html = bbcodeToHtml(original);
     const result = htmlToBbcode(html);
     expect(result).toBe(original);
     expect(result).not.toContain("&#039;");
   });
 
-  it("[private=O'Brien] preserves apostrophe after round-trip", () => {
-    const original = "[private=O'Brien]secret[/private]";
+  it('[private="O\'Brien"] preserves apostrophe after round-trip', () => {
+    const original = '[private="O\'Brien"]secret[/private]';
     const html = bbcodeToHtml(original);
     const result = htmlToBbcode(html);
     expect(result).toBe(original);
@@ -836,7 +1593,7 @@ describe("Regression Tests", () => {
   });
 
   it("multiple round-trips do not accumulate entities", () => {
-    const original = "[link=Tom's Page]https://example.com[/link]";
+    const original = '[link text="Tom\'s Page"]https://example.com[/link]';
     let current = original;
     // Perform 5 round-trips
     for (let i = 0; i < 5; i++) {
@@ -851,13 +1608,8 @@ describe("Regression Tests", () => {
     expectRoundTrip(original);
   });
 
-  it("[cut] is silently stripped on round-trip", () => {
-    // Legacy marker — see "[cut] - legacy stripper" describe block above.
-    const html = bbcodeToHtml("before[cut]after");
-    const result = htmlToBbcode(html);
-    expect(result).not.toContain("[cut]");
-    expect(result).toContain("before");
-    expect(result).toContain("after");
+  it("[cut] stays in the text through a round trip", () => {
+    expectRoundTrip("before[cut]after");
   });
 });
 
@@ -904,27 +1656,51 @@ describe("XSS Prevention - sanitizeUrl", () => {
     it("allows https: links", () => {
       expect(sanitizeUrl("https://example.com")).toBe("https://example.com");
     });
+  });
 
-    it("allows mailto: links", () => {
-      expect(sanitizeUrl("mailto:user@example.com")).toBe(
-        "mailto:user@example.com",
-      );
+  // The server shows a link at http and https only (BbParserWrapper): an
+  // address it drops must not pass here and vanish after the save.
+  describe("addresses the server drops", () => {
+    it.each([
+      "mailto:user@example.com",
+      "tel:+1234567890",
+      "//example.com/path",
+      "/path/to/page",
+      "path/to/page",
+      "https://exa mple.com/",
+    ])("refuses %s", (url) => {
+      expect(sanitizeUrl(url)).toBe("#");
     });
 
-    it("allows tel: links", () => {
-      expect(sanitizeUrl("tel:+1234567890")).toBe("tel:+1234567890");
+    // The reader's browser requests the address, so a post must not point it
+    // at the reader's own machine or network.
+    it.each([
+      "http://localhost/",
+      "http://a.localhost/",
+      "http://127.0.0.1/",
+      "http://127.1/",
+      "http://2130706433/",
+      "http://10.0.0.1/",
+      "http://100.64.0.1/",
+      "http://169.254.169.254/latest",
+      "http://172.16.0.1/",
+      "http://192.168.0.1/",
+      "http://0.0.0.0/",
+      "http://[::1]/",
+      "http://[::ffff:127.0.0.1]/",
+      "http://[fe80::1]/",
+      "http://[fd00::1]/",
+    ])("refuses the reader's own network: %s", (url) => {
+      expect(sanitizeUrl(url)).toBe("#");
     });
 
-    it("allows protocol-relative URLs", () => {
-      expect(sanitizeUrl("//example.com/path")).toBe("//example.com/path");
-    });
-
-    it("allows relative URLs", () => {
-      expect(sanitizeUrl("/path/to/page")).toBe("/path/to/page");
-    });
-
-    it("allows relative URLs without leading slash", () => {
-      expect(sanitizeUrl("path/to/page")).toBe("path/to/page");
+    it.each([
+      "http://8.8.8.8/",
+      "http://172.32.0.1/",
+      "http://[2001:db8::1]/",
+      "https://example.com/",
+    ])("lets a public address through: %s", (url) => {
+      expect(sanitizeUrl(url)).toBe(url);
     });
   });
 
@@ -1003,39 +1779,67 @@ describe("XSS Prevention - sanitizeImageUrl", () => {
   });
 });
 
+/**
+ * An address the server refuses draws no image and no link: the tag is printed
+ * as typed, its address in place, as the reader gets it. The author sees what
+ * did not work, and the text comes back unchanged.
+ */
 describe("XSS Prevention - bbcodeToHtml", () => {
-  describe("[link] XSS prevention (DM3 format)", () => {
-    it("sanitizes javascript: in link URL (content)", () => {
-      // DM3 format: [link=text]URL[/link] - URL is the content
-      const html = bbcodeToHtml("[link=click me]javascript:alert(1)[/link]");
-      expect(html).toContain('href="#"');
-      expect(html).not.toContain("javascript:");
+  /** Every element of the preview, and every address one of them carries. */
+  const drawn = (bbcode: string) => {
+    const template = document.createElement("template");
+    template.innerHTML = bbcodeToHtml(bbcode);
+    const elements = [...template.content.querySelectorAll("*")];
+    return {
+      tags: elements.map((element) => element.tagName),
+      addresses: elements.flatMap((element) =>
+        ["href", "src"].flatMap((name) => element.getAttribute(name) ?? []),
+      ),
+      text: template.content.textContent,
+    };
+  };
+
+  describe("[link] XSS prevention", () => {
+    it("draws no link for javascript: and prints the tag as typed", () => {
+      const bbcode = '[link text="click me"]javascript:alert(1)[/link]';
+      const { tags, addresses, text } = drawn(bbcode);
+      expect(tags).not.toContain("A");
+      expect(addresses).toEqual([]);
+      expect(text).toBe(bbcode);
+      expectRoundTrip(bbcode);
     });
 
-    it("sanitizes javascript: in self-ref link", () => {
-      const html = bbcodeToHtml("[link]javascript:alert(1)[/link]");
-      expect(html).toContain('href="#"');
+    it("prints a link without text as typed for javascript:", () => {
+      const bbcode = "[link]javascript:alert(1)[/link]";
+      const { tags, addresses, text } = drawn(bbcode);
+      expect(tags).not.toContain("A");
+      expect(addresses).toEqual([]);
+      expect(text).toBe(bbcode);
+      expectRoundTrip(bbcode);
     });
 
     it("preserves safe links", () => {
-      const html = bbcodeToHtml("[link=safe]https://example.com[/link]");
+      const html = bbcodeToHtml('[link text="safe"]https://example.com[/link]');
       expect(html).toContain('href="https://example.com"');
     });
   });
 
   describe("[img]URL[/img] XSS prevention (DM2 format)", () => {
-    it("sanitizes javascript: in img src", () => {
-      const html = bbcodeToHtml("[img]javascript:alert(1)[/img]");
-      expect(html).toContain('src="#"');
-      expect(html).not.toContain("javascript:");
+    it("draws no image for javascript: and prints the tag as typed", () => {
+      const bbcode = "[img]javascript:alert(1)[/img]";
+      const { tags, addresses, text } = drawn(bbcode);
+      expect(tags).not.toContain("IMG");
+      expect(addresses).toEqual([]);
+      expect(text).toBe(bbcode);
+      expectRoundTrip(bbcode);
     });
 
-    it("sanitizes data: in img src", () => {
-      const html = bbcodeToHtml(
+    it("draws no image for data:", () => {
+      const { tags, addresses } = drawn(
         '[img]data:image/svg+xml,<svg onload="alert(1)"/>[/img]',
       );
-      expect(html).toContain('src="#"');
-      expect(html).not.toContain("data:");
+      expect(tags).not.toContain("IMG");
+      expect(addresses).toEqual([]);
     });
 
     it("preserves safe image URLs", () => {
@@ -1061,9 +1865,9 @@ describe("XSS Prevention - htmlToBbcode", () => {
       expect(result).not.toContain("[link");
     });
 
-    it("preserves safe links from external HTML (DM3 format)", () => {
+    it("preserves safe links from external HTML with their text", () => {
       const result = htmlToBbcode('<a href="https://safe.com">safe link</a>');
-      expect(result).toBe("[link=safe link]https://safe.com[/link]");
+      expect(result).toBe('[link text="safe link"]https://safe.com[/link]');
     });
   });
 
@@ -1126,24 +1930,25 @@ describe("XSS Prevention - htmlToBbcode", () => {
 });
 
 describe("XSS Prevention - Round Trip Safety", () => {
-  it("dangerous links do not survive round-trip", () => {
-    // DM3 format: [link=text]URL[/link]
-    const malicious = "[link=click]javascript:alert(1)[/link]";
+  // The author's text comes back as it was: the server refuses the address
+  // again when it renders the post, and nothing in between ever made it an
+  // element with that address.
+  it("dangerous links come back as the text the author typed", () => {
+    const malicious = '[link text="click"]javascript:alert(1)[/link]';
     const html = bbcodeToHtml(malicious);
-    const result = htmlToBbcode(html);
-    expect(result).not.toContain("javascript:");
-    expect(result).toBe("click"); // Link stripped, text preserved
+    expect(html).not.toMatch(/href="javascript/);
+    expect(htmlToBbcode(html)).toBe(malicious);
   });
 
-  it("dangerous images do not survive round-trip", () => {
+  it("dangerous images come back as the text the author typed", () => {
     const malicious = "[img]javascript:alert(1)[/img]";
     const html = bbcodeToHtml(malicious);
-    // Dangerous image should have # as src, and should be stripped on conversion back
-    expect(html).toContain('src="#"');
+    expect(html).not.toMatch(/src="javascript/);
+    expect(htmlToBbcode(html)).toBe(malicious);
   });
 
   it("safe URLs survive round-trip", () => {
-    const safe = "[link=safe link]https://example.com[/link]";
+    const safe = '[link text="safe link"]https://example.com[/link]';
     const html = bbcodeToHtml(safe);
     const result = htmlToBbcode(html);
     expect(result).toBe(safe);
@@ -1336,7 +2141,7 @@ describe("cleanPastedHtml", () => {
       expect(bbcode).not.toContain("Arial");
     });
 
-    it("Google Docs HTML converts cleanly (DM3 format)", () => {
+    it("Google Docs HTML converts cleanly", () => {
       const gdocsHtml = `
         <span style="font-size:11pt;font-family:Arial;">
           <strong>Bold</strong> text with <a href="https://example.com">a link</a>
@@ -1345,8 +2150,9 @@ describe("cleanPastedHtml", () => {
       const cleaned = cleanPastedHtml(gdocsHtml);
       const bbcode = htmlToBbcode(cleaned);
       expect(bbcode).toContain("[b]Bold[/b]");
-      // DM3 format: [link=text]URL[/link]
-      expect(bbcode).toContain("[link=a link]https://example.com[/link]");
+      expect(bbcode).toContain(
+        '[link text="a link"]https://example.com[/link]',
+      );
       expect(bbcode).not.toContain("font-size");
     });
   });
@@ -1384,8 +2190,8 @@ describe("the private block the server renders", () => {
     '<div class="private-message" data-bb-tag="private" data-bb-addressees="Гэндальф">тайна</div>';
 
   it("survives being loaded into the editor and saved", () => {
-    expect(htmlToBbcode(AUTHOR_EDIT_HTML)).toContain(
-      "[private=Гэндальф]тайна[/private]",
+    expect(htmlToBbcode(AUTHOR_EDIT_HTML)).toBe(
+      '[private="Гэндальф"]тайна[/private]',
     );
   });
 
@@ -1393,13 +2199,27 @@ describe("the private block the server renders", () => {
     const html =
       '<div class="private-message" data-bb-addressees="Гэндальф">тайна</div>';
 
-    expect(htmlToBbcode(html)).toContain("[private=Гэндальф]тайна[/private]");
+    expect(htmlToBbcode(html)).toBe('[private="Гэндальф"]тайна[/private]');
   });
 
   it("still recognises the span the editor itself emits", () => {
     const html =
       '<span class="bb-private" data-bb-tag="private" data-bb-character="Гэндальф">тайна</span>';
 
-    expect(htmlToBbcode(html)).toContain("[private=Гэндальф]тайна[/private]");
+    expect(htmlToBbcode(html)).toBe('[private="Гэндальф"]тайна[/private]');
+  });
+
+  // Empty addressees are the bare block, which the game leads alone read.
+  it("reads empty addressees as the bare block", () => {
+    const html =
+      '<div class="private-message" data-bb-tag="private" data-bb-addressees="">тайна</div>';
+    expect(htmlToBbcode(html)).toBe("[private]тайна[/private]");
+  });
+
+  // Addressees that cannot be written drop, never the block around them.
+  it("keeps the block when the addressees cannot be written", () => {
+    const html =
+      '<div class="private-message" data-bb-tag="private" data-bb-addressees="Ва[ся">тайна</div>';
+    expect(htmlToBbcode(html)).toBe("[private]тайна[/private]");
   });
 });

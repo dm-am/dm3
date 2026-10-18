@@ -4,6 +4,27 @@
 
 $input-padding: ($minor + 1px) $small
 
+/// The side of a checkbox. Named, because the check lines of the guest surface
+/// hang their indent on it and must not measure the box by eye.
+$checkbox-size: 16px
+
+/// How hard the disabled hatch is drawn, as a share of the ink it is drawn in.
+///
+/// Separate from $disabled-opacity, which dims the control as a whole. The two
+/// multiply, because a disabled control is a group at $disabled-opacity and the
+/// hatch is a layer inside it, so a stroke reaches the page at 0.5 x this. The
+/// read-only plate of the guest surface carries no dimming of its own and
+/// writes the same product out for itself.
+///
+/// It was $disabled-opacity again, which put every stroke on the page at 0.25
+/// of the ink. Measured headless against the fill each one lies on: 1.57 to
+/// 2.01 by WCAG 1.4.3, in both themes, on the plate, on the checkbox and on the
+/// filled button alike. No place is darker than the others; all of them are
+/// heavier than a hatch has to be. At 0.35 the same three measure 1.36 to 1.62,
+/// a third of the weight off, and the shape still reads without a control
+/// beside it to compare against, which is the whole reason it is a shape.
+$disabled-hatch-opacity: 0.35
+
 /// Base input styles without font settings (for custom inputs)
 @mixin input-base()
   padding: $input-padding
@@ -12,56 +33,176 @@ $input-padding: ($minor + 1px) $small
   border: 1px solid $border
   border-radius: $border-radius
 
-@mixin input()
-  margin: 0
-  +input-base()
-  outline: none
-  font-family: "PT Sans", sans-serif
-  font-size: $font-size
-
-  // A tint of the border is not a focus indicator. Measured, $border-focus
-  // against $border is 1.77 in the light theme and 2.10 in the dark one, and
-  // against the field's own fill 2.61 — WCAG 1.4.11 asks 3.0 of anything that
-  // marks the state of a control. On a form of five fields a keyboard user
-  // could not tell which one held the caret until they typed into it.
+  // Focus is the frame turned $link with a 1px shadow of $link flush against
+  // it: 2px following the field's own rounded edge, which is the site's one
+  // ring (Reset.sass) in the shape a field wears it. A tint of the border was
+  // not an indicator — $border-focus against $border measured 1.77 in the
+  // light theme and 2.10 in the dark one, under the 3.0 WCAG 1.4.11 asks of
+  // anything that marks the state of a control — and a ring standing outside
+  // the box was a rectangle drawn around the field. $link clears 3.0 on all
+  // three surfaces a field sits on, in both themes; fillContrast.spec.ts
+  // measures that rather than trusting this note.
   //
-  // So the field takes the ring this file already draws elsewhere
-  // (+expand-toggle-button, +muted-link): 2px of $link, one step outside the
-  // box. $link clears 3.0 on all three surfaces a field sits on, in both
-  // themes — fillContrast.spec.ts measures that rather than trusting this note.
-  // Mouse focus stays ring-free, exactly as it does on buttons.
+  // On :focus and not :focus-visible: a field is where the reader types, and
+  // the mouse needs the mark as much as the keyboard. The outline is dropped
+  // only because this pair replaces it, and dropped under :focus-visible
+  // because that is the one state in which the user agent draws its own ring
+  // and would double the frame.
   &:focus
-    outline: none
-    border-style: solid
-    border-color: $border-focus
+    border-color: $link
+    box-shadow: 0 0 0 1px $link
 
   &:focus-visible
-    outline: 2px solid $link
-    outline-offset: 1px
+    outline: none
 
+  // Chrome paints autofilled fields with its own opaque background that
+  // ignores the theme - a white box in the dark theme. The background cannot
+  // be overridden, but it can be covered from the inside by a spread shadow
+  // of the field color; the text color needs its own escape hatch too.
+  &:-webkit-autofill,
+  &:-webkit-autofill:hover,
+  &:-webkit-autofill:focus
+    -webkit-box-shadow: 0 0 0 1000px $input-bg-autofill inset
+    -webkit-text-fill-color: $text
+    caret-color: $text
+
+  // -webkit-box-shadow is box-shadow under an older name, and the selector
+  // above outranks the :focus rule, so a focused autofilled field would keep
+  // the cover and lose the ring. Listed together, both hold.
+  &:-webkit-autofill:focus
+    -webkit-box-shadow: 0 0 0 1000px $input-bg-autofill inset, 0 0 0 1px $link
+
+/// The types of <input> that are not a line of typed text: boxes the reader
+/// ticks, a slider, and the file picker the site always hides under a button.
+/// They keep the geometry of their own recipes.
+$not-a-line: '[type="checkbox"], [type="radio"], [type="range"], [type="file"]'
+
+/// A field on a page. A field of one line is drawn after the search of the
+/// filter bar (owner's standard, 28 September 2026): $control-height high by
+/// declaration, the height every button of a page has, its text in the 14 of
+/// $control-font-size and $field-inset in from the frame. The height used to
+/// come out of the padding and the font's line box: beside a button of the
+/// token the two differed, and a change of font would have moved one and not
+/// the other.
+///
+/// A text area is not a line: it keeps the padding and the body's 16, and
+/// grows with its rows — a post, a note, the text of a tooltip. A window
+/// restates the line at its own 52 and 15 (FormField, the guest surface).
+///
+/// :where() keeps the exception out of the specificity, so a component that
+/// styles its own field outranks this rule exactly as it outranked the plain
+/// one before it.
+@mixin input()
+  margin: 0
+  font-family: "PT Sans", "PT Sans Fallback", sans-serif
+  font-size: $font-size
+  +input-base()
+
+  &:where(:not(textarea, #{$not-a-line}))
+    box-sizing: border-box
+    height: $control-height
+    padding: 0 $field-inset
+    font-size: $control-font-size
+
+  // Out of reach the way every control of the site is: half the opacity and
+  // the pointer of plain text. A field keeps its own fill under it, as a
+  // button does; the grey fill it used to take instead was the one disabled
+  // state on the site that dimmed nothing. No hatch: a field is a replaced
+  // element, and the layer the hatch is drawn in does not render on one.
   &:disabled
-    background-color: $input-bg-disabled
+    opacity: $disabled-opacity
+    cursor: default
+
+/// The caption over a field of a page: 14, bold, in the ink of the text
+/// (owner's standard, 28 September 2026). FormField draws it, and a form that
+/// captions a field by hand takes it from here, so no caption of a page is
+/// regular, grey or of another size beside one that is not. A window has its
+/// own, 15 and bold (FormField with _DialogSurface.sass, the guest surface).
+/// The weight is the face's bold and nothing between (see LINKS below).
+@mixin field-caption()
+  color: $text
+  font-size: $secondary-font-size
+  font-weight: 700
 
 // =============================================================================
 // BUTTON SYSTEM — single source of truth for all buttons on the site.
 //
-// Three-tier architecture:
-//   +_button-layout  — shared dimensions/font (internal, no colors, no nesting)
-//   +button          — solid variant (grayscale, default)
-//   +button-link     — link-styled variant (transparent, blue text)
+// Two buttons and no third (owner's standard, 27 September 2026):
+//   +button          — the secondary: grey scale over the surface, every
+//                      button that is not the main action of a form
+//   +button-primary  — the main action of a form, exactly one per form on a
+//                      page and in a window: a fill of $link. A modifier on
+//                      top of +button (shared/ui/Button, variant="primary"),
+//                      or on top of a geometry of its own (the guest card)
 //
-// Colour modifiers sit on top of a variant, they never replace it:
-//   +button-danger   — destructive fill, applied to the modifier class
+// Internal and link-shaped pieces:
+//   +_button-layout  — shared dimensions/font (internal, no colors, no nesting)
+//   +button-link     — a block control that reads as a link ("Сбросить")
+//
+// There is no coloured button. The red fill and the outlined pill in a
+// colour, which a row of a list or a danger zone used to wear, are gone: the
+// danger of an action is spelled out by the confirmation it opens, and a
+// colour on a page belongs to the main action alone. styleSystem.spec.ts
+// keeps both from coming back.
 //
 // A state sits on top of any variant and carries no colour of its own:
-//   +button-busy     — the visible half of a loading prop
+//   +disabled-hatch  — out of reach, and shared with the checkbox and radio
 //
 // IMPORTANT: call +button / +button-link AFTER all other declarations in the
 // selector to avoid Sass mixed-decls deprecation warning.
 // =============================================================================
 
+/// Disabled — the one way the whole site says a control is out of reach, in
+/// two layers: the control at half opacity, and a diagonal hatch over it in
+/// the control's own ink at half again.
+///
+/// Opacity alone used to be the whole state, and half of a grey button and a
+/// whole grey button are the same picture to a reader who has not got the
+/// other one beside it to compare. The hatch is a SHAPE — on screen or not —
+/// so it reads without a reference, without colour vision, and through a
+/// theme. The pattern is not new: the consent checkboxes of the registration
+/// form have worn it since they were written, in a private copy that this
+/// mixin replaces.
+///
+/// The control keeps its own fill. A disabled primary stays pale blue and does
+/// not go grey, so a footer with two buttons still says which of them submits.
+///
+/// The caption on a hatched control measures 2.6, under the 4.5 of WCAG 1.4.3,
+/// and that is on purpose: 1.4.3 exempts a disabled control, and a control
+/// that is not on offer should not read as one.
+///
+/// The hatch is a mask over currentColor rather than a painted pattern, so it
+/// follows the ink of whichever variant took the mixin. `inset: 0` resolves
+/// against the padding box, so the frame stays clean; the radius is inherited,
+/// or the square corners of the layer would show two stripes outside the
+/// rounded ones of the button; and the layer is out of flow and takes no
+/// pointer events, so nothing about the control moves or changes what it
+/// answers to.
+///
+/// `$state` is the selector suffix that means "out of reach". It is :disabled
+/// for a control that is one; a wrapper that draws the box of a control it
+/// cannot put a layer into (a native <select> renders no pseudo-element) says
+/// it with a class instead, as Select does.
+@mixin disabled-hatch($state: ":disabled")
+  &#{$state}
+    position: relative
+    opacity: $disabled-opacity
+    cursor: default
+
+    &::before
+      content: ""
+      position: absolute
+      inset: 0
+      pointer-events: none
+      border-radius: inherit
+      background-color: currentColor
+      opacity: $disabled-hatch-opacity
+      mask-image: url("data:image/svg+xml,%3Csvg width='6' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 6L6 0M-1 1L1 -1M5 7L7 5' stroke='white' stroke-width='1'/%3E%3C/svg%3E")
+
 /// Internal layout base — pure declarations, no nested rules.
-/// Shared by +button and +button-link.
+/// Shared by +button and +button-link. The geometry of "Фильтры" and the sort
+/// of the filter bar, which every button of a page takes: $control-height,
+/// $button-padding, the 14 of $control-font-size, the site's radius.
 @mixin _button-layout()
   display: inline-flex
   align-items: center
@@ -69,7 +210,7 @@ $input-padding: ($minor + 1px) $small
   height: $control-height
   box-sizing: border-box
   padding: $button-padding
-  font-size: $secondary-font-size
+  font-size: $control-font-size
   font-family: inherit
   line-height: 1
   white-space: nowrap
@@ -77,35 +218,116 @@ $input-padding: ($minor + 1px) $small
   border-radius: $button-border-radius
 
 /// Solid button — default variant.
-/// Every state is a translucent overlay, never an absolute color, so the
-/// button reads correctly on ANY background (page, cards, modal footers):
-/// rest = $control-bg-overlay over the parent (calibrated to render exactly
-/// like the old solid $bg-element when sitting on $bg-page), hover/active
-/// stack $hover-overlay on top of that.
-/// Hover and active (e.g. dropdown open) share the SAME visual emphasis —
-/// $hover-overlay — so an open-menu button doesn't gain a stronger third
-/// shade that would compete with selection indicators elsewhere on the page.
+///
+/// The frame is constant and the FILL carries the state. That is the model the
+/// site's checkbox already uses (+checkbox below), and it is what the button
+/// did not do: a border that changed with the state left the control's outline
+/// wandering, while three fills a few points apart left the states themselves
+/// barely told apart.
+///
+/// Every value is a translucent overlay of one step of the palette — black in
+/// the light theme, white in the dark one — and never an absolute colour, so
+/// the button reads correctly on ANY sanctioned background (page, cards, modal
+/// footers). The scale and the arithmetic behind the four numbers are in
+/// ThemeVariables.css; fillContrast.spec.ts measures them rather than trusting
+/// this note.
+///
+/// `.active` (a dropdown standing open) takes the HOVER step and not the press
+/// one: an open menu is not a held pointer, and a third, stronger shade there
+/// would compete with the selection indicators elsewhere on the page.
+///
+/// All three steps are painted in the IMAGE layer over a transparent
+/// background-color, which is the layer the site's hover overlays already use.
+/// That leaves background-color to the variant: the $link of the primary sits
+/// under the scale instead of being replaced by it, so a modifier keeps its
+/// colour in every state and does not have to restate it three times. Written
+/// the other way round — the scale in background-color — a plain :hover
+/// outranks a modifier class, and the filled button turned grey under the
+/// pointer.
+///
+/// Focus is the site's one ring, restated so the variant carries its whole
+/// look and does not half-depend on the global rule in Reset.sass, which
+/// dresses anything that is not a <button> as inline text: 2px of $link flush
+/// with the edge, following the button's corners. WCAG 2.4.13 asks 2px and 3:1
+/// against everything the indicator touches, and the grey of $border-focus
+/// missed it on the light page (2.85); $link measures 7.6 in the light theme
+/// and 4.3 in the dark one on all eight surfaces a button stands on. The
+/// primary is the one exception, and +button-primary says so itself.
 @mixin button()
   +_button-layout
-  background-color: $control-bg-overlay
-  background-image: linear-gradient(transparent, transparent)
+  background-color: transparent
+  background-image: linear-gradient($control-fill-overlay, $control-fill-overlay)
   color: $text
-  border: 1px solid $border
+  border: 1px solid $control-border-overlay
   transition: background-image $transition-normal
 
-  &:hover:not(:disabled),
   &.active,
-  &:active:not(:disabled)
-    background-image: linear-gradient($hover-overlay, $hover-overlay)
+  &:hover:not(:disabled)
+    background-image: linear-gradient($control-fill-hover-overlay, $control-fill-hover-overlay)
 
-  // Keep mouse focus outline-free; keyboard focus shows the global
-  // :focus-visible outline from Reset.sass
+  &:active:not(:disabled)
+    background-image: linear-gradient($control-fill-press-overlay, $control-fill-press-overlay)
+
+  // Keep mouse focus outline-free; the keyboard ring is the rule below.
   &:focus:not(:focus-visible)
     outline: none
 
-  &:disabled
-    opacity: $disabled-opacity
-    cursor: default
+  &:focus-visible
+    outline: 2px solid $link
+    outline-offset: 0
+
+  +disabled-hatch
+
+/// The main action of a form — the one filled control of the system, and the
+/// only fill of $link a page carries (fillContrast.spec.ts). Every form has
+/// exactly one, on a page and in a window: create, save, send, add, invite,
+/// find, the post, the comment, the chat message. "Отмена", "Превью", the
+/// filters and every action of a row are not it.
+///
+/// A modifier and not a variant: it lays the colours over a geometry that is
+/// already there — the page button of +button (shared/ui/Button with
+/// variant="primary", which applies it to `&.primary`) or the full-width
+/// control of the guest card (AuthSurface.sass). It was written twice, once in
+/// each of those, and the two copies were one hover away from drifting.
+///
+/// The relative step it used to take was a shade of the same grey every other
+/// button wears: beside an "Отмена" on a form footer the two were one control
+/// drawn twice. So the main action takes a fill of its own, $link, and the
+/// weight. The ink is written out although +button sets one: a fill with no
+/// ink of its own is a pair nobody measured.
+///
+/// The border is TRANSPARENT and not the colour of the fill: a transparent one
+/// shows the fill painted under it and follows it through every state for
+/// free, while one written as a colour leaves the old, darker line standing
+/// round the lightened hover. It cannot go: the 1px keeps this button the size
+/// of the "Отмена" beside it. The caller owns its width and style; this names
+/// the colour only.
+///
+/// background-image: none cancels the scale +button paints in that layer, and
+/// hover and press then LIGHTEN the fill with white instead of stepping the
+/// grey scale down: over $link a darkening step takes the caption to 4.44 in
+/// the dark theme, under the 4.5 of WCAG 1.4.3. The two alphas differ by theme
+/// because $link does; both are declared in ThemeVariables.css.
+///
+/// The ring steps a single pixel out: it is $link on a fill of $link, and
+/// flush with the edge it would vanish into the button. The least gap that
+/// shows the page between the two, and the only place the ring leaves a
+/// control.
+@mixin button-primary()
+  background-color: $link
+  background-image: none
+  border-color: transparent
+  color: $text-on-fill
+  font-weight: 700
+
+  &:hover:not(:disabled)
+    background-image: linear-gradient($primary-hover-overlay, $primary-hover-overlay)
+
+  &:active:not(:disabled)
+    background-image: linear-gradient($primary-press-overlay, $primary-press-overlay)
+
+  &:focus-visible
+    outline-offset: 1px
 
 /// Link-styled button — secondary variant.
 /// Transparent background, $link text color, underline on hover.
@@ -126,98 +348,21 @@ $input-padding: ($minor + 1px) $small
   &:active:not(:disabled)
     background-color: transparent
 
-  // Keep mouse focus outline-free; keyboard focus shows the global
-  // :focus-visible outline from Reset.sass
+  // Keep mouse focus outline-free. The keyboard ring is the block one of
+  // +button, written out for the same reason it is there: the variant carries
+  // its whole look, and the global rule would dress a link wearing this mixin
+  // as inline text.
   &:focus:not(:focus-visible)
     outline: none
 
-  &:disabled
-    opacity: $disabled-opacity
-    cursor: default
+  &:focus-visible
+    outline: 2px solid $link
+    outline-offset: 0
 
-/// Destructive fill for a +button — apply to the modifier class (&.danger),
-/// which outranks the +button declarations by specificity. It carries the
-/// colour pair only, so the control keeps the shared layout and hover.
-/// The ink is $text-on-fill and not the inherited $text: on the solid
-/// $accent-red, $text measures 1.89 in the light theme and 1.84 in the dark
-/// one, which is the word "Удалить" made unreadable on the button that
-/// deletes. Hover stays the +button overlay, so the measured pair holds in
-/// every state.
-@mixin button-danger()
-  background-color: $accent-red
-  border-color: $accent-red
-  color: $text-on-fill
-
-/// Busy — the visible half of a `loading` prop, on top of any variant.
-///
-/// Until this mixin the prop drew nothing a plain `disabled` attribute does not
-/// draw already, so fifteen pages wrote the state into the caption instead:
-/// "Сохранить" became "Сохранение..." in eleven of them and "Сохраняем..." in
-/// one, and the rest read "Создание...", "Отмечаю...", "Отправка...",
-/// "Выдаем...", "Загрузка...". A caption says what a control does, not what it
-/// is doing; swapped mid-request it re-measures the control, and the "Отмена"
-/// standing beside it moves while the reader is aiming at it.
-///
-/// The state is a bar along the bottom edge in the control's own ink: a shape
-/// that is either on screen or not, so a reader who cannot tell two shades
-/// apart still sees it. It is keyed off aria-busy and not off a class of its
-/// own, because two switches drift and the screen would then disagree with the
-/// screen reader.
-///
-/// The segment travels inside the bar's own box (background-position, not a
-/// transform), so nothing ever leaves the control and no overflow clip is
-/// needed; the ends are inset by the corner radius, so the square ends never
-/// cross the rounded border. Neither state takes width, so the control and
-/// everything standing beside it hold their places when the state turns on.
-///
-/// The travel frames live in Reset.sass, which is emitted once, and the note
-/// there says why. Nothing here is declared outside a nested rule, so a caller
-/// may include this in any order.
-@mixin button-busy()
-  &
-    position: relative
-
-  &[aria-busy="true"]::after
-    content: ""
-    position: absolute
-    left: $button-border-radius
-    right: $button-border-radius
-    bottom: 0
-    height: $minor
-    background-image: linear-gradient(currentColor, currentColor)
-    background-repeat: no-repeat
-    background-size: 40% 100%
-    background-position: 0 0
-    animation: button-busy $loading-tempo ease-in-out infinite alternate
-
-/// Outlined pill — the fifth variant of the system, and the one that lived as
-/// four copies outside it (mark-all, unsubscribe, notepad edit/delete). Layout
-/// and height are a +button's, so it lines up with every other control; the
-/// body is transparent and the colour is one accent, carried by the border and
-/// the letters.
-///
-/// Hover is a TINT of that accent and never the solid fill: on the solid
-/// $accent-green the dark theme's $text-on-green is the very same hex, and on
-/// the solid $accent-red $text-on-red measures 1.5 — the four copies each
-/// carried a note saying so, each in its own words.
-@mixin button-outline($color)
-  +_button-layout
-  background-color: transparent
-  color: $color
-  border: 1px solid $color
-  transition: background-color $transition-normal
-
-  &:hover:not(:disabled)
-    +tint($color, 15%)
-
-  // Keep mouse focus outline-free; keyboard focus shows the global
-  // :focus-visible outline from Reset.sass
-  &:focus:not(:focus-visible)
-    outline: none
-
-  &:disabled
-    opacity: $disabled-opacity
-    cursor: default
+  // Out of reach the way every other control is: the site's one disabled
+  // state, hatched in the variant's own ink over half its opacity. Opacity
+  // alone used to be the whole state here, the picture the hatch replaced.
+  +disabled-hatch
 
 /// Icon-only control — a flat button whose whole body is one glyph.
 /// The drawn size is the caller's; the POINTER target is not. WCAG 2.5.8 puts
@@ -259,29 +404,80 @@ $input-padding: ($minor + 1px) $small
     height: max(100%, #{$tap-target-min})
     transform: translate(-50%, -50%)
 
-/// Inline link-styled button — full reset to look like a plain inline <a> tag.
-/// Unlike +button-link, has no layout/sizing (no height, no padding box) so it
-/// can sit inline inside a paragraph or sentence. Several files hand-roll this
-/// reset (background: none, border: none, padding: 0, font: inherit) — use
-/// this mixin instead.
-@mixin inline-link-button()
+// =============================================================================
+// LINKS — one behaviour for an <a> and for a <button> dressed as one.
+//
+// The owner's standard of 27 September 2026, after DM2, where every link
+// answers the pointer the same way whatever colour it rests in: no underline
+// at rest, the underline and the hover colour under the pointer, and the
+// colour easing over $transition-normal — the tempo of the site's buttons,
+// which the plain <a> of Reset.sass now shares. Only the resting colour tells
+// the kinds apart:
+//   blue    $link        — Reset.sass for an <a>, +inline-link-button for a
+//                          <button>
+//   grey    $text-muted  — +muted-link for an <a>, +muted-link-button for a
+//                          <button>; the grey turns $link-hover like the rest
+//   green   $accent-green, a game that recruits — +link-tone($accent-green,
+//                          $accent-green-hover)
+// A bold link is 700 and nothing between: the site's face has two weights,
+// and a 500 or a 600 was a different link on different machines.
+//
+// Their own and not this: the links on a tooltip ($tooltip-link), the link on
+// a toast (the toast's colour), the heart of a like, and the navigation of the
+// header, which darkens without an underline as the top menu of DM2 did.
+// =============================================================================
+
+/// The behaviour of a link in a given resting colour: the colour eases to
+/// `$hover` and the underline appears under the pointer, the ring of inline
+/// text (Reset.sass: 1px, two pixels out) marks the keyboard focus, and a
+/// <button> out of reach dims to the site's opacity and answers nothing.
+///
+/// The ring is restated because a link that recedes to a colour of its own is
+/// written by a component rule that outranks the global one, and a <button>
+/// takes the 2px block ring from Reset.sass — a box drawn over the sentence
+/// this control is a word of. The hover skips a disabled <button>; on an <a>
+/// the guard is always true and costs nothing.
+///
+/// Ends with nested rules, so a caller adding declarations after the include
+/// wraps them in "&".
+@mixin link-tone($rest, $hover: $link-hover)
+  color: $rest
+  text-decoration: none
+  transition: color $transition-normal
+
+  &:hover:not(:disabled)
+    color: $hover
+    text-decoration: underline
+
+  &:focus-visible
+    outline: 1px solid $link
+    outline-offset: 2px
+
+  &:disabled
+    opacity: $disabled-opacity
+    cursor: default
+
+/// A <button> that is a word of the text around it and reads as a link: the
+/// user agent's box taken off (no fill, no frame, no padding, the font of the
+/// line), then the link's behaviour in `$rest`. Unlike +button-link it has no
+/// height and no padding box, so it sits inline in a sentence. Several files
+/// hand-rolled the reset and each answered the pointer its own way — use this
+/// instead.
+@mixin inline-link-button($rest: $link)
   background: none
   border: none
   padding: 0
   font: inherit
-  color: $link
   cursor: pointer
-
-  &:hover:not(:disabled)
-    color: $link-hover
-    text-decoration: underline
+  +link-tone($rest)
 
 /// "... показать полностью" reveal control — the site-wide idiom shared by
 /// TruncatedContent (text truncation) and the period-digest boards teaser.
 /// Real <button> semantics stay with the caller; this covers the visual
-/// contract: inline link look, enlarged tap target (padding overrides the
-/// inline-link-button reset via the bare & block, keeping the cascade order
-/// explicit under the new Sass mixed-decls semantics), keyboard focus ring.
+/// contract: inline link look and keyboard ring (both from +inline-link-button),
+/// enlarged tap target (padding overrides the inline-link-button reset via the
+/// bare & block, keeping the cascade order explicit under the new Sass
+/// mixed-decls semantics).
 @mixin expand-toggle-button()
   align-self: flex-start
   display: inline-block
@@ -291,41 +487,43 @@ $input-padding: ($minor + 1px) $small
   &
     padding: $tiny 0
 
-  &:focus-visible
-    outline: 2px solid $link
-    outline-offset: 2px
-    border-radius: 2px
-
 /// "Label + inline muted links" line — the site-wide idiom for secondary
 /// link rows ("Полезные ссылки" in rules, "Модераторы раздела" on boards,
 /// subscribers lines on profiles): muted secondary-size text with links
 /// that recede to the muted color and light up on hover. Apply to the
-/// line container; give a bold-ish label locally (font-weight: 500) and
-/// apply +muted-link to the links themselves (directly for own <a> tags,
-/// via :deep(a) when the links come from a child component like UserLink).
+/// line container; give a bold label locally (font-weight: 700, the face has
+/// no weight between) and apply +muted-link to the links themselves (directly
+/// for own <a> tags, via :deep(a) when the links come from a child component
+/// like UserLink).
 @mixin muted-links-line()
   font-size: $secondary-font-size
   color: $text-muted
 
-/// Link treatment for +muted-links-line rows: muted at rest, $link +
-/// underline on hover, visible keyboard focus.
+/// A grey link: $text-muted at rest, and under the pointer the same
+/// $link-hover and underline every link of the site turns, as the grey links
+/// of DM2 did. For an <a>, or for any element whose box is already taken off;
+/// a bare <button> takes +muted-link-button. A closed game in a table, the
+/// number of a comment, a moderator in the line of a board, the rating "n/a".
 @mixin muted-link()
-  color: $text-muted
-  text-decoration: none
+  +link-tone($text-muted)
 
-  &:hover
-    color: $link
-    text-decoration: underline
+/// A <button> that reads as a grey link: +inline-link-button in $text-muted.
+/// "Отмена" in the row of an inline edit, the paging arrows.
+@mixin muted-link-button()
+  +inline-link-button($text-muted)
 
-  &:focus-visible
-    outline: 2px solid $link
-    outline-offset: 2px
-
-/// Custom checkbox styling
+/// Custom checkbox styling — the control the button system took its shape
+/// from: a frame that never moves and a fill that carries the state.
 @mixin checkbox()
   appearance: none
-  width: 16px
-  height: 16px
+  // The same control goes through +input (InputsGlobal puts every input through
+  // it) and arrives with the padding of a text field. A border-box control
+  // cannot be narrower than its own padding and edges, so without this line the
+  // box asked for 16px and measured 18px wide by 16px tall: a squat rectangle,
+  // not the square the prototype draws.
+  padding: 0
+  width: $checkbox-size
+  height: $checkbox-size
   flex-shrink: 0
   cursor: pointer
   background-color: $overlay-subtle
@@ -347,6 +545,41 @@ $input-padding: ($minor + 1px) $small
       border-width: 0 2px 2px 0
       transform: translate(-50%, -50%) rotate(45deg)
 
-  &:disabled
-    cursor: default
-    opacity: $disabled-opacity
+  // The hatch the consent checkboxes of the registration form used to draw
+  // themselves, now the site's one disabled state and shared with the button.
+  +disabled-hatch
+
+/// The radio button, in the checkbox's anatomy drawn round: the same side, the
+/// same frame and ground, the same fill when chosen, and a dot of $text where
+/// the checkbox draws its tick. The browser drew it until now, a native circle
+/// of another size and weight standing in the same form as the site's square.
+///
+/// The dot is 6 of the 16: inside the frame that leaves 4 of fill on every
+/// side, whole pixels at the default zoom, because it is centred by position
+/// and not by a transform.
+@mixin radio()
+  appearance: none
+  padding: 0
+  width: $checkbox-size
+  height: $checkbox-size
+  flex-shrink: 0
+  cursor: pointer
+  background-color: $overlay-subtle
+  border: 1px solid $border
+  border-radius: 50%
+  position: relative
+
+  &:checked
+    background-color: $button-bg
+
+    &::after
+      content: ""
+      position: absolute
+      inset: 0
+      width: $checkbox-size * .375
+      height: $checkbox-size * .375
+      margin: auto
+      border-radius: 50%
+      background-color: $text
+
+  +disabled-hatch

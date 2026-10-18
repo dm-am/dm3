@@ -23,19 +23,18 @@
  */
 import { computed, ref, watch } from "vue";
 import type { Ref } from "vue";
-import { DataTable, type Column } from "@/shared/ui/DataTable";
-import { Tooltip } from "@/shared/ui/Tooltip";
+import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { SvgIcon } from "@/shared/ui/Icon";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import { forumApi, type Topic } from "@/entities/forum";
+import { RemovedAccountLink, UserLink } from "@/entities/user";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { TopicsFilter, useTopicsFilter } from "@/features/topic-filter";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { useAuthStore } from "@/shared/stores/auth";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
-import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const props = defineProps<{
   /** Profile owner whose topics we list. */
@@ -96,32 +95,38 @@ const emptyText = computed(() =>
     : "Пользователь не создал ни одного топика",
 );
 
+// "Топик" takes what the other columns leave; their shares are of the whole
+// table, the padding of each cell included.
 const columns: Column[] = [
-  { key: "title", label: "Топик", width: "40%", align: "left" },
+  { key: "title", label: "Топик", align: "left" },
   {
     key: "board",
     label: "Раздел",
-    width: "14%",
+    width: "14.3%",
     align: "left",
-    hideOnMobile: true,
   },
-  { key: "comments", label: "Комментарии", width: "10%", align: "center" },
-  { key: "likes", label: "Лайки", width: "7%", align: "center" },
+  { key: "comments", label: "Комментарии", width: "10.7%", align: "center" },
+  { key: "likes", label: "Лайки", width: "8%", align: "center" },
   {
     key: "created",
     label: "Дата создания",
-    width: "13%",
+    width: "13.4%",
     align: "center",
-    hideOnMobile: true,
   },
   {
     key: "lastActivity",
     label: "Последняя активность",
-    width: "16%",
+    width: "16.1%",
     align: "center",
-    hideOnMobile: true,
   },
 ];
+
+// The sort of the tab, told to the table as on a board (TopicsList): its
+// header announces the sort. Every sort of the filter is a column key.
+const currentSort = computed<SortState>(() => ({
+  key: filterState.value.sortBy,
+  direction: filterState.value.sortOrder,
+}));
 
 function topicLink(row: Topic) {
   return `/forum/${row.board.alias}/${row.topicNumber}`;
@@ -152,6 +157,7 @@ function boardLink(row: Topic) {
       :columns="columns"
       :data="topics"
       :loading="loading"
+      :sort="currentSort"
       :empty-text="emptyText"
     >
       <template #cell-title="{ row }">
@@ -200,20 +206,34 @@ function boardLink(row: Topic) {
         <HumanDate :date="row.createdUtc" />
       </template>
 
+      <!-- Who was last, then when, as the forum table of topics writes it
+           (TopicsList.vue): a name only in the tooltip of the date could not
+           be read on a touch screen. -->
       <template #cell-lastActivity="{ row }">
         <template v-if="row.lastComment">
-          <Tooltip
-            :text="row.lastComment.author?.username ?? 'удаленный пользователь'"
-          >
-            <router-link
-              :to="`${topicLink(row)}#comment-${row.lastComment.id}`"
-              class="last-activity-link"
-            >
-              <HumanDate :date="row.lastComment.createdUtc" />
-            </router-link>
-          </Tooltip>
+          <UserLink
+            v-if="row.lastComment.author"
+            :user="row.lastComment.author"
+            hide-badge
+          /><RemovedAccountLink v-else />,
+          <router-link
+            :to="`${topicLink(row)}#comment-${row.lastComment.id}`"
+            class="last-activity-link"
+            ><HumanDate :date="row.lastComment.createdUtc"
+          /></router-link>
         </template>
-        <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
+        <!-- A topic nobody has answered was last active when it was opened,
+             as the forum table of topics shows it. -->
+        <template v-else>
+          <UserLink
+            v-if="row.author"
+            :user="row.author"
+            hide-badge
+          /><RemovedAccountLink v-else />,
+          <router-link :to="topicLink(row)" class="last-activity-link"
+            ><HumanDate :date="row.createdUtc"
+          /></router-link>
+        </template>
       </template>
 
       <template v-if="paging && paging.pages && paging.pages > 1" #footer>

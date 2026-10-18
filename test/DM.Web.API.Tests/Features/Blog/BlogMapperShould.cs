@@ -1,3 +1,4 @@
+using DM.Domain.Core.Identity;
 using System;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -26,7 +27,7 @@ namespace DM.Web.API.Tests.Features.Blog;
 public class BlogMapperShould : UnitTestBase
 {
     private static BlogMapper CreateMapper() =>
-        new(new UserMapper(new StubImgproxyUrlBuilder()));
+        new(new UserMapper(new StubImgproxyUrlBuilder()), Mock<IIdentityProvider>());
 
     private sealed class StubImgproxyUrlBuilder : IImgproxyUrlBuilder
     {

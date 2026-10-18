@@ -1,6 +1,7 @@
 import { ref, type Ref } from "vue";
 import type { BadRequestError, GeneralError } from "@/shared/api/models/common";
-import { notifyFailure } from "@/shared/lib/errors";
+import { refusalHere } from "@/shared/lib/errors";
+import { useActionResult } from "./useActionResult";
 
 /**
  * Writing and deleting a chat message.
@@ -15,6 +16,12 @@ import { notifyFailure } from "@/shared/lib/errors";
  *
  * What stays with the page is what genuinely differs: which store answers, and
  * where the feed scrolls afterwards.
+ *
+ * A refusal is said where the press was, not in a plate (UI_STANDARDS,
+ * "Всплывающие сообщения"): a refused send under the "Отправить" of the
+ * composer, with the text back in the field; a refused press on a message - a
+ * delete here, a saved edit or a like on the page - in a line under that
+ * message, inside its row of the list so the list measures it with the row.
  */
 
 /** What a chat store answers a send or a delete with. */
@@ -59,9 +66,43 @@ export interface ChatComposerOptions {
   canSend?: () => boolean;
 }
 
+/** A refusal about one message, said under it. */
+export interface MessageRefusal {
+  id: string;
+  text: string;
+}
+
 export function useChatComposer(options: ChatComposerOptions) {
   /** The composer field, v-model of the editor. */
   const newMessage = ref("");
+
+  /** A refused send, under the button of the composer. */
+  const sendResult = useActionResult();
+
+  /** The last refused press on a message, under that message. */
+  const messageRefusal = ref<MessageRefusal | null>(null);
+
+  /**
+   * Says a refused press on a message under it, or nothing where the plate is
+   * the carrier (an expired session, a dead connection).
+   */
+  function refuseMessage(
+    id: string,
+    error: GeneralError | BadRequestError,
+    fallback: string,
+  ): void {
+    const text = refusalHere(error, fallback);
+    messageRefusal.value = text ? { id, text } : null;
+  }
+
+  /**
+   * Takes the line under a message down as a new press on it starts. A line
+   * left over from a refusal the retry has since overcome would stand under a
+   * heart that is filled, or an edit that is saved, and say the opposite.
+   */
+  function clearMessageRefusal(id: string): void {
+    if (messageRefusal.value?.id === id) messageRefusal.value = null;
+  }
 
   async function handleSend(): Promise<void> {
     if (!newMessage.value.trim() || options.sending.value) return;
@@ -69,13 +110,14 @@ export function useChatComposer(options: ChatComposerOptions) {
 
     const text = newMessage.value;
     newMessage.value = "";
+    sendResult.clear();
     const { error } = await options.send(text);
     // Give the text back on failure. Emptying the field before the request is
     // what makes sending feel instant; losing what was written when it fails is
     // not part of that bargain.
     if (error) {
       newMessage.value = text;
-      notifyFailure(error, "Не удалось отправить сообщение");
+      sendResult.refuse(error, "Не удалось отправить сообщение");
       return;
     }
     options.editor.value?.clear();
@@ -93,9 +135,10 @@ export function useChatComposer(options: ChatComposerOptions) {
   async function confirmDelete(): Promise<void> {
     const id = options.confirmingDeleteId.value;
     if (!id) return;
+    messageRefusal.value = null;
     const { error } = await options.remove(id);
     options.confirmingDeleteId.value = null;
-    if (error) notifyFailure(error, "Не удалось удалить сообщение");
+    if (error) refuseMessage(id, error, "Не удалось удалить сообщение");
   }
 
   return {
@@ -104,5 +147,9 @@ export function useChatComposer(options: ChatComposerOptions) {
     requestDelete,
     cancelDelete,
     confirmDelete,
+    sendResult,
+    messageRefusal,
+    refuseMessage,
+    clearMessageRefusal,
   };
 }

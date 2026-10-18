@@ -19,9 +19,11 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { useToast } from "@/shared/lib/composables/useToast";
+import { CaptionAction, CaptionLine } from "@/shared/ui/CaptionLine";
 import type { NotepadAdapter } from "./types";
-import { notifyFailure } from "@/shared/lib/errors";
+import { refusalHere } from "@/shared/lib/errors";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { FormField } from "@/shared/ui/Form";
 
 const props = withDefaults(
   defineProps<{
@@ -34,7 +36,7 @@ const props = withDefaults(
     /** Empty state: the line and the sentence under it. */
     emptyText: string;
     emptyHint: string;
-    /** Toast text when the list request fails. */
+    /** The line in place of the list when the list request fails. */
     loadErrorText: string;
     /**
      * Who is looking. The per-entry controls repeat the server's rules for one
@@ -61,18 +63,54 @@ const props = withDefaults(
   },
 );
 
-const toast = useToast();
-
 const entries = ref<NotepadEntry[]>([]);
 const loading = ref(false);
+/**
+ * Why the list did not arrive, in the place of the list with "Повторить". It
+ * used to be a plate over an empty notepad that read as one with no entries.
+ */
+const loadRefusal = ref("");
 const saving = ref(false);
-const deleting = ref(false);
 
 // Editor state
 const showEditor = ref(false);
 const editingEntry = ref<NotepadEntry | null>(null);
 const editorTitle = ref("");
 const editorContent = ref("");
+
+/**
+ * Why the title is missing, printed under the field.
+ *
+ * The check is the client's own and runs before any request, so nothing is on
+ * the wire to talk about: the reader is standing in the editor with the cursor
+ * two lines above the empty field. A toast said it in the far corner of the
+ * screen, away from the field it was about, while the rest of the site answers
+ * a failed field with a red line under it — the one the shared FormField
+ * prints (shared/ui/Form/FormField.vue), and the one the nearest twin of this
+ * editor already uses for the very same check
+ * (features/attribute-schema-editor, "Введите название схемы").
+ */
+const titleError = ref("");
+
+/**
+ * Why the last save was refused, printed in the editor above its buttons.
+ *
+ * A refused save leaves the editor standing with the text still in it, so the
+ * reader is looking at the editor and not at the corner a toast rises in. The
+ * refusal line of a form (p.form-error, the shape features/edit-character and
+ * features/attribute-schema-editor print) stands where the eye already is and
+ * stays until the next attempt or until the editor closes, however long the
+ * reader takes to read it. The toast that stood here said the same thing in
+ * the far corner and, raised directly, said it beside the interceptor's own
+ * plate on a 403, 429 or 5xx: one press, two red boxes. A refusal has one
+ * carrier (UI_STANDARDS, "Всплывающие сообщения"); the adapter has no seam for
+ * `ownsRefusal`, so this screen keeps quiet on the statuses the interceptor
+ * announces and prints the rest in the server's words.
+ */
+const saveRefusal = ref("");
+
+/** The board's own sentence, for a refusal the server did not word. */
+const SAVE_REFUSED = "Не удалось сохранить запись";
 
 // Selected entry for viewing
 const selectedEntry = ref<NotepadEntry | null>(null);
@@ -105,10 +143,14 @@ const canDeleteSelected = computed(
 async function fetchEntries() {
   if (!props.accessible) return;
   loading.value = true;
+  loadRefusal.value = "";
   const { data, error } = await props.adapter.list();
   loading.value = false;
   if (error) {
-    notifyFailure(error, props.loadErrorText);
+    // An expired session and a dead connection keep their plate, and the
+    // place of the list still says the list is not there.
+    loadRefusal.value =
+      refusalHere(error, props.loadErrorText) ?? props.loadErrorText;
     return;
   }
   entries.value = data?.resources ?? [];
@@ -118,6 +160,8 @@ function openNewEntryEditor() {
   editingEntry.value = null;
   editorTitle.value = "";
   editorContent.value = "";
+  titleError.value = "";
+  saveRefusal.value = "";
   showEditor.value = true;
 }
 
@@ -125,6 +169,8 @@ function openEditEntryEditor(entry: NotepadEntry) {
   editingEntry.value = entry;
   editorTitle.value = entry.title;
   editorContent.value = entry.content;
+  titleError.value = "";
+  saveRefusal.value = "";
   showEditor.value = true;
 }
 
@@ -133,14 +179,18 @@ function closeEditor() {
   editingEntry.value = null;
   editorTitle.value = "";
   editorContent.value = "";
+  titleError.value = "";
+  saveRefusal.value = "";
 }
 
 async function saveEntry() {
   if (saving.value) return;
   if (!editorTitle.value.trim()) {
-    toast.error("Введите название записи");
+    titleError.value = "Введите название записи";
     return;
   }
+  titleError.value = "";
+  saveRefusal.value = "";
 
   const input = { title: editorTitle.value, content: editorContent.value };
   const editing = editingEntry.value;
@@ -151,40 +201,61 @@ async function saveEntry() {
     : await props.adapter.create(input);
   saving.value = false;
 
-  if (error || !data?.resource) {
-    toast.error("Не удалось сохранить запись");
+  if (error) {
+    // The editor explains every refusal - a rejected field, an entry that is
+    // gone, a refused action, a wait, a dead server - and stays open with what
+    // was typed; the plate the interceptor held for it is taken down.
+    saveRefusal.value = refusalHere(error, SAVE_REFUSED) ?? "";
     return;
   }
 
-  const saved = data.resource;
+  const saved = data?.resource;
+  if (!saved) {
+    // Answered without an entry: nothing to put in the pane and nothing the
+    // interceptor would have said, so the line speaks for itself.
+    saveRefusal.value = SAVE_REFUSED;
+    return;
+  }
+
   if (editing) {
     const index = entries.value.findIndex((e) => e.id === editing.id);
     if (index !== -1) entries.value[index] = saved;
     if (selectedEntry.value?.id === saved.id) selectedEntry.value = saved;
-    toast.success("Запись обновлена");
   } else {
     entries.value.push(saved);
-    toast.success("Запись создана");
+    // A created entry opens in the reader pane, the way a created game or blog
+    // opens on its own page (features/create-game, features/create-blog): the
+    // thing that was just written is what the screen shows next. Here the pane
+    // already has the slot for it — `selectedEntry` is the only thing it reads,
+    // and the edit branch above re-points it at the saved resource for the same
+    // reason. The create endpoint answers with the whole entry
+    // (Envelope<NotepadEntryResponse>, the same DTO the list serves), so there
+    // is nothing left to fetch. Without this the pane fell back to "Выберите
+    // запись для просмотра" — the screen "Отмена" leaves behind — and a toast
+    // had to say what the screen refused to show.
+    selectedEntry.value = saved;
   }
   closeEditor();
 }
 
-async function confirmDelete() {
+/**
+ * The confirmation's action: it waits shut for the answer, prints a refusal
+ * in itself and closes on success alone, which is also what lets go of
+ * `pendingDelete` (the window's `update:show`).
+ */
+async function deleteEntry() {
   const entry = pendingDelete.value;
-  if (!entry || deleting.value) return;
+  if (!entry) return;
 
-  deleting.value = true;
-  const { error } = await props.adapter.remove(entry.id);
-  deleting.value = false;
-  if (error) {
-    notifyFailure(error, "Не удалось удалить запись");
-    return;
+  const result = await props.adapter.remove(entry.id, {
+    ownsRefusal: true,
+    ownsRateLimit: true,
+  });
+  if (!result.error) {
+    entries.value = entries.value.filter((e) => e.id !== entry.id);
+    if (selectedEntry.value?.id === entry.id) selectedEntry.value = null;
   }
-
-  pendingDelete.value = null;
-  entries.value = entries.value.filter((e) => e.id !== entry.id);
-  if (selectedEntry.value?.id === entry.id) selectedEntry.value = null;
-  toast.success("Запись удалена");
+  return result;
 }
 
 function selectEntry(entry: NotepadEntry) {
@@ -264,9 +335,11 @@ onMounted(fetchEntries);
       <div class="page-header">
         <page-title v-if="standalone">{{ title }}</page-title>
         <h2 v-else class="page-title">{{ title }}</h2>
-        <button class="add-btn" @click="openNewEntryEditor">
+        <!-- Secondary: it opens a form and is no form's action. With the editor
+             open, "Сохранить" is the one main button on screen. -->
+        <Button type="button" class="add-btn" @click="openNewEntryEditor">
           Новая запись
-        </button>
+        </Button>
       </div>
 
       <!-- Loading: geometric twin of the loaded two-pane layout
@@ -287,6 +360,12 @@ onMounted(fetchEntries);
           </div>
         </div>
       </div>
+
+      <ErrorState
+        v-else-if="loadRefusal && entries.length === 0 && !showEditor"
+        :message="loadRefusal"
+        :retry="fetchEntries"
+      />
 
       <template v-else-if="entries.length === 0 && !showEditor">
         <secondary-text>{{ emptyText }}</secondary-text>
@@ -336,73 +415,82 @@ onMounted(fetchEntries);
               </button>
             </div>
 
+            <!-- A form of the page: the fields of the site with their captions
+                 and the red line under a field that failed, the buttons under
+                 the last field at the left, the main one first. -->
             <div class="editor-form">
-              <div class="form-field">
-                <label for="entry-title">Название</label>
+              <FormField
+                label="Название"
+                :errors="titleError ? [titleError] : []"
+              >
                 <input
                   id="entry-title"
                   v-model="editorTitle"
                   type="text"
                   placeholder="Название записи"
                   maxlength="200"
+                  @input="titleError = ''"
                 />
-              </div>
+              </FormField>
 
-              <div class="form-field">
-                <label for="entry-content">Содержимое</label>
+              <FormField label="Содержимое">
                 <textarea
                   id="entry-content"
                   v-model="editorContent"
                   placeholder="Текст записи..."
                   rows="12"
                 ></textarea>
-              </div>
+              </FormField>
+
+              <!--
+                The refusal of the last save, in the form's own line above its
+                buttons: the site's answer to a save the server would not take
+                while the form stays on screen (features/edit-character puts
+                it in the same place). Not a toast - see `saveRefusal`.
+              -->
+              <p v-if="saveRefusal" class="form-error" role="alert">
+                {{ saveRefusal }}
+              </p>
 
               <div class="editor-actions">
-                <button
+                <Button variant="primary" :loading="saving" @click="saveEntry">
+                  Сохранить
+                </Button>
+                <Button
                   class="cancel-btn"
                   :disabled="saving"
                   @click="closeEditor"
                 >
                   Отмена
-                </button>
-                <Button :loading="saving" @click="saveEntry">Сохранить</Button>
+                </Button>
               </div>
             </div>
           </div>
 
           <!-- View mode -->
           <template v-else-if="selectedEntry">
-            <div class="content-header">
-              <h2>{{ selectedEntry.title }}</h2>
-              <div
-                v-if="canEditSelected || canDeleteSelected"
-                class="content-actions"
-              >
-                <button
-                  v-if="canEditSelected"
-                  class="edit-btn"
-                  @click="openEditEntryEditor(selectedEntry)"
-                >
-                  Редактировать
-                </button>
-                <button
-                  v-if="canDeleteSelected"
-                  class="delete-btn"
-                  @click="pendingDelete = selectedEntry"
-                >
-                  Удалить
-                </button>
-              </div>
-            </div>
-            <div class="content-meta">
+            <h2 class="content-title">{{ selectedEntry.title }}</h2>
+            <!-- The entry's caption and what the viewer may do with it, one
+                 line: the controls used to be buttons beside the title, where
+                 a long title pushed "Удалить" out of the pane. -->
+            <CaptionLine class="content-meta">
               <span
                 >Создано: <human-date :date="selectedEntry.createdUtc"
               /></span>
-              <span v-if="selectedEntry.modifiedUtc">
-                | Изменено: <human-date :date="selectedEntry.modifiedUtc" />
-              </span>
-            </div>
+              <span v-if="selectedEntry.modifiedUtc"
+                >Изменено: <human-date :date="selectedEntry.modifiedUtc"
+              /></span>
+              <CaptionAction
+                v-if="canEditSelected"
+                @click="openEditEntryEditor(selectedEntry)"
+                >Редактировать</CaptionAction
+              >
+              <CaptionAction
+                v-if="canDeleteSelected"
+                @click="pendingDelete = selectedEntry"
+                >Удалить</CaptionAction
+              >
+            </CaptionLine>
             <div class="content-body">
               <pre>{{ selectedEntry.content }}</pre>
             </div>
@@ -418,13 +506,12 @@ onMounted(fetchEntries);
 
     <ConfirmDialog
       :show="pendingDelete !== null"
-      title="Удаление записи"
-      :message="`Удалить запись &quot;${pendingDelete?.title ?? ''}&quot;?`"
+      title="Удалить запись?"
+      :message="`Запись &quot;${pendingDelete?.title ?? ''}&quot; будет удалена без возможности восстановления`"
       confirm-label="Удалить"
-      danger
-      :loading="deleting"
+      failure="Не удалось удалить запись"
+      :action="deleteEntry"
       @update:show="(v) => !v && (pendingDelete = null)"
-      @confirm="confirmDelete"
     />
   </div>
 </template>
@@ -438,11 +525,16 @@ onMounted(fetchEntries);
   flex-direction: column
   min-height: $grid-step * 50
 
-  // The personal notepad is the page, so it carries the page box itself.
+  // The personal notepad is the page. No padding of its own: it pushed the
+  // heading 16 to the right of every other page of the column, as the
+  // notifications had it. The heading row keeps the top of a
+  // page's heading ($medium, as PageTitle stands).
   &.standalone
-    padding: $medium
     height: 100%
     min-height: 0
+
+    .page-header
+      margin: $medium 0
 
 .notepad-denied
   padding: $big
@@ -461,12 +553,6 @@ onMounted(fetchEntries);
 .page-title
   margin: 0
 
-.add-btn
-  display: flex
-  align-items: center
-  gap: $minor
-  +button
-
 .hint
   color: $text-muted
   font-size: 0.9rem
@@ -479,13 +565,8 @@ onMounted(fetchEntries);
   flex: 1
   min-height: 0
 
-  @media (max-width: $bp-tablet)
-    grid-template-columns: 1fr
-    grid-template-rows: auto 1fr
-
 .entry-list
   border: 1px solid $border
-  border-radius: $border-radius
   overflow-y: auto
   background: $bg-element
 
@@ -503,21 +584,18 @@ onMounted(fetchEntries);
 
   &.selected
     background: $selected-overlay
-    border-left: 3px solid $accent-green
 
   // Keyboard focus ring for a listbox option. Inset, like the expandable
   // table rows in _Tables.sass: the row sits flush inside the list's scroll
   // container, where an outset ring would be clipped.
   &:focus-visible
-    outline: 2px solid $border-focus
+    outline: 2px solid $link
     outline-offset: -2px
 
+// A long title wraps, whole, rather than losing its end under "...".
 .entry-title
   font-weight: 500
   color: $text
-  white-space: nowrap
-  overflow: hidden
-  text-overflow: ellipsis
 
 .entry-date
   font-size: $tertiary-font-size
@@ -526,7 +604,6 @@ onMounted(fetchEntries);
 
 .entry-content
   border: 1px solid $border
-  border-radius: $border-radius
   padding: $medium
   overflow-y: auto
   background: $bg-element
@@ -551,11 +628,13 @@ onMounted(fetchEntries);
   h3
     margin: 0
 
+// A control, rounded as every control of the site is, the cross of a window
+// included (_DialogSurface.sass).
 .close-btn
   width: 32px
   height: 32px
   border: none
-  border-radius: 50%
+  border-radius: $border-radius
   background: transparent
   color: $text-muted
   cursor: pointer
@@ -574,66 +653,35 @@ onMounted(fetchEntries);
   display: flex
   flex-direction: column
 
-.form-field
-  margin-bottom: $small
+// The fields are the site's own (FormField, +input): the line at the page's
+// control height, the caption, the frame, the ring, the red line under a
+// field that failed. Only the growth of the text area is this editor's.
+.editor-form textarea
+  resize: vertical
+  min-height: 200px
 
-  label
-    display: block
-    margin-bottom: $minor
-    font-weight: 500
-    color: $text
+// The form's refusal line, in the colour and size features/edit-character
+// prints its own: one sentence in the accent, no box of its own. No margin of
+// its own either - the field above and the buttons below carry the spacing.
+.form-error
+  margin: 0
+  color: $accent-red
+  font-size: $secondary-font-size
 
-  input, textarea
-    width: 100%
-    padding: $small
-    border: 1px solid $border
-    border-radius: $border-radius
-    background: $input-bg
-    color: $text
-    font-family: inherit
-    font-size: $font-size
-
-    &:focus:not(:focus-visible)
-      outline: none
-      border-color: $accent-green
-
-  textarea
-    resize: vertical
-    min-height: 200px
-    flex: 1
-
+// Under the last field, $medium away, the main button first: the row every
+// form of a page has.
 .editor-actions
   display: flex
-  justify-content: flex-end
   gap: $small
   margin-top: $medium
 
-.cancel-btn
-  +button
+.content-title
+  margin: 0 0 $small
 
-.content-header
-  display: flex
-  justify-content: space-between
-  align-items: flex-start
-  margin-bottom: $small
-
-  h2
-    margin: 0
-    flex: 1
-
-.content-actions
-  display: flex
-  gap: $minor
-
-.edit-btn
-  +button-outline($link)
-
-.delete-btn
-  +button-outline($accent-red)
-
+// The caption line draws its own size and colour; here it only stands as a
+// block of its own above the text.
 .content-meta
-  font-size: 0.8rem
-  color: $text-muted
+  display: block
   margin-bottom: $medium
 
 .content-body

@@ -384,6 +384,26 @@ function apiGetCalls(mod: Module): { end: number; args: [number, number][] }[] {
 }
 
 describe("paging on the wire", () => {
+  // A corpus, or a reading of the requests, that came back empty would pass
+  // both rules below without a word: the requests are there, and the keys of
+  // their queries are read, the ones the API asks for included.
+  it("reads the requests of the client and the keys they send", () => {
+    expect(SOURCES.length).toBeGreaterThan(500);
+    const calls = SOURCES.flatMap((mod) =>
+      apiGetCalls(mod).map((call) => ({ mod, call })),
+    );
+    expect(calls.length).toBeGreaterThan(100);
+
+    const sent = new Set(
+      calls.flatMap(({ mod, call: { end, args } }) =>
+        args.length < 2
+          ? []
+          : keysOf(mod, args[1][0], args[1][1], end, 0, 0, new Set()),
+      ),
+    );
+    expect([...sent]).toEqual(expect.arrayContaining(["take", "skip"]));
+  });
+
   it("is asked for by no name the API retired", () => {
     const offences: string[] = [];
 

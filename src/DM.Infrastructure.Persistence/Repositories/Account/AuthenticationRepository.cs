@@ -26,9 +26,18 @@ internal class AuthenticationRepository : IAuthenticationRepository
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Past the global filter on purpose. A removed account has to be found for
+    /// the sign-in to refuse it as removed after a proven password, which is
+    /// the one place the site tells the owner what became of the account
+    /// (SECURITY.md). Under the filter the row did not exist, the answer was
+    /// "wrong email or password" to the right password, and the whole removed
+    /// branch of the sign-in was unreachable.
+    /// </remarks>
     public async Task<(bool Success, AuthenticatedUser? User)> TryFindUserByEmail(string email)
     {
         var result = await _dbContext.Users
+            .IgnoreQueryFilters()
             .TagWith("DM.Authentication.TryFindUserByEmail")
             .Where(u => u.Email.ToLower() == email.ToLower())
             .ProjectToAuthenticatedUser()
@@ -37,9 +46,15 @@ internal class AuthenticationRepository : IAuthenticationRepository
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Past the filter for the same reason as the lookup by address: the code
+    /// step and the session paths name a removed account instead of treating
+    /// it as one that never was.
+    /// </remarks>
     public Task<AuthenticatedUser?> FindUser(Guid userId)
     {
         return _dbContext.Users
+            .IgnoreQueryFilters()
             .TagWith("DM.Authentication.FindUser")
             .Where(u => u.UserId == userId)
             .ProjectToAuthenticatedUser()
@@ -50,7 +65,7 @@ internal class AuthenticationRepository : IAuthenticationRepository
     public async Task<Session?> FindUserSession(Guid userId, Guid sessionId)
     {
         // Both halves of the token in one predicate: a session id that exists
-        // but belongs to somebody else must not authenticate (INV-4). The
+        // but belongs to somebody else must not authenticate. The
         // hottest query on the site stays a primary-key lookup — the owner
         // check narrows a set of one.
         var session = await _dbContext.UserSessions
@@ -66,7 +81,7 @@ internal class AuthenticationRepository : IAuthenticationRepository
     {
         // Absence of the row is the ordinary state of a user who never saved
         // settings, and it means the defaults. A partial row does not exist:
-        // every paging column is NOT NULL (INV-9), which is what buried the
+        // every paging column is NOT NULL, which is what buried the
         // null-Paging repair branch this method used to carry.
         var dbSettings = await _dbContext.UserSettings
             .TagWith("DM.Authentication.FindUserSettings")
@@ -79,6 +94,9 @@ internal class AuthenticationRepository : IAuthenticationRepository
         {
             Id = dbSettings.UserId,
             Theme = dbSettings.Theme,
+            // Carried on the identity because the letter about a login is written
+            // while that login is being decided, and there is no second read.
+            TimeZoneId = dbSettings.TimeZoneId,
             Paging = new PagingSettings
             {
                 PostsPerPage = dbSettings.PostsPerPage,

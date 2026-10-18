@@ -2,7 +2,14 @@
 /**
  * StatusButtons — the status-transition action group. Draws the transitions it
  * is given, runs the chosen one through `apply`, and sends a destructive one
- * (danger) through a ConfirmDialog first.
+ * (danger) through a ConfirmDialog first. The flag decides whether the dialog
+ * opens at all and paints nothing: neither the control nor the dialog carries
+ * red, the question is what says the move is heavy.
+ *
+ * A confirmed transition is the dialog's action: the window waits shut for the
+ * answer, prints a refusal in itself and closes on success alone. A plain one
+ * runs on the spot and a refusal goes to a plate, there being no window to
+ * print it in.
  *
  * The blog and the game had one copy of this each, alike to the letter except
  * for the store they read and the noun in three sentences. What legitimately
@@ -27,11 +34,16 @@ const props = withDefaults(
     transitions: StatusTransitionOption<T>[];
     /**
      * Runs the chosen transition; resolves to the problem document when the
-     * server refused it and to null when it went through.
+     * server refused it and to null when it went through. The flags are the
+     * confirmation's, which prints a refusal in itself: passed on to the
+     * request, they keep the interceptor from saying it a second time.
      */
-    apply: (value: T) => Promise<GeneralError | null>;
+    apply: (
+      value: T,
+      options?: { ownsRefusal?: boolean; ownsRateLimit?: boolean },
+    ) => Promise<GeneralError | null>;
     /**
-     * The module in the genitive case, as the three sentences here spell it:
+     * The module in the genitive case, as the sentences here spell it:
      * "блога", "игры".
      */
     subject: string;
@@ -51,18 +63,30 @@ const confirmOption = ref(null) as Ref<{
   label: string;
 } | null>;
 
-const confirmMessage = computed(() =>
-  confirmOption.value
-    ? `Действие "${confirmOption.value.label}" изменит статус ${props.subject}. Продолжить?`
-    : "",
+// The dialog asks the question in the words of the button that opened it. The
+// transition label is a verb and its object ("Закрыть игру"), so the heading is
+// that label turned into a question and the confirm button is its first word,
+// the verb alone, the length every confirm button on the site keeps.
+const confirmTitle = computed(() =>
+  confirmOption.value ? `${confirmOption.value.label}?` : "",
 );
+
+const confirmVerb = computed(
+  () => confirmOption.value?.label.split(" ")[0] ?? "",
+);
+
+const confirmMessage = computed(() =>
+  confirmOption.value ? `Статус ${props.subject} сменится сразу` : "",
+);
+
+/** A refusal the server did not word, in a plate and in the window alike. */
+const failure = computed(() => `Не удалось изменить статус ${props.subject}`);
 
 async function run(t: T) {
   pending.value = t;
   const error = await props.apply(t);
   pending.value = null;
-  if (error)
-    notifyFailure(error, `Не удалось изменить статус ${props.subject}`);
+  if (error) notifyFailure(error, failure.value);
 }
 
 function onClick(t: StatusTransitionOption<T>) {
@@ -73,10 +97,15 @@ function onClick(t: StatusTransitionOption<T>) {
   }
 }
 
-async function confirm() {
+/** The confirmation's action: the transition the window asked about. */
+async function confirmed() {
   const opt = confirmOption.value;
-  confirmOption.value = null;
-  if (opt) await run(opt.value);
+  if (!opt) return;
+  const error = await props.apply(opt.value, {
+    ownsRefusal: true,
+    ownsRateLimit: true,
+  });
+  return { error };
 }
 </script>
 
@@ -89,7 +118,6 @@ async function confirm() {
         <button
           type="button"
           class="strip-action"
-          :class="{ danger: t.danger }"
           :disabled="pending === t.value"
           @click="onClick(t)"
         >
@@ -105,7 +133,6 @@ async function confirm() {
         :key="t.value"
         type="button"
         class="status-btn"
-        :class="{ danger: t.danger }"
         :disabled="pending === t.value"
         @click="onClick(t)"
       >
@@ -115,12 +142,12 @@ async function confirm() {
 
     <ConfirmDialog
       :show="!!confirmOption"
-      :title="`Изменение статуса ${subject}`"
+      :title="confirmTitle"
       :message="confirmMessage"
-      :confirm-label="confirmOption?.label"
-      danger
-      @confirm="confirm"
-      @cancel="confirmOption = null"
+      :confirm-label="confirmVerb"
+      :failure="failure"
+      :action="confirmed"
+      @update:show="(open: boolean) => !open && (confirmOption = null)"
     />
   </template>
 </template>
@@ -134,34 +161,19 @@ async function confirm() {
 .muted
   color: $text-muted
 
+// A word of the sidebar menu, drawn as every other link of it, out of reach
+// included. A destructive move is not coloured: it asks first, and the
+// question carries the weight.
 .strip-action
-  padding: 0
-  border: none
-  background: none
-  font: inherit
-  color: $link
-  cursor: pointer
-
-  &:hover:not(:disabled)
-    color: $link-hover
-    text-decoration: underline
-
-  &.danger
-    color: $accent-red
-
-  &:disabled
-    opacity: 0.6
-    cursor: default
+  +inline-link-button
 
 .status-buttons
   display: flex
   flex-wrap: wrap
   gap: $small
 
+// The shared secondary button, a destructive move included: see above.
 .status-btn
   font-size: $secondary-font-size
   +button
-
-  &.danger
-    +button-danger
 </style>

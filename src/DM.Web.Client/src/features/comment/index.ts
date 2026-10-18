@@ -1,2 +1,2 @@
-export { CommentItem } from "./ui";
+export { CommentItem, CommentComposer } from "./ui";
 export { useCommentWarnDialog } from "./model/useCommentWarnDialog";

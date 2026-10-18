@@ -102,7 +102,7 @@ internal class MessageSearchRepository : IMessageSearchRepository
                         .GetResultHeadline(
                             SearchConfig,
                             DmDbContext.RegexpReplace(
-                                EF.Property<string>(m, "SearchText"), PrivateBlockPattern, " ", "gi"),
+                                EF.Property<string>(m, "SearchText"), PrivateBlockPattern, " ", SearchSnippet.PrivateBlockPatternFlags),
                             SearchSnippet.HeadlineOptions),
                 })
                 .ToArrayAsync(ct))
@@ -122,7 +122,7 @@ internal class MessageSearchRepository : IMessageSearchRepository
                         .GetResultHeadline(
                             SearchConfig,
                             DmDbContext.RegexpReplace(
-                                EF.Property<string>(p, "SearchText"), PrivateBlockPattern, " ", "gi"),
+                                EF.Property<string>(p, "SearchText"), PrivateBlockPattern, " ", SearchSnippet.PrivateBlockPatternFlags),
                             SearchSnippet.HeadlineOptions),
                 })
                 .ToArrayAsync(ct))
@@ -182,6 +182,14 @@ internal class MessageSearchRepository : IMessageSearchRepository
         if (includeGlobal)
         {
             var q = _dbContext.Messages.Where(m => !m.IsRemoved && m.ChatId == globalChatId);
+            // The authors the reader hides in the general chat stay hidden in its
+            // search (MessageSearchQuery.HiddenAuthorIds).
+            if (query.HiddenAuthorIds is { Count: > 0 })
+            {
+                var hiddenAuthors = query.HiddenAuthorIds.ToArray();
+                q = q.Where(m => !hiddenAuthors.Contains(m.UserId));
+            }
+
             if (hasText)
                 q = q.Where(m => EF.Property<NpgsqlTsVector>(m, "SearchVector")
                     .Matches(EF.Functions.WebSearchToTsQuery(SearchConfig, freeText)));
@@ -205,12 +213,16 @@ internal class MessageSearchRepository : IMessageSearchRepository
         }
 
         // ── Participant chats (direct/group), reusing the participation gate ──
+        // The gate carries the reader's cleared history too: a search is one more
+        // way of reading the conversation, and what he cleared for himself is not
+        // found for him.
         if (includeChats)
         {
             var q = _dbContext.Messages.Where(m =>
                 !m.IsRemoved &&
                 m.ChatId != globalChatId &&
-                m.Chat.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId));
+                m.Chat.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId &&
+                                          (l.HistoryClearedUtc == null || m.CreatedUtc > l.HistoryClearedUtc)));
             if (chatIds != null)
                 q = q.Where(m => chatIds.Contains(m.ChatId));
             if (hasText)

@@ -57,6 +57,18 @@ export enum NotificationType {
   NewGame = "NewGame",
   NewCharacter = "NewCharacter",
 
+  // Moderation. These reach the person the decision was about: the warning
+  // leads to the log entry that says why, the ban to the profile that says
+  // until when. A warning is never withdrawn, only corrected, and the
+  // correction is announced on its own: the points it costs the reader change
+  // and the log gains a second signature saying why. The closing of a ticket
+  // reaches its author, who has an account (a guest gets no letters), and
+  // leads to the page of the ticket, where its conversation stands.
+  WarningIssued = "WarningIssued",
+  WarningPointsChanged = "WarningPointsChanged",
+  BanIssued = "BanIssued",
+  TicketResolved = "TicketResolved",
+
   // Security. These reach the owner of the account and nobody else, and they
   // carry no link: what a suspicious login or a changed password points at is
   // not a page.
@@ -67,16 +79,41 @@ export enum NotificationType {
 }
 
 export type NotificationId = Id<string>;
+
+/**
+ * One field of a notification under its title, in the words of the letter about
+ * the same event. A moment is the ISO string the generator wrote, left for the
+ * reader's clock to format like every date of the site.
+ */
+export type NotificationDetail = {
+  label: Served<string>;
+  value: Served<string>;
+  isMoment: Served<boolean>;
+};
+
+/**
+ * One row of the notification list. The title, the path and the details come
+ * from the table the letter and the bots are written from, so a page showing
+ * the list need not name an event or build an address of its own. `url` is a
+ * path from the root of the site, and absent rather than null when there is
+ * nothing to lead to: the API leaves null fields out (WhenWritingNull).
+ */
 export type UserNotification = {
   id: Served<NotificationId>;
   eventType: Served<NotificationType>;
   payload: Served<any>;
+  createdUtc: Served<string>;
+  isRead: Served<boolean>;
+  title: Served<string>;
+  url?: Served<string>;
+  details: Served<NotificationDetail[]>;
 };
 
 /**
- * One notification as the hub pushes it: the same three fields the list returns
- * over REST, in the same JSON. It used to live in a file of its own next to a
- * second copy of the event vocabulary, which is how the two came apart.
+ * One notification as the hub pushes it. The push is the DTO the list returns,
+ * written by the same mapper and always unread, and the screens that react to a
+ * push read these three fields of it. It used to live in a file of its own next
+ * to a second copy of the event vocabulary, which is how the two came apart.
  */
 export interface SignalRNotification {
   id: string;

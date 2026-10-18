@@ -8,6 +8,7 @@ using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
@@ -92,33 +93,11 @@ public class RoomServiceShould : UnitTestBase
         };
 
         _gameService.GetAsync(gameId).Returns(game);
-        _repository.GetLastRoomInfo(gameId).Returns(new RoomOrderInfo { OrderNumber = 0 });
         _repository.Create(Arg.Any<CreateRoomEntity>()).Returns(new Room { Id = Guid.NewGuid(), GameId = gameId });
 
         await _service.CreateAsync(createRoom);
 
         _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Edit, game);
-    }
-
-    [Fact]
-    public async Task CreateRoomWithIncrementedOrderNumber()
-    {
-        var gameId = Guid.NewGuid();
-        var createRoom = new CreateRoom { GameId = gameId, Title = "Test Room" };
-        var game = new GameDto
-        {
-            Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
-        };
-        var lastOrderNumber = 5;
-
-        _gameService.GetAsync(gameId).Returns(game);
-        _repository.GetLastRoomInfo(gameId).Returns(new RoomOrderInfo { OrderNumber = lastOrderNumber });
-        _repository.Create(Arg.Any<CreateRoomEntity>()).Returns(new Room { Id = Guid.NewGuid(), GameId = gameId });
-
-        await _service.CreateAsync(createRoom);
-
-        await _repository.Received(1).Create(Arg.Is<CreateRoomEntity>(e => e.OrderNumber == lastOrderNumber + 1));
     }
 
     [Fact]
@@ -134,7 +113,6 @@ public class RoomServiceShould : UnitTestBase
         };
 
         _gameService.GetAsync(gameId).Returns(game);
-        _repository.GetLastRoomInfo(gameId).Returns(new RoomOrderInfo { OrderNumber = 0 });
         _repository.Create(Arg.Any<CreateRoomEntity>()).Returns(new Room { Id = roomId, GameId = gameId });
 
         // The identifier is minted here and not learnt from the row: the marker is
@@ -162,7 +140,6 @@ public class RoomServiceShould : UnitTestBase
         };
 
         _gameService.GetAsync(gameId).Returns(game);
-        _repository.GetLastRoomInfo(gameId).Returns(new RoomOrderInfo { OrderNumber = 0 });
         _repository.Create(Arg.Any<CreateRoomEntity>()).Returns(new Room { Id = roomId, GameId = gameId });
 
         await _service.CreateAsync(createRoom);
@@ -255,6 +232,8 @@ public class RoomServiceShould : UnitTestBase
 
         UpdateRoomEntity? captured = null;
         _repository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(room);
+        _repository.GetForUpdate(previousRoomId, Arg.Any<Guid>())
+            .Returns(new RoomToUpdate { Id = previousRoomId, GameId = room.GameId });
         _repository.Update(Arg.Any<UpdateRoomEntity>())
             .Returns(room)
             .AndDoes(ci =>
@@ -439,4 +418,124 @@ public class RoomServiceShould : UnitTestBase
 
         await _repository.Received(1).GetAvailable(roomId, CurrentUserId, mayJudge);
     }
+
+    /// <summary>
+    /// A room is moved after another room of its own game and nowhere else: an
+    /// id of another game, of no room, or of the room itself is refused by name
+    /// before anything is written.
+    /// </summary>
+    [Theory]
+    [InlineData("another game")]
+    [InlineData("no room")]
+    [InlineData("itself")]
+    public async Task RefuseToPutARoomAfterAnythingButARoomOfItsGame(string previous)
+    {
+        var roomId = Guid.NewGuid();
+        var gameId = Guid.NewGuid();
+        var otherRoomId = Guid.NewGuid();
+        var room = new RoomToUpdate
+        {
+            Id = roomId,
+            GameId = gameId,
+            Game = new GameDto { Id = gameId, Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" } }
+        };
+        _repository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(room);
+        _repository.GetForUpdate(otherRoomId, Arg.Any<Guid>()).Returns(previous == "another game"
+            ? new RoomToUpdate { Id = otherRoomId, GameId = Guid.NewGuid() }
+            : null);
+        var target = previous == "itself" ? roomId : otherRoomId;
+
+        var act = () => _service.UpdateAsync(new UpdateRoom
+        {
+            RoomId = roomId,
+            PreviousRoomId = Optional<Guid>.WithValue(target)
+        });
+
+        (await act.Should().ThrowAsync<HttpBadRequestException>())
+            .Which.ValidationErrors.Should().ContainKey("previousRoomId");
+        await _repository.DidNotReceive().Update(Arg.Any<UpdateRoomEntity>());
+    }
+
+    /// <summary>
+    /// The head of the list is asked for with an explicit null, and needs no
+    /// room to stand after.
+    /// </summary>
+    [Fact]
+    public async Task PutARoomFirstWithoutAskingForAnotherRoom()
+    {
+        var roomId = Guid.NewGuid();
+        var room = new RoomToUpdate
+        {
+            Id = roomId,
+            Game = new GameDto { Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" } }
+        };
+        _repository.GetForUpdate(roomId, Arg.Any<Guid>()).Returns(room);
+        _repository.Update(Arg.Any<UpdateRoomEntity>()).Returns(room);
+
+        await _service.UpdateAsync(new UpdateRoom { RoomId = roomId, PreviousRoomId = Optional<Guid>.WithValue(null) });
+
+        await _repository.Received(1).Update(Arg.Is<UpdateRoomEntity>(
+            u => u.ShouldReorder && u.NewPreviousRoomId == null));
+    }
+
+    /// <summary>
+    /// A closed room the reader may not open is named in the menu with the
+    /// characters who write in it, as the old site writes it: "[Лес] - Густав,
+    /// Эодор". Characters let in to read, people let in by name and a removed
+    /// character are not among them, and nothing else of the room is told.
+    /// </summary>
+    [Fact]
+    public async Task NameOnlyTheWritingCharactersOfARoomTheReaderMayNotOpen()
+    {
+        var gameId = Guid.NewGuid();
+        var joined = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var closed = new Room
+        {
+            Id = Guid.NewGuid(),
+            CanView = false,
+            TotalPostsCount = 12,
+            Accesses =
+            [
+                Grant(RoomAccessTargetType.Character, RoomAccessPolicy.Full, "Эодор", joined.AddDays(2)),
+                Grant(RoomAccessTargetType.Character, RoomAccessPolicy.ReadOnly, "Читающий", joined),
+                Grant(RoomAccessTargetType.Reader, RoomAccessPolicy.ReadOnly, null, null),
+                Grant(RoomAccessTargetType.Character, RoomAccessPolicy.Full, null, null),
+                Grant(RoomAccessTargetType.Character, RoomAccessPolicy.Full, "Густав", joined.AddDays(1))
+            ]
+        };
+        var open = new Room
+        {
+            Id = Guid.NewGuid(),
+            CanView = true,
+            Accesses = [Grant(RoomAccessTargetType.Character, RoomAccessPolicy.Full, "Густав", joined)]
+        };
+        _gameService.GetAsync(gameId).Returns(new GameDto
+        {
+            Id = gameId,
+            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
+        });
+        _repository.GetAllVisible(gameId, CurrentUserId, Arg.Any<bool>()).Returns(new[] { closed, open });
+        _unreadCountersRepository
+            .SelectByEntitiesAsync(CurrentUserId, UnreadEntryType.Message, Arg.Any<Guid[]>())
+            .Returns(new Dictionary<Guid, int> { [closed.Id] = 3, [open.Id] = 0 });
+
+        var rooms = (await _service.GetAllAsync(gameId)).ToArray();
+
+        rooms[0].CharacterNames.Should().Equal("Густав", "Эодор");
+        rooms[0].Accesses.Should().BeEmpty();
+        rooms[0].TotalPostsCount.Should().Be(0);
+        rooms[0].UnreadPostsCount.Should().Be(0);
+        rooms[1].CharacterNames.Should().BeEmpty("the reader of a room is told by its accesses");
+        rooms[1].Accesses.Should().ContainSingle();
+    }
+
+    private static RoomAccess Grant(
+        RoomAccessTargetType target, RoomAccessPolicy policy, string? name, DateTimeOffset? joined) => new()
+        {
+            Id = Guid.NewGuid(),
+            TargetType = target,
+            Policy = policy,
+            Character = name == null ? null! : new Character { Id = Guid.NewGuid(), Name = name, CreatedUtc = joined!.Value },
+            User = new GeneralUser { UserId = Guid.NewGuid(), Username = "reader" }
+        };
 }

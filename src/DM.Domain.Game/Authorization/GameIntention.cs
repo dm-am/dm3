@@ -48,11 +48,6 @@ public enum GameIntention
     SetStatusClosed = 10,
 
     /// <summary>
-    /// Read game comments
-    /// </summary>
-    ReadComments = 11,
-
-    /// <summary>
     /// Post game comments
     /// </summary>
     CreateComment = 12,

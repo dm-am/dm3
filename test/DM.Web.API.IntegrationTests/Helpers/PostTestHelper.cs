@@ -40,7 +40,7 @@ public static class PostTestHelper
             AuthorId = TestConstants.TestUserId,
             CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
             GameText =
-                $"{publicText} [private={TestConstants.SecondCharacterName}]{privateText}[/private]",
+                $"{publicText} [private=\"{TestConstants.SecondCharacterName}\"]{privateText}[/private]",
             MetagameText = null,
             PrivateAddresseeSnapshotJson =
                 $"{{\"{TestConstants.SecondCharacterName}\":[\"{TestConstants.SecondUserId}\"]}}",

@@ -9,9 +9,10 @@
  * Who may write one is the server's word and only the server's: the page asks
  * GET endorsements/eligibility, which is evaluated by the same code the POST
  * refuses by (signed in, not oneself, past probation, played in the same game,
- * no recommendation for this pair yet). A refusal is printed in the server's
- * own sentence instead of being paraphrased here — a second copy of those
- * rules on the client would drift from the first.
+ * no recommendation for this pair yet). A "no" takes the reader to the
+ * profile the address names: the link here is drawn there only on a "yes",
+ * and a typed address that answered with a sentence of refusal in place of
+ * the form was the offer made anyway.
  *
  * The header, the 404 on an unknown owner and the document title are the
  * profile-subpage composable's, the same as the six list subpages next door.
@@ -30,7 +31,7 @@ import TextArea from "@/shared/ui/TextArea/TextArea.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { pluralize } from "@/shared/lib/utils/pluralize";
-import { describeFailure } from "@/shared/lib/errors";
+import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
 import { useProfileSubpage } from "./useProfileSubpage";
 import { useEndorsementEligibility } from "./useEndorsementEligibility";
@@ -46,16 +47,33 @@ const router = useRouter();
 const { username, canonicalUsername, notFound, profileLink } =
   useProfileSubpage("Написать рекомендацию");
 
+/**
+ * Both failures of this page are answered on this page, so both flags travel
+ * with both requests.
+ *
+ * A refused save stands under the field the text is still sitting in, and a
+ * failed eligibility question stands in the strip above the form with the read
+ * offered again — in each case the sentence is already where the reader is
+ * looking, and the plate the interceptor used to raise over it was one event
+ * told twice. The wait on a 429 is printed here too (describeRateLimit), which
+ * is what the second flag is for: taking a limit over without saying how long
+ * would drop the seconds the server named.
+ *
+ * An expired session and a dead connection are left to the interceptor:
+ * neither is about this recommendation, and only the interceptor knows the
+ * other address of the site.
+ */
+const OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
+
 // Asked again here rather than carried over from the profile: this URL is
 // reachable directly, and a form that draws itself before the server has
 // agreed is the offer the site must not make.
 const {
   canCreate: canWrite,
-  refusal,
   asking,
   askError,
   ask,
-} = useEndorsementEligibility();
+} = useEndorsementEligibility(OWNS_REFUSAL);
 
 const text = ref("");
 const submitting = ref(false);
@@ -63,8 +81,12 @@ const submitError = ref("");
 
 const tooShort = computed(() => text.value.trim().length < MIN_LENGTH);
 
-function checkEligibility() {
-  return ask(username.value as Username);
+async function checkEligibility() {
+  await ask(username.value as Username);
+  // A failed question is not a "no": it stays here, with the read offered
+  // again. A "no" is the profile, replaced, so that going back does not land
+  // on this address again.
+  if (!askError.value && !canWrite.value) router.replace(profileLink.value);
 }
 
 useFetchData(
@@ -88,16 +110,20 @@ async function submit() {
   const { error } = await userApi.createUserEndorsement(
     username.value as Username,
     { text: text.value.trim() },
+    OWNS_REFUSAL,
   );
   submitting.value = false;
   if (error) {
     // Every refusal of this endpoint is a sentence of the server's own, and
     // it belongs under the field the text is still sitting in: a refusal must
     // cost nothing that was typed.
-    submitError.value = describeFailure(
-      error,
-      "Не удалось отправить рекомендацию",
-    );
+    //
+    // A wait is said in the shared wording, the one the interceptor would have
+    // raised: it is the only one that names the seconds the server asked for.
+    submitError.value =
+      error.status === 429
+        ? describeRateLimit(error.retryAfterSeconds)
+        : describeFailure(error, "Не удалось отправить рекомендацию");
     return;
   }
   // Where the recommendation now lives — the recipient's received list, with
@@ -130,37 +156,35 @@ async function submit() {
 
     <!-- Nothing is drawn while the server is still deciding: a form that
          appears and then disappears has already made the offer. -->
-    <template v-else-if="!asking">
-      <template v-if="canWrite">
-        <form-field
-          label="Текст рекомендации (обычный текст, без форматирования)"
-          name="endorsementText"
-          :errors="submitError ? [submitError] : []"
+    <template v-else-if="!asking && canWrite">
+      <form-field
+        label="Текст рекомендации (обычный текст, без форматирования)"
+        name="endorsementText"
+        :errors="submitError ? [submitError] : []"
+      >
+        <template #hint
+          >Чем игрок запомнился в совместной игре: {{ lengthHint }}</template
         >
-          <template #hint
-            >Чем игрок запомнился в совместной игре: {{ lengthHint }}</template
-          >
-          <text-area
-            id="endorsementText"
-            v-model="text"
-            placeholder="Напишите, за что вы рекомендуете этого игрока..."
-            :max-length="MAX_LENGTH"
-            :disabled="submitting"
-          />
-        </form-field>
+        <text-area
+          id="endorsementText"
+          v-model="text"
+          placeholder="Напишите, за что вы рекомендуете этого игрока..."
+          :max-length="MAX_LENGTH"
+          :disabled="submitting"
+        />
+      </form-field>
 
-        <div class="form-actions">
-          <Button :loading="submitting" :disabled="tooShort" @click="submit">
-            Отправить рекомендацию
-          </Button>
-          <router-link :to="profileLink">Отмена</router-link>
-        </div>
-      </template>
-
-      <!-- The server's own sentence, not a paraphrase of it. -->
-      <secondary-text v-else class="refusal">
-        {{ refusal || "Сейчас рекомендацию написать нельзя" }}
-      </secondary-text>
+      <div class="form-actions">
+        <Button
+          variant="primary"
+          :loading="submitting"
+          :disabled="tooShort"
+          @click="submit"
+        >
+          Отправить рекомендацию
+        </Button>
+        <router-link :to="profileLink">Отмена</router-link>
+      </div>
     </template>
   </div>
 </template>
@@ -178,8 +202,4 @@ async function submit() {
   display: flex
   align-items: center
   gap: $medium
-
-.refusal
-  display: block
-  margin-top: $medium
 </style>

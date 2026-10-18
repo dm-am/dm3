@@ -71,9 +71,6 @@
     "resolverComment",
     "status"
   ],
-  "DM.Web.API.Features.Account.Deactivation.DeactivationRequest": [
-    "password"
-  ],
   "DM.Web.API.Features.Account.Recovery.PasswordResetCompletion": [
     "newPassword"
   ],
@@ -88,7 +85,7 @@
     "status"
   ],
   "DM.Web.API.Features.Account.Registration.ActivationRequest": [
-    "retryEmail",
+    "timeZoneId",
     "username"
   ],
   "DM.Web.API.Features.Account.Registration.PendingInfoResponse": [
@@ -100,9 +97,6 @@
     "email",
     "password",
     "website"
-  ],
-  "DM.Web.API.Features.Account.Registration.ResendActivation": [
-    "email"
   ],
   "DM.Web.API.Features.Account.Security.SecurityEvent": [
     "details",
@@ -136,10 +130,8 @@
     "enabled",
     "enabledUtc",
     "lastVerifiedUtc",
-    "privilegeWithheld",
     "recoveryCodesLeft",
-    "removalDueUtc",
-    "required"
+    "removalDueUtc"
   ],
   "DM.Web.API.Features.Blog.Blacklists.BlockUserRequest": [
     "username"
@@ -152,7 +144,6 @@
     "closedReason",
     "closedUtc",
     "commentsCount",
-    "commentsEnabled",
     "createdUtc",
     "description",
     "draftVisibility",
@@ -167,7 +158,9 @@
     "subscribersCount",
     "title",
     "unreadCommentsCount",
-    "unreadPublicationsCount"
+    "unreadPublicationsCount",
+    "viewer",
+    "viewerBlacklisted"
   ],
   "DM.Web.API.Features.Blog.Blogs.BlogPremoderationChangeRequest": [
     "transition"
@@ -175,8 +168,10 @@
   "DM.Web.API.Features.Blog.Blogs.BlogStatusChangeRequest": [
     "transition"
   ],
+  "DM.Web.API.Features.Blog.Blogs.BlogViewer": [
+    "canComment"
+  ],
   "DM.Web.API.Features.Blog.Blogs.CreateBlogRequest": [
-    "commentsEnabled",
     "copyBlacklist",
     "description",
     "draftVisibility",
@@ -198,7 +193,6 @@
     "unreadPublicationsCount"
   ],
   "DM.Web.API.Features.Blog.Blogs.UpdateBlogRequest": [
-    "commentsEnabled",
     "description",
     "draftVisibility",
     "title"
@@ -220,7 +214,6 @@
     "username"
   ],
   "DM.Web.API.Features.Blog.Publications.CreatePublicationRequest": [
-    "commentsEnabled",
     "content",
     "preview",
     "publishImmediately",
@@ -232,7 +225,6 @@
     "blogId",
     "blogTitle",
     "commentCount",
-    "commentsEnabled",
     "content",
     "createdUtc",
     "id",
@@ -243,11 +235,14 @@
     "publishedUtc",
     "rubric",
     "title",
-    "viewCount"
+    "viewCount",
+    "viewer"
+  ],
+  "DM.Web.API.Features.Blog.Publications.PublicationViewer": [
+    "canComment"
   ],
   "DM.Web.API.Features.Blog.Publications.UpdatePublicationRequest": [
     "clearRubric",
-    "commentsEnabled",
     "content",
     "isPublished",
     "preview",
@@ -494,6 +489,9 @@
     "modifiedUtc",
     "text"
   ],
+  "DM.Web.API.Features.Community.Users.ProfileViewer": [
+    "canMessage"
+  ],
   "DM.Web.API.Features.Community.Users.Rating": [
     "postReviewScoreSum",
     "totalPosts"
@@ -528,7 +526,6 @@
     "lastActivityUtc",
     "likesReceived",
     "picture",
-    "privilegeWithheld",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -552,6 +549,7 @@
   "DM.Web.API.Features.Community.Users.UserProfile": [
     "bansReceived",
     "birthday",
+    "blockedByViewer",
     "blogsHosting",
     "blogsHostingByStatus",
     "commentsAuthored",
@@ -578,7 +576,6 @@
     "picture",
     "postReviewsGiven",
     "postReviewsReceived",
-    "privilegeWithheld",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -590,7 +587,8 @@
     "subscribersByCategory",
     "topicsAuthored",
     "username",
-    "usernameHistory"
+    "usernameHistory",
+    "viewer"
   ],
   "DM.Web.API.Features.Community.Users.UsernameHistoryEntry": [
     "changedUtc",
@@ -621,7 +619,8 @@
     "title",
     "topicsCount",
     "unreadCommentsCount",
-    "unreadTopicsCount"
+    "unreadTopicsCount",
+    "viewer"
   ],
   "DM.Web.API.Features.Forum.Boards.BoardLastComment": [
     "author",
@@ -637,6 +636,10 @@
     "id",
     "title",
     "topicNumber"
+  ],
+  "DM.Web.API.Features.Forum.Boards.BoardViewer": [
+    "canCreateTopic",
+    "canCreateTopicAfterSignIn"
   ],
   "DM.Web.API.Features.Forum.Comments.FirstUnreadComment": [
     "commentId",
@@ -662,6 +665,7 @@
     "attachOrder",
     "author",
     "board",
+    "closedByAuthor",
     "commentsCount",
     "createdUtc",
     "description",
@@ -676,7 +680,11 @@
     "periodDigest",
     "title",
     "topicNumber",
-    "unreadCommentsCount"
+    "unreadCommentsCount",
+    "viewer"
+  ],
+  "DM.Web.API.Features.Forum.Topics.TopicViewer": [
+    "canComment"
   ],
   "DM.Web.API.Features.Forum.Topics.UpdateTopicRequest": [
     "board",
@@ -685,12 +693,15 @@
     "isClosed",
     "title"
   ],
-  "DM.Web.API.Features.Game.AttributeSchemas.AttributeSchema": [
-    "author",
+  "DM.Web.API.Features.Game.AttributeSchemaTemplates.AttributeSchemaTemplate": [
     "id",
+    "isDefault",
     "specifications",
-    "title",
-    "type"
+    "title"
+  ],
+  "DM.Web.API.Features.Game.AttributeSchemaTemplates.AttributeSchemaTemplateRequest": [
+    "specifications",
+    "title"
   ],
   "DM.Web.API.Features.Game.AttributeSchemas.AttributeSpecification": [
     "id",
@@ -706,11 +717,6 @@
   "DM.Web.API.Features.Game.AttributeSchemas.AttributeValueSpecification": [
     "modifier",
     "value"
-  ],
-  "DM.Web.API.Features.Game.AttributeSchemas.UpdateAttributeSchemaRequest": [
-    "specifications",
-    "title",
-    "type"
   ],
   "DM.Web.API.Features.Game.Characters.Character": [
     "author",
@@ -808,10 +814,11 @@
   ],
   "DM.Web.API.Features.Game.Games.CreateGameRequest": [
     "assistantUsername",
+    "attributeSpecifications",
+    "copyBlacklist",
     "draft",
     "info",
     "privacySettings",
-    "schemaId",
     "setting",
     "system",
     "tags",
@@ -838,7 +845,6 @@
     "premoderationStatus",
     "publicId",
     "recruitment",
-    "schemaId",
     "setting",
     "status",
     "subscriberUsernames",
@@ -850,6 +856,10 @@
     "unreadCharactersCount",
     "unreadCommentsCount",
     "unreadPostsCount"
+  ],
+  "DM.Web.API.Features.Game.Games.GameAttributeSchema": [
+    "specifications",
+    "version"
   ],
   "DM.Web.API.Features.Game.Games.GameDetails": [
     "activatedUtc",
@@ -881,7 +891,6 @@
     "readers",
     "recruitment",
     "schema",
-    "schemaId",
     "setting",
     "status",
     "subscriberUsernames",
@@ -894,7 +903,9 @@
     "totalPostsCount",
     "unreadCharactersCount",
     "unreadCommentsCount",
-    "unreadPostsCount"
+    "unreadPostsCount",
+    "viewer",
+    "viewerBlacklisted"
   ],
   "DM.Web.API.Features.Game.Games.GamePremoderationChangeRequest": [
     "transition"
@@ -936,12 +947,20 @@
   "DM.Web.API.Features.Game.Games.GameStatusChangeRequest": [
     "transition"
   ],
+  "DM.Web.API.Features.Game.Games.GameViewer": [
+    "canComment",
+    "canReview"
+  ],
   "DM.Web.API.Features.Game.Games.PlayerCharacterInfo": [
     "isDead",
     "isPlayerExiled",
     "isPlayerLeft",
     "name",
     "status"
+  ],
+  "DM.Web.API.Features.Game.Games.ReplaceGameAttributeSchemaRequest": [
+    "specifications",
+    "version"
   ],
   "DM.Web.API.Features.Game.Games.Tag": [
     "description",
@@ -1018,12 +1037,15 @@
     "createdUtc",
     "diceRolls",
     "edits",
+    "gameId",
     "gameText",
     "id",
     "metagameText",
+    "number",
     "rating",
     "reviewCount",
-    "room"
+    "room",
+    "viewer"
   ],
   "DM.Web.API.Features.Game.Posts.PostAttachment": [
     "contentType",
@@ -1039,6 +1061,9 @@
     "editor",
     "id",
     "modifiedUtc"
+  ],
+  "DM.Web.API.Features.Game.Posts.PostViewer": [
+    "canReview"
   ],
   "DM.Web.API.Features.Game.Posts.UpdatePostRequest": [
     "gameText",
@@ -1071,9 +1096,15 @@
     "sign",
     "text"
   ],
+  "DM.Web.API.Features.Game.Reviews.UpdateGameReviewRequest": [
+    "text"
+  ],
   "DM.Web.API.Features.Game.Reviews.UpdatePostReviewRequest": [
     "sign",
     "text"
+  ],
+  "DM.Web.API.Features.Game.Rooms.CreatePostPendencyRequest": [
+    "characterId"
   ],
   "DM.Web.API.Features.Game.Rooms.CreateRoomRequest": [
     "accessType",
@@ -1097,14 +1128,15 @@
     "access",
     "accesses",
     "canView",
+    "characterNames",
     "game",
     "id",
     "isArchived",
     "pendencies",
-    "previousRoomId",
     "roomNumber",
     "settings",
     "title",
+    "totalPostsCount",
     "type",
     "unreadPostsCount"
   ],
@@ -1144,6 +1176,14 @@
     "roomId",
     "totalUnreadCount"
   ],
+  "DM.Web.API.Features.Game.Unread.FirstUnreadRoomPostResult": [
+    "hasUnread",
+    "page",
+    "pageSize",
+    "postId",
+    "postNumber",
+    "totalUnreadCount"
+  ],
   "DM.Web.API.Features.Game.Users.GameUser": [
     "characterId",
     "characterName",
@@ -1181,22 +1221,20 @@
     "website"
   ],
   "DM.Web.API.Features.General.Tickets.CreateTicketIntakeResponse": [
+    "ticketId",
     "trackingToken"
   ],
   "DM.Web.API.Features.General.Tickets.TrackedTicket": [
-    "answer",
+    "canComment",
+    "comments",
     "createdUtc",
     "description",
+    "descriptionHtml",
+    "resolvedByUsername",
     "resolvedUtc",
-    "responses",
     "status",
     "subject",
     "subtype"
-  ],
-  "DM.Web.API.Features.General.Tickets.TrackedTicketResponse": [
-    "createdUtc",
-    "isFromModerator",
-    "text"
   ],
   "DM.Web.API.Features.Messaging.Chats.Chat": [
     "id",
@@ -1204,11 +1242,16 @@
     "participants",
     "title",
     "type",
-    "unreadMessagesCount"
+    "unreadMessagesCount",
+    "viewer"
   ],
-  "DM.Web.API.Features.Messaging.Chats.ChatAvailability": [
-    "canStart",
-    "reason"
+  "DM.Web.API.Features.Messaging.Chats.ChatUnreadCount": [
+    "count"
+  ],
+  "DM.Web.API.Features.Messaging.Chats.ChatViewer": [
+    "canClearHistory",
+    "canLeave",
+    "canWrite"
   ],
   "DM.Web.API.Features.Messaging.Chats.CreateChat": [
     "participantIds",
@@ -1297,6 +1340,8 @@
     "workUrl"
   ],
   "DM.Web.API.Features.Moderation.Bans.Ban": [
+    "accessPolicy",
+    "canLift",
     "comment",
     "expiresUtc",
     "id",
@@ -1304,12 +1349,18 @@
     "isLifted",
     "isVoluntary",
     "liftReason",
-    "liftedByUserId",
+    "liftedBy",
     "liftedUtc",
     "moderator",
     "startedUtc",
     "type",
     "user"
+  ],
+  "DM.Web.API.Features.Moderation.Bans.BanLogEntry": [
+    "ban",
+    "kind",
+    "number",
+    "occurredUtc"
   ],
   "DM.Web.API.Features.Moderation.Bans.CreateBanRequest": [
     "accessPolicy",
@@ -1374,6 +1425,7 @@
   "DM.Web.API.Features.Moderation.Profiles.ModeratedProfile": [
     "bansReceived",
     "birthday",
+    "blockedByViewer",
     "blogsHosting",
     "blogsHostingByStatus",
     "commentsAuthored",
@@ -1407,7 +1459,6 @@
     "picture",
     "postReviewsGiven",
     "postReviewsReceived",
-    "privilegeWithheld",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -1420,6 +1471,7 @@
     "topicsAuthored",
     "username",
     "usernameHistory",
+    "viewer",
     "violations"
   ],
   "DM.Web.API.Features.Moderation.Profiles.ModeratedProfileNote": [
@@ -1444,6 +1496,17 @@
   ],
   "DM.Web.API.Features.Moderation.Profiles.ModerationWatchRequest": [
     "underWatch"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.RemoveAccountRequest": [
+    "reason"
+  ],
+  "DM.Web.API.Features.Moderation.Profiles.RemovedAccount": [
+    "email",
+    "id",
+    "lastActivityUtc",
+    "registeredUtc",
+    "role",
+    "username"
   ],
   "DM.Web.API.Features.Moderation.Profiles.UpdateModeratedProfileNoteRequest": [
     "text"
@@ -1476,6 +1539,7 @@
   ],
   "DM.Web.API.Features.Moderation.Tags.Tag": [
     "description",
+    "descriptionHtml",
     "gamesCount",
     "groupId",
     "groupTitle",
@@ -1504,6 +1568,13 @@
     "sortOrder",
     "title"
   ],
+  "DM.Web.API.Features.Moderation.Tickets.AnswerTicketRequest": [
+    "status",
+    "text"
+  ],
+  "DM.Web.API.Features.Moderation.Tickets.CreateTicketCommentRequest": [
+    "text"
+  ],
   "DM.Web.API.Features.Moderation.Tickets.CreateTicketRequest": [
     "comment",
     "description",
@@ -1511,58 +1582,48 @@
     "entityType",
     "targetUsername"
   ],
-  "DM.Web.API.Features.Moderation.Tickets.ResolveTicketRequest": [
-    "answer",
-    "banComment",
-    "banDurationHours",
-    "issueBan",
-    "issueWarning",
-    "status",
-    "warningPoints",
-    "warningText"
-  ],
   "DM.Web.API.Features.Moderation.Tickets.Ticket": [
-    "answer",
-    "assignedModeratorUsername",
     "comment",
+    "commentsCount",
     "createdUtc",
     "description",
+    "descriptionHtml",
     "entityId",
     "entityType",
     "guestEmail",
-    "hasBan",
-    "hasWarning",
     "id",
-    "reporterUsername",
+    "isGuest",
+    "reporter",
     "resolvedUtc",
     "status",
-    "subtype",
-    "targetUsername"
+    "subtype"
   ],
-  "DM.Web.API.Features.Moderation.Tickets.TicketDetails": [
-    "answer",
-    "assignedModeratorUsername",
-    "comment",
-    "createdUtc",
-    "description",
-    "entityId",
-    "entityType",
-    "guestEmail",
-    "hasBan",
-    "hasWarning",
-    "id",
-    "reporterUsername",
-    "resolvedUtc",
-    "responses",
-    "status",
-    "subtype",
-    "targetUsername"
-  ],
-  "DM.Web.API.Features.Moderation.Tickets.TicketResponse": [
+  "DM.Web.API.Features.Moderation.Tickets.TicketComment": [
     "author",
     "createdUtc",
-    "isFromModerator",
+    "id",
+    "isGuest",
     "text"
+  ],
+  "DM.Web.API.Features.Moderation.Tickets.TicketDetails": [
+    "canComment",
+    "canResolve",
+    "comment",
+    "comments",
+    "commentsCount",
+    "createdUtc",
+    "description",
+    "descriptionHtml",
+    "entityId",
+    "entityType",
+    "guestEmail",
+    "id",
+    "isGuest",
+    "reporter",
+    "resolvedByUsername",
+    "resolvedUtc",
+    "status",
+    "subtype"
   ],
   "DM.Web.API.Features.Moderation.Tickets.TicketStats": [
     "closed",
@@ -1587,6 +1648,10 @@
     "status",
     "userId"
   ],
+  "DM.Web.API.Features.Moderation.Warnings.ChangeWarningPointsRequest": [
+    "points",
+    "reason"
+  ],
   "DM.Web.API.Features.Moderation.Warnings.CreateWarningRequest": [
     "entityId",
     "entityType",
@@ -1596,7 +1661,6 @@
   ],
   "DM.Web.API.Features.Moderation.Warnings.PublicWarning": [
     "createdUtc",
-    "isActive",
     "points"
   ],
   "DM.Web.API.Features.Moderation.Warnings.UserWarningsInfo": [
@@ -1613,18 +1677,49 @@
     "user"
   ],
   "DM.Web.API.Features.Moderation.Warnings.Warning": [
+    "canChangePoints",
     "createdUtc",
-    "entityEditedAfterWarning",
+    "entityCreatedUtc",
     "entityId",
-    "entitySnapshot",
     "entityType",
     "entityUrl",
+    "evidence",
     "id",
-    "isActive",
     "moderator",
+    "originalPoints",
+    "placeKind",
+    "placeTitle",
     "points",
+    "pointsChangeText",
+    "pointsChangedBy",
+    "pointsChangedUtc",
+    "profile",
     "reason",
     "user"
+  ],
+  "DM.Web.API.Features.Moderation.Warnings.WarningLogEntry": [
+    "createdUtc",
+    "entityCreatedUtc",
+    "entityType",
+    "entityUrl",
+    "evidence",
+    "id",
+    "moderator",
+    "originalPoints",
+    "placeKind",
+    "placeTitle",
+    "points",
+    "pointsChangeText",
+    "pointsChangedBy",
+    "pointsChangedUtc",
+    "profile",
+    "reason",
+    "user"
+  ],
+  "DM.Web.API.Features.Moderation.Warnings.WarningProfile": [
+    "info",
+    "picture",
+    "status"
   ],
   "DM.Web.API.Features.Personal.Blacklists.BlacklistEntry": [
     "createdUtc",
@@ -1691,12 +1786,22 @@
     "expiresUtc"
   ],
   "DM.Web.API.Features.Personal.Notifications.Notification": [
+    "createdUtc",
+    "details",
     "eventType",
     "id",
-    "payload"
+    "isRead",
+    "payload",
+    "title",
+    "url"
   ],
   "DM.Web.API.Features.Personal.Notifications.NotificationCount": [
     "count"
+  ],
+  "DM.Web.API.Features.Personal.Notifications.NotificationDetail": [
+    "isMoment",
+    "label",
+    "value"
   ],
   "DM.Web.API.Features.Personal.Notifications.NotificationSettings": [
     "discord",
@@ -1719,7 +1824,8 @@
   ],
   "DM.Web.API.Features.Personal.Preferences.Preferences": [
     "paging",
-    "theme"
+    "theme",
+    "timeZoneId"
   ],
   "DM.Web.API.Features.Personal.Preferences.UpdatePagingRequest": [
     "commentsPerPage",
@@ -1730,7 +1836,8 @@
   ],
   "DM.Web.API.Features.Personal.Preferences.UpdatePreferencesRequest": [
     "paging",
-    "theme"
+    "theme",
+    "timeZoneId"
   ],
   "DM.Web.API.Features.Personal.ProfileNotes.UserProfileNote": [
     "createdUtc",
@@ -1745,6 +1852,7 @@
   "DM.Web.API.Features.Personal.Profiles.PersonalProfile": [
     "bansReceived",
     "birthday",
+    "blockedByViewer",
     "blogsHosting",
     "blogsHostingByStatus",
     "commentsAuthored",
@@ -1772,7 +1880,6 @@
     "picture",
     "postReviewsGiven",
     "postReviewsReceived",
-    "privilegeWithheld",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -1785,6 +1892,7 @@
     "topicsAuthored",
     "username",
     "usernameHistory",
+    "viewer",
     "visibility"
   ],
   "DM.Web.API.Features.Personal.Profiles.UpdateProfile": [
@@ -1815,7 +1923,9 @@
     "createdUtc",
     "id",
     "settings",
+    "targetActivatedUtc",
     "targetId",
+    "targetStatus",
     "targetTitle",
     "targetType",
     "targetUsername"
@@ -1824,6 +1934,12 @@
     "settings"
   ],
   "DM.Web.API.Shared.BbRendering.CommonBbText": [
+    "context",
+    "parseMode",
+    "surface",
+    "value"
+  ],
+  "DM.Web.API.Shared.BbRendering.HintBbText": [
     "context",
     "parseMode",
     "surface",
@@ -1840,10 +1956,6 @@
     "parseMode",
     "surface",
     "value"
-  ],
-  "DM.Web.API.Shared.BbRendering.QuoteSource": [
-    "privateTextStripped",
-    "text"
   ],
   "DM.Web.API.Shared.BbRendering.RenderContextEnvelope": [
     "gameId",
@@ -1970,7 +2082,7 @@
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Forum.Topics.Topic, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
-  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.AttributeSchemas.AttributeSchema, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.AttributeSchemaTemplates.AttributeSchemaTemplate, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Characters.CharacterDetails, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
@@ -1980,6 +2092,9 @@
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Games.Game, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Games.GameAttributeSchema, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Games.GameDetails, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
@@ -2009,7 +2124,13 @@
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Unread.FirstUnreadPostResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Game.Unread.FirstUnreadRoomPostResult, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.General.Tickets.TrackedTicket, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Messaging.Chats.ChatUnreadCount, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Messaging.GlobalChatEvents.GlobalChatEvent, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
@@ -2033,6 +2154,9 @@
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Tickets.Ticket, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Tickets.TicketComment, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Moderation.Tickets.TicketDetails, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
@@ -2043,9 +2167,6 @@
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Personal.Notepads.NotepadEntryResponse, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
-    "resource"
-  ],
-  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Shared.BbRendering.QuoteSource, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Shared.Dto.Comment, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
@@ -2131,7 +2252,7 @@
     "paging",
     "resources"
   ],
-  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.AttributeSchemas.AttributeSchema, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Game.AttributeSchemaTemplates.AttributeSchemaTemplate, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],
@@ -2195,11 +2316,19 @@
     "paging",
     "resources"
   ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Bans.BanLogEntry, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
   "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Moderators.ModeratorOverview, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],
   "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Profiles.ModeratedProfileNote, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Profiles.RemovedAccount, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],
@@ -2224,6 +2353,10 @@
     "resources"
   ],
   "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Warnings.Warning, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Moderation.Warnings.WarningLogEntry, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],

@@ -31,38 +31,94 @@ html, body, #app, #application
   overflow: hidden
 
 body
-  font-family: "PT Sans", sans-serif
+  font-family: "PT Sans", "PT Sans Fallback", sans-serif
   font-size: $font-size
   line-height: 1.3
   word-wrap: break-word
   color: $text
 
+// The link of the site. Its colour eases over the tempo of the buttons and of
+// every link-shaped button (+link-tone in Inputs.sass), so an <a> and a
+// <button> standing side by side in one line answer the pointer alike; it
+// used to take .4s here and none at all there.
 a
   text-decoration: none
   cursor: pointer
-  transition: color $animation-time ease
+  transition: color $transition-normal
   color: $link
   &:hover
     text-decoration: underline
     color: $link-hover
 
-// Keyboard focus indicator — the reset above removes outlines, so restore
-// them for keyboard navigation only (mouse focus stays outline-free).
-// Component-level :focus-visible rules (e.g. _Tables.sass expandable rows,
-// DataTable sort buttons) have higher specificity and override this.
-// Form controls are on this list too. They used to rely on the ring inside
-// +input-base, which a control that styles its own frame never takes, and the
-// components that do that are the search field, the date field and the range
-// picker — the most-used fields on the site. A keyboard reader had nothing at
-// all to tell them where they were.
+// Focus indicator — the reset above removes outlines, and this is where the
+// site's one ring comes back. One colour, $link, at a width and offset chosen
+// by what the ring goes around, and nothing else anywhere draws a different
+// one; component rules only refine these (a negative offset for controls that
+// stand shoulder to shoulder — table rows, segments, picker cells — where a
+// ring on the edge would lie on the neighbour).
+//
+// Inline text (a link, a word made focusable with tabindex): 1px, two pixels
+// out. A 2px ring around a single word reads as a box drawn over the sentence,
+// and that is what this rule used to draw. [tabindex] is treated as text here
+// because most of it is; a focusable box takes the block recipe in its own
+// component.
+//
+// A block control (a button): 2px flush with the edge, so the ring follows the
+// control's corners and reads as part of it rather than as a rectangle around
+// it. The filled primary steps it one pixel out in Inputs.sass, because a ring
+// of $link on a fill of $link would vanish.
+//
+// A field (input, textarea, select): no outline at all. The frame turns $link
+// and a 1px shadow of $link sits flush against it — 2px following the field's
+// own rounded edge, the pair AuthSurface.sass already draws. On :focus and not
+// :focus-visible, because a field is where the reader types, and the mouse
+// needs the mark as much as the keyboard. The outline is dropped only because
+// this pair replaces it, and dropped under :focus-visible rather than :focus:
+// the user agent's own ring is a :focus-visible rule, so that is the one state
+// in which it would double the frame. +input-base restates the pair for the fields that take the mixin; this rule
+// is what the fields that style their own frame (the search field, the date
+// field, the range picker — the most-used fields on the site) fall back on.
+//
+// $link and not the grey of $border-focus, which every ring here used to be:
+// WCAG 2.4.13 asks 3:1 against everything the indicator touches, and the grey
+// measured 2.85 on the light page. $link measures 7.6 in the light theme and
+// 4.3 in the dark one on every surface a control stands on — fillContrast
+// .spec.ts keeps measuring it.
 a:focus-visible,
-button:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible,
 [tabindex]:focus-visible
-  outline: 2px solid $border-focus
+  outline: 1px solid $link
   outline-offset: 2px
+
+button:focus-visible
+  outline: 2px solid $link
+  outline-offset: 0
+
+// Text fields only: a checkbox or a radio is a box the reader clicks, not a
+// field they type into, so a mouse click on it must not light a ring, and its
+// keyboard ring is the box ring further down, not the field pair.
+//
+// :where() and not a bare :not() chain: :not() takes the specificity of its
+// argument, and three attribute selectors would lift this global rule above
+// every component's own field rule - the inner control of a wrapped field lost
+// its box-shadow: none to it and drew a second ring inside the first. :where()
+// keeps the exclusions and adds nothing, so the rule stays what a global
+// fallback must be: the weakest voice in the cascade.
+input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"])):focus,
+textarea:focus,
+select:focus
+  border-color: $link
+  box-shadow: 0 0 0 1px $link
+
+input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"])):focus-visible,
+textarea:focus-visible,
+select:focus-visible
+  outline: none
+
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible,
+input[type="range"]:focus-visible
+  outline: 2px solid $link
+  outline-offset: 0
 
 // Zero-width preserved space: invisible in layout (font-size: 0) but
 // Selection.toString() still emits a real " " between the inline parts of a
@@ -202,25 +258,6 @@ select:focus-visible,
     background-position: 200% 0
   100%
     background-position: -200% 0
-
-// The travel of the busy bar a control draws while its request is in flight
-// (+button-busy, Inputs.sass). It lives here for the two reasons the shimmer
-// above does: a partial that emits a rule is emitted again into every scoped
-// stylesheet importing it, and Inputs.sass is imported by more than a hundred
-// of them; and the name has to stay global for the mixin's `animation:` to
-// resolve, since Vue rewrites a frame name only when the frames are declared
-// inside the same scoped block.
-//
-// The segment is 40% of the bar and travels between its two ends, so both
-// stops are inside the control and nothing has to be clipped. Reduced motion
-// (the rule at the bottom of this file) collapses the travel and leaves the
-// bar standing at its declared position: the state is the bar being on screen,
-// never the movement of it.
-@keyframes button-busy
-  from
-    background-position: 0 0
-  to
-    background-position: 100% 0
 
 // Search highlight - global marker pen effect
 // Used by highlightMatch() utility - preserves original text color

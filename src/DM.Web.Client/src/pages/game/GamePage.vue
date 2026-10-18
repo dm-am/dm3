@@ -18,7 +18,10 @@ import {
   joinTitleSegments,
   useDocumentTitle,
 } from "@/shared/lib/composables/useDocumentTitle";
-import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
+import {
+  provideZoneMarker,
+  provideZoneSection,
+} from "@/shared/lib/composables/useZoneSection";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import { PageTitleSkeleton } from "@/shared/ui/Skeleton";
 
@@ -75,6 +78,9 @@ const announced = provideZoneSection();
 const heading = computed(() =>
   joinTitleSegments(game.value?.title, announced.value ?? route.meta.section),
 );
+// A muted word after the heading ("архив" of an archived room), announced by
+// the sub-page. Left out of the tab title: it is a state, not a name.
+const marker = provideZoneMarker();
 
 useDocumentTitle(() =>
   errorCode.value ? getErrorConfig(errorCode.value).title : heading.value,
@@ -132,7 +138,15 @@ onUnmounted(() => {
 <template>
   <template v-if="game">
     <div class="game-header">
-      <page-title>{{ heading }}</page-title>
+      <!-- The gap before the marker is a " " text node, not a margin: a margin
+           is drawn but not copied, and the heading would reach the clipboard
+           glued to it. -->
+      <page-title
+        >{{ heading
+        }}<template v-if="marker"
+          >{{ " " }}<span class="heading-marker">{{ marker }}</span></template
+        ></page-title
+      >
     </div>
 
     <router-view />
@@ -150,4 +164,12 @@ onUnmounted(() => {
 <style scoped lang="sass">
 .game-header
   margin-bottom: $medium
+
+// The same quiet tag the room drew beside its own title before the title
+// moved up here: secondary size, normal weight, muted.
+.heading-marker
+  font-size: $secondary-font-size
+  font-weight: normal
+  color: $text-muted
+  text-transform: uppercase
 </style>

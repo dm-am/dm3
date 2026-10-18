@@ -125,25 +125,8 @@ const linksWithSplit = computed(() =>
 
 .help-solution-col
   // Global `a` (Reset.sass) already provides color/hover — only the bold
-  // weight for links-inside-sentences (LeadText convention) is local here.
+  // weight for links-inside-sentences (LeadText convention) is local here, at
+  // the site's one bold.
   .help-link
-    font-weight: 600
-
-@media (max-width: $bp-mobile)
-  .help-row
-    grid-template-columns: 24px 1fr
-    grid-template-rows: auto auto
-
-  .help-icon-col
-    grid-row: 1 / 3
-
-  .help-problem-col
-    grid-column: 2
-
-  .help-arrow-col
-    display: none
-
-  .help-solution-col
-    grid-column: 2
-    font-size: $secondary-font-size
+    font-weight: 700
 </style>

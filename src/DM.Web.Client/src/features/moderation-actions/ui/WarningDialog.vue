@@ -1,35 +1,54 @@
 <script setup lang="ts">
 /**
- * WarningDialog — "Создание предупреждения" (product doc 4.2.4.1).
+ * "Создание предупреждения" (product doc 4.2.4.1): the window a moderator
+ * issues a warning from, opened under a topic, a comment, a message of the
+ * global chat or on a profile.
  *
- * Dialog dialog for issuing a moderator warning to a user. Opened from
- * warn buttons on topics/comments/messages/profiles with the target user
- * and a link to the violating content prefilled.
+ * It is drawn as the other moderation windows are (BanDialog,
+ * ChangeWarningPointsDialog): the site's heading, the lines that say whom the
+ * decision is about, the fields, the two buttons. Whom, as the profile says
+ * it: "Нарушитель:" with the name as a link, and "Нарушения: N/6", the points
+ * he carries now, in the profile's own line (ProfilePage.vue,
+ * ProfileViolations.vue), red while he carries any. The profile reds the same
+ * line under an active ban too, but there the line of the ban stands right
+ * under it and says why; the window has no line of the ban, so its red stands
+ * for points alone. What for, as the message itself: its text whole,
+ * rendered, set as a [quote] of the site is, and under it in the corner its
+ * number linking to its place in the discussion, where it has one, as under
+ * a comment (CommentItem.vue). The address is never written out as text.
  *
- * The doc calls for a non-modal window; the shared Dialog (vue-final-modal)
- * is modal (locks scroll) — the site-wide dialog idiom is used deliberately,
- * see the integration notes.
+ * One field for the weight, "Баллы", from 0 to 6, as the window that changes
+ * the points has it; 0 is the verbal warning and says so.
  *
- * Validation mirrors the backend CreateWarningValidator: points 0-6
- * (0 = verbal warning), reason required and max 2000 chars.
+ * The text comes from the opener where it holds it (the comment lists); for a
+ * topic and a chat message the window asks for it by the id it is handed, so
+ * those openers say no more than they did. The violation itself is sent as
+ * entityId/entityType, and the server takes its own copy of the text.
  *
- * The violation object itself is referenced by entityId/entityType (the
- * server resolves the block copy); the human-readable link is shown for
- * the moderator's context only and is not part of the payload.
+ * Validation mirrors the backend CreateWarningValidator: points 0-6, reason
+ * required and max 2000 chars.
+ *
+ * The window runs the request itself (Dialog's `action`): it waits shut, the
+ * editor included, prints a refusal over its buttons or under the field the
+ * server named, and closes on success alone. A typed reason is asked about
+ * before it is dropped.
  */
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, nextTick, onMounted } from "vue";
+import { storeToRefs } from "pinia";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
-import { Select } from "@/shared/ui/Select";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { Select, type SelectOption } from "@/shared/ui/Select";
+import { StatLine } from "@/shared/ui/StatLine";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
-import type { BadRequestError } from "@/shared/api/models/common";
+import {
+  initBbcodeInteractive,
+  trimHtmlWhitespace,
+} from "@/shared/lib/utils/bbcodeInteractive";
+import { useUiStore } from "@/shared/stores/ui";
 import moderationActionsApi, { type WarningResult } from "../api";
-import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   /** Target user (violator) username. */
@@ -38,8 +57,29 @@ const props = defineProps<{
   entityId?: string;
   /** Entity type name for the backend ("Comment", "Topic", "Message"...). */
   entityType?: string;
-  /** Human-readable link to the violating content (context display only). */
+  /** The address of the violating message: where its number leads. */
   entityLink?: string;
+  /**
+   * The text of the violating message as the site renders it, handed over by
+   * an opener that holds it. Without it the window asks for a topic's and a
+   * chat message's text itself.
+   */
+  evidence?: string;
+  /** The number of the message in its discussion, where it has one. */
+  number?: number;
+  /**
+   * Set by an opener whose own screen shows the issued warning, so that the
+   * dialog does not repeat it with a toast (UI_STANDARDS, "Всплывающие
+   * сообщения": a result the reader can see needs no confirmation).
+   *
+   * The profile moderation block is that opener: behind the closing dialog its
+   * "Предупреждения: N" counter and the active-points bracket are refetched,
+   * and the open list of warnings picks up the new row. A topic, a chat
+   * message and a comment list have nowhere to put a warning — it is a record
+   * in the violator's profile, not on the page being moderated — so there the
+   * toast is the only answer there is and stays.
+   */
+  hideToast?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -48,138 +88,161 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const { hyphenateWords } = storeToRefs(useUiStore());
 
-// --- Warning type + points (doc: "Устное предупреждение (0 баллов)" /
-// "Предупреждение (1-6 баллов)") ---
-const WARNING_KIND_VERBAL = "verbal";
-const WARNING_KIND_SCORED = "scored";
+/** The scale the warning counts against, as the profile writes it ("N/6"). */
+const WARNING_LIMIT = 6;
 
-const kindOptions = [
-  { value: WARNING_KIND_VERBAL, label: "Устное предупреждение (0 баллов)" },
-  { value: WARNING_KIND_SCORED, label: "Предупреждение (1-6 баллов)" },
-];
+/** The whole scale; zero is the verbal warning, and its option says so. */
+const pointsOptions: SelectOption[] = Array.from(
+  { length: WARNING_LIMIT + 1 },
+  (_, value) => ({
+    value: String(value),
+    label: value === 0 ? "0 (устное предупреждение)" : String(value),
+  }),
+);
 
-const pointsOptions = ["1", "2", "3", "4", "5", "6"].map((v) => ({
-  value: v,
-  label: v,
-}));
-
-const kind = ref(WARNING_KIND_SCORED);
 const points = ref("1");
 const reason = ref("");
-const sending = ref(false);
-const fieldErrors = ref<Record<string, string[]>>({});
-
-// Effective points sent to the backend: verbal warning is always 0.
-const effectivePoints = computed(() =>
-  kind.value === WARNING_KIND_VERBAL ? 0 : parseInt(points.value, 10),
-);
 
 // Mirror of the backend rules (points 0-6, reason required + max 2000).
 const reasonTooLong = computed(() => reason.value.length > 2000);
 const canSubmit = computed(
-  () =>
-    reason.value.trim().length > 0 &&
-    !reasonTooLong.value &&
-    effectivePoints.value >= 0 &&
-    effectivePoints.value <= 6,
+  () => reason.value.trim().length > 0 && !reasonTooLong.value,
 );
 
-// --- "Баллы: N/6" context (current active points of the target user) ---
+// --- "Нарушения: N/6", the points the person carries now ---
 const currentPoints = ref<number | null>(null);
+const pointsFailed = ref(false);
+
+// --- The message the warning is for ---
+const quoted = ref(trimHtmlWhitespace(props.evidence));
+const quoteRef = ref<HTMLElement | null>(null);
+
+/**
+ * The window is asking for the text of the message. The quote stands above
+ * the fields, so the fields wait for it: drawn before it, they would move down
+ * under the moderator's hand when it lands. Whatever the answer, the fields
+ * come with it, the quote only where there was a text.
+ */
+const quoteLoading = ref(!quoted.value && !!props.entityId);
+
+/** Spoilers and the 18+ veil open in the quote as they do on the page. */
+async function bindQuote() {
+  await nextTick();
+  if (quoteRef.value) initBbcodeInteractive(quoteRef.value);
+}
 
 onMounted(async () => {
-  const { data } = await moderationActionsApi.getUserWarnings(props.username);
-  if (data) currentPoints.value = data.totalPoints;
-});
-
-async function submit() {
-  if (!canSubmit.value || sending.value) return;
-
-  sending.value = true;
-  fieldErrors.value = {};
-
-  const { data, error } = await moderationActionsApi.createWarning({
-    username: props.username,
-    points: effectivePoints.value,
-    reason: reason.value.trim(),
-    entityId: props.entityId,
-    entityType: props.entityType,
-  });
-
-  sending.value = false;
-
-  if (error) {
-    fieldErrors.value = parseApiErrors(error as BadRequestError);
-    if (!Object.keys(fieldErrors.value).length) {
-      notifyFailure(error, "Не удалось отправить предупреждение");
-    }
-    return;
+  if (quoted.value) {
+    void bindQuote();
+  } else if (quoteLoading.value) {
+    void moderationActionsApi
+      .getQuotedText(props.entityType, props.entityId)
+      .then((text) => {
+        quoted.value = trimHtmlWhitespace(text);
+        if (quoted.value) void bindQuote();
+      })
+      .finally(() => (quoteLoading.value = false));
   }
 
-  toast.success("Предупреждение отправлено");
-  emit("success", data?.resource ?? null);
-}
+  const { data } = await moderationActionsApi.getUserWarnings(props.username);
+  if (data) currentPoints.value = data.totalPoints;
+  else pointsFailed.value = true;
+});
 
-function reasonErrors(): string[] {
-  const server = getFieldError(fieldErrors.value, "reason");
-  if (server) return [server];
-  if (reasonTooLong.value) return ["Слишком длинное значение"];
-  return [];
-}
-
-function pointsErrors(): string[] {
-  const server = getFieldError(fieldErrors.value, "points");
-  return server ? [server] : [];
+/**
+ * The window's action. A form that breaks the rules above never gets here:
+ * the main button is shut by `canSubmit`, and a shut button submits nothing.
+ */
+async function send() {
+  const result = await moderationActionsApi.createWarning(
+    {
+      username: props.username,
+      points: Number(points.value),
+      reason: reason.value.trim(),
+      entityId: props.entityId,
+      entityType: props.entityType,
+    },
+    { ownsRefusal: true, ownsRateLimit: true },
+  );
+  if (!result.error) {
+    // Silence is only safe where the opener answers for the warning itself.
+    if (!props.hideToast) toast.success("Предупреждение выдано");
+    emit("success", result.data?.resource ?? null);
+  }
+  return result;
 }
 </script>
 
 <template>
-  <Dialog>
+  <Dialog
+    v-slot="{ busy }"
+    editor
+    :action="send"
+    failure="Не удалось выдать предупреждение"
+    :dirty="reason.trim().length > 0"
+    discard-text="Набранная причина пропадет"
+    @close="emit('cancel')"
+  >
     <DialogTitle>Создание предупреждения</DialogTitle>
 
-    <!-- Violation context: target user, current points, violation link -->
     <div class="warn-context">
-      <div>
-        Пользователь:
-        <router-link :to="{ name: 'profile', params: { username } }">{{
-          username
-        }}</router-link>
+      <!-- Whom: the lines of the profile, the name a link to it and the
+           points red while he carries any. The second line keeps its height
+           while the points load, so nothing under it moves. -->
+      <div class="warn-person">
+        <StatLine
+          label="Нарушитель"
+          :value="username"
+          :to="{ name: 'profile', params: { username } }"
+        />
+        <div class="warn-points">
+          <StatLine
+            v-if="currentPoints !== null"
+            label="Нарушения"
+            :value="`${currentPoints}/${WARNING_LIMIT}`"
+            :variant="currentPoints > 0 ? 'negative' : 'default'"
+          />
+          <StatLine
+            v-else-if="pointsFailed"
+            label="Нарушения"
+            value="не удалось загрузить"
+            variant="muted"
+          />
+        </div>
       </div>
-      <SecondaryText v-if="currentPoints !== null">
-        Баллы: {{ currentPoints }}/6
-      </SecondaryText>
-      <div v-if="entityLink" class="warn-violation">
-        Нарушение:
-        <a :href="entityLink" target="_blank" rel="noopener">{{
-          entityLink
-        }}</a>
+
+      <!-- What for: the message whole, as a [quote], and its number in the
+           corner under it, a link to its place as under a comment. -->
+      <div v-if="quoted" class="warn-evidence">
+        <div
+          ref="quoteRef"
+          class="warn-quote bbcode-content"
+          :class="{ hyphenated: hyphenateWords }"
+        >
+          <div class="quote" v-html="quoted" />
+        </div>
+        <div v-if="number && entityLink" class="warn-evidence-footer">
+          <a
+            :href="entityLink"
+            target="_blank"
+            rel="noopener"
+            class="warn-number"
+            :aria-label="`Комментарий ${number}`"
+            >{{ number }}</a
+          >
+        </div>
       </div>
     </div>
 
     <Form
+      v-if="!quoteLoading"
       :valid="canSubmit"
-      :loading="sending"
-      action="Отправить предупреждение"
+      action="Выдать"
       cancel="Отмена"
-      @submit="submit"
-      @cancel="emit('cancel')"
     >
-      <FormField label="Тип предупреждения" name="warning-kind">
-        <Select
-          id="warning-kind"
-          :model-value="kind"
-          :options="kindOptions"
-          @update:model-value="(v) => (kind = v)"
-        />
-      </FormField>
-
-      <FormField
-        v-if="kind === WARNING_KIND_SCORED"
-        label="Баллы"
-        name="warning-points"
-        :errors="pointsErrors()"
-      >
+      <FormField label="Баллы" name="warning-points" field="points">
         <Select
           id="warning-points"
           :model-value="points"
@@ -191,13 +254,14 @@ function pointsErrors(): string[] {
       <FormField
         label="Причина предупреждения"
         name="warning-reason"
-        :errors="reasonErrors()"
+        field="reason"
+        :errors="reasonTooLong ? ['Слишком длинное значение'] : []"
       >
         <BBCodeEditor
           v-model="reason"
           context="common"
           placeholder="Опишите нарушение..."
-          :disabled="sending"
+          :disabled="busy"
           :min-height="100"
           :max-height="300"
           :is-moderator="true"
@@ -208,13 +272,49 @@ function pointsErrors(): string[] {
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/BbcodeContent" as *
+
+// One field step down to the first field, as between two fields, and the
+// same step between whom and what for.
 .warn-context
   display: flex
   flex-direction: column
-  gap: $minor
-  margin-bottom: $small
+  gap: $medium
+  margin-bottom: $medium
 
-.warn-violation
-  // Long permalinks must wrap inside the fixed-width dialog.
-  overflow-wrap: anywhere
+// The lines of the profile (ProfilePage.vue, .stats-group): one under another
+// with the profile's step between them.
+.warn-person
+  display: flex
+  flex-direction: column
+  gap: $minor
+
+// The height of one line held while the points load (ProfileViolations.vue,
+// .violations-inline).
+.warn-points
+  min-height: calc($font-size * 1.25)
+
+// The text of a comment (CommentItem.vue, .comment-text, +body-text): DM2's
+// 16 on a step of 20, flush on both sides, broken at syllables while the
+// switch "Перенос слов" is on. The quote itself is the site's [quote]
+// (_BbcodeContent.sass).
+.warn-quote
+  color: $text
+  +body-text
+
+  > .quote
+    margin: 0
+
+// The footer of a comment: the number pinned to its right corner, a small
+// step under the text (CommentItem.vue, .comment-footer, .comment-number).
+.warn-evidence-footer
+  display: flex
+  margin-top: $small
+
+.warn-number
+  flex: none
+  margin-left: auto
+  font-size: $tertiary-font-size
+  +muted-link
 </style>

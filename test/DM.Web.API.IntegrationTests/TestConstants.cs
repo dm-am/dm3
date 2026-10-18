@@ -31,7 +31,10 @@ public static class TestConstants
     public static readonly Guid SecondTopicId = Guid.Parse("00000000-0000-0000-0000-000000000021");
 
     // Comments
-    public static readonly Guid TestCommentId = Guid.Parse("00000000-0000-0000-0000-000000000030");
+    // Nothing seeds a comment under this id: it stands in the requests a guest
+    // is refused before the comment is looked up. A test that needs a comment
+    // to exist writes its own.
+    public static readonly Guid UnseededCommentId = Guid.Parse("00000000-0000-0000-0000-000000000030");
 
     // Games
     public static readonly Guid TestGameId = Guid.Parse("00000000-0000-0000-0000-000000000040");
@@ -83,8 +86,18 @@ public static class TestConstants
     // Chats
     public static readonly Guid TestChatId = Guid.Parse("00000000-0000-0000-0000-000000000070");
 
+    /// <summary>The alias TestChat is reachable by, as the fixture seeds it.</summary>
+    public const string TestChatPublicId = "chata";
+
     // Blogs
     public static readonly Guid TestBlogId = Guid.Parse("00000000-0000-0000-0000-000000000080");
+
+    /// <summary>
+    /// The alias TestBlog is reachable by. The fixture derives it from the seeding
+    /// order, and TestBlog is seeded first.
+    /// </summary>
+    public const string TestBlogPublicId = "bloga";
+
     public static readonly Guid SecondBlogId = Guid.Parse("00000000-0000-0000-0000-000000000081");
 
     // Testimonials (website reviews) for existing users

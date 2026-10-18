@@ -85,11 +85,10 @@ internal class UserProfileNoteService : IUserProfileNoteService
                 "Нельзя оставить заметку о себе");
         }
 
-        var existingNote = await _repository.Get(currentUser.UserId, subjectUserId.Value, ct);
-
         // Delete note if text is empty
         if (string.IsNullOrWhiteSpace(createNote.Text))
         {
+            var existingNote = await _repository.Get(currentUser.UserId, subjectUserId.Value, ct);
             if (existingNote != null)
             {
                 await _repository.Delete(existingNote.Id, ct);
@@ -97,26 +96,18 @@ internal class UserProfileNoteService : IUserProfileNoteService
             return null;
         }
 
-        var now = _dateTimeProvider.Now;
-
-        if (existingNote != null)
-        {
-            var update = new UpdateUserProfileNoteEntity
-            {
-                Id = existingNote.Id,
-                Text = createNote.Text,
-                ModifiedUtc = now
-            };
-            return await _repository.Update(update, ct);
-        }
-
+        // No read before the write: whether the pair already has a note is
+        // decided by the write itself. A read here stops being true the moment
+        // it returns - two saves arriving together both found nothing and both
+        // inserted, and a save that found the note lost it to a clear arriving
+        // with it and failed to update a row that was gone. Both answered 500.
         var entity = new CreateUserProfileNoteEntity
         {
             Id = _guidFactory.Create(),
             OwnerId = currentUser.UserId,
             SubjectUserId = subjectUserId.Value,
             Text = createNote.Text,
-            CreatedUtc = now
+            CreatedUtc = _dateTimeProvider.Now
         };
 
         return await _repository.Create(entity, ct);

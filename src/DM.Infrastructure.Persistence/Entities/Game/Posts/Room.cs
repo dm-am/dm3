@@ -47,7 +47,9 @@ public class Room : ISoftDeletable
     public RoomType Type { get; set; }
 
     /// <summary>
-    /// Display order number
+    /// Place of the room among the rooms of its game, ascending; rooms on one
+    /// number follow their RoomNumber. The only record of the order: every list
+    /// of rooms sorts by it, and a move rewrites it for the whole game.
     /// </summary>
     public double OrderNumber { get; set; }
 
@@ -65,16 +67,6 @@ public class Room : ISoftDeletable
     /// Dice rolling is enabled in this room
     /// </summary>
     public bool DiceEnabled { get; set; }
-
-    /// <summary>
-    /// Previous room identifier (for 2-linked-list)
-    /// </summary>
-    public Guid? PreviousRoomId { get; set; }
-
-    /// <summary>
-    /// Next room identifier (for 2-linked-list)
-    /// </summary>
-    public Guid? NextRoomId { get; set; }
 
     /// <summary>
     /// Room is archived (hidden from the active rooms list, kept for history)
@@ -113,18 +105,6 @@ public class Room : ISoftDeletable
     /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
     public virtual User? DeletedBy { get; set; }
-
-    /// <summary>
-    /// Previous room (for 2-linked-list)
-    /// </summary>
-    [ForeignKey(nameof(PreviousRoomId))]
-    public virtual Room? PreviousRoom { get; set; }
-
-    /// <summary>
-    /// Next room (for 2-linked-list)
-    /// </summary>
-    [ForeignKey(nameof(NextRoomId))]
-    public virtual Room? NextRoom { get; set; }
 
     /// <summary>
     /// Room access links (characters and readers)

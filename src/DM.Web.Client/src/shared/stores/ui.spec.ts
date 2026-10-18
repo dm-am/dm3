@@ -147,3 +147,112 @@ describe("useUiStore theme", () => {
     expect(localStorage.getItem(THEME_KEY)).toBeNull();
   });
 });
+
+/**
+ * The typographic switch of the settings panel. It is on for a device that has
+ * never answered, as it was on the old site for everyone, and only the
+ * device's own "off" turns it off.
+ */
+describe("useUiStore text switches", () => {
+  /**
+   * Written out rather than imported, like the keys above: the store keeps
+   * them private, and a renamed key silently forgets every choice already made.
+   */
+  const SWITCHES = [
+    {
+      name: "hyphenation",
+      key: "dm_hyphenate_words",
+      read: (ui: ReturnType<typeof useUiStore>) => ui.hyphenateWords,
+      set: (ui: ReturnType<typeof useUiStore>, on: boolean) =>
+        ui.setHyphenateWords(on),
+    },
+  ];
+
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+  });
+
+  for (const { name, key, read, set } of SWITCHES) {
+    it(`keeps ${name} on for a device that has never answered`, () => {
+      expect(read(useUiStore())).toBe(true);
+    });
+
+    it(`restores ${name} turned off by a previous visit`, () => {
+      localStorage.setItem(key, "off");
+
+      expect(read(useUiStore())).toBe(false);
+    });
+
+    it(`keeps ${name} on when the stored value is not an answer`, () => {
+      localStorage.setItem(key, "maybe");
+
+      expect(read(useUiStore())).toBe(true);
+    });
+
+    it(`records ${name} turned off and on again`, async () => {
+      const ui = useUiStore();
+
+      set(ui, false);
+      await nextTick();
+      expect(read(ui)).toBe(false);
+      expect(localStorage.getItem(key)).toBe("off");
+
+      set(ui, true);
+      await nextTick();
+      expect(read(ui)).toBe(true);
+      expect(localStorage.getItem(key)).toBe("on");
+    });
+  }
+
+  /**
+   * The owner's word: justification is always on, and the switch is gone. A
+   * device that turned it off before keeps the key, and the key is no answer
+   * to anything any more: the store has nothing that reads it.
+   */
+  it("carries no justification switch", () => {
+    localStorage.setItem("dm_justify_text", "off");
+    const ui = useUiStore();
+
+    expect(Object.keys(ui).filter((key) => /justif/i.test(key))).toEqual([]);
+  });
+});
+
+/**
+ * The side columns of a narrow screen. One field says which of the two is out
+ * over the page, so there is no state in which both are: opening one is
+ * closing the other.
+ */
+describe("useUiStore side columns", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    setActivePinia(createPinia());
+  });
+
+  it("starts with both columns in", () => {
+    expect(useUiStore().openedPanel).toBeNull();
+  });
+
+  it("keeps one column out at a time", () => {
+    const ui = useUiStore();
+
+    ui.openPanel("left");
+    expect(ui.openedPanel).toBe("left");
+    ui.openPanel("right");
+    expect(ui.openedPanel).toBe("right");
+    ui.togglePanel("left");
+    expect(ui.openedPanel).toBe("left");
+  });
+
+  it("puts the column back with the button that took it out", () => {
+    const ui = useUiStore();
+
+    ui.togglePanel("right");
+    ui.togglePanel("right");
+    expect(ui.openedPanel).toBeNull();
+
+    ui.openPanel("left");
+    ui.closePanel();
+    expect(ui.openedPanel).toBeNull();
+  });
+});

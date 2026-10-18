@@ -6,20 +6,33 @@ import type { PostReview } from "../model/types";
 import type { ReviewSign } from "@/shared/api/models/game/reviews";
 import type { RouteLocationRaw } from "vue-router";
 import {
+  RemovedAccountLink,
   UserLink,
   userIsAdmin,
   userIsSeniorModerator,
 } from "@/entities/user/@x/game";
 import gameApi from "../api/gameApi";
-import { reviewSignToNumber, reviewSignName } from "../model/reviewSign";
+import {
+  reviewSignToNumber,
+  reviewSignName,
+  reviewSignOptions,
+} from "../model/reviewSign";
 import { unwrapResource } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores/auth";
 import { ContentText } from "@/shared/ui/Content";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import {
+  CaptionAction,
+  CaptionLine,
+  CaptionPart,
+} from "@/shared/ui/CaptionLine";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
-import { notifyFailure } from "@/shared/lib/errors";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { ActionResult } from "@/shared/ui/ActionResult";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import Button from "@/shared/ui/Button/Button.vue";
+import { SegmentedControl } from "@/shared/ui/SegmentedControl";
 
 const props = withDefaults(
   defineProps<{
@@ -143,6 +156,8 @@ const canDelete = computed(
 // for them, and an edit that would set one is refused by the same probation
 // rule on the server.
 const canPickSign = computed(() => !currentUser.value?.isNewbie);
+/** The segments of the sign toggle: "=" alone for a newbie. */
+const signOptions = computed(() => reviewSignOptions(canPickSign.value));
 
 // ── Inline edit ───────────────────────────────────────────────────────────
 const isEditing = ref(false);
@@ -174,11 +189,17 @@ async function startEdit() {
 function cancelEdit() {
   isEditing.value = false;
   editText.value = "";
+  saveResult.clear();
 }
+
+// A refusal stands under the buttons of the edit, which stays open with the
+// text in it.
+const saveResult = useActionResult();
 
 async function saveEdit() {
   if (!editText.value.trim() || saving.value) return;
   saving.value = true;
+  saveResult.clear();
   // Clamp defensively even though the ± buttons are hidden for a newbie.
   const sign = canPickSign.value ? editSign.value : 0;
   const { data, error } = await gameApi.updatePostReview(
@@ -188,7 +209,7 @@ async function saveEdit() {
   );
   saving.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось сохранить оценку");
+    saveResult.refuse(error, "Не удалось сохранить оценку");
     return;
   }
   const updated = unwrapResource<PostReview>(data);
@@ -205,28 +226,28 @@ function handleEditKeydown(event: KeyboardEvent) {
 
 // ── Delete ────────────────────────────────────────────────────────────────
 const showDeleteConfirm = ref(false);
-const deleting = ref(false);
 
 function requestDelete() {
   showDeleteConfirm.value = true;
 }
 
-async function confirmDelete() {
-  if (deleting.value) return;
-  deleting.value = true;
+/**
+ * The confirmation's action: it waits shut for the answer, prints a refusal
+ * in itself and closes on success alone, so the card is struck through only
+ * once the server has taken the review down.
+ */
+async function deleteReview() {
   const sign = reviewSignToNumber(effectiveSign.value);
-  const { error } = await gameApi.deletePostReview(
+  const result = await gameApi.deletePostReview(
     props.review.postId,
     props.review.id,
+    { ownsRefusal: true, ownsRateLimit: true },
   );
-  deleting.value = false;
-  showDeleteConfirm.value = false;
-  if (error) {
-    notifyFailure(error, "Не удалось удалить оценку");
-    return;
+  if (!result.error) {
+    removed.value = true;
+    emit("deleted", { id: props.review.id, sign });
   }
-  removed.value = true;
-  emit("deleted", { id: props.review.id, sign });
+  return result;
 }
 </script>
 
@@ -246,37 +267,12 @@ async function confirmDelete() {
          asks for, in the place the review already occupies. -->
     <template v-else-if="isEditing">
       <div class="review-edit">
-        <div class="sign-selector">
-          <button
-            v-if="canPickSign"
-            type="button"
-            class="sign-btn"
-            :class="{ active: editSign === 1, positive: editSign === 1 }"
-            aria-label="Положительная оценка"
-            @click="editSign = 1"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            class="sign-btn"
-            :class="{ active: editSign === 0, neutral: editSign === 0 }"
-            aria-label="Нейтральная оценка"
-            @click="editSign = 0"
-          >
-            =
-          </button>
-          <button
-            v-if="canPickSign"
-            type="button"
-            class="sign-btn"
-            :class="{ active: editSign === -1, negative: editSign === -1 }"
-            aria-label="Отрицательная оценка"
-            @click="editSign = -1"
-          >
-            −
-          </button>
-        </div>
+        <SegmentedControl
+          :model-value="String(editSign)"
+          :options="signOptions"
+          ariaLabel="Знак оценки"
+          @update:model-value="editSign = reviewSignToNumber($event)"
+        />
         <textarea
           v-model="editText"
           class="review-input"
@@ -285,18 +281,20 @@ async function confirmDelete() {
           @keydown="handleEditKeydown"
         ></textarea>
         <div class="edit-actions">
-          <button
+          <Button
             type="button"
+            variant="primary"
             class="submit-btn"
             :disabled="!editText.trim() || saving"
             @click="saveEdit"
           >
             Сохранить
-          </button>
-          <button type="button" class="action-btn" @click="cancelEdit">
+          </Button>
+          <Button type="button" class="cancel-btn" @click="cancelEdit">
             Отмена
-          </button>
+          </Button>
         </div>
+        <ActionResult :result="saveResult" class="review-refusal" />
       </div>
     </template>
 
@@ -306,63 +304,60 @@ async function confirmDelete() {
         :html="effectiveText"
         class="review-text"
       />
-      <div class="review-footer">
-        <div class="review-meta">
-          <span class="review-sign" :class="getSignClass(effectiveSign)">{{
+      <!-- One caption line: "+1 от Имя, дата, #N | Редактировать | Удалить",
+           the number in the line after the date, where it stood before the
+           room wave of 24.09 moved it to the right corner (the owner, 05.10:
+           "У оценок постов что ты сделал с #1? Почему он справа?"). The sign
+           and the name run into the date, and the date into the number, with
+           a comma and a space, so a narrow column can break after either
+           comma and keeps each piece whole; a copy of the row reads
+           "+1 от Имя, дата, #1". -->
+      <CaptionLine class="review-meta">
+        <CaptionPart :bar="false"
+          ><span class="review-sign" :class="getSignClass(effectiveSign)">{{
             signText
           }}</span
           >{{ " от "
           }}<UserLink
-            :user="review.author!"
+            v-if="review.author"
+            :user="review.author"
             :hide-badge="true"
             :class="{ 'author-highlight': highlight }"
-          />{{ `, ${formattedDate}`
-          }}<template v-if="number && to"
-            >{{ ", "
-            }}<Tooltip :text="anchorHint"
-              ><router-link
-                class="review-anchor"
-                :to="to"
-                :aria-label="anchorHint"
-                >{{ `#${number}` }}</router-link
-              ></Tooltip
-            ></template
-          >
-        </div>
-
-        <span v-if="canEdit || canDelete" class="review-actions">
-          <button
-            v-if="canEdit"
-            type="button"
-            class="action-btn"
-            @click="startEdit"
-          >
-            Редактировать
-          </button>
-          <button
-            v-if="canDelete"
-            type="button"
-            class="action-btn delete-btn"
-            @click="requestDelete"
-          >
-            Удалить
-          </button>
-        </span>
-      </div>
+          /><RemovedAccountLink v-else />,</CaptionPart
+        >
+        <CaptionPart :bar="!(number && to)"
+          >{{ formattedDate
+          }}<template v-if="number && to">,</template></CaptionPart
+        >
+        <span v-if="number && to" class="review-anchor-part"
+          ><Tooltip :text="anchorHint"
+            ><router-link
+              class="review-anchor"
+              :to="to"
+              :aria-label="anchorHint"
+              >{{ `#${number}` }}</router-link
+            ></Tooltip
+          ></span
+        >
+        <CaptionAction v-if="canEdit" @click="startEdit"
+          >Редактировать</CaptionAction
+        >
+        <CaptionAction v-if="canDelete" @click="requestDelete"
+          >Удалить</CaptionAction
+        >
+      </CaptionLine>
     </template>
 
     <!-- The question "Удалить" asks before it deletes, the way the post and
          the comment do. Kept outside the branches above so the answer still
          has a dialog to close. -->
     <ConfirmDialog
-      :show="showDeleteConfirm"
+      v-model:show="showDeleteConfirm"
       title="Удалить оценку?"
-      message="Оценка будет удалена, а ее вклад в рейтинг поста и его автора снят."
+      message="Оценка будет удалена, а ее вклад в рейтинг поста и его автора снят"
       confirm-label="Удалить"
-      danger
-      :loading="deleting"
-      @confirm="confirmDelete"
-      @update:show="showDeleteConfirm = $event"
+      failure="Не удалось удалить оценку"
+      :action="deleteReview"
     />
   </li>
 </template>
@@ -370,15 +365,23 @@ async function confirmDelete() {
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
 
-// Review item - bullet list style like old DM site
+// Review item - bullet list style like old DM site. The reviews of a post stand
+// a clear step apart (owner, 27.09): the next one takes $medium over the
+// $minor the list keeps at its edges.
 .review-item
   margin: $minor 0
   padding-left: $small
   line-height: 1.4
-  border-left: 2px solid transparent
 
+  & + &
+    margin-top: $medium
+
+  // The review the reader came for is marked the way the site marks any
+  // navigated-to block: the highlight tint of the theme, square as every
+  // content surface. The author line is bold here already, and a rule down
+  // one edge belongs to quotes alone.
   &.highlighted
-    border-left-color: $accent-green
+    background-color: $bg-highlight-yellow
 
 // Review text - first line, primary content
 .review-text
@@ -386,26 +389,17 @@ async function confirmDelete() {
   font-weight: 500
   margin-bottom: $small
 
-// The meta line and the controls share one baseline row. The buttons are a
-// sibling of the meta and not part of it, so the line still copies as the one
-// human sentence it reads as.
-.review-footer
-  display: flex
-  align-items: baseline
-  flex-wrap: wrap
-  gap: $small
-
-// Meta line: "+1 от Username, дата, #N"
+// The caption line draws its own size and colour; here it is a block of its
+// own under the text.
 .review-meta
-  font-size: $tertiary-font-size
-  color: $text-muted
+  display: block
 
 .review-removed
   font-size: $tertiary-font-size
   color: $text-muted
   font-style: italic
 
-// No margin: the space before the number is the ", " text node above.
+// No margin: the space before the number is the ", " of the date before it.
 // Same rule as .post-number in GamePost: a "go to the post" affordance is a
 // link and looks like one everywhere, home page included (UI_STANDARDS).
 .review-anchor
@@ -427,80 +421,28 @@ async function confirmDelete() {
 :deep(.author-highlight .user-link)
   font-weight: bold
 
-.review-actions
-  display: inline-flex
-  align-items: baseline
-  gap: $small
-
-.action-btn
-  padding: 0 $tiny
-  font-size: $secondary-font-size
-  border: none
-  background: transparent
-  cursor: pointer
-  color: $text-muted
-  font-family: inherit
-
-  &:hover
-    color: $link
-
-  &.delete-btn:hover
-    color: $accent-red
-
-// Edit mode — the create form of a review, unchanged: same sign column, same
-// text field, same submit button, so the two are not two different forms.
+// Edit mode — the create form of a review, unchanged: the sign as segments,
+// the text field across the column, the buttons under it at the left, so the
+// two are not two different forms.
 .review-edit
   display: flex
-  gap: $small
+  flex-direction: column
   align-items: flex-start
-  flex-wrap: wrap
+  gap: $small
   margin: $small 0
 
-.sign-selector
-  display: flex
-  flex-direction: column
-  gap: 2px
-
-.sign-btn
-  width: 28px
-  height: 24px
-  border: 1px solid $border
-  background: $bg-element
-  color: $text-muted
-  cursor: pointer
-  font-size: $font-size
-  font-weight: bold
-  padding: 0
-  font-family: inherit
-  &:hover
-    border-color: $link
-  &.active.positive
-    color: $accent-green
-    border-color: $accent-green
-  &.active.neutral
-    color: $text-muted
-    border-color: $text-muted
-  &.active.negative
-    color: $accent-red
-    border-color: $accent-red
-
+// A text area of the site (+input): its frame, ground, padding and type,
+// across the column, growing downwards only.
 .review-input
-  flex: 1
-  min-width: 200px
-  min-height: 40px
-  padding: $minor
-  border: 1px solid $border
-  font-size: $font-size
-  font-family: inherit
+  box-sizing: border-box
+  width: 100%
   resize: vertical
-  color: $text
-  background: $bg-page
+
+// Under the buttons, spaced by the gap of the column.
+.review-refusal
+  --action-result-margin: 0
 
 .edit-actions
-  display: inline-flex
-  align-items: flex-start
+  display: flex
   gap: $small
-
-.submit-btn
-  +button
 </style>

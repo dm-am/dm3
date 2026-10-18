@@ -23,11 +23,11 @@ namespace DM.Domain.Account.Tests.Features.Authentication;
 /// What a login does when the account has a second factor.
 /// </summary>
 /// <remarks>
-/// The whole point is stated by INV-7: between the two factors there is no
-/// session. No row, no cookie, no activity stamp, no entry in the journal saying
-/// somebody signed in. The alternative - a session marked "half" - obliges every
-/// authorization surface in the product to remember the mark, and the day one of
-/// them forgets, a password is enough again.
+/// The whole point is that between the two factors there is no session. No row,
+/// no cookie, no activity stamp, no entry in the journal saying somebody signed
+/// in. The alternative - a session marked "half" - obliges every authorization
+/// surface in the product to remember the mark, and the day one of them forgets,
+/// a password is enough again.
 /// </remarks>
 public class SecondFactorLoginShould : UnitTestBase
 {
@@ -120,7 +120,7 @@ public class SecondFactorLoginShould : UnitTestBase
 
     // ── The password step ──
 
-    /// <summary>AC-1: an account without a factor signs in exactly as before.</summary>
+    /// <summary>An account without a factor signs in exactly as before.</summary>
     [Fact]
     public async Task LeaveALoginWithoutAFactorAsItWas()
     {
@@ -131,7 +131,7 @@ public class SecondFactorLoginShould : UnitTestBase
         await _repository.Received(1).AddSession(UserId, Arg.Any<CreateSession>());
     }
 
-    /// <summary>AC-9 and INV-7: no session exists until the factor is shown.</summary>
+    /// <summary>No session exists until the factor is shown.</summary>
     [Fact]
     public async Task CreateNoSessionForAnAccountWithAFactor()
     {
@@ -189,7 +189,7 @@ public class SecondFactorLoginShould : UnitTestBase
 
     // ── The second step ──
 
-    /// <summary>AC-10: the code finishes the login and the session is created.</summary>
+    /// <summary>The code finishes the login and the session is created.</summary>
     [Fact]
     public async Task FinishTheLoginOnAGoodCode()
     {
@@ -208,7 +208,7 @@ public class SecondFactorLoginShould : UnitTestBase
     }
 
     /// <summary>
-    /// AC-10: "remember me" comes from the first step, where the box was.
+    /// "Remember me" comes from the first step, where the box was.
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -222,7 +222,7 @@ public class SecondFactorLoginShould : UnitTestBase
         _sessionFactory.Received(1).Create(persistent, Arg.Any<SessionContext?>());
     }
 
-    /// <summary>AC-14: five ways of failing, one answer.</summary>
+    /// <summary>Five ways of failing, one answer.</summary>
     [Fact]
     public async Task AnswerEveryFailureTheSameWay()
     {
@@ -254,7 +254,7 @@ public class SecondFactorLoginShould : UnitTestBase
         });
     }
 
-    /// <summary>AC-13: the challenge is destroyed once the attempts run out.</summary>
+    /// <summary>The challenge is destroyed once the attempts run out.</summary>
     [Fact]
     public async Task DestroyTheChallengeWhenTheAttemptsRunOut()
     {
@@ -311,7 +311,7 @@ public class SecondFactorLoginShould : UnitTestBase
         await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
     }
 
-    /// <summary>AC-17: a ban issued between the two steps takes effect.</summary>
+    /// <summary>A ban issued between the two steps takes effect.</summary>
     [Fact]
     public async Task RefuseALoginBannedBetweenTheTwoSteps()
     {
@@ -337,7 +337,7 @@ public class SecondFactorLoginShould : UnitTestBase
         await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
     }
 
-    /// <summary>AC-23: a sign-in with the factor calls off a scheduled removal.</summary>
+    /// <summary>A sign-in with the factor calls off a scheduled removal.</summary>
     [Fact]
     public async Task CallOffAScheduledRemovalOnASuccessfulSecondFactor()
     {
@@ -369,8 +369,7 @@ public class SecondFactorLoginShould : UnitTestBase
     // ── The path that mints a session without a password ──
 
     /// <summary>
-    /// INV-19 and AC-29: no session without a password for an account with a
-    /// factor.
+    /// No session without a password for an account with a factor.
     /// </summary>
     /// <remarks>
     /// Today the only caller is the auto-login that follows activation, and a
@@ -399,48 +398,33 @@ public class SecondFactorLoginShould : UnitTestBase
         await _repository.Received(1).AddSession(UserId, Arg.Any<CreateSession>());
     }
 
-    // ── The fold on the token path ──
+    // ── The rank on the token path ──
 
     /// <summary>
-    /// INV-10: the fold happens where the identity is built, so every resolver
-    /// and every hand-written rank comparison reads the withheld role.
+    /// A second factor is optional for every rank: an account without one acts
+    /// with the rank recorded on it.
     /// </summary>
-    [Fact]
-    public async Task WithholdTheRankOnTheTokenPathWhileTheFactorIsMissing()
+    [Theory]
+    [InlineData(UserRole.Admin)]
+    [InlineData(UserRole.SeniorModerator)]
+    public async Task KeepTheRankOnTheTokenPathWithoutAFactor(UserRole role)
     {
-        ArrangeTokenPath(UserRole.Admin, factorConfirmed: false);
+        ArrangeTokenPath(role, factorConfirmed: false);
 
         var identity = await _service.Authenticate("token");
 
-        identity.User.IsAuthenticated.Should().BeTrue("the factor never refuses a login");
-        identity.User.Role.Should().Be(UserRole.RegularUser);
-        identity.User.PrivilegeWithheld.Should().BeTrue();
-        identity.User.RecordedRole.Should().Be(UserRole.Admin);
+        identity.User.IsAuthenticated.Should().BeTrue();
+        identity.User.Role.Should().Be(role);
     }
 
-    /// <summary>AC-20: the rank comes back on the very next request.</summary>
+    /// <summary>
+    /// An ordinary request never asks the storage about the factor: it is asked
+    /// at sign-in, where it is owed, and nowhere else.
+    /// </summary>
     [Fact]
-    public async Task GiveTheRankBackOnTheNextRequestOnceTheFactorIsOn()
+    public async Task NotAskStorageAboutTheFactorOnTheTokenPath()
     {
         ArrangeTokenPath(UserRole.Admin, factorConfirmed: true);
-
-        var identity = await _service.Authenticate("token");
-
-        identity.User.Role.Should().Be(UserRole.Admin);
-        identity.User.PrivilegeWithheld.Should().BeFalse();
-    }
-
-    /// <summary>
-    /// The storage is only asked about the ranks the requirement covers.
-    /// </summary>
-    /// <remarks>
-    /// The fold runs on every authenticated request, and for everybody outside
-    /// those two ranks the answer is decided without leaving the process.
-    /// </remarks>
-    [Fact]
-    public async Task AskStorageAboutTheFactorOnlyForARankThatOwesOne()
-    {
-        ArrangeTokenPath(UserRole.RegularUser, factorConfirmed: false);
 
         await _service.Authenticate("token");
 

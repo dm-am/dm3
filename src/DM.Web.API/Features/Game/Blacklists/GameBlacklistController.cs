@@ -17,7 +17,9 @@ namespace DM.Web.API.Features.Game.Blacklists;
 /// </summary>
 /// <remarks>
 /// Provides operations for managing game blacklists.
-/// Blacklisted users cannot access, comment, or participate in the game.
+/// Blacklisted users cannot comment in the game's discussion or apply to it,
+/// each including the edit of their own; everything else stays as it is for
+/// anybody (GameRoleExtensions.IsBlacklisted).
 /// </remarks>
 [ApiController]
 [Route("v1/games")]

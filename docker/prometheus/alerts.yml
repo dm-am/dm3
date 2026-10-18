@@ -234,7 +234,7 @@ groups:
           severity: warning
         annotations:
           summary: "The realtime push queue has no consumer"
-          description: "The API and the broker are both up and the notification consumer of the API is not subscribed, so every push is dropped at the broker. The global chat page catches up on its own; the two badges are re-read only when the application mounts or the socket reconnects, and it stays that way until the API restarts."
+          description: "The API and the broker are both up and the notification consumer of the API is not subscribed, so every push is dropped at the broker. The consumer retries the subscription forever, at most 30 seconds apart, and logs a warning per attempt: a log carrying those warnings means the attempts are failing, and its exception says why. A log carrying none of them means nobody is trying — the retry loop was never reached, and the line to look for is \"could not be started\", logged once when the consumer gave up before its first attempt. Either way /_health/detail reports realtime-push as Degraded until a subscription opens. Meanwhile the global chat page catches up on its own, and the two badges are re-read only when the application mounts or the socket reconnects."
 
       # Ready plus unacknowledged, not ready alone. A message handed to a consumer
       # stops being ready the moment it is delivered, so a worker that has taken a

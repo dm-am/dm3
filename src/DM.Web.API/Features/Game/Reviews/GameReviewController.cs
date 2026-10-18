@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace DM.Web.API.Features.Game.Reviews;
 
 /// <summary>
-/// Game reviews collection - list and create
+/// Game reviews of one game - list, read, create, edit and delete
 /// </summary>
 /// <remarks>
 /// The game segment takes the same identifier as every other subroute of a game:
@@ -96,10 +96,70 @@ public class GameReviewController : ControllerBase
     /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="reviewId">Review ID</param>
     /// <response code="200">Game review</response>
-    /// <response code="404">Review not found</response>
+    /// <response code="404">Game not found, or the review is not a review of this game</response>
     [HttpGet("{reviewId:guid}", Name = nameof(GetGameReview))]
     [ProducesResponseType(typeof(Envelope<GameReviewDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetGameReview(string id, Guid reviewId) =>
-        Ok(await _gameReviewApiService.Get(reviewId));
+        Ok(await _gameReviewApiService.Get(await _gameApiService.ResolveId(id), reviewId));
+
+    /// <summary>
+    /// Update game review
+    /// </summary>
+    /// <remarks>
+    /// Changes the text; an omitted text keeps the stored one.
+    ///
+    /// **Requirements:**
+    /// - Only the review's author may edit it. A moderator does not rewrite
+    ///   somebody else's opinion — the moderation tool is DELETE below
+    /// - The window is 24 hours from publication (admins are exempt)
+    /// </remarks>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
+    /// <param name="reviewId">Review ID</param>
+    /// <param name="request">Fields to change</param>
+    /// <response code="200">Review updated</response>
+    /// <response code="400">Invalid update data</response>
+    /// <response code="401">User not authenticated</response>
+    /// <response code="403">Not allowed (not the author, window expired)</response>
+    /// <response code="404">Review not found</response>
+    [HttpPatch("{reviewId:guid}", Name = nameof(UpdateGameReview))]
+    [AuthenticationRequired]
+    [ProducesResponseType(typeof(Envelope<GameReviewDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateGameReview(
+        string id, Guid reviewId, [FromBody] UpdateGameReviewRequest request) =>
+        Ok(await _gameReviewApiService.Update(reviewId, request));
+
+    /// <summary>
+    /// Delete game review
+    /// </summary>
+    /// <remarks>
+    /// Soft-deletes the review.
+    ///
+    /// **Requirements:**
+    /// - The author, at any time — no window
+    /// - Or a senior moderator, on somebody else's review: taking down a stated
+    ///   opinion sits a step above deleting a comment, and AUTHORIZATION.md puts
+    ///   it with profile moderation
+    /// </remarks>
+    /// <param name="id">Game public ID (5 letters) or GUID</param>
+    /// <param name="reviewId">Review ID</param>
+    /// <response code="204">Review deleted</response>
+    /// <response code="401">User not authenticated</response>
+    /// <response code="403">Not allowed (neither the author nor a senior moderator)</response>
+    /// <response code="404">Review not found</response>
+    [HttpDelete("{reviewId:guid}", Name = nameof(DeleteGameReview))]
+    [AuthenticationRequired]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteGameReview(string id, Guid reviewId)
+    {
+        await _gameReviewApiService.Delete(reviewId);
+        return NoContent();
+    }
 }

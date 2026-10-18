@@ -3,8 +3,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Community.Features.Profiles;
+using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Blacklists;
+using DM.Domain.Core.Identity;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
+using DM.Domain.Messaging.Features.Messages;
 using DM.Domain.Personal.Features.ProfileNotes;
 using DM.Infrastructure.Core.Parsing;
 using DM.Web.API.Shared.BbRendering;
@@ -22,6 +26,9 @@ internal class CommunityUserApiService : ICommunityUserApiService
     private readonly IUserLookupService _userLookupService;
     private readonly IUserProfileNoteService _profileNoteService;
     private readonly ILoginRecordService _loginRecordService;
+    private readonly IUserBlacklistChecker _blacklistChecker;
+    private readonly IMessageService _messageService;
+    private readonly IIdentityProvider _identityProvider;
     private readonly UserMapper _mapper;
 
     /// <inheritdoc />
@@ -30,12 +37,18 @@ internal class CommunityUserApiService : ICommunityUserApiService
         IUserLookupService userLookupService,
         IUserProfileNoteService profileNoteService,
         ILoginRecordService loginRecordService,
+        IUserBlacklistChecker blacklistChecker,
+        IMessageService messageService,
+        IIdentityProvider identityProvider,
         UserMapper mapper)
     {
         _profileService = profileService;
         _userLookupService = userLookupService;
         _profileNoteService = profileNoteService;
         _loginRecordService = loginRecordService;
+        _blacklistChecker = blacklistChecker;
+        _messageService = messageService;
+        _identityProvider = identityProvider;
         _mapper = mapper;
     }
 
@@ -77,6 +90,16 @@ internal class CommunityUserApiService : ICommunityUserApiService
     /// <inheritdoc />
     public async Task<Envelope<UserProfile>> GetUserProfile(string username)
     {
+        // "Аккаунт удален" is no account: the name is reserved, no row answers to it,
+        // and its profile is the sum of every removed one. Asked here first, before a
+        // lookup that would find nobody and answer 404; every other endpoint that
+        // takes a name does exactly that with it.
+        if (RemovedAccount.Is(username))
+        {
+            var summary = await _profileService.GetRemovedAccountSummary();
+            return new Envelope<UserProfile>(_mapper.ToRemovedAccountProfile(summary));
+        }
+
         var user = await _profileService.GetProfile(username);
 
         // Username history is public — always fetch. A personal note is
@@ -120,6 +143,20 @@ internal class CommunityUserApiService : ICommunityUserApiService
         {
             profile.PersonalNote = _mapper.ToPersonalNote(personalNote);
         }
+
+        // The viewer's own list, and only that direction (see BlockedByViewer).
+        if (AnonymousIdentity.Of(_identityProvider.Current?.User) is { } viewerId && viewerId != user.UserId)
+        {
+            profile.BlockedByViewer = await _blacklistChecker.IsBlockedAsync(viewerId, user.UserId);
+        }
+
+        // What the viewer may do with this user, asked of the code that refuses
+        // it: "Написать сообщение" leads to a conversation whose first message
+        // MessageService takes or refuses by the same rule.
+        profile.Viewer = new ProfileViewer
+        {
+            CanMessage = await _messageService.MayWriteToAsync(user.UserId)
+        };
 
         return new Envelope<UserProfile>(profile);
     }

@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Messaging.Features.Chats;
 
 namespace DM.Domain.Messaging.Features.Messages;
 
@@ -34,6 +35,25 @@ public interface IMessageService
     /// <param name="ct">Cancellation token</param>
     /// <returns>Created message</returns>
     Task<Message> CreateInGameRoomAsync(CreateMessage createMessage, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether the current user may write a new message in the chat: true exactly
+    /// when <see cref="CreateAsync" /> takes one there, the text aside. The page
+    /// offers the field by this answer instead of refusing what was typed.
+    /// </summary>
+    /// <param name="chat">The chat, read for the current user</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<bool> MayCreateAsync(Chat chat, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether the current user may write to this user in private: a conversation
+    /// of the two of them would take his message. False for a guest and for the
+    /// user himself, who has nobody to write to there. The profile offers
+    /// "Написать сообщение" by this answer.
+    /// </summary>
+    /// <param name="userId">The user written to</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<bool> MayWriteToAsync(Guid userId, CancellationToken ct = default);
 
     // ═══ READ ═══
 

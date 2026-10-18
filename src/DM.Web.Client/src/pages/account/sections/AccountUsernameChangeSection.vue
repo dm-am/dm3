@@ -14,10 +14,9 @@
            something the server may refuse. -->
       <div v-else-if="loadError" class="status-card status-card--failed">
         <div class="status-header">
-          <span class="status-icon">{{ symbols.cross }}</span>
           <span class="status-title">{{ loadError }}</span>
         </div>
-        <p class="status-note">Обновите страницу, чтобы попробовать снова.</p>
+        <p class="status-note">Обновите страницу, чтобы попробовать снова</p>
       </div>
 
       <!-- Pending request status card -->
@@ -26,7 +25,6 @@
         class="status-card status-card--pending"
       >
         <div class="status-header">
-          <SvgIcon name="clock" class="status-icon" />
           <span class="status-title">Заявка на рассмотрении</span>
         </div>
         <div class="status-details">
@@ -51,7 +49,6 @@
         class="status-card status-card--rejected"
       >
         <div class="status-header">
-          <span class="status-icon">{{ symbols.cross }}</span>
           <span class="status-title">Заявка отклонена</span>
         </div>
         <div class="status-details">
@@ -64,7 +61,7 @@
             <span>{{ existingRequest.resolvedByUsername }}</span>
           </div>
         </div>
-        <p class="status-note">Вы можете подать новую заявку.</p>
+        <p class="status-note">Вы можете подать новую заявку</p>
       </div>
 
       <!-- Approved notification -->
@@ -73,7 +70,6 @@
         class="status-card status-card--approved"
       >
         <div class="status-header">
-          <span class="status-icon">{{ symbols.checkmark }}</span>
           <span class="status-title">Заявка одобрена</span>
         </div>
         <p class="status-note">
@@ -88,7 +84,6 @@
         class="status-card status-card--expired"
       >
         <div class="status-header">
-          <SvgIcon name="clock" class="status-icon" />
           <span class="status-title">Заявка истекла</span>
         </div>
         <div class="status-details">
@@ -110,11 +105,12 @@
         class="status-card status-card--completed"
       >
         <div class="status-header">
-          <span class="status-icon">{{ symbols.checkmark }}</span>
           <span class="status-title">Имя изменено</span>
         </div>
         <p class="status-note">Заявка выполнена. Вы можете подать новую.</p>
       </div>
+
+      <ActionResult :text="conflictRefusal" />
 
       <!-- Create request form -->
       <form
@@ -148,7 +144,13 @@
           Заявка будет рассмотрена модераторами. Обычно это занимает 1-3 дня.
         </div>
 
-        <Button type="submit" :loading="submitting" :disabled="!canSubmit">
+        <Button
+          type="submit"
+          variant="primary"
+          class="request-submit"
+          :loading="submitting"
+          :disabled="!canSubmit"
+        >
           Отправить заявку
         </Button>
       </form>
@@ -158,22 +160,23 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { symbols } from "@/shared/lib/utils/icons";
-import { SvgIcon } from "@/shared/ui/Icon";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { describeFailure } from "@/shared/lib/errors";
+import {
+  describeFailure,
+  describeRateLimit,
+  refusalHere,
+} from "@/shared/lib/errors";
+import { ActionResult } from "@/shared/ui/ActionResult";
 import type { User } from "@/shared/api/models/community";
+import type { GeneralError } from "@/shared/api/models/common";
 import type { UsernameChangeRequest } from "@/shared/api/models/account";
 
 defineProps<{
   user: User;
 }>();
-
-const toast = useToast();
 
 const loading = ref(true);
 const existingRequest = ref<UsernameChangeRequest | null>(null);
@@ -181,9 +184,25 @@ const existingRequest = ref<UsernameChangeRequest | null>(null);
 const reason = ref("");
 const submitting = ref(false);
 const submitError = ref<string | null>(null);
+/**
+ * Why the request was turned down as a conflict, under the card of the state
+ * that stands in the form's place once the section is read again.
+ */
+const conflictRefusal = ref<string | null>(null);
 const loadError = ref<string | null>(null);
 
 const LOAD_FAILED = "Не удалось узнать состояние заявки";
+
+/**
+ * The read this section answers for itself.
+ *
+ * A failed read is a card in place of the state and the gate that shuts the
+ * form under it, so the card is the one carrier of the failure and a plate in
+ * the corner has nothing to add to it. Set here and not inside the request: the
+ * profile page reads the same thing and shows nothing about a failure, and a
+ * flag fixed in the service would take its plate away too.
+ */
+const OWNED_BY_CARD = { ownsRefusal: true, ownsRateLimit: true } as const;
 
 // A request in flight is one awaiting a moderator, or an approval whose name is
 // not yet chosen: those hold a change already asked for. Every other state holds
@@ -213,16 +232,43 @@ onMounted(async () => {
   await loadExistingRequest();
 });
 
+/**
+ * What the card says about a read that failed.
+ *
+ * A failed read used to be indistinguishable from "never asked": the section
+ * offered the form to someone whose request was already in flight, and the
+ * server refused it with a conflict that landed as a validation note under the
+ * reason field, where there was nothing to correct. So the card stands in place
+ * of the state and closes the form.
+ *
+ * Which makes it the one carrier of the failure, and it says what the server
+ * said: a refusal names why this block is shut, where the section's own line
+ * names only that something is missing. Nothing stands over it repeating that -
+ * the request took the refusal and the limit over from the interceptor.
+ *
+ * Two statuses keep the section's own line, because the interceptor still
+ * speaks for them and knows more about them than this block does: a session
+ * that ended is about the session, and a request that never went out has no
+ * sentence of its own.
+ *
+ * The wait is built rather than relayed: the seconds the server named ride in
+ * Retry-After and the transport copies them onto the failure, while the title
+ * of a 429 carries no number at all.
+ */
+function describeLoadFailure(failure: GeneralError): string {
+  if (failure.status === 0 || failure.status === 401) return LOAD_FAILED;
+  if (failure.status === 429)
+    return describeRateLimit(failure.retryAfterSeconds);
+  return describeFailure(failure, LOAD_FAILED);
+}
+
 async function loadExistingRequest() {
   loading.value = true;
-  const { data, error } = await accountApi.getUsernameChangeRequest();
+  const { data, error } =
+    await accountApi.getUsernameChangeRequest(OWNED_BY_CARD);
   loading.value = false;
 
-  // A failed read used to be indistinguishable from "never asked": the section
-  // offered the form to someone whose request was already in flight, and the
-  // server refused it with a conflict that landed as a validation note under
-  // the reason field, where there was nothing to correct.
-  loadError.value = error ? describeFailure(error, LOAD_FAILED) : null;
+  loadError.value = error ? describeLoadFailure(error) : null;
   existingRequest.value = data ?? null;
 }
 
@@ -231,6 +277,7 @@ async function submitRequest() {
 
   submitting.value = true;
   submitError.value = null;
+  conflictRefusal.value = null;
 
   const { data, error } = await accountApi.createUsernameChangeRequest({
     reason: reason.value.trim(),
@@ -241,20 +288,28 @@ async function submitRequest() {
   if (error) {
     // A conflict means the section is looking at a stale state - the request was
     // filed elsewhere, or an approval is still live. Re-read it and let the card
-    // say so, instead of explaining it under the reason field.
+    // say so, with the server's sentence under it, in the place the form stood.
     if (error.status === 409) {
       await loadExistingRequest();
-      toast.error(describeFailure(error, "Не удалось отправить заявку"));
+      conflictRefusal.value = describeFailure(
+        error,
+        "Не удалось отправить заявку на смену имени",
+      );
       return;
     }
-    submitError.value = describeFailure(error, "Не удалось отправить заявку");
+    // Under the reason field, the refusals the interceptor speaks for included:
+    // the form and the reason typed into it stay on screen, and the plate the
+    // interceptor held for the same refusal is taken down.
+    submitError.value = refusalHere(
+      error,
+      "Не удалось отправить заявку на смену имени",
+    );
     return;
   }
 
   if (data) {
     existingRequest.value = data;
     reason.value = "";
-    toast.success("Заявка отправлена на рассмотрение");
   }
 }
 </script>
@@ -266,7 +321,6 @@ async function submitRequest() {
 .username-change-content
   padding: $medium
   background-color: $bg-element
-  border-radius: $border-radius
 
 .current-value
   margin-bottom: $medium
@@ -278,83 +332,30 @@ async function submitRequest() {
 .loading-state
   padding: $medium
 
-// Status cards
+// The state of the request is written in words, as a state is across the
+// site, and not drawn as a panel: no fill, no frame, no mark beside it. The
+// sentence takes the colour of what it means: green for what is granted, red
+// for what was refused or could not be read, grey for what lapsed, the text's
+// own for what still waits.
 .status-card
-  padding: $medium
-  border-radius: $border-radius
   margin-bottom: $medium
 
-  &--pending
-    +tint($link, 15%)
-    border: 1px solid $link
-
-  &--rejected
-    +tint($accent-red, 15%)
-    border: 1px solid $accent-red
-
-  &--approved
-    +tint($accent-green, 15%)
-    border: 1px solid $accent-green
-
-  &--expired
-    +tint($text-muted, 15%)
-    border: 1px solid $text-muted
-
-  &--completed
-    +tint($accent-green, 15%)
-    border: 1px solid $accent-green
-
-  &--failed
-    +tint($accent-red, 15%)
-    border: 1px solid $accent-red
-
 .status-header
-  display: flex
-  align-items: center
-  gap: $small
   margin-bottom: $small
-
-.status-icon
-  font-size: 1.2em
-
-  .status-card--pending &
-    color: $link
-
-  .status-card--rejected &
-    color: $accent-red
-
-  .status-card--approved &
-    color: $accent-green
-
-  .status-card--expired &
-    color: $text-muted
-
-  .status-card--completed &
-    color: $accent-green
-
-  .status-card--failed &
-    color: $accent-red
 
 .status-title
   font-weight: 600
 
-  .status-card--pending &
-    color: $link
-
-  .status-card--rejected &
+  .status-card--rejected &,
+  .status-card--failed &
     color: $accent-red
 
-  .status-card--approved &
+  .status-card--approved &,
+  .status-card--completed &
     color: $accent-green
 
   .status-card--expired &
     color: $text-muted
-
-  .status-card--completed &
-    color: $accent-green
-
-  .status-card--failed &
-    color: $accent-red
 
 .status-details
   display: flex
@@ -395,4 +396,9 @@ async function submitRequest() {
 .form-note
   font-size: $secondary-font-size
   color: $text-muted
+
+// At the width of its caption, as every button of a page is: the column would
+// otherwise stretch it across the card.
+.request-submit
+  align-self: flex-start
 </style>

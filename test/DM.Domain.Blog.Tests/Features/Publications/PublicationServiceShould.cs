@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,6 +19,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Testing;
+using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
@@ -75,7 +78,8 @@ public class PublicationServiceShould : UnitTestBase
             _updatePublicationValidator,
             _guidFactory,
             _dateTimeProvider,
-            _eventProducer);
+            _eventProducer,
+            new TagNamesAsTyped());
     }
 
     [Fact]
@@ -242,13 +246,15 @@ public class PublicationServiceShould : UnitTestBase
         var blogId = Guid.NewGuid();
         var authorId = Guid.NewGuid();
         _userLookupService.GetAsync(username).Returns(new GeneralUser { UserId = authorId, Username = username });
-        _repository.GetBestUserPublication(authorId, default).Returns(new Publication
-        {
-            Id = publicationId,
-            BlogId = blogId,
-            IsPublished = true,
-            Author = new GeneralUser { UserId = authorId }
-        });
+        _repository.GetBestUserPublication(
+                Arg.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 1 && ids.Contains(authorId)), default)
+            .Returns(new Publication
+            {
+                Id = publicationId,
+                BlogId = blogId,
+                IsPublished = true,
+                Author = new GeneralUser { UserId = authorId }
+            });
         return (publicationId, blogId);
     }
 

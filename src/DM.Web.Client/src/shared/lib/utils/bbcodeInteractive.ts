@@ -1,7 +1,8 @@
 /**
  * BBCode Interactive Elements
  *
- * Shared utilities for initializing interactive BBCode elements (spoilers, NSFW)
+ * Shared utilities for initializing interactive BBCode elements (spoilers, NSFW,
+ * pictures that open whole, the tooltip naming who reads a hidden block)
  * in server-rendered content. Used by every component that displays
  * server-rendered BBCode content.
  *
@@ -24,6 +25,19 @@ import {
   registerExpandable,
   notifyExpandableChanged,
 } from "@/shared/lib/composables/useExpandableRegistry";
+import { openImageViewer } from "@/shared/lib/composables/useImageViewer";
+import {
+  TAP_CLOSE_DELAY,
+  anchoredTooltipElement,
+  anchoredTooltipOwner,
+  closesByItself,
+  hideAnchoredTooltip,
+  isCompatMouseEvent,
+  isTap,
+  showAnchoredTooltip,
+  tapTargetOf,
+  trackInput,
+} from "@/shared/ui/Tooltip";
 
 // ============================================================================
 // CLEANUP TRACKING
@@ -295,10 +309,30 @@ export function initSpoilers(container: HTMLElement | null): void {
     head.setAttribute("tabindex", "0");
     head.setAttribute("aria-expanded", "false");
 
-    // Initially collapsed with standard text
+    // The head the server wrote carries the caption the author gave the
+    // spoiler ([spoiler text="..."]), or the standard text when none was
+    // given. Writing the standard text over it hid every caption from every
+    // reader. It is read on the first initialisation and kept on the head: a
+    // head initialised again after cleanup may be showing the text of the
+    // open state.
+    const caption =
+      head.getAttribute("data-bb-caption") ??
+      (head.textContent?.trim() || SPOILER_SHOW_TEXT);
+    head.setAttribute("data-bb-caption", caption);
+
+    // The words of the open head. The server writes them in data-swaptext: a
+    // spoiler with a caption keeps it open as well, since the caption names
+    // what is inside, and one without swaps to the standard words, as on DM2.
+    // A head written without them (the spoiler an image is put behind) swaps
+    // only when it shows the standard words.
+    const openCaption =
+      head.getAttribute("data-swaptext") ||
+      (caption === SPOILER_SHOW_TEXT ? SPOILER_HIDE_TEXT : caption);
+
+    // Initially collapsed, showing the caption
     collapse.classList.remove("open");
     collapse.inert = true;
-    head.textContent = SPOILER_SHOW_TEXT;
+    head.textContent = caption;
 
     // Toggle function. Pure class flip — the CSS grid transition animates
     // both directions and reverses cleanly mid-flight on rapid clicks.
@@ -306,7 +340,7 @@ export function initSpoilers(container: HTMLElement | null): void {
       const expand = !collapse.classList.contains("open");
       collapse.classList.toggle("open", expand);
       collapse.inert = !expand;
-      head.textContent = expand ? SPOILER_HIDE_TEXT : SPOILER_SHOW_TEXT;
+      head.textContent = expand ? openCaption : caption;
       head.setAttribute("aria-expanded", String(expand));
     };
 
@@ -557,6 +591,362 @@ export function initNsfw(container: HTMLElement | null): void {
 }
 
 // ============================================================================
+// PICTURES
+// ============================================================================
+
+/** Containers that already hear a click on their pictures. */
+const imageListeners = new WeakSet<HTMLElement>();
+
+/**
+ * A click on a picture of the text opens it whole over the page (the viewer of
+ * shared/ui/ImageViewer). In the text it is drawn no taller than the window
+ * allows, and a tall map or sheet could not be read there at all.
+ *
+ * One listener on the container and not one per picture, so a picture that
+ * arrives with new text later (an edit, a page of comments loaded in) opens
+ * like the first ones did, and the container is initialised over and over
+ * (ContentText re-runs this on every change of the text) without piling up.
+ *
+ * A picture inside [link] is the link's: the press goes where the author
+ * sent it, as it did before. A press with a modifier is the browser's.
+ */
+function initImageViewer(container: HTMLElement): void {
+  if (imageListeners.has(container)) return;
+
+  const onClick = (event: MouseEvent) => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof HTMLImageElement)) return;
+    if (!target.matches(".bb-image") || !container.contains(target)) return;
+    if (target.closest("a[href]")) return;
+
+    event.preventDefault();
+    openImageViewer(target.currentSrc || target.src);
+  };
+
+  container.addEventListener("click", onClick);
+  imageListeners.add(container);
+  registerCleanup(container, () => {
+    container.removeEventListener("click", onClick);
+    imageListeners.delete(container);
+  });
+}
+
+// ============================================================================
+// HIDDEN TEXT: WHO READS IT
+// ============================================================================
+
+/**
+ * The hover waits longer on hidden text than on a control. A reader rests the
+ * pointer on the text he reads, and a bubble after the usual 150 ms would stand
+ * over the line above it, the line just read, every time the hand stopped.
+ */
+export const PRIVATE_HOVER_DELAY = 600;
+
+/** The grace the bubble keeps while the pointer crosses between two lines. */
+const PRIVATE_LEAVE_DELAY = 150;
+
+/**
+ * The words of the tooltip over a hidden block: "Получатели: DungeonMaster,
+ * Assistant, Вася". The server writes the names on the block itself, in
+ * data-recipients, the leads first (PrivateTag). They used to be a line of the
+ * post after the block, " (Получатели: ...)", and the owner took it out (05.10:
+ * "а зачем это вообще текстом, если при наведении показывается?"): the line
+ * stretched the gaps of a justified paragraph around every hidden block.
+ *
+ * Read with getAttribute and shown as text: the names are the players' own.
+ */
+export function privateRecipientsText(piece: Element): string | null {
+  const names = (piece.getAttribute("data-recipients") ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return names ? `Получатели: ${names}` : null;
+}
+
+/**
+ * The line of `element` nearest to the point, as an index into its client
+ * rectangles (an inline box has one per line it spans): the one the point is
+ * in, else the one nearest above or below it.
+ */
+function lineIndexAt(element: Element, x: number, y: number): number {
+  let best = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  Array.from(element.getClientRects()).forEach((rect, index) => {
+    const dy = y < rect.top ? rect.top - y : Math.max(0, y - rect.bottom);
+    const dx = x < rect.left ? rect.left - x : Math.max(0, x - rect.right);
+    // Vertical distance first: the line, then the place on it.
+    const distance = dy * 100_000 + dx;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = index;
+    }
+  });
+  return best;
+}
+
+/**
+ * The point the bubble points at: on that line, where the pointer or the
+ * finger is. A line of a block runs the width of the column, and a bubble
+ * centred on the whole line put its arrow a column away from the word the
+ * reader was on.
+ */
+function lineAnchor(
+  element: Element,
+  index: number,
+  x: number,
+): () => DOMRect | null {
+  return () => {
+    if (!element.isConnected) return null;
+    const line =
+      element.getClientRects()[index] ?? element.getBoundingClientRect();
+    const at = Math.min(Math.max(x, line.left), line.right);
+    return new DOMRect(at, line.top, 0, line.height);
+  };
+}
+
+/**
+ * The one hidden block whose bubble is up (a page shows one bubble at a time),
+ * how it was opened, and what closes it.
+ */
+let recipientsOpen: { piece: HTMLElement; byTap: boolean } | null = null;
+let recipientsShowTimer: ReturnType<typeof setTimeout> | null = null;
+let recipientsHideTimer: ReturnType<typeof setTimeout> | null = null;
+let recipientsTapTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearRecipientsTimers(): void {
+  for (const timer of [
+    recipientsShowTimer,
+    recipientsHideTimer,
+    recipientsTapTimer,
+  ]) {
+    if (timer) clearTimeout(timer);
+  }
+  recipientsShowTimer = null;
+  recipientsHideTimer = null;
+  recipientsTapTimer = null;
+}
+
+function hideRecipients(): void {
+  clearRecipientsTimers();
+  if (recipientsOpen) hideAnchoredTooltip(recipientsOpen.piece);
+  recipientsOpen = null;
+  listenWhileRecipientsOpen(false);
+}
+
+function showRecipients(
+  piece: HTMLElement,
+  text: string,
+  point: { x: number; y: number },
+  byTap: boolean,
+): void {
+  clearRecipientsTimers();
+  showAnchoredTooltip({
+    text,
+    owner: piece,
+    anchor: lineAnchor(piece, lineIndexAt(piece, point.x, point.y), point.x),
+  });
+  recipientsOpen = { piece, byTap };
+  listenWhileRecipientsOpen(true);
+  if (byTap) {
+    // One line of names goes by itself, a longer list waits for the finger.
+    recipientsTapTimer = setTimeout(() => {
+      recipientsTapTimer = null;
+      const bubble = anchoredTooltipElement();
+      if (
+        !bubble ||
+        closesByItself(bubble, bubble.querySelector(".tooltip-text"))
+      ) {
+        hideRecipients();
+      }
+    }, TAP_CLOSE_DELAY);
+  }
+}
+
+// While the bubble is up, anything the reader does elsewhere takes it away: a
+// press outside the block (the bubble itself included, it has nothing to
+// press), a scroll, a key, a resize. A press inside the block is the block's
+// own to decide: a mouse starting a selection there (see below), a tap that
+// toggles.
+function onRecipientsDocumentPointerDown(event: Event): void {
+  const open = recipientsOpen;
+  if (!open) return;
+  const target = event.target as Node | null;
+  if (target && open.piece.contains(target)) return;
+  hideRecipients();
+}
+
+function onRecipientsDismiss(): void {
+  if (recipientsOpen) hideRecipients();
+}
+
+function listenWhileRecipientsOpen(on: boolean): void {
+  const method = on ? "addEventListener" : "removeEventListener";
+  document[method]("pointerdown", onRecipientsDocumentPointerDown, true);
+  document[method]("keydown", onRecipientsDismiss, true);
+  window[method]("scroll", onRecipientsDismiss, true);
+  window[method]("resize", onRecipientsDismiss);
+}
+
+/** Blocks already listening, so that a second init adds nothing. */
+const privateListeners = new WeakSet<HTMLElement>();
+
+/**
+ * Whether a tap on the target inside a hidden block does something of its
+ * own: follows a link, opens a spoiler (its head is a link), presses a
+ * control, or opens a picture whole (initImageViewer). Text says nothing.
+ */
+function actsOnTap(target: EventTarget | null, piece: HTMLElement): boolean {
+  if (tapTargetOf(target) !== "text") return true;
+  return (
+    target instanceof HTMLImageElement &&
+    target.matches(".bb-image") &&
+    piece.contains(target)
+  );
+}
+
+/**
+ * Who reads a hidden block, in a tooltip over the green text: the names the
+ * server writes on the block (privateRecipientsText), over the line under the
+ * pointer or the finger, so that on a long block it stands where the reader is.
+ *
+ * - Mouse: the bubble comes after PRIVATE_HOVER_DELAY over the line under the
+ *   pointer and goes when the pointer leaves the block. A press on the block,
+ *   or a drag into it with the button held, takes it away and keeps it away
+ *   until the pointer leaves: that is a selection being made. A link, a
+ *   spoiler and a picture inside answer the click at once, as anywhere.
+ * - Touch, by the rule of the site's tooltips (touchRule.ts) with one
+ *   addition of its own: the first tap anywhere on the hidden text opens the
+ *   bubble over the line under the finger, a tap on a link, a spoiler or a
+ *   picture inside included, and that tap does nothing else. While the bubble
+ *   is open, a tap on the link follows it, on the spoiler opens it, on the
+ *   picture opens it whole, and the bubble goes. A block that is a link and
+ *   nothing more would otherwise never say on a phone whom it is for (the
+ *   owner, 05.10: "как поступать, если приватный текст полностью состоит из
+ *   ссылки или спойлера"). A second tap on the text, a tap elsewhere or
+ *   TAP_CLOSE_DELAY (a one-line list only) close it. A scroll and a long
+ *   press open nothing, the long press stays the phone's, for selecting and
+ *   copying.
+ * - Keyboard: nothing. The block takes no Tab stop: a room would get one on
+ *   every green block.
+ *
+ * The bubble lives outside the text, so a selection of the post copies the
+ * text alone.
+ */
+function initPrivateRecipients(container: HTMLElement): void {
+  const pieces = container.querySelectorAll<HTMLElement>(".private-message");
+  const cleanupFunctions: Array<() => void> = [];
+
+  pieces.forEach((piece) => {
+    if (privateListeners.has(piece)) return;
+    const text = privateRecipientsText(piece);
+    if (!text) return;
+
+    trackInput();
+    privateListeners.add(piece);
+
+    let point = { x: 0, y: 0 };
+
+    // A mouse button held over the block is a selection being made, begun on
+    // the block or dragged into it: the bubble keeps away until the pointer
+    // leaves and comes back with the button up.
+    const keepAway = (): void => {
+      if (recipientsOpen?.piece === piece) hideRecipients();
+      else if (recipientsShowTimer) {
+        clearTimeout(recipientsShowTimer);
+        recipientsShowTimer = null;
+      }
+    };
+
+    const onMouseEnter = (event: MouseEvent): void => {
+      if (isCompatMouseEvent()) return;
+      point = { x: event.clientX, y: event.clientY };
+      if (recipientsOpen?.piece === piece) {
+        // Back across the gap between two lines before the grace ran out.
+        if (recipientsHideTimer) clearTimeout(recipientsHideTimer);
+        recipientsHideTimer = null;
+        return;
+      }
+      if (event.buttons !== 0) return;
+      if (recipientsShowTimer) clearTimeout(recipientsShowTimer);
+      recipientsShowTimer = setTimeout(
+        () => showRecipients(piece, text, point, false),
+        PRIVATE_HOVER_DELAY,
+      );
+    };
+
+    const onMouseMove = (event: MouseEvent): void => {
+      if (isCompatMouseEvent()) return;
+      point = { x: event.clientX, y: event.clientY };
+      if (event.buttons !== 0) keepAway();
+    };
+
+    const onMouseLeave = (): void => {
+      if (isCompatMouseEvent()) return;
+      if (recipientsOpen?.piece === piece) {
+        if (recipientsOpen.byTap) return;
+        if (recipientsHideTimer) clearTimeout(recipientsHideTimer);
+        recipientsHideTimer = setTimeout(hideRecipients, PRIVATE_LEAVE_DELAY);
+        return;
+      }
+      if (recipientsShowTimer) clearTimeout(recipientsShowTimer);
+      recipientsShowTimer = null;
+    };
+
+    const onMouseDown = (): void => {
+      if (isCompatMouseEvent()) return;
+      keepAway();
+    };
+
+    // Heard in the capture phase, before the link, the spoiler head and the
+    // picture under the finger hear the tap: the first tap is the bubble's.
+    const onClick = (event: MouseEvent): void => {
+      if (!isTap(event)) return;
+      const acts = actsOnTap(event.target, piece);
+      if (recipientsOpen?.piece === piece && recipientsOpen.byTap) {
+        // The bubble has said its words: the link, the spoiler, the picture
+        // do what they do now, and the text closes it as a second tap.
+        hideRecipients();
+        return;
+      }
+      if (acts) {
+        event.preventDefault();
+        event.stopPropagation();
+      } else {
+        // A tap into a selection is about the selection.
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed) return;
+      }
+      showRecipients(piece, text, { x: event.clientX, y: event.clientY }, true);
+    };
+
+    piece.addEventListener("mouseenter", onMouseEnter);
+    piece.addEventListener("mousemove", onMouseMove);
+    piece.addEventListener("mouseleave", onMouseLeave);
+    piece.addEventListener("mousedown", onMouseDown);
+    piece.addEventListener("click", onClick, true);
+
+    cleanupFunctions.push(() => {
+      piece.removeEventListener("mouseenter", onMouseEnter);
+      piece.removeEventListener("mousemove", onMouseMove);
+      piece.removeEventListener("mouseleave", onMouseLeave);
+      piece.removeEventListener("mousedown", onMouseDown);
+      piece.removeEventListener("click", onClick, true);
+      privateListeners.delete(piece);
+      if (anchoredTooltipOwner() === piece) hideRecipients();
+    });
+  });
+
+  if (cleanupFunctions.length > 0) {
+    registerCleanup(container, () => {
+      cleanupFunctions.forEach((fn) => fn());
+    });
+  }
+}
+
+// ============================================================================
 // PUBLIC API
 // ============================================================================
 
@@ -608,4 +998,8 @@ export function initBbcodeInteractive(container: HTMLElement | null): void {
   removeBrAroundBlockElements(container);
   initSpoilers(container);
   initNsfw(container);
+  if (container) {
+    initImageViewer(container);
+    initPrivateRecipients(container);
+  }
 }

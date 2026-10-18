@@ -83,7 +83,7 @@ internal class NotificationEmailSender : INotificationEmailSender
                 }
 
                 // Send the email
-                var subject = $"Dungeon Master: {NotificationText.GetTitle(eventType)}";
+                var subject = $"Dungeon Master: {NotificationWording.GetTitle(eventType)}";
 
                 var body = BuildEmailBody(eventType, notification.Metadata, _siteAddresses);
 
@@ -144,11 +144,11 @@ internal class NotificationEmailSender : INotificationEmailSender
         // Content
         sb.AppendLine("<div style=\"padding: 20px; background: #f9f9f9;\">");
 
-        var subject = NotificationText.EscapeHtml(NotificationText.GetTitle(eventType));
+        var subject = NotificationText.EscapeHtml(NotificationWording.GetTitle(eventType));
         sb.AppendLine($"<h2 style=\"color: #333;\">{subject}</h2>");
 
         // Format metadata as readable content
-        var fields = NotificationText.ReadMetadata(metadata);
+        var fields = NotificationWording.ReadMetadata(metadata);
         if (fields.Count > 0)
         {
             sb.AppendLine("<dl style=\"margin: 0;\">");

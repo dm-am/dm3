@@ -42,7 +42,7 @@ async function saveSession(
     const body = await response.text();
     throw new Error(
       `E2E global setup: login failed for ${user.email}: ${response.status()} - ${body}. ` +
-        "Is the API up and the database seeded (scripts/dm.ps1 seed)?",
+        "Is the API up and the database seeded (powershell -File .\\scripts\\dm.ps1 seed)?",
     );
   }
 

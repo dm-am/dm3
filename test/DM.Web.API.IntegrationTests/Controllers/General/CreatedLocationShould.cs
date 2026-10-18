@@ -6,14 +6,17 @@ using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using DM.Infrastructure.Persistence;
 using DM.Web.API.Swagger;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc.ActionConstraints;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Routing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
@@ -172,22 +175,73 @@ public class CreatedLocationShould : IntegrationTestBase
     /// <summary>
     /// A like is not a resource, so liking answers 200 and sets no Location.
     /// </summary>
+    /// <remarks>
+    /// The like has to be taken for the missing header to say anything: a like of
+    /// a comment nobody wrote is refused as 404 and sets no Location either. So
+    /// the comment is written here, by somebody other than the one who likes it,
+    /// and taken away again with the like so the shared topic reads as it did
+    /// before.
+    /// </remarks>
     [Theory]
-    [InlineData("/v1/topics/{0}/likes")]
-    [InlineData("/v1/forum/comments/{1}/likes")]
-    public async Task NotBeSetWhereNothingAddressableWasCreated(string route)
+    [InlineData("topic")]
+    [InlineData("comment")]
+    public async Task NotBeSetWhereNothingAddressableWasCreated(string liked)
     {
-        var address = string.Format(
-            route, TestConstants.SecondTopicId, TestConstants.TestCommentId);
+        var target = liked == "topic" ? TestConstants.SecondTopicId : await SeedCommentAsync();
+        var address = liked == "topic" ? $"/v1/topics/{target}/likes" : $"/v1/forum/comments/{target}/likes";
 
-        using var request = CreateAuthenticatedRequest(HttpMethod.Post, address);
-        var response = await Client.SendAsync(request);
+        try
+        {
+            using var request = CreateAuthenticatedRequest(HttpMethod.Post, address);
+            var response = await Client.SendAsync(request);
 
-        response.StatusCode.Should().NotBe(HttpStatusCode.Created,
-            "a like has no address of its own, so 201 has nothing to point at");
-        response.Headers.Location.Should().BeNull(
-            "the header pointed at the whole topic, so a consumer following it to read what it " +
-            "had created redrew the page instead of moving a counter");
+            response.StatusCode.Should().Be(HttpStatusCode.OK,
+                "a like has no address of its own, so 201 has nothing to point at; body was: {0}",
+                await response.Content.ReadAsStringAsync());
+            response.Headers.Location.Should().BeNull(
+                "the header pointed at the whole topic, so a consumer following it to read what it " +
+                "had created redrew the page instead of moving a counter");
+        }
+        finally
+        {
+            await DropAsync(target, ownComment: liked == "comment");
+        }
+    }
+
+    /// <summary>A comment of the second user on the seeded topic, written past the counters.</summary>
+    private async Task<Guid> SeedCommentAsync()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var commentId = Guid.NewGuid();
+        dbContext.Comments.Add(new DbComment
+        {
+            CommentId = commentId,
+            EntityId = TestConstants.TestTopicId,
+            AuthorId = TestConstants.SecondUserId,
+            CreatedUtc = DateTimeOffset.UtcNow,
+            Text = "A comment to like",
+        });
+        await dbContext.SaveChangesAsync();
+
+        return commentId;
+    }
+
+    /// <summary>The like this test put, and the comment when the test wrote it.</summary>
+    private async Task DropAsync(Guid target, bool ownComment)
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """DELETE FROM "Likes" WHERE "EntityId" = {0} AND "UserId" = {1}""",
+            target, TestConstants.TestUserId);
+        if (ownComment)
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(
+                """DELETE FROM "Comments" WHERE "CommentId" = {0}""", target);
+        }
     }
 
     /// <summary>

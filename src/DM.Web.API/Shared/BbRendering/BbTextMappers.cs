@@ -38,4 +38,9 @@ public static class BbTextMappers
     [return: NotNullIfNotNull(nameof(value))]
     public static InfoBbText? ToInfoBbText(string? value) =>
         value == null ? null : new InfoBbText { Value = value };
+
+    /// <summary>Raw BBCode into a tag description carrier</summary>
+    [return: NotNullIfNotNull(nameof(value))]
+    public static HintBbText? ToHintBbText(string? value) =>
+        value == null ? null : new HintBbText { Value = value };
 }

@@ -82,34 +82,14 @@ public class Ticket
     public string Comment { get; set; } = null!;
 
     /// <summary>
-    /// Moderator who is handling this ticket
+    /// The moderator who closed the ticket (null while it is open)
     /// </summary>
-    public Guid? AssignedModeratorId { get; set; }
-
-    /// <summary>
-    /// Complaint responsible identifier
-    /// </summary>
-    public Guid? AnswerAuthorId { get; set; }
+    public Guid? ResolvedById { get; set; }
 
     /// <summary>
     /// Moment when ticket was resolved
     /// </summary>
     public DateTimeOffset? ResolvedUtc { get; set; }
-
-    /// <summary>
-    /// Moderator's response/resolution comment
-    /// </summary>
-    public string? Answer { get; set; }
-
-    /// <summary>
-    /// Warning issued as a result of this ticket (if any)
-    /// </summary>
-    public Guid? WarningId { get; set; }
-
-    /// <summary>
-    /// Ban issued as a result of this ticket (if any)
-    /// </summary>
-    public Guid? BanId { get; set; }
 
     #region Navigation Properties
 
@@ -126,33 +106,17 @@ public class Ticket
     public virtual User? Target { get; set; }
 
     /// <summary>
-    /// Moderator assigned to handle this ticket
-    /// </summary>
-    [ForeignKey(nameof(AssignedModeratorId))]
-    public virtual User? AssignedModerator { get; set; }
-
-    /// <summary>
     /// Moderator who resolved the ticket
     /// </summary>
-    [ForeignKey(nameof(AnswerAuthorId))]
-    public virtual User? AnswerAuthor { get; set; }
+    [ForeignKey(nameof(ResolvedById))]
+    public virtual User? ResolvedBy { get; set; }
 
     /// <summary>
-    /// Warning issued as result of this ticket
+    /// The conversation of the ticket. Read by the ticket repository and by the
+    /// notifications about tickets only (TicketComment)
     /// </summary>
-    [ForeignKey(nameof(WarningId))]
-    public virtual Warning? Warning { get; set; }
-
-    /// <summary>
-    /// Ban issued as result of this ticket
-    /// </summary>
-    [ForeignKey(nameof(BanId))]
-    public virtual Ban? Ban { get; set; }
-
-    /// <summary>
-    /// Responses in this ticket conversation
-    /// </summary>
-    public virtual ICollection<TicketResponse> Responses { get; set; } = [];
+    [InverseProperty(nameof(TicketComment.Ticket))]
+    public virtual ICollection<TicketComment> TicketComments { get; set; } = [];
 
     #endregion
 }

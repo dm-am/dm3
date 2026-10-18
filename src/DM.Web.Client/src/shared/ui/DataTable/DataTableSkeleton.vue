@@ -57,11 +57,7 @@ function getBarWidth(
       v-for="(column, colIndex) in columns"
       :key="column.key"
       class="skeleton-td"
-      :class="[
-        `col-${column.key}`,
-        `align-${column.align || 'left'}`,
-        { 'hide-mobile': column.hideOnMobile },
-      ]"
+      :class="[`col-${column.key}`, `align-${column.align || 'left'}`]"
     >
       <div
         class="skeleton-bar"
@@ -104,9 +100,4 @@ function getBarWidth(
 .skeleton-bar-number
   width: 20px
   margin: 0 auto
-
-// Mobile responsiveness (matches DataTable)
-@media (max-width: $bp-tablet)
-  .hide-mobile
-    display: none
 </style>

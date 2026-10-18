@@ -60,6 +60,50 @@ public class TelegramWebhookHandlerShould : UnitTestBase
         await _botLinkService.Received(1).VerifyAndLink("abc123", "telegram", "12345", Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// The account page hands the code out as a link, t.me/{bot}?start={code},
+    /// and Telegram delivers the press of Start in that chat as "/start {code}".
+    /// </summary>
+    [Fact]
+    public async Task VerifyAndLinkOnStartCommandWithCode()
+    {
+        var payload = Payload("""{"message": {"text": "/start ABC123", "chat": {"id": 12345}}}""");
+
+        await _handler.HandleAsync(payload);
+
+        await _botLinkService.Received(1).VerifyAndLink("ABC123", "telegram", "12345", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TrimCodeFromStartCommand()
+    {
+        var payload = Payload("""{"message": {"text": "/start  abc123 ", "chat": {"id": 12345}}}""");
+
+        await _handler.HandleAsync(payload);
+
+        await _botLinkService.Received(1).VerifyAndLink("abc123", "telegram", "12345", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task NotLinkOnStartCommandWithBlankCode()
+    {
+        var payload = Payload("""{"message": {"text": "/start   ", "chat": {"id": 12345}}}""");
+
+        await _handler.HandleAsync(payload);
+
+        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task NotTakeACommandThatOnlyStartsLikeStartForOne()
+    {
+        var payload = Payload("""{"message": {"text": "/startABC123", "chat": {"id": 12345}}}""");
+
+        await _handler.HandleAsync(payload);
+
+        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task IgnoreUpdateWithoutMessage()
     {

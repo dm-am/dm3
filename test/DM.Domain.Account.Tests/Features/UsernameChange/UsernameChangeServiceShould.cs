@@ -171,7 +171,6 @@ public class UsernameChangeServiceShould : UnitTestBase
         ), Arg.Any<CancellationToken>());
         await _notificationSender.Received(1).SendApprovalAsync(
             request.UserEmail,
-            request.UserUsername!,
             request.ApprovalToken!.Value
         );
     }
@@ -385,6 +384,78 @@ public class UsernameChangeServiceShould : UnitTestBase
         exception.Message.Should().Contain("занято");
         await _repository.DidNotReceive().ApplyRename(
             Arg.Any<UsernameChangeRequest>(), Arg.Any<CreateUsernameHistory>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// A name the storage refuses is refused the way a name found taken is, and
+    /// not as a failure of the storage engine.
+    /// </summary>
+    /// <remarks>
+    /// Two unique structures stand over the rename, and the checks above it are
+    /// reads: the name can be taken between the check and the write, and the
+    /// history of the name being left behind can refuse the row outright - which
+    /// takes no race at all, only an account that once took its previous name
+    /// back. Untranslated, both reached the reader as a 500 on the form that
+    /// exists to let them pick another name.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseARenameTheStorageWouldNotTake()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var userId = Guid.NewGuid();
+        _dateTimeProvider.Now.Returns(now);
+        var token = IssuedApproval(UsernameChangeRequestStatus.Approved, now.AddHours(1), userId);
+        _repository.IsUsernameAvailable("newusername", Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+            .Returns(true);
+        _historyRepository.IsUsernameReservedForOthers("newusername", userId, Arg.Any<CancellationToken>())
+            .Returns(false);
+        _repository.ApplyRename(
+                Arg.Any<UsernameChangeRequest>(), Arg.Any<CreateUsernameHistory>(),
+                Arg.Any<CancellationToken>())
+            .ThrowsAsync(new DuplicateEntityException("Duplicate username or username history entry"));
+
+        var exception = await Assert.ThrowsAsync<HttpException>(
+            () => _service.CompleteWithTokenAsync(token, "newusername"));
+
+        exception.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        exception.Message.Should().Contain("занято");
+    }
+
+    /// <summary>
+    /// And the rollback the same, under the answer that path already gives.
+    /// </summary>
+    [Fact]
+    public async Task RefuseARollbackTheStorageWouldNotTake()
+    {
+        var requestId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var request = new UsernameChangeRequest
+        {
+            RequestId = requestId,
+            UserId = userId,
+            Status = UsernameChangeRequestStatus.Completed,
+            UserUsername = "newusername"
+        };
+        var moderator = Identity.Success(
+            new AuthenticatedUser { UserId = Guid.NewGuid(), Username = "moderator", Role = UserRole.Admin },
+            new Session(),
+            UserSettings.Default,
+            "token");
+
+        _identityProvider.Current.Returns(moderator);
+        _repository.GetById(requestId, Arg.Any<CancellationToken>()).Returns(request);
+        _historyRepository.GetLatestByUserId(userId, Arg.Any<CancellationToken>()).Returns(
+            new UsernameHistoryEntry { OldUsername = "oldusername", NewUsername = "newusername" });
+        _repository.IsUsernameAvailable("oldusername", userId, Arg.Any<CancellationToken>()).Returns(true);
+        _repository.ApplyRename(
+                Arg.Any<UsernameChangeRequest>(), Arg.Any<CreateUsernameHistory>(),
+                Arg.Any<CancellationToken>())
+            .ThrowsAsync(new DuplicateEntityException("Duplicate username or username history entry"));
+
+        var exception = await Assert.ThrowsAsync<HttpException>(() => _service.RollbackAsync(requestId));
+
+        exception.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        exception.Message.Should().Contain("Откат невозможен");
     }
 
     /// <summary>

@@ -35,24 +35,6 @@ internal class AuthenticationService : IAuthenticationService
     private readonly AuthenticationConfiguration _config;
     private readonly TwoFactorConfiguration _twoFactorConfig;
 
-    /// <summary>
-    /// Credentials of nobody, hashed so that a login for an account that does not
-    /// exist costs what a login for one that does costs.
-    /// </summary>
-    /// <remarks>
-    /// The two answers are required to be indistinguishable, and in text they
-    /// are: both come back as "wrong email or password". In time they were not. A
-    /// missing account skipped Argon2id entirely and answered tens of
-    /// milliseconds sooner, which says the address carries no account without any
-    /// password having been tried. The salt has to be well formed because the
-    /// hasher decodes it; neither value is ever stored or compared against
-    /// anything real.
-    /// </remarks>
-    private static readonly string DecoySalt = Convert.ToBase64String(new byte[75]);
-
-    /// <inheritdoc cref="DecoySalt" />
-    private static readonly string DecoyHash = Convert.ToBase64String(new byte[32]);
-
     /// <inheritdoc />
     public AuthenticationService(
         ISecurityManager securityManager,
@@ -117,7 +99,7 @@ internal class AuthenticationService : IAuthenticationService
                     context?.IpAddress, context?.UserAgent, "Account locked due to failed attempts");
             }
 
-            return Identity.Fail(AuthenticationError.AccountLocked);
+            return Identity.Fail(AuthenticationError.AccountLocked, remainingSeconds);
         }
 
         // Progressive delay for bot protection.
@@ -153,7 +135,7 @@ internal class AuthenticationService : IAuthenticationService
         // point here is to spend the time, not to ask a question with an answer.
         var (salt, hash) = userFound && user!.Role != UserRole.System
             ? (user.Salt, user.PasswordHash)
-            : (DecoySalt, DecoyHash);
+            : (DecoyCredentials.Salt, DecoyCredentials.Hash);
         var passwordMatches = _securityManager.ComparePasswords(password, salt, hash);
 
         switch (userFound)
@@ -197,12 +179,20 @@ internal class AuthenticationService : IAuthenticationService
             // try being counted. That an address is registered is disclosed here
             // by a recorded decision (see SECURITY.md); what moderation did with
             // the account is not, and the owner still gets the real reason.
+            // The owner's journal gets the entry the wrong-password branch
+            // writes: a refusal after a proven password is the one line in it
+            // that says the password itself is known to somebody. Both refusals
+            // below come after that proof.
             case true when user.IsRemoved:
+                await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
+                    context?.IpAddress, context?.UserAgent, "Account removed");
                 _logger.LogWarning("Login failed: account removed. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.Removed);
             case true when user.AccessPolicy.HasFlag(AccessPolicy.FullBan):
+                await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
+                    context?.IpAddress, context?.UserAgent, "Account banned");
                 _logger.LogWarning("Login failed: account banned. UserId={UserId}", user.UserId);
-                return Identity.Fail(AuthenticationError.Banned);
+                return Identity.Banned(user.BanEndsAt(_dateTimeProvider.Now));
 
             default:
                 // The password is proven. Whether that is enough is the next
@@ -239,10 +229,6 @@ internal class AuthenticationService : IAuthenticationService
 
                 // Update activity on login
                 await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
-
-                // The account has no factor, so the fold below can only withhold
-                // a rank - which is exactly what it is for.
-                user.ApplySecondFactorRequirement(secondFactorConfirmed: false);
 
                 // Session persistence based on "remember me" checkbox
                 var session = _sessionFactory.Create(persistent: rememberMe, context: context);
@@ -316,7 +302,7 @@ internal class AuthenticationService : IAuthenticationService
             }
 
             await _auditService.LogAsync(challenge.UserId, SecurityEventType.LoginFailure,
-                context?.IpAddress, context?.UserAgent, "Второй фактор");
+                context?.IpAddress, context?.UserAgent, "Двухфакторная аутентификация");
             _logger.LogWarning("Second factor failed: wrong code. UserId={UserId}", challenge.UserId);
             return Identity.Fail(AuthenticationError.TwoFactorRejected);
         }
@@ -337,14 +323,18 @@ internal class AuthenticationService : IAuthenticationService
 
         if (user.IsRemoved)
         {
+            await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
+                context?.IpAddress, context?.UserAgent, "Account removed");
             _logger.LogWarning("Second factor refused: account removed. UserId={UserId}", user.UserId);
             return Identity.Fail(AuthenticationError.Removed);
         }
 
         if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
         {
+            await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
+                context?.IpAddress, context?.UserAgent, "Account banned");
             _logger.LogWarning("Second factor refused: account banned. UserId={UserId}", user.UserId);
-            return Identity.Fail(AuthenticationError.Banned);
+            return Identity.Banned(user.BanEndsAt(_dateTimeProvider.Now));
         }
 
         // A sign-in that passed the factor is the owner saying "the device is
@@ -358,7 +348,6 @@ internal class AuthenticationService : IAuthenticationService
 
         await _loginAttemptTracker.ResetAttempts(challenge.Account);
         await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
-        user.ApplySecondFactorRequirement(secondFactorConfirmed: true);
 
         // "Remember me" as it was ticked on the first step: the second step has
         // no checkbox and must not quietly answer for the person.
@@ -385,7 +374,7 @@ internal class AuthenticationService : IAuthenticationService
         var (userId, sessionId) = token;
 
         // Sequential on purpose: all three reads go to one DmDbContext now, and
-        // a context refuses parallel queries inside one scope (INV-7). Each is a
+        // a context refuses parallel queries inside one scope. Each is a
         // primary-key lookup on the local database — units of milliseconds —
         // and the price bought the disappearance of a class of cross-store
         // inconsistencies. A single joined round trip stays a cheap local
@@ -411,7 +400,7 @@ internal class AuthenticationService : IAuthenticationService
         if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
         {
             _logger.LogWarning("Token authentication failed: user banned. UserId={UserId}", userId);
-            return Identity.Fail(AuthenticationError.Banned);
+            return Identity.Banned(user.BanEndsAt(_dateTimeProvider.Now));
         }
 
         if (session == null)
@@ -460,13 +449,6 @@ internal class AuthenticationService : IAuthenticationService
             await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
         }
 
-        // Folded on every request the way active bans are, and for the same
-        // reason: the role is what every resolver and every rank comparison in
-        // the moderation services reads. Folding it once here is what makes a
-        // factor switched on a minute ago give the rank back without a new
-        // sign-in, and a factor removed take it away just as fast.
-        await ApplySecondFactorRequirement(user);
-
         return Identity.Success(user, session, settings, authToken);
     }
 
@@ -494,7 +476,7 @@ internal class AuthenticationService : IAuthenticationService
         if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
         {
             _logger.LogWarning("Direct authentication failed: user banned. UserId={UserId}", userId);
-            return Identity.Fail(AuthenticationError.Banned);
+            return Identity.Banned(user.BanEndsAt(_dateTimeProvider.Now));
         }
 
         // A session minted without a password is exactly what a second factor
@@ -518,7 +500,6 @@ internal class AuthenticationService : IAuthenticationService
         // no successful login on record, so the first real login from anywhere
         // had nothing to be compared against.
         await _repository.UpdateActivity(userId, _dateTimeProvider.Now);
-        user.ApplySecondFactorRequirement(secondFactorConfirmed: false);
         var session = _sessionFactory.Create(persistent: false, context: context);
         var settings = await _repository.FindUserSettings(userId);
 
@@ -631,25 +612,5 @@ internal class AuthenticationService : IAuthenticationService
         }
 
         user.AccessPolicy = user.EffectiveAccessPolicyAt(_dateTimeProvider.Now);
-    }
-
-    /// <summary>
-    /// Withhold the rank of an account that owes a second factor and has none.
-    /// </summary>
-    /// <remarks>
-    /// Beside the ban fold, and by the same argument: computed once, at the one
-    /// point an identity is built, so that no surface is obliged to remember it.
-    /// The day one surface forgets is the day a password alone is enough for a
-    /// privileged account again.
-    ///
-    /// The storage is asked only for the ranks the requirement covers, which is
-    /// a small handful of accounts: for everybody else the predicate is decided
-    /// without leaving the process, and the ordinary request pays nothing.
-    /// </remarks>
-    private async Task ApplySecondFactorRequirement(AuthenticatedUser user)
-    {
-        var confirmed = TwoFactorRequirement.AppliesTo(user.Role) &&
-                        await _twoFactorRepository.IsConfirmed(user.UserId);
-        user.ApplySecondFactorRequirement(confirmed);
     }
 }

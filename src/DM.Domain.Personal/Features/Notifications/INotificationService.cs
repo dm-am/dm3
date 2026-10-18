@@ -22,7 +22,7 @@ public interface INotificationService
     /// Get list of notifications for current user
     /// </summary>
     /// <param name="query">Paging query</param>
-    Task<(IEnumerable<UserNotification> Notifications, PagingResult Paging)> GetAsync(PagingQuery query);
+    Task<(IEnumerable<ListedNotification> Notifications, PagingResult Paging)> GetAsync(PagingQuery query);
 
     #endregion
 

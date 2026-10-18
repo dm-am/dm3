@@ -39,11 +39,4 @@ const emit = defineEmits<{
 @use "@/assets/styles/Filters" as *
 
 +filter-bubbles
-
-// Keep the button visually identical to the former <span>
-.clear-all-link
-  background: none
-  border: none
-  font-family: inherit
-  line-height: inherit
 </style>

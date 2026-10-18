@@ -47,7 +47,7 @@ public sealed class RenderContextEnvelope
     } = new Dictionary<string, IReadOnlySet<Guid>>(StringComparer.Ordinal);
 
     /// <summary>Per-block snapshot: raw [private] tag attribute → names of the
-    /// frozen addressees, for the recipients line. Populated at post save time,
+    /// frozen addressees, for the recipients the block carries. Populated at post save time,
     /// from the same snapshot the owner ids come from.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> PrivateAddresseeNamesByAttribute
     {

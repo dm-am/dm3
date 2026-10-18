@@ -130,6 +130,21 @@ public class UpdateUserSettingsEntity
     public DM.Domain.Core.Dto.Optional<DM.Domain.Core.Enums.Theme>? Theme { get; set; }
 
     /// <summary>
+    /// Whether the time zone below is part of this update.
+    /// </summary>
+    /// <remarks>
+    /// A flag and not an Optional, which only wraps value types: the zone is a
+    /// string, and null is a value it can be set to - the reader who clears it
+    /// is asking for UTC, not asking for nothing to change.
+    /// </remarks>
+    public bool UpdateTimeZone { get; set; }
+
+    /// <summary>
+    /// IANA name of the reader's time zone, null for UTC
+    /// </summary>
+    public string? TimeZoneId { get; set; }
+
+    /// <summary>
     /// Comments per page setting
     /// </summary>
     public DM.Domain.Core.Dto.Optional<int>? CommentsPerPage { get; set; }

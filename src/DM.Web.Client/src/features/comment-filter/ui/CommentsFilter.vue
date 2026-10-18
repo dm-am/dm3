@@ -209,11 +209,13 @@ function handleSearchKeydown(event: KeyboardEvent) {
             />
           </template>
 
-          <!-- Author multi-select -->
+          <!-- Author multi-select: include-inactive, so the author of an old
+               comment who has not been here for 30 days stays findable -->
           <UserMultiSelect
             v-if="navPath?.filter === 'author'"
             :selected-users="filterState.authors"
             placeholder="Поиск автора"
+            include-inactive
             @add="handleAddAuthor"
             @remove="handleRemoveAuthor"
           />

@@ -114,7 +114,7 @@ internal class AuthenticationApiService : IAuthenticationApiService
                     // page. Read off the identity because the details come from
                     // the database, which holds the recorded role and knows
                     // nothing of the fold.
-                    User = WithWithheldPrivilege(_mapper.ToUser(userDetails)),
+                    User = _mapper.ToUser(userDetails),
                     Preferences = _preferencesMapper.ToPreferences(userDetails.Settings)
                 };
                 return response;
@@ -123,10 +123,10 @@ internal class AuthenticationApiService : IAuthenticationApiService
                 // Unified error message to prevent user enumeration attacks
                 throw new HttpBadRequestException(new Dictionary<string, string>
                 {
-                    ["password"] = "Неверная почта или пароль"
+                    ["password"] = RefusalMessage.WrongCredentials
                 });
             case AuthenticationError.Banned:
-                throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccountBanned);
+                throw BanRefusal(identity);
             case AuthenticationError.PendingRegistration:
                 // This answer names an address that exists, which is the whole
                 // difference between it and the unified refusal above it: a caller
@@ -141,12 +141,20 @@ internal class AuthenticationApiService : IAuthenticationApiService
                 });
             case AuthenticationError.Removed:
                 throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccountRemoved);
-            case AuthenticationError.Forbidden:
-                throw new HttpException(HttpStatusCode.Forbidden,
-                    "Ошибка авторизации.");
+            // These refusals are the title of a problem document, which the client
+            // prints as one line under the form. One sentence, and a sentence
+            // standing alone carries no full stop.
             case AuthenticationError.AccountLocked:
-                throw new HttpException(HttpStatusCode.Forbidden,
-                    "Слишком много неудачных попыток. Попробуйте позже.");
+                // The number travels and the sentence does not: the screen says
+                // the wait in the words it already uses for the rate limit, and
+                // a second copy of that sentence here is the one that drifts.
+                throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.LoginLocked)
+                {
+                    Extensions = new Dictionary<string, object?>
+                    {
+                        ["retryAfterSeconds"] = identity.LockoutSecondsRemaining
+                    }
+                };
             // Unreachable from the password step, which never returns it, and
             // written out because the switch is what keeps every refusal counted
             // under a reason of its own.
@@ -155,25 +163,17 @@ internal class AuthenticationApiService : IAuthenticationApiService
                 {
                     ["code"] = RefusalMessage.TwoFactorRejected
                 });
+            // Forbidden is missing from this switch on purpose. The only thing
+            // that returns it is the passwordless session, which the password
+            // step never asks for, so it cannot reach a reader of this card and
+            // had no business carrying a sentence written for one. Should the
+            // password path ever return it, the throw below is the loud answer
+            // that sends someone to read this comment.
             default:
                 throw new ArgumentOutOfRangeException();
         }
     }
 
-    /// <summary>
-    /// Marks the viewer in a sign-in answer with whether their rank is in force.
-    /// </summary>
-    /// <remarks>
-    /// Only ever put on the account the answer is about. The flag says the rank
-    /// on this account is withheld for want of a second factor, which is the
-    /// owner's business and nobody else's, and every other response carrying a
-    /// user leaves it absent.
-    /// </remarks>
-    private User WithWithheldPrivilege(User user)
-    {
-        user.PrivilegeWithheld = _identityProvider.Current.User.PrivilegeWithheld;
-        return user;
-    }
 
     /// <summary>
     /// Hands the attempt to the account layer with the two facts only the request
@@ -227,12 +227,12 @@ internal class AuthenticationApiService : IAuthenticationApiService
                     // False here by construction - the factor was just passed -
                     // and said out loud rather than left absent: the client is
                     // replacing a viewer that may have been stored withheld.
-                    User = WithWithheldPrivilege(_mapper.ToUser(userDetails)),
+                    User = _mapper.ToUser(userDetails),
                     Preferences = _preferencesMapper.ToPreferences(userDetails.Settings)
                 };
             case AuthenticationError.Banned:
                 _challengeCookie.Clear(httpContext);
-                throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccountBanned);
+                throw BanRefusal(identity);
             case AuthenticationError.Removed:
                 _challengeCookie.Clear(httpContext);
                 throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccountRemoved);
@@ -240,6 +240,25 @@ internal class AuthenticationApiService : IAuthenticationApiService
                 throw RejectSecondFactor();
         }
     }
+
+    /// <summary>
+    /// The refusal a ban comes back as, with the day it runs out beside it.
+    /// </summary>
+    /// <remarks>
+    /// The screen spells the day itself, in the reader's own time zone and in
+    /// its own words, so what travels is the moment and not a sentence. The
+    /// moment comes with the identity: the domain read the ban off the account
+    /// it refused, and a refused identity carries the guest, whose list of
+    /// restrictions is empty - computed here, every ban read as one with no end.
+    /// </remarks>
+    private static HttpException BanRefusal(IIdentity identity) =>
+        new(HttpStatusCode.Forbidden, RefusalMessage.AccountBanned)
+        {
+            Extensions = new Dictionary<string, object?>
+            {
+                ["banExpiresUtc"] = identity.BanEndsUtc
+            }
+        };
 
     /// <summary>
     /// The one refusal every way of failing the second factor comes back as.

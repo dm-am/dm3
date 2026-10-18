@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
@@ -13,6 +14,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Characters;
+using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Games;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Domain.Game.Features.Subscriptions;
@@ -36,6 +38,7 @@ public class CharacterServiceShould : UnitTestBase
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IBbTagNameCase _tagNames;
     private readonly CharacterService _service;
     private readonly Guid _currentUserId;
 
@@ -78,6 +81,10 @@ public class CharacterServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
+        // The text as it came, unless a test says otherwise.
+        _tagNames = Mock<IBbTagNameCase>();
+        _tagNames.ToLowerCase(Arg.Any<string?>(), Arg.Any<BbTagSet>()).Returns(ci => ci.ArgAt<string?>(0));
+
         _service = new CharacterService(
             createValidator,
             updateValidator,
@@ -90,7 +97,54 @@ public class CharacterServiceShould : UnitTestBase
             _producer,
             _identityProvider,
             _guidFactory,
-            _dateTimeProvider);
+            _dateTimeProvider,
+            _tagNames);
+    }
+
+    /// <summary>
+    /// The save path writes the names of the tags of a value in the site markup
+    /// in lower case; a value of any other type is plain text and stays as typed.
+    /// </summary>
+    [Fact]
+    public async Task WriteTheTagNamesOfAMarkupValueInLowerCase()
+    {
+        var gameId = Guid.NewGuid();
+        var markupSpecId = Guid.NewGuid();
+        var textSpecId = Guid.NewGuid();
+        _gameService.GetAsync(gameId).Returns(new GameDto
+        {
+            Id = gameId,
+            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Master" },
+            BlacklistedUsers = Array.Empty<BlacklistedUser>()
+        });
+        _repository.GetGameSchema(gameId).Returns(new GameAttributeSchema
+        {
+            Specifications = new[]
+            {
+                new AttributeSpecification { Id = markupSpecId, Title = "M", Type = AttributeSpecificationType.BbCode },
+                new AttributeSpecification { Id = textSpecId, Title = "T", Type = AttributeSpecificationType.Text }
+            }
+        });
+        _tagNames.ToLowerCase("[B]сила[/B]", BbTagSet.Common).Returns("[b]сила[/b]");
+
+        CreateCharacterEntity? captured = null;
+        _repository.Create(Arg.Any<CreateCharacterEntity>())
+            .Returns(new Character { Id = Guid.NewGuid(), GameId = gameId })
+            .AndDoes(ci => captured = ci.ArgAt<CreateCharacterEntity>(0));
+
+        await _service.CreateAsync(new CreateCharacter
+        {
+            GameId = gameId,
+            Name = "Герой",
+            Attributes = new[]
+            {
+                new Domain.Game.Features.Games.CharacterAttribute { Id = markupSpecId, Value = "[B]сила[/B]" },
+                new Domain.Game.Features.Games.CharacterAttribute { Id = textSpecId, Value = "[B]сила[/B]" }
+            }
+        });
+
+        captured!.Attributes.Should().Contain(a => a.Id == markupSpecId && a.Value == "[b]сила[/b]");
+        captured.Attributes.Should().Contain(a => a.Id == textSpecId && a.Value == "[B]сила[/B]");
     }
 
     [Fact]
@@ -144,11 +198,75 @@ public class CharacterServiceShould : UnitTestBase
             BlacklistedUsers = new[] { new BlacklistedUser { UserId = _currentUserId } }
         };
         _gameService.GetAsync(gameId).Returns(game);
+        // The gate carries the same rule and would refuse in generic words; the
+        // list is asked first so the refusal says why.
+        _intentionManager
+            .When(manager => manager.ThrowIfForbidden(GameIntention.CreateCharacter, Arg.Any<GameDto>()))
+            .Do(_ => throw new IntentionManagerException(
+                Identities.User(_currentUserId, UserRole.RegularUser).User, GameIntention.CreateCharacter));
 
         var act = async () => await _service.CreateAsync(createCharacter);
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromGame);
+        await _repository.DidNotReceive().Create(Arg.Any<CreateCharacterEntity>());
+    }
+
+    /// <summary>
+    /// Editing one's own application is applying again, which the list closes.
+    /// </summary>
+    [Theory]
+    [InlineData(CharacterStatus.UnderReview)]
+    [InlineData(CharacterStatus.Declined)]
+    public async Task RefuseTheBlacklistedOwnerAnEditOfHisApplication(CharacterStatus status)
+    {
+        var characterId = OwnCharacterInAGameThatListsTheOwner(status);
+
+        var act = async () => await _service.UpdateAsync(new UpdateCharacter { CharacterId = characterId, Name = "Other" });
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromGame);
+        await _repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
+    }
+
+    /// <summary>
+    /// The sheet of a character in play or out of it is not an application, and
+    /// the list closes the application only.
+    /// </summary>
+    [Theory]
+    [InlineData(CharacterStatus.Active)]
+    [InlineData(CharacterStatus.Retired)]
+    public async Task LetTheBlacklistedOwnerEditASheetThatIsNoApplication(CharacterStatus status)
+    {
+        var characterId = OwnCharacterInAGameThatListsTheOwner(status);
+
+        await _service.UpdateAsync(new UpdateCharacter { CharacterId = characterId, Name = "Other" });
+
+        await _repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
+    }
+
+    /// <summary>
+    /// A character of the current user in the given status, in a game whose
+    /// blacklist holds that user.
+    /// </summary>
+    private Guid OwnCharacterInAGameThatListsTheOwner(CharacterStatus status)
+    {
+        var gameId = Guid.NewGuid();
+        var characterId = Guid.NewGuid();
+        _repository.GetForUpdate(characterId).Returns(new CharacterToUpdate
+        {
+            Id = characterId,
+            GameId = gameId,
+            AuthorId = _currentUserId,
+            Status = status,
+            GameAssistantIds = Array.Empty<Guid>()
+        });
+        _gameService.GetAsync(gameId).Returns(new GameDto
+        {
+            Id = gameId,
+            BlacklistedUsers = [new BlacklistedUser { UserId = _currentUserId }]
+        });
+        return characterId;
     }
 
     [Fact]
@@ -220,8 +338,7 @@ public class CharacterServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = _currentUserId, Username = "Master" },
             Assistants = [],
-            Players = [],
-            AttributeSchemaId = Guid.NewGuid()
+            Players = []
         };
         _gameService.GetAsync(gameId).Returns(game);
 
@@ -278,8 +395,7 @@ public class CharacterServiceShould : UnitTestBase
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Master" },
             Assistants = [],
-            Players = [],
-            AttributeSchemaId = Guid.NewGuid()
+            Players = []
         };
         _gameService.GetAsync(gameId).Returns(game);
 
@@ -292,7 +408,7 @@ public class CharacterServiceShould : UnitTestBase
         };
         _repository.GetForUpdate(characterId).Returns(characterForUpdate);
 
-        var schema = new AttributeSchema
+        var schema = new GameAttributeSchema
         {
             Specifications = new[]
             {

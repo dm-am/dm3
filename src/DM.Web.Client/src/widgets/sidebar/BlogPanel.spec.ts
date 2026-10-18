@@ -15,8 +15,8 @@
  * the other. The discussion counter vanished at zero. And the panel repeated
  * the status that the info table prints two lines further down.
  */
-import { describe, it, expect, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BlogPanel from "./BlogPanel.vue";
 import SidebarSectionTitle from "./SidebarSectionTitle.vue";
@@ -66,9 +66,15 @@ const blog = {
   ],
 } as unknown as Blog;
 
-function mountPanel(premoderationStatus?: BlogPremoderationStatus) {
+function mountPanel(
+  premoderationStatus?: BlogPremoderationStatus,
+  overrides: Record<string, unknown> = {},
+) {
   useBlogDetailsStore().blog = { ...blog, premoderationStatus };
-  return mount(BlogPanel, { props: { blogId: "aaaab" }, global: { stubs } });
+  return mount(BlogPanel, {
+    props: { blogId: "aaaab" },
+    global: { stubs: { ...stubs, ...overrides } },
+  });
 }
 
 function signedInAs(username: string, role?: UserRole) {
@@ -205,5 +211,84 @@ describe("BlogPanel", () => {
       expect(menu).not.toContain("- Отправить на премодерацию");
       expect(menu).not.toContain("- Снять с премодерации");
     });
+  });
+});
+
+/**
+ * The question before a moderation move waits for the answer and says a
+ * refusal in itself. It used to close before the request went out, so a
+ * refused verdict came back as a plate over a menu that looked as if nothing
+ * had been asked.
+ */
+describe("BlogPanel moderation question", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("keeps the question open with the refusal in it", async () => {
+    signedInAs("Наставник", UserRole.Mentor);
+    const store = useBlogDetailsStore();
+    const change = vi.spyOn(store, "changePremoderation").mockResolvedValue({
+      type: "",
+      title: "",
+      status: 404,
+      traceId: "t",
+    });
+    const wrapper = mountPanel("AwaitingApproval", { ConfirmDialog: false });
+
+    const approve = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Одобрить блог");
+    await approve!.trigger("click");
+    document.body
+      .querySelector<HTMLButtonElement>(".dialog-btn-submit")
+      ?.click();
+    await flushPromises();
+
+    expect(change).toHaveBeenCalledWith("SetApproved", {
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
+    expect(
+      document.body.querySelector(".dialog-refusal")?.textContent?.trim(),
+    ).toBe("Не удалось изменить премодерацию");
+    expect(document.body.textContent).toContain("Одобрить блог?");
+    wrapper.unmount();
+  });
+});
+
+/**
+ * "Обсуждение" is a row whatever closes the discussion to the viewer's
+ * writing: the blacklist closes it to writing and not to reading, so the one
+ * on the list reads it too, empty or not, and the menu leads him there.
+ */
+describe("BlogPanel discussion row", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const hasRow = (wrapper: ReturnType<typeof mountPanel>) =>
+    rows(wrapper).some((row) => row.startsWith("- Обсуждение"));
+
+  it("keeps the row of an empty discussion to the one on its blacklist", async () => {
+    signedInAs("Читатель");
+    const wrapper = mountPanel();
+    useBlogDetailsStore().blog = {
+      ...blog,
+      commentsCount: 0,
+      viewer: { canComment: false },
+      viewerBlacklisted: true,
+    } as unknown as Blog;
+    await flushPromises();
+
+    expect(hasRow(wrapper)).toBe(true);
   });
 });

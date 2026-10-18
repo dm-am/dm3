@@ -3,6 +3,8 @@
  * FilterButton - Filter toggle button (controlled component).
  *
  * Shows "Фильтры" button. Parent manages dropdown state and wrapper.
+ *
+ * The icon and the word at every width, as on the full version.
  */
 import { ref } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
@@ -49,11 +51,12 @@ function handleEscape() {
     class="filter-btn"
     :class="{ active }"
     :aria-expanded="active"
+    :aria-label="label"
     @click="handleClick"
     @keydown.esc="handleEscape"
   >
     <SvgIcon name="filter" class="filter-icon" />
-    <span>{{ label }}</span>
+    <span class="filter-btn-label">{{ label }}</span>
   </button>
 </template>
 

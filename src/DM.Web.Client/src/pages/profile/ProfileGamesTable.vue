@@ -32,7 +32,7 @@ import {
   type Game,
   type PlayerCharacterInfo,
 } from "@/entities/game";
-import { UserLink } from "@/entities/user";
+import { RemovedAccountLink, UserLink } from "@/entities/user";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
@@ -224,45 +224,42 @@ function handleSortOrder(order: "asc" | "desc") {
 
 // Column sets mirror /games (GamesDataTable): same keys, order, widths and
 // cell formats, minus the tags column (profile-specific decision). In
-// "Игрок" mode the tags' 20% slot is taken by the profile-only "Статус
+// "Игрок" mode the tags' slot is taken by the profile-only "Статус
 // персонажа" column (the backend fills `playerCharacters` solely when the
 // request carries the playerUsername filter, so in "Ведущий" mode there is
-// nothing to show there); in "Ведущий" mode that 20% is folded back into
-// title/master/status.
+// nothing to show there); in "Ведущий" mode that slot is folded back into
+// title/master/status. "Название" takes what the others leave.
 const columns = computed<Column[]>(() =>
   role.value === "player"
     ? [
-        { key: "title", label: "Название", width: "28%", align: "left" },
-        { key: "master", label: "Ведущие", width: "18%", align: "left" },
-        { key: "status", label: "Статус игры", width: "16.3%", align: "left" },
+        { key: "title", label: "Название", align: "left" },
+        { key: "master", label: "Ведущие", width: "17.4%", align: "left" },
+        { key: "status", label: "Статус игры", width: "15.9%", align: "left" },
         {
           key: "character",
           label: "Статус персонажа",
-          width: "20%",
+          width: "19.2%",
           align: "left",
-          hideOnMobile: true,
         },
         {
           key: "reviews",
           label: "Рецензии",
-          width: "7.7%",
+          width: "8.5%",
           align: "center",
-          hideOnMobile: true,
         },
-        { key: "readers", label: "Читатели", width: "7%", align: "center" },
+        { key: "readers", label: "Читатели", width: "7.9%", align: "center" },
       ]
     : [
-        { key: "title", label: "Название", width: "38%", align: "left" },
-        { key: "master", label: "Ведущие", width: "23%", align: "left" },
-        { key: "status", label: "Статус игры", width: "21.3%", align: "left" },
+        { key: "title", label: "Название", align: "left" },
+        { key: "master", label: "Ведущие", width: "22.2%", align: "left" },
+        { key: "status", label: "Статус игры", width: "20.7%", align: "left" },
         {
           key: "reviews",
           label: "Рецензии",
-          width: "7.7%",
+          width: "8.6%",
           align: "center",
-          hideOnMobile: true,
         },
-        { key: "readers", label: "Читатели", width: "7%", align: "center" },
+        { key: "readers", label: "Читатели", width: "8%", align: "center" },
       ],
 );
 
@@ -293,6 +290,9 @@ function pagingAnchor(): HTMLElement | null {
 
 <template>
   <div class="profile-games-table">
+    <!-- The field takes the line; where the sort and the toggle do not fit
+         beside it, they go under it together, side by side or one under the
+         other, the sort with its words, the toggle with both segments. -->
     <div class="controls">
       <FilterSearchInput
         v-model="searchInput"
@@ -300,23 +300,26 @@ function pagingAnchor(): HTMLElement | null {
         class="search"
       />
 
-      <SortButton
-        :options="sortOptions"
-        :sort-by="sortBy"
-        :sort-order="sortOrder"
-        @sort-select="handleSortSelect"
-        @update:sort-order="handleSortOrder"
-      />
+      <div class="controls-pair">
+        <SortButton
+          :options="sortOptions"
+          :sort-by="sortBy"
+          :sort-order="sortOrder"
+          @sort-select="handleSortSelect"
+          @update:sort-order="handleSortOrder"
+        />
 
-      <SegmentedControl
-        :model-value="role"
-        :options="[
-          { value: 'host', label: 'Ведущий' },
-          { value: 'player', label: 'Игрок' },
-        ]"
-        ariaLabel="Роль в играх"
-        @update:model-value="setRole"
-      />
+        <SegmentedControl
+          class="role-toggle"
+          :model-value="role"
+          :options="[
+            { value: 'host', label: 'Ведущий' },
+            { value: 'player', label: 'Игрок' },
+          ]"
+          ariaLabel="Роль в играх"
+          @update:model-value="setRole"
+        />
+      </div>
     </div>
 
     <ErrorState v-if="error" :message="error" :retry="fetchGames" />
@@ -362,8 +365,11 @@ function pagingAnchor(): HTMLElement | null {
       </template>
 
       <template #cell-master="{ row }">
-        <UserLink v-if="row.master" :user="row.master" hide-badge /><template
-          v-if="row.assistants?.length"
+        <UserLink
+          v-if="row.master"
+          :user="row.master"
+          hide-badge
+        /><RemovedAccountLink v-else /><template v-if="row.assistants?.length"
           >{{ " "
           }}<Tooltip :text="buildAssistantTooltip(row.assistants)">
             <span class="assistant-count">[+{{ row.assistants.length }}]</span>
@@ -442,6 +448,9 @@ function pagingAnchor(): HTMLElement | null {
   flex-direction: column
   gap: $medium
 
+// As before 5 October 2026, without the sideways scroll the toggle had on a
+// phone (owner, 12 October 2026): what does not fit beside the field goes to
+// the next line whole, and nothing gives up its words.
 .controls
   display: flex
   flex-wrap: wrap
@@ -455,10 +464,21 @@ function pagingAnchor(): HTMLElement | null {
   flex: 1
   min-width: 200px
 
+// The sort and the toggle go to the next line as one: never the sort beside
+// the field and the toggle alone under it. There they stand side by side, or
+// one under the other where the two do not fit.
+.controls-pair
+  display: flex
+  flex-wrap: wrap
+  align-items: center
+  gap: $small
+
+// The toggle stands at the width of its segments and does not give it up.
+.role-toggle
+  flex: none
+
 .game-link
   color: $link
-  word-wrap: break-word
-  overflow-wrap: break-word
   &:hover
     color: $link-hover
   &.new-item
@@ -486,9 +506,12 @@ function pagingAnchor(): HTMLElement | null {
 .character-none
   color: $text-muted
 
+// One token, "[0/∞]": the status wraps between its words, never inside the
+// brackets.
 .slots-indicator
   color: $text-muted
   cursor: help
+  white-space: nowrap
 
 .review-link
   color: $link

@@ -5,6 +5,7 @@ import { useAuthStore, userIsSeniorModerator } from "@/entities/user";
 import { useCreatePoll } from "../model";
 import TextArea from "@/shared/ui/TextArea/TextArea.vue";
 import Button from "@/shared/ui/Button/Button.vue";
+import { DateTimeInput } from "@/shared/ui/DatePicker";
 
 const userStore = useAuthStore();
 const canCreatePoll = computed(() => userIsSeniorModerator(userStore.user));
@@ -16,6 +17,11 @@ const {
   pollDetails,
   pollStartsUtc,
   pollEndsUtc,
+  startsMin,
+  endsMin,
+  endsMax,
+  startsReason,
+  endsReason,
   pollIsAnonymous,
   pollOptions,
   isSubmitting,
@@ -59,16 +65,31 @@ const {
             />
           </form-field>
 
-          <form-field label="Начало" name="pollStartsUtc">
-            <input
+          <form-field
+            label="Начало"
+            name="pollStartsUtc"
+            :errors="startsReason ? [startsReason] : []"
+          >
+            <DateTimeInput
               id="poll-starts"
               v-model="pollStartsUtc"
-              type="datetime-local"
+              :min="startsMin"
+              @reason="startsReason = $event"
             />
           </form-field>
 
-          <form-field label="Окончание" name="pollEndsUtc">
-            <input id="poll-ends" v-model="pollEndsUtc" type="datetime-local" />
+          <form-field
+            label="Окончание"
+            name="pollEndsUtc"
+            :errors="endsReason ? [endsReason] : []"
+          >
+            <DateTimeInput
+              id="poll-ends"
+              v-model="pollEndsUtc"
+              :min="endsMin"
+              :max="endsMax"
+              @reason="endsReason = $event"
+            />
           </form-field>
 
           <form-field label="Тип опроса">
@@ -115,7 +136,11 @@ const {
           </form-field>
 
           <div class="form-actions">
-            <Button :loading="isSubmitting" @click="submitPoll">
+            <Button
+              variant="primary"
+              :loading="isSubmitting"
+              @click="submitPoll"
+            >
               Создать опрос
             </Button>
             <span v-if="errorMessage" class="error-message">{{
@@ -144,7 +169,6 @@ const {
   padding: $medium
   background-color: $bg-element-overlay
   border: 1px solid $border
-  border-radius: $border-radius
 
 .option-row
   display: flex
@@ -164,7 +188,7 @@ const {
   font-size: 1.2em
 
   &:hover
-    color: $accent-red
+    color: $text
 
 .add-option-btn
   margin-top: $tiny
@@ -187,14 +211,10 @@ const {
 .radio-option
   display: flex
   align-items: center
-  gap: $tiny
+  gap: $small
   cursor: pointer
 
-  // FormField's shared `.form-field-row input { width: 100% }` rule would
-  // otherwise stretch the native radio control — override with an extra
-  // attribute selector so specificity wins regardless of style load order
   input[type="radio"]
-    width: auto
     margin: 0
 
 .hint

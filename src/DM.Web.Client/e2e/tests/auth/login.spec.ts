@@ -47,7 +47,10 @@ test.describe("Login Flow", () => {
     await page.waitForTimeout(2500);
     await page.click('button[type="submit"]');
 
-    await expect(page.locator(".form-field-error")).toBeVisible({
+    // The refusal goes into the strip under a field, and the strip turns red
+    // with it. The strips are rendered empty too, so the red state is what is
+    // waited for.
+    await expect(page.locator(".auth-message--error").first()).toBeVisible({
       timeout: 10000,
     });
   });

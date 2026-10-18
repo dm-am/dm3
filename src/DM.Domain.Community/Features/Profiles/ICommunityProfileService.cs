@@ -40,4 +40,10 @@ public interface ICommunityProfileService
     /// Get username history for a user
     /// </summary>
     Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistory(Guid userId);
+
+    /// <summary>
+    /// The profile of "Аккаунт удален": the public counters of every removed account
+    /// added up (<see cref="RemovedAccount" />). The same for every reader.
+    /// </summary>
+    Task<GeneralUser> GetRemovedAccountSummary();
 }

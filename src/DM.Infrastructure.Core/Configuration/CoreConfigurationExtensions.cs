@@ -49,6 +49,10 @@ public static class CoreConfigurationExtensions
 
         services.Configure<CdnConfiguration>(
             configuration.GetSection(nameof(CdnConfiguration)).Bind);
+        // Bound, not required: left empty the lookup answers nothing, which is
+        // right for every host that never sends the letter that asks it.
+        services.Configure<GeoLocationConfiguration>(
+            configuration.GetSection(nameof(GeoLocationConfiguration)).Bind);
         services.Configure<BotConfiguration>(
             configuration.GetSection(nameof(BotConfiguration)).Bind);
 

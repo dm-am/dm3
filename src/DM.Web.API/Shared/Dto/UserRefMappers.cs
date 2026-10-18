@@ -16,9 +16,17 @@ namespace DM.Web.API.Shared.Dto;
 internal static partial class UserRefMappers
 {
     /// <summary>General user to the lightweight reference</summary>
+    /// <remarks>
+    /// Null in, null out, as <c>UserMapper.ToUser</c> does it: the domain hands
+    /// users over from <c>= null!</c> members, and a removed account is nested
+    /// as exactly that null (the content reads keep what it wrote and sign it
+    /// by nobody). The generated body would dereference it.
+    /// </remarks>
+    public static UserRef ToUserRef(GeneralUser user) => user is null ? null! : ToUserRefCore(user);
+
     [MapProperty(nameof(GeneralUser.UserId), nameof(UserRef.Id))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
-    public static partial UserRef ToUserRef(GeneralUser user);
+    private static partial UserRef ToUserRefCore(GeneralUser user);
 
     /// <summary>Domain user reference to the API one</summary>
     [MapProperty(nameof(UserReference.UserId), nameof(UserRef.Id))]

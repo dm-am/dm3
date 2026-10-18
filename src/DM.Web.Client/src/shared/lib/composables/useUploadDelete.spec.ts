@@ -7,98 +7,77 @@
  *
  * The moderation list and the owner's list each carried it, and the last
  * difference between the copies — which client sent the DELETE — had already
- * been settled on the shared one. What matters to both is here: nothing is
- * asked twice while a request is in flight, the list is re-read only after the
- * server agreed, and a refusal leaves the row selected so the reader can see
- * what was refused and try again.
+ * been settled on the shared one. What matters to both is here: the request
+ * carries the flags of a window that prints the refusal itself, the list is
+ * re-read only after the server agreed, and a refusal is handed back to the
+ * window with the row still selected, so the reader can see what was refused
+ * and try again. One request per press and the refusal line are the window's
+ * (ConfirmDialog.spec.ts).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Upload } from "@/shared/api/models/common/upload";
+import { useToast } from "@/shared/lib/composables/useToast";
 import { useUploadDelete } from "./useUploadDelete";
 
 const deleteUpload = vi.hoisted(() => vi.fn());
-const success = vi.hoisted(() => vi.fn());
-const notifyFailure = vi.hoisted(() => vi.fn());
 
 vi.mock("@/shared/api/uploadApi", () => ({
   default: { deleteUpload },
 }));
 
-vi.mock("@/shared/lib/composables/useToast", () => ({
-  useToast: () => ({ success, error: vi.fn() }),
-}));
-
-vi.mock("@/shared/lib/errors", () => ({ notifyFailure }));
-
 const file = { id: "u-1", originalFileName: "portrait.png" } as Upload;
+
+const toast = useToast();
+const saidOutLoud = () => toast.toasts.value.map((one) => one.message);
 
 beforeEach(() => {
   deleteUpload.mockReset();
-  success.mockReset();
-  notifyFailure.mockReset();
+  for (const shown of [...toast.toasts.value]) toast.dismiss(shown.id);
 });
 
 describe("useUploadDelete", () => {
   it("deletes the selected file and re-reads the page", async () => {
     deleteUpload.mockResolvedValue({ error: null });
     const reload = vi.fn();
-    const { deleteTarget, deleting, confirmDelete } = useUploadDelete(reload);
+    const { deleteTarget, deleteFile } = useUploadDelete(reload);
 
     deleteTarget.value = file;
-    await confirmDelete();
+    const answer = await deleteFile();
 
-    expect(deleteUpload).toHaveBeenCalledWith("u-1");
-    expect(success).toHaveBeenCalledWith("Файл удален");
+    expect(deleteUpload).toHaveBeenCalledWith("u-1", {
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
+    expect(answer?.error).toBeNull();
+    // Nothing is said on success: the window closes and the row is gone from
+    // the reloaded table.
+    expect(saidOutLoud()).toEqual([]);
     expect(reload).toHaveBeenCalled();
-    expect(deleteTarget.value).toBeNull();
-    expect(deleting.value).toBe(false);
   });
 
   it("does nothing when no file is selected", async () => {
     const reload = vi.fn();
-    const { confirmDelete } = useUploadDelete(reload);
+    const { deleteFile } = useUploadDelete(reload);
 
-    await confirmDelete();
+    await deleteFile();
 
     expect(deleteUpload).not.toHaveBeenCalled();
     expect(reload).not.toHaveBeenCalled();
   });
 
-  it("keeps the row and says what the server said on a refusal", async () => {
+  it("hands a refusal back to the window and keeps the row", async () => {
     const refusal = { status: 403, title: "Нельзя" };
     deleteUpload.mockResolvedValue({ error: refusal });
     const reload = vi.fn();
-    const { deleteTarget, confirmDelete } = useUploadDelete(reload);
+    const { deleteTarget, deleteFile } = useUploadDelete(reload);
 
     deleteTarget.value = file;
-    await confirmDelete();
+    const answer = await deleteFile();
 
-    expect(notifyFailure).toHaveBeenCalledWith(
-      refusal,
-      "Не удалось удалить файл",
-    );
+    expect(answer?.error).toEqual(refusal);
+    expect(saidOutLoud()).toEqual([]);
     expect(reload).not.toHaveBeenCalled();
     // Still selected: ref() hands back a reactive view of the same row.
     expect(deleteTarget.value).toEqual(file);
-  });
-
-  it("sends one request however often the button is pressed", async () => {
-    let release: (value: { error: null }) => void = () => {};
-    deleteUpload.mockReturnValue(
-      new Promise<{ error: null }>((resolve) => {
-        release = resolve;
-      }),
-    );
-    const { deleteTarget, deleting, confirmDelete } = useUploadDelete(vi.fn());
-
-    deleteTarget.value = file;
-    const first = confirmDelete();
-    expect(deleting.value).toBe(true);
-    await confirmDelete();
-
-    expect(deleteUpload).toHaveBeenCalledTimes(1);
-
-    release({ error: null });
-    await first;
   });
 });

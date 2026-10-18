@@ -39,10 +39,16 @@ public class NotificationReachabilityShould
     private const string DispatcherProject = "DM.Workers.NotificationDispatcher";
 
     /// <summary>
-    /// Sorts every event type into a notification category. It names them all and
+    /// The tables every reader of a notification shares: the category of every
+    /// event, its title and where it leads. Each names the events by the dozen and
     /// sends none, so left in the scan it would vouch for every generator at once.
     /// </summary>
-    private const string CategoryMapper = "NotificationCategoryMapper.cs";
+    private static readonly string[] SharedTables =
+    {
+        "NotificationCategoryMapper.cs",
+        "NotificationWording.cs",
+        "NotificationDestination.cs"
+    };
 
     private static readonly Assembly Dispatcher =
         typeof(DM.Workers.NotificationDispatcher.Startup).Assembly;
@@ -124,7 +130,7 @@ public class NotificationReachabilityShould
             .GetFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !file.Contains(DispatcherProject, StringComparison.Ordinal))
             .Where(file => !IsBuildOutput(file))
-            .Where(file => Path.GetFileName(file) != CategoryMapper)
+            .Where(file => !SharedTables.Contains(Path.GetFileName(file), StringComparer.Ordinal))
             .ToArray();
 
         sources.Should().NotBeEmpty("the services that send events live under src/");

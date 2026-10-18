@@ -70,11 +70,6 @@ public class Game : GameRef
     public string Setting { get; set; } = null!;
 
     /// <summary>
-    /// Attribute schema identifier (for referencing, full schema in GameDetails)
-    /// </summary>
-    public Guid? SchemaId { get; set; }
-
-    /// <summary>
     /// Game closed date (when status changed to Closed)
     /// </summary>
     public DateTimeOffset? ClosedUtc { get; set; }

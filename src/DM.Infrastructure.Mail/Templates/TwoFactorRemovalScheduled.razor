@@ -1,28 +1,13 @@
 @*
-    Письмо о назначенном снятии второго фактора. Несет срок и ссылку отмены;
-    отменяет снятие также любой успешный вход со вторым фактором.
+    Письмо о назначенном отключении двухфакторной аутентификации. Несет срок и
+    ссылку отмены; отменяет отключение также любой успешный вход с
+    подтверждением второго шага.
 *@
-<EmailLayout Title="Второй фактор будет снят">
+<EmailLayout Title="Отключение назначено">
     <p style="@EmailConstants.ParagraphStyles">
-        Здравствуйте, @Model.Username!
+        Отключение двухфакторной аутентификации запланировано на @Model.Due, но будет автоматически отменено при успешном входе
     </p>
-
-    <p style="@EmailConstants.ParagraphStyles">
-        Снятие второго фактора назначено на @Model.DueUtc.UtcDateTime.ToString("dd.MM.yyyy HH:mm") UTC.
-        Все сессии учетной записи завершены.
-    </p>
-
-    <a href="@Model.CancellationLinkUrl" style="@EmailConstants.ButtonStyles">Отменить снятие</a>
-
-    <p style="@EmailConstants.ParagraphStyles">
-        Если кнопка не работает, откройте ссылку вручную:<br/>
-        <a href="@Model.CancellationLinkUrl">@Model.CancellationLinkUrl</a>
-    </p>
-
-    <p style="@EmailConstants.ParagraphStyles">
-        Снятие отменяет и любой вход со вторым фактором: если устройство при вас,
-        достаточно войти обычным способом.
-    </p>
+    <ActionButton Url="@Model.CancellationLinkUrl">Отменить отключение</ActionButton>
 </EmailLayout>
 
 @code {

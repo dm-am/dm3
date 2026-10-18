@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -20,10 +19,17 @@ namespace DM.Web.API.Features.Moderation.Bans;
 /// creating and lifting bans requires SeniorModerator role or higher.
 ///
 /// ## Ban Types
-/// - **Auto**: Triggered by warning points (6+ in 30 days)
 /// - **Temporary**: Set by moderator with expiration
 /// - **Permanent**: Indefinite ban (only Admin can lift)
 /// - **Voluntary**: Self-requested by user
+///
+/// ## The automatic ban
+/// The site issues one of its own when a reader's active warning points reach
+/// the threshold (WarningPolicy): the ordinary scope, 48 hours, filed under the
+/// system account. It reads back as Temporary, because that is what it is - the
+/// window exists only to hold the reader at arm's length until a senior
+/// moderator or an administrator looks at the case and either lifts it or issues
+/// a ban of his own. It is never issued over a ban already running.
 /// </remarks>
 [ApiController]
 [Route("v1/bans")]
@@ -49,10 +55,11 @@ public class BanController : ControllerBase
     /// </remarks>
     /// <param name="username">Username</param>
     /// <response code="200">User ban status and history</response>
-    /// <response code="404">User not found</response>
+    // No 404 is declared: a name nobody carries is answered with an empty
+    // history and "not banned", the way the service has always answered it, so
+    // the contract that promised a refusal described one nothing here throws.
     [HttpGet("~/v1/users/{username}/bans", Name = nameof(GetUserBans))]
     [ProducesResponseType(typeof(PublicUserBanStatus), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetUserBans(string username) =>
         Ok(await _banApiService.GetPublicUserBanStatus(username));
 
@@ -99,24 +106,35 @@ public class BanController : ControllerBase
         Ok(await _banApiService.GetAllActiveBans(type));
 
     /// <summary>
-    /// Get ban history (moderators only)
+    /// Get the ban list (moderators only)
     /// </summary>
     /// <remarks>
-    /// Returns all bans ever issued - active, expired and lifted - newest first, paged.
+    /// The ban log, written the way DM2's bot wrote it: every issue and every
+    /// lift is an entry of its own (`kind` Issued or Lifted) at the moment it
+    /// happened (`occurredUtc`: the start of the ban, or the moment of the lift),
+    /// newest first, a lift before an issue of the same moment. Each entry carries
+    /// the ban as it stands now, so a lifted ban appears twice: its issue, and its
+    /// lift above every entry that happened before it. Paged by entries, and
+    /// `paging.total` counts entries, not bans. `username` narrows the list to
+    /// one banned reader; a name nobody carries answers with an empty page.
+    /// Every entry carries its `number` in the whole list, counted from the
+    /// oldest, which never changes; `entry` asks for the page of this list that
+    /// holds the entry of that number instead of the page `skip` names, and the
+    /// answer's `paging.skip` tells which page it is.
     /// The unpaged GET /v1/bans endpoint keeps returning only currently active bans.
     /// </remarks>
-    /// <param name="q">Pagination parameters</param>
-    /// <response code="200">Paged list of all bans</response>
-    /// <response code="400">Invalid pagination parameters</response>
+    /// <param name="q">Username filter, page bounds and the entry whose page is asked for</param>
+    /// <response code="200">Page of the ban list</response>
+    /// <response code="400">Invalid filter or pagination parameters</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">Moderator role required</response>
     [HttpGet("history", Name = nameof(GetBanHistory))]
     [RequireRole(UserRole.Moderator)]
-    [ProducesResponseType(typeof(ListEnvelope<Ban>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ListEnvelope<BanLogEntry>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetBanHistory([FromQuery] PagingQuery q) =>
+    public async Task<IActionResult> GetBanHistory([FromQuery] BansQuery q) =>
         Ok(await _banApiService.GetBanHistory(q));
 
     /// <summary>
@@ -158,21 +176,29 @@ public class BanController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Cancels an active ban before its expiration.
-    /// Requires SeniorModerator role; permanent bans can only be lifted by Admin.
+    /// Requires SeniorModerator role; permanent bans can only be lifted by Admin,
+    /// and nobody lifts a ban of his own. The `canLift` flag of every ban the
+    /// lists return is answered by the same rule.
+    /// The reason is required and travels in the body: the ban list shows it
+    /// in the entry of the lift.
     /// </remarks>
     /// <param name="id">Ban identifier</param>
-    /// <param name="request">Optional lift reason</param>
+    /// <param name="request">Why the ban is lifted</param>
     /// <response code="204">Ban lifted</response>
+    /// <response code="400">No reason given</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">SeniorModerator role required (Admin for permanent bans)</response>
-    /// <response code="404">Ban not found</response>
+    /// <response code="403">SeniorModerator role required (Admin for permanent bans), or the ban is the caller's own</response>
+    /// <response code="404">Ban not found, or already lifted</response>
+    /// <response code="409">The ban has already run out</response>
     [HttpDelete("{id}", Name = nameof(LiftBan))]
     [RequireRole(UserRole.SeniorModerator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> LiftBan(Guid id, [FromBody] LiftBanRequest? request = null)
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> LiftBan(Guid id, [FromBody] LiftBanRequest request)
     {
         await _banApiService.LiftBan(id, request);
         return NoContent();

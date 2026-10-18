@@ -83,22 +83,21 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 .link
   display: block
 
 .muted
   color: $text-muted
 
+// A blog that is new: the site's green link.
 .new-item
-  color: $accent-green
-  &:hover
-    color: $accent-green-hover
+  +link-tone($accent-green, $accent-green-hover)
 
-// Closed blogs: muted grey; on hover — the regular link behavior.
+// Closed blogs: the site's grey link.
 .closed-item
-  color: $text-muted
-  &:hover
-    color: $link-hover
+  +muted-link
 
 .counters
   transition: opacity 0.15s ease

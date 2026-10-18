@@ -21,8 +21,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Account;
 /// </summary>
 /// <remarks>
 /// Run over the real database because the substance of the feature is two
-/// conditional updates - one that claims a time step (INV-6) and one that spends
-/// a recovery code (INV-5) - and a conditional update is only a guarantee where
+/// conditional updates - one that claims a time step and one that spends
+/// a recovery code - and a conditional update is only a guarantee where
 /// there is a database to make it.
 /// </remarks>
 public class TwoFactorShould : IntegrationTestBase
@@ -148,7 +148,7 @@ public class TwoFactorShould : IntegrationTestBase
         body["twoFactorRequired"]!.GetValue<bool>().Should().BeTrue();
         body["user"]?.GetValue<object?>().Should().BeNull("the login is not finished");
 
-        // AC-9 and INV-7: no session exists between the two factors.
+        // No session exists between the two factors.
         Cookie(response, "dm_session").Should().BeNull();
 
         var challenge = Cookie(response, "dm_2fa");
@@ -166,7 +166,7 @@ public class TwoFactorShould : IntegrationTestBase
 
     // ── Switching the factor on ──
 
-    /// <summary>AC-2: the answer carries the secret and the URI, once.</summary>
+    /// <summary>The answer carries the secret and the URI, once.</summary>
     [Fact]
     public async Task HandOverASecretAndAUriAndLeaveTheLoginSingleFactor()
     {
@@ -189,7 +189,7 @@ public class TwoFactorShould : IntegrationTestBase
         Cookie(login, "dm_session").Should().NotBeNullOrEmpty();
     }
 
-    /// <summary>AC-3: the current password is not optional.</summary>
+    /// <summary>The current password is not optional.</summary>
     [Fact]
     public async Task RefuseASetupWithoutTheCurrentPassword()
     {
@@ -203,7 +203,7 @@ public class TwoFactorShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// INV-3: what the table holds is an envelope, and the secret is inside it.
+    /// What the table holds is an envelope, and the secret is inside it.
     /// </summary>
     [Fact]
     public async Task StoreTheSecretOnlyInsideTheEnvelope()
@@ -221,7 +221,7 @@ public class TwoFactorShould : IntegrationTestBase
         stored.ConfirmedUtc.Should().NotBeNull();
     }
 
-    /// <summary>AC-8 and INV-16: confirming ends every other session.</summary>
+    /// <summary>Confirming ends every other session.</summary>
     [Fact]
     public async Task EndEveryOtherSessionOnConfirmation()
     {
@@ -237,7 +237,7 @@ public class TwoFactorShould : IntegrationTestBase
 
     // ── Signing in ──
 
-    /// <summary>AC-10: a good code finishes the login and mints the session.</summary>
+    /// <summary>A good code finishes the login and mints the session.</summary>
     [Fact]
     public async Task FinishTheLoginWithACodeFromTheDevice()
     {
@@ -258,7 +258,7 @@ public class TwoFactorShould : IntegrationTestBase
             "the accepted step is what the replay guard remembers");
     }
 
-    /// <summary>AC-11 and INV-6: the same code is not accepted twice.</summary>
+    /// <summary>The same code is not accepted twice.</summary>
     [Fact]
     public async Task RefuseACodeWhoseStepWasAlreadyAccepted()
     {
@@ -279,7 +279,7 @@ public class TwoFactorShould : IntegrationTestBase
         Cookie(replay, "dm_session").Should().BeNull();
     }
 
-    /// <summary>AC-15 and INV-5: a recovery code opens the account exactly once.</summary>
+    /// <summary>A recovery code opens the account exactly once.</summary>
     [Fact]
     public async Task SpendARecoveryCodeExactlyOnce()
     {
@@ -305,7 +305,7 @@ public class TwoFactorShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// INV-4: the table holds the hash of a code and never the code.
+    /// The table holds the hash of a code and never the code.
     /// </summary>
     [Fact]
     public async Task StoreOnlyTheHashOfARecoveryCode()
@@ -324,7 +324,7 @@ public class TwoFactorShould : IntegrationTestBase
         stored.Should().NotContainAny(codes.ToArray());
     }
 
-    /// <summary>AC-25 and INV-17: a reissue retires the previous set whole.</summary>
+    /// <summary>A reissue retires the previous set whole.</summary>
     [Fact]
     public async Task InvalidateEveryCodeOfThePreviousSetOnReissue()
     {
@@ -350,7 +350,7 @@ public class TwoFactorShould : IntegrationTestBase
         (await FinishLogin(second, fresh[0])).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>AC-13: the challenge is destroyed once the attempts run out.</summary>
+    /// <summary>The challenge is destroyed once the attempts run out.</summary>
     [Fact]
     public async Task DestroyTheChallengeWhenTheAttemptsRunOut()
     {
@@ -375,7 +375,7 @@ public class TwoFactorShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// AC-14: five ways of failing, one answer.
+    /// Five ways of failing, one answer.
     /// </summary>
     /// <remarks>
     /// Compared with the correlation token taken out. Every problem document of
@@ -424,7 +424,7 @@ public class TwoFactorShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// AC-28: the mailed password reset hands out no session and lifts no factor.
+    /// The mailed password reset hands out no session and lifts no factor.
     /// </summary>
     /// <remarks>
     /// It never did hand one out, and the point of the test is that nothing may
@@ -470,7 +470,7 @@ public class TwoFactorShould : IntegrationTestBase
         Cookie(login, "dm_session").Should().BeNull();
     }
 
-    /// <summary>AC-18 and INV-8: a password change kills unfinished logins.</summary>
+    /// <summary>A password change kills unfinished logins.</summary>
     [Fact]
     public async Task DiscardUnfinishedLoginsWhenThePasswordChanges()
     {
@@ -492,7 +492,7 @@ public class TwoFactorShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// AC-26: nothing that can pass the factor reaches the security journal.
+    /// Nothing that can pass the factor reaches the security journal.
     /// </summary>
     [Fact]
     public async Task WriteNeitherSecretNorRecoveryCodeIntoTheJournal()
@@ -548,7 +548,7 @@ public class TwoFactorShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// INV-18: switching the factor off costs the password and a second factor.
+    /// Switching the factor off costs the password and a second factor.
     /// </summary>
     [Fact]
     public async Task SwitchTheFactorOffOnlyForBothHalves()

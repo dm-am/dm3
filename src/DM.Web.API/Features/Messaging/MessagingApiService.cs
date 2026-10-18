@@ -5,11 +5,8 @@ using System.Threading.Tasks;
 using DM.Domain.Messaging.Features.Chats;
 using DM.Domain.Messaging.Features.Messages;
 using DM.Domain.Messaging.Features.Likes;
-using DM.Domain.Personal.Features.Profiles;
-using DM.Domain.Personal.Features.Blacklists;
 using DM.Domain.Core.Chats;
 using DM.Domain.Core.Dto;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using ServiceCreateChat = DM.Domain.Messaging.Features.Chats.CreateChat;
 using ServiceUpdateChat = DM.Domain.Messaging.Features.Chats.UpdateChat;
@@ -17,9 +14,11 @@ using ServiceCreateMessage = DM.Domain.Messaging.Features.Messages.CreateMessage
 using ServiceUpdateMessage = DM.Domain.Messaging.Features.Messages.UpdateMessage;
 using ServiceMessage = DM.Domain.Messaging.Features.Messages.Message;
 using ApiChat = DM.Web.API.Features.Messaging.Chats.Chat;
+using ApiChatViewer = DM.Web.API.Features.Messaging.Chats.ChatViewer;
+using DomainChat = DM.Domain.Messaging.Features.Chats.Chat;
 using ApiCreateChat = DM.Web.API.Features.Messaging.Chats.CreateChat;
 using ApiUpdateChat = DM.Web.API.Features.Messaging.Chats.UpdateChat;
-using ApiChatAvailability = DM.Web.API.Features.Messaging.Chats.ChatAvailability;
+using ApiChatUnreadCount = DM.Web.API.Features.Messaging.Chats.ChatUnreadCount;
 using ApiMessage = DM.Web.API.Features.Messaging.Messages.Message;
 
 namespace DM.Web.API.Features.Messaging;
@@ -30,28 +29,19 @@ internal class MessagingApiService : IMessagingApiService
     private readonly IChatService _chatService;
     private readonly IMessageService _messageService;
     private readonly IMessageLikeService _messageLikeService;
-    private readonly IUserService _userService;
-    private readonly IUserBlacklistService _userBlacklistService;
     private readonly MessagingMapper _mapper;
-    private readonly IQuoteSourceService _quoteSourceService;
 
     /// <inheritdoc />
     public MessagingApiService(
         IChatService chatService,
         IMessageService messageService,
         IMessageLikeService messageLikeService,
-        IUserService userService,
-        IUserBlacklistService userBlacklistService,
-        MessagingMapper mapper,
-        IQuoteSourceService quoteSourceService)
+        MessagingMapper mapper)
     {
         _chatService = chatService;
         _messageService = messageService;
         _messageLikeService = messageLikeService;
-        _userService = userService;
-        _userBlacklistService = userBlacklistService;
         _mapper = mapper;
-        _quoteSourceService = quoteSourceService;
     }
 
     /// <inheritdoc />
@@ -144,21 +134,6 @@ internal class MessagingApiService : IMessagingApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<QuoteSource>> GetMessageQuoteAsync(Guid messageId) =>
-        Quote(await _messageService.GetAsync(messageId));
-
-    /// <summary>
-    /// The quotation of a message that has already been read through the service
-    /// which authorizes reading it: a message the reader is refused is refused by
-    /// that read, and there is no second permission rule here to keep in step
-    /// with the first. Which read that is belongs to the caller — private
-    /// correspondence asks about participation, the global chat about the type of
-    /// the chat — and the shape of the quotation does not differ between them.
-    /// </summary>
-    private Envelope<QuoteSource> Quote(ServiceMessage message) =>
-        _quoteSourceService.Build(_mapper.ToMessage(message).Text, message.Author?.Username);
-
-    /// <inheritdoc />
     public async Task<Envelope<ApiMessage>> UpdateMessageAsync(Guid messageId, ApiMessage message)
     {
         var updateMessage = _mapper.ToUpdateMessage(message);
@@ -194,35 +169,35 @@ internal class MessagingApiService : IMessagingApiService
     public async Task<ApiChat> GetDirectChatAsync(string username)
     {
         var chat = await _chatService.GetOrCreateDirectAsync(username);
-        return _mapper.ToChat(chat);
+        return await ChatForViewer(chat);
     }
 
     /// <inheritdoc />
     public async Task<ApiChat> GetChatAsync(Guid id)
     {
         var chat = await _chatService.GetAsync(id);
-        return _mapper.ToChat(chat);
+        return await ChatForViewer(chat);
     }
 
     /// <inheritdoc />
     public async Task<ApiChat> GetChatByPublicIdAsync(string publicId)
     {
         var chat = await _chatService.GetByPublicIdAsync(publicId);
-        return _mapper.ToChat(chat);
+        return await ChatForViewer(chat);
     }
 
     /// <inheritdoc />
     public async Task<Guid> ResolveChatIdAsync(string idOrPublicId) =>
         Guid.TryParse(idOrPublicId, out var guid)
             ? guid
-            : (await GetChatByPublicIdAsync(idOrPublicId)).Id;
+            : (await _chatService.GetByPublicIdAsync(idOrPublicId)).Id;
 
     /// <inheritdoc />
     public async Task<ApiChat> CreateChatAsync(ApiCreateChat createChat)
     {
         var serviceCreateChat = _mapper.ToCreateChat(createChat);
         var chat = await _chatService.CreateGroupAsync(serviceCreateChat);
-        return _mapper.ToChat(chat);
+        return await ChatForViewer(chat);
     }
 
     /// <inheritdoc />
@@ -231,20 +206,35 @@ internal class MessagingApiService : IMessagingApiService
         var serviceUpdateChat = _mapper.ToUpdateChat(updateChat);
         serviceUpdateChat.ChatId = id;
         var chat = await _chatService.UpdateAsync(serviceUpdateChat);
-        return _mapper.ToChat(chat);
+        return await ChatForViewer(chat);
+    }
+
+    /// <summary>
+    /// One chat as the viewer gets it: the chat, and what he may do in it, asked
+    /// of the code that refuses the message. A list leaves the second half out,
+    /// so the reads of one chat and the writes that return one come through here.
+    /// </summary>
+    private async Task<ApiChat> ChatForViewer(DomainChat chat)
+    {
+        var result = _mapper.ToChat(chat);
+        result.Viewer = new ApiChatViewer
+        {
+            CanWrite = await _messageService.MayCreateAsync(chat),
+            CanLeave = _chatService.MayLeave(chat),
+            CanClearHistory = _chatService.MayClearHistory(chat)
+        };
+        return result;
     }
 
     /// <inheritdoc />
-    public async Task<ApiChatAvailability> CanStartChatAsync(string username)
-    {
-        // Get target user to resolve username to ID
-        var targetUser = await _userService.GetAsync(username);
+    public Task LeaveChatAsync(Guid id) => _chatService.LeaveAsync(id);
 
-        // Check block status between current user and target user
-        var blockStatus = await _userBlacklistService.GetBlockStatus(targetUser.UserId);
+    /// <inheritdoc />
+    public Task ClearChatHistoryAsync(Guid id) => _chatService.ClearHistoryAsync(id);
 
-        return new ApiChatAvailability { CanStart = blockStatus.CanCommunicate };
-    }
+    /// <inheritdoc />
+    public async Task<Envelope<ApiChatUnreadCount>> GetUnreadCountAsync() =>
+        new(new ApiChatUnreadCount { Count = await _chatService.CountUnreadAsync() });
 
     // ═══ GLOBAL CHAT ═══
 
@@ -271,10 +261,6 @@ internal class MessagingApiService : IMessagingApiService
         var message = await _messageService.GetGlobalChatMessageAsync(messageId);
         return new Envelope<ApiMessage>(_mapper.ToMessage(message));
     }
-
-    /// <inheritdoc />
-    public async Task<Envelope<QuoteSource>> GetGlobalChatMessageQuoteAsync(Guid messageId) =>
-        Quote(await _messageService.GetGlobalChatMessageAsync(messageId));
 
     /// <inheritdoc />
     public async Task<Envelope<ApiMessage>> UpdateGlobalChatMessageAsync(Guid messageId, ApiMessage message)

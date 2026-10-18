@@ -76,7 +76,7 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
         if (existing != null)
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                $"У участника {createTestimonial.AuthorUsername} уже есть отзыв");
+                RefusalMessage.TestimonialAlreadyExists(createTestimonial.AuthorUsername));
         }
 
         var entity = new CreateWebsiteTestimonialEntity
@@ -87,7 +87,21 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
             Text = createTestimonial.Text
         };
 
-        var result = await _repository.Create(entity);
+        WebsiteTestimonial result;
+        try
+        {
+            result = await _repository.Create(entity);
+        }
+        catch (DuplicateEntityException)
+        {
+            // The pre-check above cannot see the request running beside it, and
+            // the partial unique index by author is what actually refuses the
+            // second entry. Answered with the sentence the pre-check uses, so
+            // the loser of the race and the ordinary second attempt read alike.
+            throw new HttpException(HttpStatusCode.Conflict,
+                RefusalMessage.TestimonialAlreadyExists(createTestimonial.AuthorUsername));
+        }
+
         await _producer.SendAsync(EventType.NewWebsiteTestimonial, result.Id);
 
         return result;

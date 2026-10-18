@@ -249,4 +249,54 @@ describe("NumericRangePicker", () => {
       expect(wrapper.emitted("apply")![0]).toEqual([10, 20]);
     });
   });
+
+  /**
+   * Enter is the second way to apply, and for a while it was the unguarded
+   * one: the button carries `:disabled="!canApply"` and explains itself with
+   * "Минимум не может быть больше максимума", while the keydown handler
+   * emitted whatever was typed. An inverted range went through from the
+   * keyboard while the control on screen said it could not.
+   */
+  describe("Apply from the keyboard", () => {
+    it("does not emit apply on Enter while the range is inverted", async () => {
+      const wrapper = mountComponent();
+      const inputs = wrapper.findAll(".stepper-input");
+
+      await inputs[0].setValue("10");
+      await inputs[1].setValue("5");
+      await nextTick();
+      // The lock the keyboard has to obey, read off the button itself.
+      expect(wrapper.find(".apply-btn").attributes("disabled")).toBeDefined();
+
+      await inputs[0].trigger("keydown", { key: "Enter" });
+      await inputs[1].trigger("keydown", { key: "Enter" });
+
+      expect(wrapper.emitted("apply")).toBeFalsy();
+    });
+
+    it("emits apply on Enter when the range is valid", async () => {
+      const wrapper = mountComponent();
+      const inputs = wrapper.findAll(".stepper-input");
+
+      await inputs[0].setValue("10");
+      await inputs[1].setValue("50");
+      await nextTick();
+
+      await inputs[0].trigger("keydown", { key: "Enter" });
+
+      expect(wrapper.emitted("apply")![0]).toEqual([10, 50]);
+    });
+
+    it("does not emit apply on Enter when nothing changed", async () => {
+      // The other half of canApply: the button is locked in this state too,
+      // and the keyboard now answers to the same condition.
+      const wrapper = mountComponent({ minValue: 10, maxValue: 50 });
+
+      await wrapper
+        .findAll(".stepper-input")[0]
+        .trigger("keydown", { key: "Enter" });
+
+      expect(wrapper.emitted("apply")).toBeFalsy();
+    });
+  });
 });

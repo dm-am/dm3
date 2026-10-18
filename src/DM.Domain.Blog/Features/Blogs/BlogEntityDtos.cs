@@ -40,11 +40,6 @@ public class CreateBlogEntity
     public DraftVisibility DraftVisibility { get; set; }
 
     /// <summary>
-    /// Whether comments are enabled
-    /// </summary>
-    public bool CommentsEnabled { get; set; }
-
-    /// <summary>
     /// Creation timestamp
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
@@ -74,11 +69,6 @@ public class UpdateBlogEntity
     /// New visibility (if changed)
     /// </summary>
     public DraftVisibility? DraftVisibility { get; set; }
-
-    /// <summary>
-    /// Comments enabled flag (if changed)
-    /// </summary>
-    public bool? CommentsEnabled { get; set; }
 
     /// <summary>
     /// Blog status (if changed)

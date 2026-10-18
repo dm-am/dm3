@@ -13,6 +13,18 @@ export type RegisterCredentials = {
 };
 
 /**
+ * The second step of a registration: the name the account takes, and the time
+ * zone of the device it is finished on. The account is created here, and it
+ * starts in that zone: the site shows a signed-in reader's time in the zone of
+ * the account, and an account without one is UTC, which is nobody's clock.
+ * Absent where the browser will not say, and the account is then UTC.
+ */
+export type ActivationRequest = {
+  username: string;
+  timeZoneId?: string;
+};
+
+/**
  * Response from activation token check
  */
 export type PendingInfo = {
@@ -27,7 +39,11 @@ export type PendingInfo = {
  */
 export type UsernameAvailability = {
   isAvailable: boolean;
-  /** Reason if not available: "taken" | "reserved" | "invalid_format" */
+  /**
+   * Reason if not available: "Taken" | "InvalidFormat". A name a former user
+   * left behind answers "Taken" as well: whether the holder is live or gone is
+   * not the reader's to know, and he does the same thing either way.
+   */
   reason?: string;
 };
 
@@ -92,7 +108,13 @@ export type RecoveryResponse = {
 };
 
 /**
- * Response from email availability check
+ * Response from email availability check.
+ *
+ * Two reasons, not three. A removed account's address answers "Taken", the
+ * same as a live one's: "удален" is a decision about an account, and a guest
+ * at the registration form is not owed it. The owner of a removed account is
+ * shown the way to support after a correct password on the sign-in card, or by
+ * the recovery letter.
  */
 export type EmailAvailability = {
   isAvailable: boolean;
@@ -260,7 +282,6 @@ export type SecurityEventType =
   | "TwoFactorRemovalScheduled"
   | "TwoFactorRemovalCancelled"
   | "TwoFactorRemovedByAdmin"
-  | "TwoFactorRemovalRefused"
   | "TwoFactorSetupFailure";
 
 /**
@@ -299,10 +320,6 @@ export type TwoFactorStatus = {
   recoveryCodesLeft: number;
   /** When a removal asked for by mail takes effect, if one is pending. */
   removalDueUtc?: string;
-  /** Whether this account's rank owes a factor. */
-  required: boolean;
-  /** Whether the rank is withheld for want of a factor. */
-  privilegeWithheld: boolean;
 };
 
 /**

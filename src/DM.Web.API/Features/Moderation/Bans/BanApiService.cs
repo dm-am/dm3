@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Web.API.Features.Moderation.Warnings;
 using DM.Web.API.Shared.Dto;
@@ -86,12 +85,13 @@ internal class BanApiService : IBanApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Ban>> GetBanHistory(PagingQuery query)
+    public async Task<ListEnvelope<BanLogEntry>> GetBanHistory(BansQuery query)
     {
-        var (bans, totalCount) = await _banService.GetBanHistory(query.Skip, query.Take);
-        return new ListEnvelope<Ban>(
-            bans.Select(_mapper.ToBan),
-            new PagingInfo(query.Skip, query.Take, totalCount));
+        var (entries, totalCount, skip) =
+            await _banService.GetBanHistory(query.Username, query.Skip, query.Take, query.Entry);
+        return new ListEnvelope<BanLogEntry>(
+            entries.Select(_mapper.ToBanLogEntry).ToList(),
+            new PagingInfo(skip, query.Take, totalCount));
     }
 
     /// <inheritdoc />
@@ -112,8 +112,8 @@ internal class BanApiService : IBanApiService
     }
 
     /// <inheritdoc />
-    public Task LiftBan(Guid banId, LiftBanRequest? request = null)
+    public Task LiftBan(Guid banId, LiftBanRequest request)
     {
-        return _banService.LiftBan(banId, request?.Reason);
+        return _banService.LiftBan(banId, request.Reason);
     }
 }

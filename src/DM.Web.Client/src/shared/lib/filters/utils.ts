@@ -97,6 +97,34 @@ export function formatDateForDisplay(date: string | null | undefined): string {
 }
 
 /**
+ * Format a numeric range for display in a filter bubble.
+ *
+ * The same three shapes as the date range below, with the prepositions a
+ * Russian reader expects in front of a count rather than a date. Spelled here
+ * once: rating, hosted games, played games, blogs and the pulse rating all
+ * draw a range of numbers, and every one of them spelled it out for itself
+ * until the wordings drifted apart.
+ */
+export function formatNumberRangeForDisplay(
+  from: number | null | undefined,
+  to: number | null | undefined,
+): string {
+  const hasFrom = from !== null && from !== undefined;
+  const hasTo = to !== null && to !== undefined;
+
+  if (hasFrom && hasTo) {
+    return `${from} — ${to}`;
+  }
+  if (hasFrom) {
+    return `от ${from}`;
+  }
+  if (hasTo) {
+    return `до ${to}`;
+  }
+  return "";
+}
+
+/**
  * Format date range for display in filter bubble
  */
 export function formatDateRangeForDisplay(range: DateRange): string {

@@ -70,24 +70,21 @@ public interface ITopicCommentRepository
     Task<TopicCommentToDelete?> GetForDelete(Guid commentId);
 
     /// <summary>
-    /// The newest live comment of the topic other than <paramref name="exceptCommentId" />:
-    /// the successor of the comment being deleted.
+    /// Delete comment (soft delete). Answers whether this call is the removal that
+    /// happened.
     /// </summary>
     /// <remarks>
-    /// Named by exclusion rather than by position. "The second one down the list" is the
-    /// same row only while the comment being deleted is first on that list, and two
-    /// comments can share a timestamp — the DM2 import produces that by the thousand —
-    /// so the row leaving could sort second and be handed back as its own successor. The
-    /// topic would then point at a soft-deleted comment, which every read filters out,
-    /// and the topic drops to the bottom of the activity order.
+    /// The topic's last-comment pointer moves inside the same transaction, and which
+    /// comment it moves to is chosen there rather than handed in: a comment written
+    /// between the caller's read and this write would otherwise be passed over, and
+    /// the pointer would go back to a comment older than the discussion's newest.
+    ///
+    /// A caller with counters or events of its own reads the answer and does not
+    /// repeat them for a comment somebody else removed first.
     /// </remarks>
-    Task<Guid?> GetNewestCommentIdExcept(Guid topicId, Guid exceptCommentId);
-
-    /// <summary>
-    /// Delete comment (soft delete)
-    /// </summary>
     /// <param name="deleteComment">Comment deletion data</param>
-    Task Delete(DeleteTopicCommentEntity deleteComment);
+    /// <returns>True when this call is the one that removed the comment.</returns>
+    Task<bool> Delete(DeleteTopicCommentEntity deleteComment);
 }
 
 /// <summary>
@@ -147,11 +144,6 @@ public class TopicCommentToDelete : Comment
     /// Topic identifier
     /// </summary>
     public Guid TopicId => EntityId;
-
-    /// <summary>
-    /// Tells if the comment is last comment of the topic
-    /// </summary>
-    public bool IsLastComment { get; set; }
 }
 
 /// <summary>
@@ -168,11 +160,6 @@ public class DeleteTopicCommentEntity
     /// Topic identifier
     /// </summary>
     public Guid TopicId { get; set; }
-
-    /// <summary>
-    /// New last comment ID (if this was the last comment)
-    /// </summary>
-    public Guid? NewLastCommentId { get; set; }
 
     /// <summary>
     /// User who removed the comment

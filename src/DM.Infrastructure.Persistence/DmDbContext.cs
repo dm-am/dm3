@@ -17,6 +17,7 @@ using DM.Infrastructure.Persistence.Entities.Moderation;
 using DM.Infrastructure.Persistence.Entities.Game;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes;
+using DM.Infrastructure.Persistence.InitialData;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DM.Infrastructure.Persistence.Entities.Messaging;
@@ -45,10 +46,12 @@ public class DmDbContext : DbContext
     /// <remarks>
     /// A table rather than an interface on the entities: what makes a property the
     /// searchable body of a row is what it means, and the surface it is displayed
-    /// on is a fact about the feature rather than about the type. [private] is a
-    /// node of the tree only on the surfaces that declare it, so a projection made
-    /// on the wrong one leaves the block a literal and puts its contents into the
-    /// index and into every preview.
+    /// on is a fact about the feature rather than about the type. The surface
+    /// decides which of the other tags are markup ([mod] is on some and text on
+    /// others), so a projection made on the wrong one reads as markup a tag the
+    /// page shows as text, or the other way round. [private] is a node on every
+    /// surface, and the plain text the projection is made of drops it on every
+    /// one.
     /// </remarks>
     private static readonly (Type Entity, string Body, BbSurface Surface)[] ProjectedBodies =
     [
@@ -336,7 +339,7 @@ public class DmDbContext : DbContext
         // columns: it has to agree across the two, and nothing here can see them.
         static string SearchVectorSql(string column) =>
             $"to_tsvector('{SearchTextConfiguration.Name}', regexp_replace(coalesce(\"{column}\", ''), " +
-            $"'{PrivateBlockMarkup.BlockPattern}', ' ', 'gi'))";
+            $"'{PrivateBlockMarkup.BlockPattern}', ' ', '{PrivateBlockMarkup.BlockPatternFlags}'))";
 
 
         // Generated STORED tsvector columns + GIN indexes power every full-text
@@ -495,6 +498,35 @@ public class DmDbContext : DbContext
         }
         likeIndexBuilder.IsUnique();
 
+        // One person is on one event's list once. Joining is check-then-insert -
+        // the service asks whether the person is a participant and inserts after
+        // that - so two clicks arriving together both read a list without them on
+        // it and both insert. The extra row is not something the reader can clear
+        // either: leaving deleted the one row that was read back, so the person
+        // stayed a participant of an event they had left. Leads with
+        // GlobalChatEventId, so it replaces the plain FK index the convention
+        // used to add rather than adding to it.
+        modelBuilder.Entity<GlobalChatEventParticipant>()
+            .HasIndex(p => new { p.GlobalChatEventId, p.UserId })
+            .IsUnique();
+
+        // At most one event is live at a time. The rule was held by a read before
+        // the write - "is any event live" - which two organisers starting two
+        // events at the same moment both pass, and the chat then belongs to two
+        // events at once: the strip over it names one of them, and a closed event
+        // decides who may write. Partial and PostgreSQL-only for the reason the
+        // template indexes above are: declared unconditionally the filter would be
+        // dropped, and the second scheduled event - the ordinary case - would
+        // become a violation. The value is the one Live is stored as; an enum whose
+        // numbers move has to move this filter with it.
+        if (isPostgres)
+        {
+            modelBuilder.Entity<GlobalChatEvent>()
+                .HasIndex(e => e.Status)
+                .IsUnique()
+                .HasFilter($"\"Status\" = {(int)GlobalChatEventStatus.Live}");
+        }
+
         // A game carries a tag once. The link rows are written from a resolved
         // catalogue today, which is why no duplicate exists to clean up, but the
         // required-tag filter counts rows and not distinct tags, so a second row for
@@ -561,6 +593,15 @@ public class DmDbContext : DbContext
         // start resolving to a newer one.
         modelBuilder.Entity<Topic>()
             .HasIndex(t => new { t.BoardId, t.TopicNumber })
+            .IsUnique();
+
+        // PublicationNumber is the same key one module over, allocated the same
+        // way (MAX+1 under the blog row the creation writes anyway), and the
+        // constraint is here for the same reason: it is what guarantees one
+        // number names one publication of a blog no matter who writes. Removed
+        // publications keep their number.
+        modelBuilder.Entity<Publication>()
+            .HasIndex(p => new { p.BlogId, p.PublicationNumber })
             .IsUnique();
 
         // RoomNumber is the same key one level down: a room is addressed as
@@ -1389,7 +1430,7 @@ public class DmDbContext : DbContext
                 ShortId = 63,
                 TagGroupId = Guid.Parse("00000000-0000-0000-0005-000000000008"),
                 Title = "ERP",
-                Description = "Erotic Role-Play: [tipimg:/images/erp-tooltip.gif]эротические сцены[/tipimg] как основа игрового процесса",
+                Description = "Erotic Role-Play: [tip img=\"/images/erp-tooltip.gif\"]эротические сцены[/tip] как основа игрового процесса",
                 SortOrder = 0
             },
             new Tag
@@ -2441,6 +2482,23 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<UserBlacklist>()
             .HasIndex(b => new { b.OwnerId, b.BlockedUserId }).IsUnique();
 
+        // The same rule for the game's own list, which had no constraint at all.
+        // Adding is check-then-insert over the game's blacklist read a statement
+        // earlier, and a check cannot see the request beside it: two of them
+        // passed and both inserted. The duplicate was not something the master
+        // could undo - the list showed the name twice, and removing it deleted
+        // the one row it happened to load while the person stayed blocked.
+        // Leading with GameId, so it replaces the conventional FK index rather
+        // than adding to it.
+        modelBuilder.Entity<GameBlacklist>()
+            .HasIndex(b => new { b.GameId, b.BlockedUserId }).IsUnique();
+
+        // And for the blog's, for the same race: two adds of one name both
+        // passed the check and both inserted, and the blog showed the name
+        // twice. Leading with BlogId, so it replaces the conventional FK index.
+        modelBuilder.Entity<BlogBlacklist>()
+            .HasIndex(b => new { b.BlogId, b.BlockedUserId }).IsUnique();
+
         // Unique index on UserProfileNote(OwnerId, SubjectUserId) - prevent duplicate profile notes
         modelBuilder.Entity<UserProfileNote>()
             .HasIndex(n => new { n.OwnerId, n.SubjectUserId }).IsUnique();
@@ -2593,6 +2651,49 @@ public class DmDbContext : DbContext
         modelBuilder.Entity<CharacterAttribute>()
             .HasIndex(a => new { a.CharacterId, a.AttributeId }).IsUnique();
 
+        // The moderator who corrected the points of a warning is a third person
+        // beside its target and its author, and he collects nothing: no inverse
+        // collection on the user, so the two that exist keep meaning "warnings
+        // received" and "warnings given". No cascade either - the warning is the
+        // record of what the moderation did, and it must outlive the account of
+        // whoever last touched its points.
+        modelBuilder.Entity<Entities.Moderation.Warning>()
+            .HasOne(w => w.PointsChangedBy)
+            .WithMany()
+            .HasForeignKey(w => w.PointsChangedByUserId)
+            .OnDelete(DeleteBehavior.ClientSetNull);
+
+        // The avatar a warning on a profile pins (DATA_STORAGE.md, "Объектное
+        // хранилище"). SetNull, because the sweeper deletes the upload row once
+        // moderation deleted the picture and its grace period is over: the
+        // warning stays, without the picture, as a record of the decision.
+        modelBuilder.Entity<Entities.Moderation.Warning>()
+            .HasOne(w => w.ProfileAvatarUpload)
+            .WithMany()
+            .HasForeignKey(w => w.ProfileAvatarUploadId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // The conversation of a ticket goes with the ticket, and is read whole, in
+        // the order it was written: the index is that read. The account of an
+        // author does not take his comments with it - an account is removed
+        // softly, and the comment stays signed by nobody - so a delete for real is
+        // refused rather than cascaded or nulled: a null author is how the guest's
+        // comment is told apart, and must not be produced by anything else.
+        modelBuilder.Entity<Entities.Moderation.TicketComment>(entity =>
+        {
+            entity.HasIndex(c => new { c.TicketId, c.CreatedUtc, c.TicketCommentId });
+
+            entity.HasOne(c => c.Ticket)
+                .WithMany(t => t.TicketComments)
+                .HasForeignKey(c => c.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(c => c.Author)
+                .WithMany()
+                .HasForeignKey(c => c.AuthorId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         #region Migrated document collections (W1.1)
 
         // The nine collections that used to live in the document store, as
@@ -2625,6 +2726,10 @@ public class DmDbContext : DbContext
                 .WithOne()
                 .HasForeignKey<UserSettings>(s => s.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // An IANA zone name: the longest one today is under forty characters,
+            // and the bound is twice that so the column holds the limit rather
+            // than a hope that names stay short.
+            entity.Property(s => s.TimeZoneId).HasMaxLength(64);
             entity.Property(s => s.DiscordPreferences).IsJson(isPostgres);
             entity.Property(s => s.TelegramPreferences).IsJson(isPostgres);
             entity.Property(s => s.EmailPreferences).IsJson(isPostgres);
@@ -2814,7 +2919,7 @@ public class DmDbContext : DbContext
                 .IsDescending(false, true);
         });
 
-        // DiceRolls: written only inside the post's transaction (INV-6). The FK
+        // DiceRolls: written only inside the post's transaction. The FK
         // index the convention adds serves the room render's batch read.
         modelBuilder.Entity<DiceRoll>(entity =>
         {
@@ -2826,40 +2931,70 @@ public class DmDbContext : DbContext
             entity.Property(d => d.Result).IsJson(isPostgres);
         });
 
-        // AttributeSchemata: an honest document — polymorphic constraints and
-        // nested value lists in one jsonb column. SetNull on the author: the
-        // schema can be public and outlive its author's account.
-        modelBuilder.Entity<AttributeSchema>(entity =>
+        // AttributeSchemaTemplates: an honest document — polymorphic constraints
+        // and nested value lists in one jsonb column. SetNull on the author: the
+        // template belongs to the site and outlives the account that typed it in.
+        //
+        // Both unique indexes sit entirely under the PostgreSQL branch, filter
+        // and all. Declared outside it the filter would be dropped and the index
+        // would become unconditional, which turns the second template that is
+        // not the default one — the ordinary case — into a violation. Away from
+        // PostgreSQL these two rules are simply not enforced.
+        modelBuilder.Entity<AttributeSchemaTemplate>(entity =>
         {
-            entity.HasKey(s => s.AttributeSchemaId);
+            entity.HasKey(t => t.TemplateId);
             entity.HasOne<User>()
                 .WithMany()
-                .HasForeignKey(s => s.UserId)
+                .HasForeignKey(t => t.CreatedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
-            entity.Property(s => s.Specifications).IsJson(isPostgres);
+            entity.Property(t => t.Specifications).IsJson(isPostgres);
+
+            if (isPostgres)
+            {
+                // Two templates under one name are indistinguishable in the list
+                // the creation form offers.
+                entity.HasIndex(t => t.Title)
+                    .IsUnique()
+                    .HasFilter("\"IsRemoved\" = false");
+
+                // At most one default. The other half of the rule — at least one
+                // — is held by the row below and by a removal that refuses the
+                // default template.
+                entity.HasIndex(t => t.IsDefault)
+                    .IsUnique()
+                    .HasFilter("\"IsDefault\" = true and \"IsRemoved\" = false");
+            }
+
+            // The catalogue is never empty: the creation form starts a game from
+            // the default template, so a site without one has no sheet to offer.
+            entity.HasData(DefaultAttributeSchema.Template());
         });
 
-        // INV-8: a game's schema reference carries a real FK now. Restrict, not
-        // cascade or set-null: the schema is soft-deleted, so the row outlives
-        // the delete and the game keeps resolving it.
-        modelBuilder.Entity<Entities.Game.Game>()
-            .HasOne<AttributeSchema>()
-            .WithMany()
-            .HasForeignKey(g => g.AttributeSchemaId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // GameAttributeSchemas: the character sheet of one game, keyed by the
+        // game so a second sheet for it is unrepresentable. Cascade, because the
+        // sheet describes nothing once the game row is gone; games are not
+        // deleted physically today, so the cascade is there for the day that
+        // changes rather than for a path anybody walks now.
+        modelBuilder.Entity<Entities.Game.GameAttributeSchema>(entity =>
+        {
+            entity.HasKey(s => s.GameId);
+            entity.HasOne<Entities.Game.Game>()
+                .WithOne()
+                .HasForeignKey<Entities.Game.GameAttributeSchema>(s => s.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(s => s.Specifications).IsJson(isPostgres);
+        });
 
         #endregion
 
         // Global Query Filter: automatically exclude soft-deleted entities.
-        // UnreadCounters and AttributeSchemata opt out on purpose: their write
-        // paths have to see tombstone rows (an upsert over a tombstone revives
-        // the marker for a re-added participant, a game resolves its removed
-        // schema through its own reference), so each of their reads owns its
-        // IsRemoved predicate explicitly.
+        // UnreadCounters opts out on purpose: its write path has to see tombstone
+        // rows, because an upsert over one revives the marker for a re-added
+        // participant, so each of its reads owns its IsRemoved predicate
+        // explicitly.
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
-            if (entityType.ClrType == typeof(UnreadCounter) ||
-                entityType.ClrType == typeof(AttributeSchema))
+            if (entityType.ClrType == typeof(UnreadCounter))
             {
                 continue;
             }
@@ -2869,6 +3004,16 @@ public class DmDbContext : DbContext
                 var parameter = Expression.Parameter(entityType.ClrType, "e");
                 var property = Expression.Property(parameter, nameof(IRemovable.IsRemoved));
                 var filter = Expression.Lambda(Expression.Not(property), parameter);
+
+                // The account filter carries a name so the content reads can lift
+                // it alone and keep what removed accounts wrote; see RemovedAuthors.
+                if (entityType.ClrType == typeof(User))
+                {
+                    modelBuilder.Entity(entityType.ClrType)
+                        .HasQueryFilter(Shared.Users.RemovedAuthors.AccountFilter, filter);
+                    continue;
+                }
+
                 modelBuilder.Entity(entityType.ClrType).HasQueryFilter(filter);
             }
         }
@@ -3152,9 +3297,14 @@ public class DmDbContext : DbContext
     public DbSet<DiceRoll> DiceRolls { get; set; }
 
     /// <summary>
-    /// Character attribute schemata
+    /// Starting character sheets the site offers when a game is created
     /// </summary>
-    public DbSet<AttributeSchema> AttributeSchemata { get; set; }
+    public DbSet<AttributeSchemaTemplate> AttributeSchemaTemplates { get; set; }
+
+    /// <summary>
+    /// Character sheets of games, one row per game
+    /// </summary>
+    public DbSet<Entities.Game.GameAttributeSchema> GameAttributeSchemas { get; set; }
 
     #endregion
 
@@ -3200,9 +3350,10 @@ public class DmDbContext : DbContext
     public DbSet<Ticket> Tickets { get; set; }
 
     /// <summary>
-    /// Ticket responses (conversation history)
+    /// The conversations of tickets. Read by the ticket repository and by the
+    /// notifications about tickets only (see the entity)
     /// </summary>
-    public DbSet<TicketResponse> TicketResponses { get; set; }
+    public DbSet<TicketComment> TicketComments { get; set; }
 
     /// <summary>
     /// Warnings

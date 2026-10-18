@@ -41,18 +41,6 @@ public interface IGameCommentRepository
     /// </summary>
     Task<GameCommentToDelete?> GetForDelete(Guid commentId);
 
-    /// <summary>
-    /// The newest live comment of the game other than <paramref name="exceptCommentId" />:
-    /// the successor of the comment being deleted.
-    /// </summary>
-    /// <remarks>
-    /// Named by exclusion rather than by position — see the note on the forum's
-    /// counterpart. Two comments can share a timestamp, and then "the second one down the
-    /// list" can be the row that is leaving, which would leave the game pointing at a
-    /// soft-deleted comment.
-    /// </remarks>
-    Task<Guid?> GetNewestCommentIdExcept(Guid gameId, Guid exceptCommentId);
-
     #endregion
 
     #region Write
@@ -70,7 +58,16 @@ public interface IGameCommentRepository
     /// <summary>
     /// Delete comment
     /// </summary>
-    Task Delete(DeleteGameCommentEntity deleteComment);
+    /// <remarks>
+    /// The game's comment count and its last-comment pointer travel with the mark,
+    /// and the mark is conditional on the comment still being there: the answer
+    /// says whether this call is the removal that happened, so a caller that has
+    /// counters or events of its own does not repeat them for a comment somebody
+    /// else removed first.
+    /// </remarks>
+    /// <param name="deleteComment">Comment deletion entity</param>
+    /// <returns>Whether this call is the one that removed the comment</returns>
+    Task<bool> Delete(DeleteGameCommentEntity deleteComment);
 
     #endregion
 }

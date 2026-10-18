@@ -1,3 +1,4 @@
+@use "sass:math"
 
 // The family the whole site is set in, so it is on the critical path of every
 // address (Reset.sass puts it on the root elements, main.ts imports this file).
@@ -43,3 +44,68 @@
   font-style: italic
   font-display: swap
   src: url("@/assets/fonts/PTSans-BoldItalic.ttf") format("truetype")
+
+// The face the words are drawn in during that first frame, fitted to PT Sans.
+//
+// `swap` shows the text at once in the next family of the stack, and that
+// family was the system's sans-serif: Arial on most desktops, which sets the
+// bold of the headings 14 percent wider than PT Sans. A heading that fits one
+// line in PT Sans took two in the first frame and jumped back to one when the
+// file landed, and every line of text under it jumped with it. So the stack
+// names this family before the generic one (Reset.sass, Inputs.sass): Arial,
+// or one of the faces drawn to its metrics (Liberation Sans, Arimo), scaled to
+// the width of PT Sans and given its ascent and descent, so a line keeps its
+// length and its baseline when the real face arrives. A system with none of
+// them skips the family and falls to the generic one, as every system did
+// before.
+//
+// Measured 27.09.2026 in headless Chrome, the faces of assets/fonts against the
+// Arial of Windows 11: the widths of every heading and paragraph of seven pages
+// of the site, rendered in both, and the italics on a paragraph of Russian
+// prose. One number for every weight does not hold: 85.8, taken off one bold
+// heading, fits the bold and makes the roman 8 percent narrower than PT Sans,
+// and body text is roman.
+//
+// The metric overrides are divided by size-adjust because the browser scales
+// them by it: PT Sans has an ascent of 1.018 and a descent of 0.276 of the
+// size, and no line gap.
+
+@font-face
+  font-family: "PT Sans Fallback"
+  font-weight: 400
+  font-style: normal
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("Arimo")
+  size-adjust: 93.4%
+  ascent-override: math.div(101.8%, 0.934)
+  descent-override: math.div(27.6%, 0.934)
+  line-gap-override: 0%
+
+@font-face
+  font-family: "PT Sans Fallback"
+  font-weight: 700
+  font-style: normal
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("Arimo Bold")
+  size-adjust: 87%
+  ascent-override: math.div(101.8%, 0.87)
+  descent-override: math.div(27.6%, 0.87)
+  line-gap-override: 0%
+
+@font-face
+  font-family: "PT Sans Fallback"
+  font-weight: 400
+  font-style: italic
+  src: local("Arial Italic"), local("Arial-ItalicMT"), local("Liberation Sans Italic"), local("Arimo Italic")
+  size-adjust: 90.5%
+  ascent-override: math.div(101.8%, 0.905)
+  descent-override: math.div(27.6%, 0.905)
+  line-gap-override: 0%
+
+@font-face
+  font-family: "PT Sans Fallback"
+  font-weight: 700
+  font-style: italic
+  src: local("Arial Bold Italic"), local("Arial-BoldItalicMT"), local("Liberation Sans Bold Italic"), local("Arimo Bold Italic")
+  size-adjust: 84.4%
+  ascent-override: math.div(101.8%, 0.844)
+  descent-override: math.div(27.6%, 0.844)
+  line-gap-override: 0%

@@ -74,9 +74,9 @@ internal class GameReviewApiService : IGameReviewApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<GameReviewDto>> Get(Guid reviewId)
+    public async Task<Envelope<GameReviewDto>> Get(Guid gameId, Guid reviewId)
     {
-        var review = await _gameReviewService.GetAsync(reviewId);
+        var review = await _gameReviewService.GetAsync(gameId, reviewId);
         return new Envelope<GameReviewDto>(_mapper.ToGameReview(review));
     }
 
@@ -91,4 +91,19 @@ internal class GameReviewApiService : IGameReviewApiService
         var review = await _gameReviewService.CreateAsync(createReview);
         return new Envelope<GameReviewDto>(_mapper.ToGameReview(review));
     }
+
+    /// <inheritdoc />
+    public async Task<Envelope<GameReviewDto>> Update(Guid reviewId, UpdateGameReviewRequest request)
+    {
+        var updateReview = new UpdateGameReview
+        {
+            ReviewId = reviewId,
+            Text = request.Text
+        };
+        var review = await _gameReviewService.UpdateAsync(updateReview);
+        return new Envelope<GameReviewDto>(_mapper.ToGameReview(review));
+    }
+
+    /// <inheritdoc />
+    public Task Delete(Guid reviewId) => _gameReviewService.DeleteAsync(reviewId);
 }

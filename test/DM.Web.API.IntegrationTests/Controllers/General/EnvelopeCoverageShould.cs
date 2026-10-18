@@ -49,7 +49,6 @@ public class EnvelopeCoverageShould : IntegrationTestBase
         "GET /v1/account/password-reset",
         "GET /v1/account/username-change",
         "GET /v1/account/username-change/approval",
-        "GET /v1/chats/can-start/{username}",
         "GET /v1/chats/{id}",
         "GET /v1/endorsements/{id}",
         "GET /v1/moderation/notes/{id}",

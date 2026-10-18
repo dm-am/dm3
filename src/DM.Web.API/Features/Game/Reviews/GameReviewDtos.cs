@@ -63,3 +63,19 @@ public class CreateGameReviewRequest
     [StringLength(10000, MinimumLength = 10, ErrorMessage = "Рецензия от 10 до 10000 символов")]
     public string Text { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Request to update a game review
+/// </summary>
+/// <remarks>
+/// The upper bound is the one the domain enforces on both paths; the lower one
+/// keeps an edit from saving a text creation would have refused.
+/// </remarks>
+public class UpdateGameReviewRequest
+{
+    /// <summary>
+    /// New review text (10-5000 characters, BBCode supported). Omit to keep the current one
+    /// </summary>
+    [StringLength(5000, MinimumLength = 10, ErrorMessage = "Рецензия от 10 до 5000 символов")]
+    public string? Text { get; set; }
+}

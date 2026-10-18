@@ -26,8 +26,10 @@ internal partial class BoardMapper
     /// <summary>
     /// Domain board to its response DTO, last topic and comment included.
     /// Policies and moderator ids stay behind - the response answers what a
-    /// reader sees, not how the board is governed.
+    /// reader sees, not how the board is governed. What the viewer may do on
+    /// it is the domain's answer, composed by the reads of one board.
     /// </summary>
+    [MapperIgnoreTarget(nameof(Board.Viewer))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     public partial Board ToBoard(DomainBoard board);
 }

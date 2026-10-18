@@ -70,8 +70,10 @@ export default new (class uploadApi {
   /**
    * Delete an upload (DELETE /v1/uploads/{id}, soft-delete).
    * Allowed to the upload owner and admins server-side.
+   *
+   * @param options The refusal flags of a window that shows the failure itself.
    */
-  public deleteUpload(id: string) {
-    return Api.delete(`uploads/${id}`);
+  public deleteUpload(id: string, options?: Parameters<typeof Api.delete>[2]) {
+    return Api.delete(`uploads/${id}`, undefined, options);
   }
 })();

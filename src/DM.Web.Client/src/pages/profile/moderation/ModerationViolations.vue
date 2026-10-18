@@ -1,43 +1,36 @@
 <script setup lang="ts">
-import { ref, reactive, toRef, watch } from "vue";
-import { useExpandableSection } from "@/shared/lib/composables/useExpandableSection";
+/**
+ * "Нарушения", the first section of the profile's "Модерация" tab: the two
+ * counts and the two actions a moderator opens the tab for most often.
+ *
+ * The counts are stat lines of the profile ("Предупреждения: 2"), as in the
+ * card at the top of the page, and each leads where its records can be read,
+ * narrowed to this user. The warnings lead to "Последние предупреждения",
+ * where every warning carries what it was given for. The bans lead to
+ * "Последние баны", written as DM2's ban log (the owner, 12.10, line 45), with
+ * the reason, the moderator and every lift. They used to open in place, a row
+ * per ban from the public answer: no reason, no moderator, no lifted ban, under
+ * a count that counted the lifted ones too ("Баны: 11" over ten rows). A count
+ * of zero leads nowhere: there is nothing behind it.
+ *
+ * The buttons are the server's answer (permissions): a warning and a ban reach
+ * only a rank below the reader's and never an administrator, so a moderator
+ * sees neither on the profile of a colleague, a senior moderator or an
+ * administrator.
+ *
+ * What is in force now (the active points, the current ban) is not repeated:
+ * the card above the tabs says it to everybody, moderators included.
+ */
+import { reactive, toRef } from "vue";
 import { useModal } from "vue-final-modal";
 import type {
   ViolationSummary,
   ModerationPermissions,
 } from "@/shared/api/models/moderation";
-import type { Username } from "@/shared/api/models/community";
-import {
-  moderationApi,
-  type PublicWarning,
-  type PublicBan,
-} from "@/entities/moderation";
 import { WarningDialog, BanDialog } from "@/features/moderation-actions";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { BlockTitle } from "@/shared/ui/Layout";
+import { StatLine } from "@/shared/ui/StatLine";
 import Button from "@/shared/ui/Button/Button.vue";
-import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
-import { pluralize } from "@/shared/lib/utils/pluralize";
-
-/** "1 активный балл" / "3 активных балла" / "5 активных баллов". */
-function activePointsLabel(points: number): string {
-  const noun = pluralize(
-    points,
-    "активный балл",
-    "активных балла",
-    "активных баллов",
-  );
-  return `${points} ${noun}`;
-}
-
-// NOTE: moderationApi.getWarnings/getBans hit the PUBLIC endpoints
-// (GET users/{username}/warnings|bans), which only return aggregate
-// facts — no reason, no moderator identity (see PublicWarning/PublicBan).
-// This mod-panel list used to assume the full moderation shape; that
-// mismatch is out of scope here (owned by another unit) and is left as
-// a pre-existing gap — only the TS types below were corrected to match
-// what the API actually returns, so the fields referenced below that no
-// longer exist (.reason, .moderator, .comment) render as empty/undefined
-// instead of failing to compile.
 
 const props = defineProps<{
   violations: ViolationSummary;
@@ -49,74 +42,40 @@ const emit = defineEmits<{
   (e: "updated"): void;
 }>();
 
-// Expandable lists — content expandable sections (unified reveal
-// animation + the page-wide "Развернуть/Свернуть все" toggle). The list
-// data lazy-loads on first expand, whichever way the expand arrives.
-const showWarnings = ref(false);
-const showBans = ref(false);
-const warningsList = ref<PublicWarning[] | null>(null);
-const bansList = ref<PublicBan[] | null>(null);
-const loadingWarnings = ref(false);
-const loadingBans = ref(false);
-
-const warningsZoneRef = ref<HTMLElement | null>(null);
-const { toggle: toggleWarnings, zoneBindings: warningsZoneBindings } =
-  useExpandableSection({
-    el: warningsZoneRef,
-    model: showWarnings,
-    label: "ModerationWarningsList",
-  });
-
-const bansZoneRef = ref<HTMLElement | null>(null);
-const { toggle: toggleBans, zoneBindings: bansZoneBindings } =
-  useExpandableSection({
-    el: bansZoneRef,
-    model: showBans,
-    label: "ModerationBansList",
-  });
-
-watch(showWarnings, async (open) => {
-  if (open && warningsList.value === null) {
-    loadingWarnings.value = true;
-    const { data } = await moderationApi.getWarnings(
-      props.targetUsername as Username,
-    );
-    warningsList.value = data?.warnings ?? [];
-    loadingWarnings.value = false;
-  }
+/** "Последние предупреждения", narrowed to this user. */
+const warningsLog = () => ({
+  name: "moderation-warnings" as const,
+  query: { username: props.targetUsername },
 });
 
-watch(showBans, async (open) => {
-  if (open && bansList.value === null) {
-    loadingBans.value = true;
-    const { data } = await moderationApi.getBans(
-      props.targetUsername as Username,
-    );
-    bansList.value = data?.history ?? [];
-    loadingBans.value = false;
-  }
+/** "Последние баны", narrowed to this user. */
+const bansLog = () => ({
+  name: "moderation-bans" as const,
+  query: { username: props.targetUsername },
 });
 
 // --- Warning / ban dialogs (product doc 4.2.4.1 / 4.2.4.2) ---
-// The profile moderation block (doc 4.2.2.19) is one of the seven warn-trigger
-// sites. Both actions mount the spec-compliant dialogs from
-// features/moderation-actions instead of a divergent inline form: WarningDialog
-// offers verbal (0) / 1-6 points with a BBCode reason, BanDialog offers the
-// "Демократический" / "Полный" access policy x 14 durations with a BBCode
-// reason.
-// A warning from the profile block is a general user warning (no specific
-// content entity), so no entityId/entityType is passed.
+// A warning issued from here is a warning on the profile: the server keeps the
+// avatar, the status and "О себе" as they stand at that moment, and the log
+// shows them with the warning (the owner, 12.10, line 41: "почему профиль
+// пользователя не видно?"). The entity is the warned user, so no id is sent:
+// the server takes the user the warning is for.
 const usernameRef = toRef(props, "targetUsername");
 
+// No toast from this dialog: the answer is on the screen behind it. The parent
+// refetches the profile, and the count of warnings in this section goes up
+// under the moderator's eyes (UI_STANDARDS, "Всплывающие сообщения"). The
+// other openers of the same dialog - topic, chat message, comment list - keep
+// their toast: nothing about a warning can appear on the page it was issued
+// from there.
 const { open: openWarnDialog, close: closeWarnDialog } = useModal({
   component: WarningDialog,
   attrs: reactive({
     username: usernameRef,
+    entityType: "Profile",
+    hideToast: true,
     onSuccess: () => {
       closeWarnDialog();
-      // Force a refetch of the expandable list on next open + refresh the
-      // moderation summary counts held by the parent.
-      warningsList.value = null;
       emit("updated");
     },
     onCancel: () => closeWarnDialog(),
@@ -129,7 +88,7 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
     username: usernameRef,
     onSuccess: () => {
       closeBanDialog();
-      bansList.value = null;
+      // The counts are the parent's: it refetches them.
       emit("updated");
     },
     onCancel: () => closeBanDialog(),
@@ -138,199 +97,52 @@ const { open: openBanDialog, close: closeBanDialog } = useModal({
 </script>
 
 <template>
-  <div class="mod-section">
-    <h4 class="mod-section_title">Нарушения</h4>
+  <section class="mod-section">
+    <BlockTitle>Нарушения</BlockTitle>
 
-    <!-- Warnings summary + expandable list -->
-    <div class="mod-violations_group">
-      <button
-        type="button"
-        class="mod-violations_summary"
-        :aria-expanded="showWarnings"
-        @click="toggleWarnings()"
-      >
-        <span>
-          Предупреждения: <strong>{{ violations.totalWarnings }}</strong>
-        </span>
-        <span
-          v-if="violations.activeWarningPoints > 0"
-          class="mod-warning-points"
-        >
-          ({{ activePointsLabel(violations.activeWarningPoints) }})
-        </span>
-        <span
-          class="mod-expand-icon expand-marker"
-          :class="{ expanded: showWarnings }"
-          aria-hidden="true"
-        />
-      </button>
-
-      <div
-        ref="warningsZoneRef"
-        class="expand-zone"
-        v-bind="warningsZoneBindings"
-      >
-        <div v-if="showWarnings" class="mod-violations_list">
-          <secondary-text v-if="loadingWarnings">Загрузка...</secondary-text>
-          <template v-else-if="warningsList">
-            <secondary-text v-if="warningsList.length === 0">
-              Нет предупреждений
-            </secondary-text>
-            <div
-              v-for="(w, wIndex) in warningsList"
-              :key="wIndex"
-              class="mod-violation-item"
-              :class="{ 'mod-violation-active': w.isActive }"
-            >
-              <div class="mod-violation-item_header">
-                <secondary-text>{{
-                  formatDateFull(w.createdUtc)
-                }}</secondary-text>
-                <span class="mod-warning-badge">{{ w.points }} б.</span>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
+    <div class="mod-violations_lines">
+      <StatLine
+        label="Предупреждения"
+        :value="violations.totalWarnings"
+        :to="violations.totalWarnings > 0 ? warningsLog() : undefined"
+      />
+      <StatLine
+        label="Баны"
+        :value="violations.totalBans"
+        :to="violations.totalBans > 0 ? bansLog() : undefined"
+      />
     </div>
 
-    <!-- Bans summary + expandable list -->
-    <div class="mod-violations_group">
-      <button
+    <!-- The dialogs are the site's own (doc 4.2.4.1/4.2.4.2). -->
+    <div
+      v-if="permissions.canIssueWarning || permissions.canIssueBan"
+      class="mod-violations_actions"
+    >
+      <Button
+        v-if="permissions.canIssueWarning"
         type="button"
-        class="mod-violations_summary"
-        :aria-expanded="showBans"
-        @click="toggleBans()"
+        @click="openWarnDialog"
       >
-        <span>
-          Баны: <strong>{{ violations.totalBans }}</strong>
-        </span>
-        <span v-if="violations.isCurrentlyBanned" class="mod-active-ban">
-          (активный бан{{
-            violations.currentBanEndUtc
-              ? " до " + formatDate(violations.currentBanEndUtc)
-              : ", перманентный"
-          }})
-        </span>
-        <span
-          class="mod-expand-icon expand-marker"
-          :class="{ expanded: showBans }"
-          aria-hidden="true"
-        />
-      </button>
-
-      <div ref="bansZoneRef" class="expand-zone" v-bind="bansZoneBindings">
-        <div v-if="showBans" class="mod-violations_list">
-          <secondary-text v-if="loadingBans">Загрузка...</secondary-text>
-          <template v-else-if="bansList">
-            <secondary-text v-if="bansList.length === 0">
-              Нет банов
-            </secondary-text>
-            <div
-              v-for="(b, bIndex) in bansList"
-              :key="bIndex"
-              class="mod-violation-item"
-              :class="{ 'mod-violation-active': b.isActive }"
-            >
-              <div class="mod-violation-item_header">
-                <secondary-text>{{
-                  formatDateFull(b.startedUtc)
-                }}</secondary-text>
-                <span class="mod-ban-type">{{ b.type }}</span>
-                <span v-if="b.expiresUtc">
-                  до {{ formatDateFull(b.expiresUtc) }}
-                </span>
-              </div>
-            </div>
-          </template>
-        </div>
-      </div>
-    </div>
-
-    <!-- Action buttons — open the spec-compliant dialogs (doc 4.2.4.1/4.2.4.2) -->
-    <div class="mod-violations_actions">
-      <Button v-if="permissions.canIssueWarning" @click="openWarnDialog">
-        Вынести предупреждение
+        Выдать предупреждение
       </Button>
-
-      <Button v-if="permissions.canIssueBan" @click="openBanDialog">
-        Забанить
+      <Button
+        v-if="permissions.canIssueBan"
+        type="button"
+        @click="openBanDialog"
+      >
+        Выдать бан
       </Button>
     </div>
-  </div>
+  </section>
 </template>
 
 <style scoped lang="sass">
-.mod-section
-  margin-bottom: $medium
-
-.mod-section_title
-  margin: 0 0 $small 0
-  color: $heading
-
-.mod-violations_group
-  margin-bottom: $small
-
-.mod-violations_summary
-  width: 100%
-  box-sizing: border-box
-  border: none
-  background: none
-  font: inherit
-  color: inherit
-  text-align: left
-  cursor: pointer
-  padding: $minor 0
+// The rhythm of the profile's stat groups: $minor between the lines.
+.mod-violations_lines
   display: flex
-  align-items: baseline
-  gap: $small
-  &:hover
-    color: $link-hover
-
-.mod-expand-icon
-  font-size: $tertiary-font-size
-
-.mod-warning-points
-  color: $accent-red
-  font-size: $secondary-font-size
-
-.mod-active-ban
-  color: $accent-red
-  font-size: $secondary-font-size
-  font-weight: bold
-
-.mod-violations_list
-  padding-left: $medium
-  margin-bottom: $small
-
-.mod-violation-item
-  padding: $small
-  border-bottom: 1px solid $bg-element-accent
-  &:last-child
-    border-bottom: none
-
-.mod-violation-active
-  background: $bg-highlight-yellow
-
-.mod-violation-item_header
-  display: flex
-  align-items: baseline
-  gap: $small
-  margin-bottom: $minor
-
-.mod-violation-item_text
-  white-space: pre-wrap
-  word-break: break-word
-
-.mod-warning-badge
-  font-size: $secondary-font-size
-  font-weight: bold
-  color: $accent-red
-
-.mod-ban-type
-  font-size: $secondary-font-size
-  font-weight: bold
-  color: $accent-red
+  flex-direction: column
+  align-items: flex-start
+  gap: $minor
 
 .mod-violations_actions
   display: flex

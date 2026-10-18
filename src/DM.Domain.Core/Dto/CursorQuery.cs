@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace DM.Domain.Core.Dto;
 
@@ -21,6 +22,20 @@ public class CursorQuery
     /// Get messages nearest to specific timestamp (UTC)
     /// </summary>
     public DateTimeOffset? NearTimestampUtc { get; set; }
+
+    /// <summary>
+    /// Authors whose messages are left out of the page. Not a filter the caller
+    /// chooses: the service fills it from the reader's personal blacklist when
+    /// the reader switched on "Скрывать сообщения в чате" (HideMessages).
+    /// </summary>
+    public IReadOnlyCollection<Guid>? HiddenAuthorIds { get; set; }
+
+    /// <summary>
+    /// Messages created at or before this moment are left out of the page. Not a
+    /// filter the caller chooses: the service fills it from the moment the reader
+    /// cleared the history of the conversation for himself.
+    /// </summary>
+    public DateTimeOffset? HistoryClearedUtc { get; set; }
 
     /// <summary>
     /// Number of items to fetch (default: 50, max: 100)

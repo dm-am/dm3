@@ -121,7 +121,10 @@ describe("GameCharacter", () => {
     const { wrapper, announced } = render();
     await flushPromises();
 
-    expect(get).toHaveBeenCalledWith("char-1");
+    expect(get).toHaveBeenCalledWith("char-1", {
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
     // The name reaches the reader through the heading of the zone, which reads
     // "{game} | {character}" — the page announces the second half.
     expect(announced.value).toBe("Ронин");
@@ -143,6 +146,54 @@ describe("GameCharacter", () => {
 
     expect(wrapper.text()).toContain("Не удалось загрузить персонажа");
     expect(wrapper.text()).toContain("Повторить");
+  });
+
+  /**
+   * The card above is the one carrier of a failed read, and the response
+   * interceptor used to raise a plate over it saying the same thing — on a 500
+   * the identical sentence, since both read it out of the same problem
+   * document. The read says on the way out that this page answers for it, which
+   * is the only way the interceptor can know; a page without the card would
+   * have been left blank, with a plate in the corner explaining nothing.
+   *
+   * Asserted on the request rather than on the toast, because that is where the
+   * decision is: the interceptor lives below the mock this suite installs.
+   */
+  it("takes the refusal of the read over from the interceptor", async () => {
+    const get = vi.spyOn(gameApi, "getCharacter").mockResolvedValue({
+      error: { status: 403, title: "Персонаж скрыт мастером" },
+    } as never);
+
+    const { wrapper } = render();
+    await flushPromises();
+
+    expect(get).toHaveBeenCalledWith("char-1", {
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
+    // And the reason the server named is what the card reads, not a sentence
+    // of the page's own.
+    expect(wrapper.text()).toContain("Персонаж скрыт мастером");
+  });
+
+  // The wait comes over with the refusal, so the card has to say what the plate
+  // would have: the seconds the server asked for. The title the API sends with
+  // a rate limit carries no number.
+  it("names the wait on the card when the read is rate limited", async () => {
+    vi.spyOn(gameApi, "getCharacter").mockResolvedValue({
+      error: {
+        status: 429,
+        title: "Слишком много запросов",
+        retryAfterSeconds: 30,
+      },
+    } as never);
+
+    const { wrapper } = render();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Слишком много попыток, попробуйте через 30 секунд",
+    );
   });
 
   it("leads back to the roster of the game", async () => {

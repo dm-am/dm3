@@ -97,13 +97,16 @@ defineEmits<{
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
 
+// The wrapper draws the disabled state of the whole control, the list and its
+// chevron together: the site's half opacity and its hatch (+disabled-hatch),
+// which a native <select> cannot carry itself because it renders no layer of
+// its own. The radius is the field's, so the hatch follows its corners.
 .select-control
   position: relative
   display: block
   width: 100%
-
-  &.disabled
-    opacity: $disabled-opacity
+  border-radius: $border-radius
+  +disabled-hatch(".disabled")
 
 .select-input
   width: 100%
@@ -111,13 +114,17 @@ defineEmits<{
   cursor: pointer
   +input()
 
-  // Reserves the chevron's box. Overrides the padding shorthand from
+  // Reserves the chevron's box: the chevron's 14 and its 8 from the edge, and
+  // one more step of 8 before the text. Overrides the padding shorthand from
   // +input(), so it must come after the mixin; the bare & block keeps it a
   // later same-specificity rule under CSS ordering semantics.
   &
-    padding-right: $control-height
+    padding-right: $small * 2 + 14px
 
+  // The wrapper dims the control once; dimmed here as well, the list would
+  // stand at a quarter.
   &:disabled
+    opacity: 1
     cursor: default
 
 .select-chevron

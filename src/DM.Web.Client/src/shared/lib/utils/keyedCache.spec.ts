@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createKeyedCache, stableCacheKey } from "./keyedCache";
+import {
+  createFreshness,
+  createKeyedCache,
+  stableCacheKey,
+  startStopwatch,
+} from "./keyedCache";
 
 describe("createKeyedCache", () => {
   afterEach(() => {
@@ -108,6 +113,96 @@ describe("createKeyedCache", () => {
 
     expect(cache.isStale("missing")).toBe(false);
     expect(cache.getStale("missing")).toBeUndefined();
+  });
+});
+
+/**
+ * The clock of the cache without the cache: a caller that holds the answer
+ * itself and only needs to know whether it is still worth keeping.
+ */
+describe("createFreshness", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * The question a caller actually asks is "may I skip this read", and isStale
+   * cannot answer it: it says false for something fresh and false again for
+   * something never read at all. A caller reading that as "leave it alone"
+   * never makes the first read; one reading it as "go and read" makes a second
+   * read a moment after the first. So the two are separate answers.
+   */
+  it("tells fresh apart from never recorded", () => {
+    vi.useFakeTimers();
+    const freshness = createFreshness(1000);
+
+    expect(freshness.isFresh()).toBe(false);
+    expect(freshness.isStale()).toBe(false);
+
+    freshness.touch();
+    expect(freshness.isFresh()).toBe(true);
+    expect(freshness.isStale()).toBe(false);
+
+    vi.advanceTimersByTime(1001);
+    expect(freshness.isFresh()).toBe(false);
+    expect(freshness.isStale()).toBe(true);
+  });
+
+  it("is no longer fresh once it is aged out on demand", () => {
+    const freshness = createFreshness(1000);
+    freshness.touch();
+    freshness.expire();
+
+    expect(freshness.isFresh()).toBe(false);
+    expect(freshness.isStale()).toBe(true);
+  });
+
+  /**
+   * Forgetting goes back to the start rather than to "stale": a read that
+   * failed left nothing behind, and the next caller has to make it.
+   */
+  it("is no longer fresh once it is forgotten", () => {
+    const freshness = createFreshness(1000);
+    freshness.touch();
+    freshness.clear();
+
+    expect(freshness.isFresh()).toBe(false);
+    expect(freshness.isStale()).toBe(false);
+  });
+});
+
+/**
+ * The callers that measure elapsed time without keeping an answer: a debounce
+ * that may not be postponed past a ceiling, and a retry loop reporting how long
+ * it has been trying. Both used to subtract a `Date.now()` of their own from
+ * the clock, which is the arithmetic this module exists to hold once.
+ */
+describe("startStopwatch", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("counts from the moment it was started", () => {
+    vi.useFakeTimers();
+    const watch = startStopwatch();
+
+    expect(watch.elapsedMs()).toBe(0);
+    vi.advanceTimersByTime(1500);
+    expect(watch.elapsedMs()).toBe(1500);
+  });
+
+  it("counts a ceiling down and stops at nothing left", () => {
+    vi.useFakeTimers();
+    const watch = startStopwatch();
+
+    vi.advanceTimersByTime(1500);
+    expect(watch.remainingMs(10000)).toBe(8500);
+
+    // Past the ceiling there is no time left rather than negative time: a
+    // caller handing this to setTimeout would otherwise have to clamp it, and
+    // the one that forgot is the bug this replaces.
+    vi.advanceTimersByTime(10000);
+    expect(watch.remainingMs(10000)).toBe(0);
   });
 });
 

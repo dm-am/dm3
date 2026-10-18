@@ -1,0 +1,199 @@
+// The surface a window of the site stands on: the card, the cross in its
+// corner, the heading in the site's own style, the row of two equal buttons at
+// its foot and the fields between them.
+//
+// Two windows draw it, and neither draws it for the other. The vue-final-modal
+// tier (shared/ui/Layout/Dialog.vue) carries the forms; the confirmation
+// (shared/ui/ConfirmDialog) rolls its own backdrop because it is opened by a
+// flag and not by useModal. What they have in common lives here once, so the
+// two cannot drift apart the way the form window and the confirmation had: one
+// with a 16px frame, a grey footer and no cross, the other a guest card. Both
+// are the guest card now (owner's call, 21 September 2026).
+//
+// Mixins only, no rules, like _Surfaces.sass: a module that emits is emitted
+// again into every stylesheet that uses it.
+//
+// The numbers are the guest card's (AuthSurface.sass: .auth-card, .auth-close,
+// .auth-label, .auth-field, $auth-control-height). They are written out here
+// and not read from there, because that sheet emits: a @use of it would bring
+// the whole guest language into each window's stylesheet. dialogSurface.spec.ts
+// holds the two in step.
+
+@use "Themes" as *
+@use "Variables" as *
+
+/// The gutter on every side of the card, the guest card's three steps of 8.
+$dialog-gutter: 24px
+
+/// Height of a control in a window: a field and each button of the row. It is
+/// the guest's control and not $control-height (38px): a window holds a few
+/// fields and two buttons, and the target is a thumb's rather than a toolbar's.
+$dialog-control-height: 52px
+
+/// The measures. 580 is the window with a form. 920 is the window with the
+/// BBCode editor: its toolbar and the [bbcode]/wysiwyg switch need 828px to
+/// stand in one row, and 920 less two gutters leaves 872. 352 is the
+/// confirmation, the guest's compact card.
+$dialog-width: 580px
+$dialog-width-editor: 920px
+$dialog-width-compact: 352px
+
+/// The cross: its side, how far it stands from the corner, and its two bars.
+$dialog-close-size: 32px
+$dialog-close-inset: 10px
+$dialog-close-bar: 14px
+
+/// What a heading leaves free for the cross. The cross ends 10px from the edge
+/// and is 32px wide, so it reaches 18px into the content box; the gutter
+/// clears that by 6.
+$dialog-close-reserve: $dialog-gutter
+
+/// Type of a field: the caption over it and what is typed into it. 15px is the
+/// guest surface's step between the site's 16 and 14 ($auth-font-size).
+$dialog-field-font-size: 15px
+
+/// How far into a field its text starts ($auth-field-inset).
+$dialog-field-inset: 14px
+
+/// The space over and under the text of a multi-line field, the guest's own
+/// (.auth-field textarea). Its height comes from the rows it is given.
+$dialog-textarea-padding: 13px
+
+/// The distance from one field to the next, and from a field to the row of
+/// buttons.
+$dialog-field-step: $medium
+
+/// A refusal or a hint under a field starts this far below it. It holds no
+/// place in advance: a line that arrives moves what stands under it, and the
+/// window grows by it.
+$dialog-message-gap: 6px
+
+/// The card: the page's own fill, the gutter on every side, the site's radius,
+/// and neither a frame nor a shadow, because a card standing over a dimmed page
+/// takes its edge from the dimming. The width is the caller's; the cap is the
+/// one the dialog tier keeps, since on a 375px screen an uncapped card runs off
+/// both edges.
+=dialog-card
+  position: relative
+  box-sizing: border-box
+  max-width: calc(100vw - #{$medium} * 2)
+  padding: $dialog-gutter
+  background-color: $bg-page
+  border-radius: $border-radius
+
+/// The cross of the guest dialog, in the same corner and drawn out of the same
+/// two bars rather than typed: a typographic cross is thinner than the marks it
+/// stands beside, and how much thinner depends on which of the site's fonts
+/// actually loaded.
+=dialog-close
+  position: absolute
+  top: $dialog-close-inset
+  right: $dialog-close-inset
+  width: $dialog-close-size
+  height: $dialog-close-size
+  padding: 0
+  color: $text-muted
+  background: none
+  border: 0
+  border-radius: $border-radius
+  cursor: pointer
+
+  &:hover
+    color: $text
+
+  // Shut while a request is in flight, and still in the tab order: it carries
+  // aria-disabled and not the attribute, because it is where the caret waits
+  // once the pressed button turns disabled, and a card whose every control
+  // took the attribute would have no place left to hold focus. Dimmed by the
+  // site's token for a control that does not answer; the hover gives no hint
+  // of an answer either.
+  &[aria-disabled="true"]
+    opacity: $disabled-opacity
+    cursor: default
+
+    &:hover
+      color: $text-muted
+
+  // The site's ring, following the button's own rounded edge instead of
+  // standing outside it: the cross sits in the corner of the card, and an
+  // outline there is clipped by the card's edge.
+  &:focus-visible
+    outline: none
+    box-shadow: 0 0 0 2px $link
+
+  &::before,
+  &::after
+    content: ""
+    position: absolute
+    left: 50%
+    top: 50%
+    width: $dialog-close-bar
+    height: 2px
+    margin: -1px 0 0 ($dialog-close-bar * -.5)
+    border-radius: 1px
+    background-color: currentColor
+
+  &::before
+    transform: rotate(45deg)
+
+  &::after
+    transform: rotate(-45deg)
+
+/// The heading of a window, in the site's style: the 16px of the body, bold,
+/// in capitals with the site's letter spacing and the colour of a heading.
+/// Where it stands, left or centred, is the window's to say.
+=dialog-title
+  margin: 0
+  font-size: $font-size
+  font-weight: 700
+  text-transform: uppercase
+  letter-spacing: .5px
+  color: $heading
+
+/// The refusal of a step: what the server said no to, in a red line of 14
+/// right above the row of buttons, in the window and not in a plate over a
+/// page whose window is gone. It holds no place in advance, as the line under a
+/// field holds none: a window that was never refused stands exactly as it
+/// stood, and a refusal moves the row down by its line. The one red a window
+/// carries, with the line under a field; the buttons never take it.
+=dialog-refusal
+  margin: 0
+  color: $accent-red
+  font-size: $secondary-font-size
+  line-height: 1.4
+
+/// The row at the foot of a window: the site's own buttons, two equal halves
+/// across the card at the window's control height. A zero basis and not the
+/// "auto" one: the two captions differ in length, and a basis taken from the
+/// content would leave the halves unequal.
+///
+/// The caption is the guest button's 16 ($font-size, .auth-button) and not the
+/// page's 14: the windows are drawn after the guest card, and a caption of 14
+/// in a button of 52 read small beside the fields of 15 over it (owner's
+/// standard, 28 September 2026: the controls of a window differ from a page's
+/// in their measure alone). The weight stays the button's own, bold on the
+/// main one.
+///
+/// A half is as wide as the row makes it and not as its caption asks, so the
+/// caption is the one that has to give. On a phone "Выдать предупреждение"
+/// asked 155px of a half that held 134, and the site's button keeps a caption
+/// on one line: it stood cut at both edges. Here it wraps instead, at the
+/// leading of the text around it, and two lines of it stand well inside 52.
+/// The side padding comes down to one step for the same reason: it is what
+/// sizes a button round its caption, and in a half of fixed width all it still
+/// does is keep the longest word off the frame. A caption that fits its half
+/// stands exactly where it stood, since it is centred either way.
+/// dialogSurface.spec.ts measures every caption of both windows at the width
+/// of a phone, 360, where a half leaves its caption 118.
+=dialog-actions
+  display: flex
+  gap: $small
+
+  > *
+    flex: 1 1 0
+    min-width: 0
+    height: $dialog-control-height
+    padding: 0 $small
+    font-size: $font-size
+    white-space: normal
+    line-height: inherit

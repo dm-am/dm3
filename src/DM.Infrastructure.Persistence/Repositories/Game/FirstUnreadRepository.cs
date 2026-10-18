@@ -25,7 +25,7 @@ internal class FirstUnreadRepository : IFirstUnreadRepository
         return await _dbContext.Rooms
             .Where(r => r.GameId == gameId)
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
-            .OrderBy(r => r.OrderNumber)
+            .InGameOrder()
             .Select(r => r.RoomId)
             .ToListAsync();
     }
@@ -44,8 +44,8 @@ internal class FirstUnreadRepository : IFirstUnreadRepository
             roomId => lastReadTimes.TryGetValue(roomId, out var time) ? time : DateTime.MinValue);
 
         // The first room in reading order that has anything unread. The order is
-        // the caller's: GetAccessibleRoomIds sorts by OrderNumber, which is the
-        // order the rooms are shown in.
+        // the caller's: GetAccessibleRoomIds sorts by RoomOrder, the order the
+        // rooms are shown in.
         var room = roomIds
             .Select(id => summaries.GetValueOrDefault(id))
             .FirstOrDefault(summary => summary != null);
@@ -146,6 +146,80 @@ internal class FirstUnreadRepository : IFirstUnreadRepository
         };
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// The unread posts are the tail of the room: they are the ones written after a
+    /// moment, and the room is ordered by the moment first. So the first of them
+    /// stands right after the read ones, and its number is the count of those plus
+    /// one — ties on the timestamp included, since a tie is read or unread as a
+    /// whole. Ordered by (CreatedUtc, PostId) like the page it opens, so the post
+    /// named is the one the page shows at that number.
+    /// </remarks>
+    public async Task<FirstUnreadRoomPostResult> LocateInRoom(Guid roomId, DateTime lastRead)
+    {
+        // UTC by contract, and the implicit conversion would read an unspecified
+        // Kind as local time (see RoomSummaries).
+        var from = new DateTimeOffset(DateTime.SpecifyKind(lastRead, DateTimeKind.Utc));
+        var posts = _dbContext.Posts
+            .TagWith("DM.Game.RoomFirstUnread")
+            .Where(p => p.RoomId == roomId && !p.IsRemoved);
+
+        // Both counts in one statement: taken apart, a post written between them
+        // would move the number by one and could put the reader on the page before.
+        var counts = await posts
+            .GroupBy(p => p.RoomId)
+            .Select(g => new { Total = g.Count(), Unread = g.Count(p => p.CreatedUtc > from) })
+            .FirstOrDefaultAsync();
+        var total = counts?.Total ?? 0;
+        var unread = counts?.Unread ?? 0;
+
+        if (unread > 0)
+        {
+            var firstUnread = await posts
+                .Where(p => p.CreatedUtc > from)
+                .OrderBy(p => p.CreatedUtc)
+                .ThenBy(p => p.PostId)
+                .Select(p => p.PostId)
+                .FirstAsync();
+
+            return new FirstUnreadRoomPostResult
+            {
+                PostId = firstUnread,
+                PostNumber = total - unread + 1,
+                TotalUnreadCount = unread,
+                HasUnread = true
+            };
+        }
+
+        // Everything is read: the reader is put down at the end of the room.
+        var last = total == 0
+            ? null
+            : await posts
+                .OrderByDescending(p => p.CreatedUtc)
+                .ThenByDescending(p => p.PostId)
+                .Select(p => (Guid?)p.PostId)
+                .FirstAsync();
+
+        return new FirstUnreadRoomPostResult
+        {
+            PostId = last,
+            PostNumber = total,
+            TotalUnreadCount = 0,
+            HasUnread = false
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<DateTime?> GetLastOwnPostUtc(Guid roomId, Guid userId)
+    {
+        var last = await _dbContext.Posts
+            .TagWith("DM.Game.RoomLastOwnPost")
+            .Where(p => p.RoomId == roomId && p.AuthorId == userId && !p.IsRemoved)
+            .MaxAsync(p => (DateTimeOffset?)p.CreatedUtc);
+
+        return last?.UtcDateTime;
+    }
+
     /// <summary>
     /// One row per room that holds a post past its own lower bound.
     /// </summary>
@@ -203,9 +277,13 @@ internal class FirstUnreadRepository : IFirstUnreadRepository
 
     public async Task<FirstUnreadCommentResult?> FindFirstUnreadComment(Guid gameId, DateTime lastRead)
     {
+        // UTC by contract, as in LocateInRoom: the implicit conversion would read
+        // an unspecified Kind as local time, and a reader who never marked the
+        // discussion read would get a 500 on any host not set to UTC.
+        var from = new DateTimeOffset(DateTime.SpecifyKind(lastRead, DateTimeKind.Utc));
         var firstUnread = await _dbContext.Comments
             .Where(c => c.EntityId == gameId && !c.IsRemoved)
-            .Where(c => c.CreatedUtc > lastRead)
+            .Where(c => c.CreatedUtc > from)
             .OrderBy(c => c.CreatedUtc)
             .Select(c => new { c.CommentId, c.CreatedUtc })
             .FirstOrDefaultAsync();
@@ -219,7 +297,7 @@ internal class FirstUnreadRepository : IFirstUnreadRepository
 
         var totalUnread = await _dbContext.Comments
             .Where(c => c.EntityId == gameId && !c.IsRemoved)
-            .CountAsync(c => c.CreatedUtc > lastRead);
+            .CountAsync(c => c.CreatedUtc > from);
 
         return new FirstUnreadCommentResult
         {

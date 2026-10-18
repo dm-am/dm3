@@ -55,6 +55,13 @@ function load() {
   });
 }
 
+function editRoute(pubId: string) {
+  return {
+    name: "blog-publication-edit",
+    params: { id: blogId.value, pubId },
+  };
+}
+
 // Paging scrolls the feed back into view (not the page top)
 const feedRef = ref<HTMLElement | null>(null);
 function pagingAnchor(): HTMLElement | null {
@@ -108,21 +115,14 @@ useFetchData(
         :key="publication.id"
         class="feed-item"
       >
+        <!-- "Редактировать" is an action of the card's caption line, next to
+             the other actions and not on a row of its own under the card. -->
         <PublicationCard
           :publication="publication"
           :blog-id="blogId"
+          :edit-to="canManage ? editRoute(publication.id) : null"
           truncatable
         />
-        <div v-if="canManage" class="feed-item-actions">
-          <router-link
-            :to="{
-              name: 'blog-publication-edit',
-              params: { id: blogId, pubId: publication.id },
-            }"
-          >
-            Редактировать
-          </router-link>
-        </div>
       </div>
     </div>
 
@@ -171,16 +171,4 @@ useFetchData(
   display: flex
   flex-direction: column
   gap: $medium
-
-.feed-item-actions
-  margin-top: $tiny
-  text-align: right
-  font-size: $secondary-font-size
-
-  a
-    color: $link
-
-    &:hover
-      color: $link-hover
-      text-decoration: underline
 </style>

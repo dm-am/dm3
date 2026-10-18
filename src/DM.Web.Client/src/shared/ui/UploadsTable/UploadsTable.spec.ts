@@ -41,10 +41,10 @@ const PROFILE_COLUMNS: Column[] = [
 const MODERATION_COLUMNS: Column[] = [
   uploadPreviewColumn,
   uploadFileColumn,
-  { key: "uploader", label: "Загрузил", width: "18%" },
-  { key: "date", label: "Дата", width: "14%", hideOnMobile: true },
-  { key: "size", label: "Размер", width: "12%", align: "right" },
-  { key: "actions", label: "", width: "12%", align: "center" },
+  { key: "uploader", label: "Загрузил", width: "20%" },
+  { key: "date", label: "Дата", width: "16%" },
+  { key: "size", label: "Размер", width: "14%", align: "right" },
+  { key: "actions", label: "", width: "14%", align: "center" },
 ];
 
 const image: Upload = {
@@ -105,7 +105,7 @@ describe("UploadsTable", () => {
         '<td class="col col-preview align-center"><img src="https://files.example/portrait.png" alt="portrait.png" class="upload-thumb" loading="lazy"></td>',
         '<td class="col col-file align-left"><a href="https://files.example/portrait.png" target="_blank" rel="noopener" class="upload-name">portrait.png</a></td>',
         '<td class="col col-date align-left">01.05.2026</td>',
-        '<td class="col col-size align-right">200.0 КБ</td>',
+        '<td class="col col-size align-right">200,0 КБ</td>',
         '<td class="col col-actions align-center"><button type="button" class="delete-button"> Удалить </button></td>',
         "</tr>",
       ].join("\n"),
@@ -122,7 +122,7 @@ describe("UploadsTable", () => {
         '<td class="col col-preview align-center"><span class="upload-ext">ZIP</span></td>',
         '<td class="col col-file align-left"><a href="https://files.example/archive.zip" target="_blank" rel="noopener" class="upload-name">archive.zip</a></td>',
         '<td class="col col-date align-left">01.05.2026</td>',
-        '<td class="col col-size align-right">200.0 КБ</td>',
+        '<td class="col col-size align-right">200,0 КБ</td>',
         '<td class="col col-actions align-center"><button type="button" class="delete-button"> Удалить </button></td>',
         "</tr>",
       ].join("\n"),
@@ -139,8 +139,8 @@ describe("UploadsTable", () => {
         '<td class="col col-preview align-center"><img src="https://files.example/portrait.png" alt="portrait.png" class="upload-thumb" loading="lazy"></td>',
         '<td class="col col-file align-left"><a href="https://files.example/portrait.png" target="_blank" rel="noopener" class="upload-name">portrait.png</a></td>',
         '<td class="col col-uploader align-left"><span class="who">кто-то</span></td>',
-        '<td class="col col-date align-left hide-mobile">01.05.2026</td>',
-        '<td class="col col-size align-right">200.0 КБ</td>',
+        '<td class="col col-date align-left">01.05.2026</td>',
+        '<td class="col col-size align-right">200,0 КБ</td>',
         '<td class="col col-actions align-center"><button type="button" class="delete-button"> Удалить </button></td>',
         "</tr>",
       ].join("\n"),

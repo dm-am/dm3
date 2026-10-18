@@ -22,6 +22,7 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { dirname, join, relative } from "path";
 import { fileURLToPath } from "url";
 import { parse as parseSfc } from "vue/compiler-sfc";
+import { compileSass, ruleMap } from "@/shared/lib/testing/styles";
 
 const CLIENT_SRC = dirname(fileURLToPath(import.meta.url));
 const SKIP_DIRS = new Set(["node_modules", "dist", "coverage"]);
@@ -85,5 +86,24 @@ describe("the entity info table", () => {
       .filter((block) => block.body.join(" ") !== MIXIN)
       .map((block) => `${block.path}: ${block.body.join(" / ")}`);
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * A caption stands in one line, as wide as it is, at every width: a phone
+ * shows the table of the full version, and no width of the window lays it out
+ * another way.
+ */
+describe("a caption of the entity info table", () => {
+  const css = compileSass(
+    `@use "@/assets/styles/Tables" as *\n.info-table\n  ${MIXIN}`,
+  );
+
+  it("stands in one line as wide as it is, at every width", () => {
+    expect(ruleMap(css).get(`${SELECTOR} th`)).toMatchObject({
+      width: "1%",
+      "white-space": "nowrap",
+    });
+    expect(css).not.toMatch(/@media/);
   });
 });

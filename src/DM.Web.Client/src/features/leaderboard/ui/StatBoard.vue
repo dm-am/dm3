@@ -99,11 +99,20 @@ function formatScore(score: number): string {
 @use "@/assets/styles/Skeleton" as *
 
 // Dashed content card with the site element background (poll/topic idiom).
+//
+// A board is as wide as the column of the grid it stands in and never wider:
+// a name longer than a whole line of a narrow board breaks at its edge, the
+// way a login breaks in running text everywhere on the site (UserLink), and
+// does not push the board, the grid and the page past the middle column. A
+// name that fits keeps its line: break-word, unlike anywhere, gives the words
+// no new places to break and leaves the board's measure alone.
 .stat-board
+  min-width: 0
   border: 1px dashed $border
   background-color: $bg-element
   padding: $medium
   box-sizing: border-box
+  overflow-wrap: break-word
 
 // Plain bold body-text heading (no heading colour/size, never brown).
 .stat-board-title
@@ -125,8 +134,12 @@ function formatScore(score: number): string {
     font-weight: bold
 
 // Score "[+N]" — muted brackets, green value (positive only).
+// The score never leaves the name it belongs to: the space before "[" is the
+// score's own, and unbreakable, so a narrow board moves the last word of the
+// name down with it instead of opening a line with "[+16]".
 .score
   color: $text-muted
+  white-space: nowrap
 
 .score-pos
   color: $accent-green
@@ -136,20 +149,23 @@ function formatScore(score: number): string {
   align-items: center
   height: 1.6em
 
+// A bar is as long as it was on a wide card and never longer than its share
+// of a narrow one. Written as min() rather than as a px width under a max-width
+// in percent: a grid sizes a column of cards by the widest thing in them, and
+// the px width counted there while the percentage did not. The three cards of
+// the statistics page stood 858px wide on their bars alone, the column is 556px
+// at 1280, and the page went sideways until the boards arrived.
 .skeleton-bar
   display: inline-block
   height: 0.85em
   +skeleton-shimmer
 
   &--w1
-    width: 220px
-    max-width: 85%
+    width: min(220px, 85%)
 
   &--w2
-    width: 160px
-    max-width: 65%
+    width: min(160px, 65%)
 
   &--w3
-    width: 190px
-    max-width: 75%
+    width: min(190px, 75%)
 </style>

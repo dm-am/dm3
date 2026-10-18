@@ -154,7 +154,6 @@ internal sealed partial class DataSeeder
                 PremoderationStatus = template.Premod,
                 MentorId = isNewbieOwner ? mentor.UserId : null,
                 DraftVisibility = template.DraftVisibility,
-                CommentsEnabled = true,
                 PublicationCount = 0,
                 CommentCount = 0,
                 IsRemoved = false,
@@ -236,7 +235,6 @@ internal sealed partial class DataSeeder
                     CreatedUtc = pubCreatedUtc,
                     IsPublished = true,
                     PublishedUtc = pubCreatedUtc,
-                    CommentsEnabled = true,
                     ViewCount = _random.Next(10, 500),
                     CommentCount = 0,
                     IsRemoved = false

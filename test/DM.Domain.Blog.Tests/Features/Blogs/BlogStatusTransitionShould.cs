@@ -13,6 +13,7 @@ using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 using DM.Domain.Blog.Features.Subscriptions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
@@ -21,6 +22,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Testing;
+using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using NSubstitute;
@@ -80,6 +82,7 @@ public class BlogStatusTransitionShould : UnitTestBase
         _service = new BlogService(
             _repository,
             blacklistRepository,
+            Mock<IUserBlacklistChecker>(),
             userLookupService,
             subscriptionService,
             unreadCountersRepository,
@@ -91,7 +94,8 @@ public class BlogStatusTransitionShould : UnitTestBase
             updateRubricValidator,
             guidFactory,
             dateTimeProvider,
-            _eventProducer);
+            _eventProducer,
+            new TagNamesAsTyped());
     }
 
     private Guid SetupBlog(
@@ -463,7 +467,10 @@ public class BlogStatusTransitionShould : UnitTestBase
     public async Task RefuseAHiddenBlogBeforeTheStateMachineSeesIt(ModuleStatus status)
     {
         HideEveryBlogFromTheCaller();
-        var blogId = SetupBlog(status, draftVisibility: DraftVisibility.Private);
+        // Premoderation hides a blog whatever its status, so it can hide an active
+        // one; a private draft is hidden only while it is a draft.
+        var blogId = SetupBlog(status, draftVisibility: DraftVisibility.Private,
+            premoderationStatus: PremoderationStatus.AwaitingEdits);
 
         var refusal = await RefusedStart(blogId.ToString());
 

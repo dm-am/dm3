@@ -55,7 +55,6 @@ public class RateLimitPolicyBindingShould
         ["Account.Availability.AvailabilityController.CheckEmail"] = RateLimitPolicies.EmailCheck,
         ["Account.Availability.AvailabilityController.CheckUsername"] = RateLimitPolicies.UsernameCheck,
         ["Account.Credentials.CredentialsController"] = RateLimitPolicies.Auth,
-        ["Account.Deactivation.DeactivationController"] = RateLimitPolicies.Auth,
         ["Account.Recovery.RecoveryController"] = RateLimitPolicies.Auth,
         ["Account.Registration.RegistrationController"] = RateLimitPolicies.Auth,
         // The second factor is counted per endpoint because it is counted per two
@@ -90,11 +89,14 @@ public class RateLimitPolicyBindingShould
         ["Game.Games.GameController.PostGamePremoderation"] = RateLimitPolicies.Default,
         ["Game.Games.GameController.PostGameStatus"] = RateLimitPolicies.Default,
         ["Game.Games.GameController.PostResetRecruitmentDate"] = RateLimitPolicies.Default,
+        ["Game.Games.GameController.PutGameAttributeSchema"] = RateLimitPolicies.Default,
         ["Game.Notepads.GameNotepadController"] = RateLimitPolicies.Default,
         ["General.Tickets.TicketIntakeController.CreateTicketIntake"] = RateLimitPolicies.Auth,
+        // The guest writes in his ticket by the token alone, so the budget is the
+        // address budget of the tracking page, shared with reading it.
+        ["General.Tickets.TicketIntakeController.CreateTrackedTicketComment"] = RateLimitPolicies.Auth,
         ["General.Tickets.TicketIntakeController.TrackTicketIntake"] = RateLimitPolicies.Auth,
         ["General.Upload.UploadController.DirectUpload"] = RateLimitPolicies.Uploads,
-        ["Messaging.Chats.ChatController.CanStartChat"] = RateLimitPolicies.Sliding,
         ["Personal.Blacklists.BlacklistController"] = RateLimitPolicies.Default,
         ["Personal.Invitations.InvitationController"] = RateLimitPolicies.Default,
         ["Personal.Notepads.NotepadController"] = RateLimitPolicies.Default,
@@ -104,6 +106,7 @@ public class RateLimitPolicyBindingShould
         ["Personal.Profiles.ProfileController"] = RateLimitPolicies.Default,
         ["Personal.Subscriptions.SubscriptionController"] = RateLimitPolicies.Default,
         ["Personal.Webhooks.WebhookController.HandleWebhook"] = RateLimitPolicies.Sliding,
+        ["Moderation.Tickets.TicketController.CreateTicketComment"] = RateLimitPolicies.Default,
         ["General.Search.ForumSearchController.SearchForum"] = RateLimitPolicies.Sliding,
         ["General.Search.MessageSearchController.SearchMessages"] = RateLimitPolicies.Sliding,
     };

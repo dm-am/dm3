@@ -33,6 +33,7 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
 
         response.RootElement.GetProperty("status").GetInt32().Should().Be(500);
         response.RootElement.GetProperty("title").GetString().Should().Be("Ошибка сервера");
+        response.RootElement.GetProperty("detail").GetString().Should().NotContain("Ошибка сервера");
         response.RootElement.GetProperty("detail").GetString().Should().Contain(_correlationId.ToString());
         response.RootElement.ToString().Should().NotContain("42P01").And.NotContain("secret");
     }

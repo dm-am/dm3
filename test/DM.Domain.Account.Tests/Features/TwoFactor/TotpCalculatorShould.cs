@@ -10,7 +10,7 @@ namespace DM.Domain.Account.Tests.Features.TwoFactor;
 /// The arithmetic of RFC 6238, and the window it is read through.
 /// </summary>
 /// <remarks>
-/// AC-12: a code one step either side is accepted, a code two steps away is not.
+/// A code one step either side is accepted, a code two steps away is not.
 /// Three codes out of a million give one attempt a chance of three in a million,
 /// which is nothing beside the attempt limits; a wider window starts to matter.
 /// </remarks>
@@ -54,7 +54,7 @@ public class TotpCalculatorShould
     /// <remarks>
     /// Without it a verifier can only say yes or no, and "this exact code has
     /// already been used" becomes unanswerable - which is the whole of the replay
-    /// guard (INV-6).
+    /// guard.
     /// </remarks>
     [Fact]
     public void ReturnTheStepTheCodeWasComputedFor()

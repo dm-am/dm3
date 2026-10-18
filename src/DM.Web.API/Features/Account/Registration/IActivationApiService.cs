@@ -26,10 +26,4 @@ public interface IActivationApiService
     /// <param name="httpContext">HTTP context for setting auth cookie</param>
     /// <returns>Activated user wrapped in envelope</returns>
     Task<Envelope<User>> Activate(Guid token, ActivationRequest request, HttpContext httpContext);
-
-    /// <summary>
-    /// Resend activation email for pending registration
-    /// </summary>
-    /// <param name="resendActivation">Email address</param>
-    Task ResendActivation(ResendActivation resendActivation);
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { useGuardedRequest } from "./useGuardedRequest";
+import { shownOnPage, useGuardedRequest } from "./useGuardedRequest";
 import type { ApiResult, GeneralError } from "@/shared/api/models/common";
+import { announceWorded } from "@/shared/lib/errors/generalPlate";
 
 /** A fetcher whose response the test releases by hand. */
 function deferred<T>() {
@@ -189,5 +190,85 @@ describe("useGuardedRequest", () => {
     // A scope change (another profile, another game) drops the previous
     // answer and the previous complaint about it.
     expect(request.error.value).toBeNull();
+  });
+});
+
+/**
+ * Every screen that loads through here shows `error` in its own box beside the
+ * content. The plate the interceptor held for the same failure said it a
+ * second time in the corner, "Запрос не выполнен: ошибка сервера" over "Не
+ * удалось загрузить топики [Повторить]".
+ */
+describe("the plate of a failed load", () => {
+  const problem = (status: number): GeneralError => ({
+    type: "",
+    title: "",
+    status,
+    traceId: "t",
+  });
+  const endOfTask = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("is taken down: the screen says the failure in its own box", async () => {
+    const failure = problem(500);
+    const raise = vi.fn();
+    const request = useGuardedRequest({ message: "Не удалось загрузить" });
+
+    await request.run(
+      async () => {
+        announceWorded(failure, raise);
+        return { data: null, error: failure };
+      },
+      () => {},
+    );
+    await endOfTask();
+
+    expect(request.error.value).toBe("Не удалось загрузить");
+    expect(raise).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 0])("stays up for status %i", async (status) => {
+    const failure = problem(status);
+    const raise = vi.fn();
+    const request = useGuardedRequest({ message: "Не удалось загрузить" });
+
+    await request.run(
+      async () => {
+        announceWorded(failure, raise);
+        return { data: null, error: failure };
+      },
+      () => {},
+    );
+    await endOfTask();
+
+    expect(raise).toHaveBeenCalledTimes(1);
+  });
+
+  // Two requests of one load land in two tasks. The plate of the first is up
+  // by the time the second answers, so each is taken over as it lands.
+  it("is taken down for each half of a load that waits on two", async () => {
+    const first = problem(403);
+    const raiseFirst = vi.fn();
+    const request = useGuardedRequest({ message: "Не удалось загрузить" });
+
+    await request.run(
+      async () => {
+        const [a] = await Promise.all([
+          Promise.resolve({ data: null, error: first })
+            .then((answer) => {
+              announceWorded(first, raiseFirst);
+              return answer;
+            })
+            .then(shownOnPage),
+          endOfTask()
+            .then(() => ({ data: 1, error: null }))
+            .then(shownOnPage),
+        ]);
+        return { data: null, error: a.error };
+      },
+      () => {},
+    );
+    await endOfTask();
+
+    expect(raiseFirst).not.toHaveBeenCalled();
   });
 });

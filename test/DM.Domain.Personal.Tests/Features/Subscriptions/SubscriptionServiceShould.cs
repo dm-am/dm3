@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,119 +20,64 @@ namespace DM.Domain.Personal.Tests.Features.Subscriptions;
 
 /// <summary>
 /// The generic subscription endpoint takes a target type and an identifier and
-/// belongs to no module, so the rules the modules put on their own targets are
-/// exactly what it cannot know by itself.
+/// belongs to no module.
 /// </summary>
 /// <remarks>
-/// It wrote the row without asking. A game's blacklist refuses a join, and a
-/// request naming that game by type and identifier walked past the refusal: the
-/// same table, the same TargetType.Game, the roster and GameRole.Reader, the
-/// private comment thread open. The module's own handle checked; this one was a
-/// second door to the same write with no lock on it.
+/// It used to ask every module for a rule of its own on being subscribed to,
+/// and the one rule there was is gone: the blacklist
+/// of a game or a blog closes writing, and following a game or a blog is
+/// reading. The two doors to the same row - this endpoint and the module's own
+/// handle - now agree by having nothing to ask, and the endpoint must not grow a
+/// second answer again. The behaviour with a real list behind both doors is in
+/// BlacklistRuleShould.
 /// </remarks>
 public class SubscriptionServiceShould : UnitTestBase
 {
-    /// <summary>
-    /// Hand-written rather than mocked: what is under test is which guard the
-    /// service picks and whether it obeys the answer, so the guard has to be a
-    /// thing with behaviour and a call count, not a configured expectation.
-    /// </summary>
-    private sealed class Guard : ISubscriptionTargetGuard
-    {
-        private readonly string? _refusal;
-
-        public Guard(SubscriptionTargetType targetType, string? refusal)
-        {
-            TargetType = targetType;
-            _refusal = refusal;
-        }
-
-        public SubscriptionTargetType TargetType { get; }
-
-        public int Asked { get; private set; }
-
-        public Task<string?> Refusal(Guid targetId, Guid subscriberId, CancellationToken ct = default)
-        {
-            Asked++;
-            return Task.FromResult(_refusal);
-        }
-    }
-
     private readonly ISubscriptionRepository _repository;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IUserLookupService _userLookupService;
+    private readonly SubscriptionService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
     private readonly Guid _targetId = Guid.NewGuid();
 
     public SubscriptionServiceShould()
     {
         _repository = Mock<ISubscriptionRepository>();
-        _userLookupService = Mock<IUserLookupService>();
-        _identityProvider = Mock<IIdentityProvider>();
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        var identityProvider = Mock<IIdentityProvider>();
+        var guidFactory = Mock<IGuidFactory>();
+        var dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _identityProvider.Current.Returns(Identities.User(_currentUserId, "subscriber"));
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        identityProvider.Current.Returns(Identities.User(_currentUserId, "subscriber"));
+        guidFactory.Create().Returns(Guid.NewGuid());
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+
+        _service = new SubscriptionService(
+            _repository,
+            Mock<IUserLookupService>(),
+            identityProvider,
+            guidFactory,
+            dateTimeProvider);
     }
 
-    private SubscriptionService ServiceGuardedBy(params ISubscriptionTargetGuard[] guards) =>
-        new(
-            _repository,
-            _userLookupService,
-            _identityProvider,
-            _guidFactory,
-            _dateTimeProvider,
-            guards);
+    [Theory]
+    [InlineData(SubscriptionTargetType.Game)]
+    [InlineData(SubscriptionTargetType.Blog)]
+    public async Task WriteTheSubscriptionWithoutAskingTheTargetsBlacklist(SubscriptionTargetType targetType)
+    {
+        await _service.SubscribeAsync(targetType, _targetId);
+
+        await _repository.Received(1).CreateAsync(
+            Arg.Is<CreateSubscription>(s =>
+                s.SubscriberId == _currentUserId && s.TargetType == targetType && s.TargetId == _targetId),
+            Arg.Any<CancellationToken>());
+    }
 
     [Fact]
-    public async Task RefuseWhatTheTargetRefuses()
+    public async Task StillRefuseASubscriptionToOneself()
     {
-        var guard = new Guard(SubscriptionTargetType.Game, RefusalMessage.BlacklistedFromGame);
-        var service = ServiceGuardedBy(guard);
-
-        var act = async () => await service.SubscribeAsync(SubscriptionTargetType.Game, _targetId);
+        var act = async () => await _service.SubscribeAsync(SubscriptionTargetType.User, _currentUserId);
 
         (await act.Should().ThrowAsync<HttpException>())
             .Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        guard.Asked.Should().Be(1, "the target is asked before the row is written, not after");
-        // The row is the thing the rule exists to prevent.
         await _repository.DidNotReceive().CreateAsync(
-            Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task WriteTheSubscriptionTheTargetAllows()
-    {
-        var guard = new Guard(SubscriptionTargetType.Game, refusal: null);
-        var service = ServiceGuardedBy(guard);
-
-        await service.SubscribeAsync(SubscriptionTargetType.Game, _targetId);
-
-        guard.Asked.Should().Be(1);
-        await _repository.Received(1).CreateAsync(
-                Arg.Is<CreateSubscription>(s =>
-                    s.TargetType == SubscriptionTargetType.Game && s.TargetId == _targetId),
-                Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task AskTheGuardThatSpeaksForTheTargetTypeAndNoOther()
-    {
-        // A guard answers for one type. Asking the wrong one would either refuse
-        // subscriptions that are fine or, worse, let through the ones it was
-        // written to stop.
-        var gameGuard = new Guard(SubscriptionTargetType.Game, RefusalMessage.BlacklistedFromGame);
-        var service = ServiceGuardedBy(gameGuard);
-
-        await service.SubscribeAsync(SubscriptionTargetType.Blog, _targetId);
-
-        gameGuard.Asked.Should().Be(0, "a blog is not a game");
-        // A type with no rule of its own is not refused by another type's rule.
-        await _repository.Received(1).CreateAsync(
             Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>());
     }
 }

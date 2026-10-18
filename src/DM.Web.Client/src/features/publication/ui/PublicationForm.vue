@@ -18,6 +18,8 @@ defineProps<{
   action: string;
   cancelLabel: string;
   draftKey?: string;
+  /** Why the last submit was refused, said over the footer of the form. */
+  refusal?: string | null;
 }>();
 
 defineEmits<{ submit: []; cancel: [] }>();
@@ -40,6 +42,7 @@ defineExpose({ clearDraft: () => editor.value?.clearDraft() });
     :loading="loading"
     :action="action"
     :cancel="cancelLabel"
+    :refusal="refusal"
     @submit="$emit('submit')"
     @cancel="$emit('cancel')"
   >

@@ -86,6 +86,8 @@ public static class SortVocabulary
             ],
             // GET /v1/posts — PostRepository.GetRatedPosts
             [typeof(PostsQuery)] = ["rating", "created", "lastreview", "reviewcount"],
+            // GET /v1/rooms/{id}/posts — PostRepository.SortRoomPosts
+            [typeof(RoomPostsQuery)] = ["created", "rating", "reviewcount", "lastreview"],
             // GET /v1/users names its sort field with the UserSort enum, which
             // model binding already refuses an unknown value for; the field is
             // spelled sortBy like the thirteen lists beside it (API_DESIGN.md),

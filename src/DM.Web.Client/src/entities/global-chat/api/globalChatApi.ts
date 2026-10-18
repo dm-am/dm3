@@ -2,7 +2,6 @@ import type {
   CursorEnvelope,
   Envelope,
   ListEnvelope,
-  QuoteSource,
 } from "@/shared/api/models/common";
 import type {
   GlobalChatMessage,
@@ -119,23 +118,6 @@ export default new (class GlobalChatApi {
       undefined,
       RENDER_AUDIENCE.AuthorEdit,
     );
-  }
-
-  /**
-   * Fetch the markup of a quotation of a global chat message.
-   *
-   * The server composes the whole tag, author included, already filtered for
-   * whoever is asking. The client does not build one out of the rendered page:
-   * that conversion is lossy, and the source of somebody else's message is not
-   * something the browser holds.
-   *
-   * Addressed under global-chat, for the reason the neighbours above are: the
-   * private-message endpoint composes the quotation from the read that asks
-   * whether the reader takes part in the chat, and the global chat has no
-   * participants, so it answered 404 to everyone.
-   */
-  public getMessageQuote(id: string) {
-    return Api.get<Envelope<QuoteSource>>(`global-chat/messages/${id}/quote`);
   }
 
   /**

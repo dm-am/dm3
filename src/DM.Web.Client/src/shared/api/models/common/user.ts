@@ -181,18 +181,6 @@ export interface User extends UserRef {
   // own blog, which a flat client-side flag cannot express. The server decides.
   /** User settings (only for authenticated user) */
   settings?: import("@/shared/api/models/personal").UserSettings;
-  /**
-   * Whether this account's rank is withheld for want of a second factor.
-   *
-   * Present only where the response is about the viewer themselves — the
-   * sign-in, the step that finishes it and the own profile. Absent everywhere
-   * else, because whether somebody else's rank is withheld is theirs to know,
-   * so `undefined` reads as "this answer is not about you", not as "no".
-   *
-   * `role` beside it stays the recorded one: the account stopped being able,
-   * not being an administrator.
-   */
-  privilegeWithheld?: boolean;
 
   // Extended profile fields (present in UserProfile responses)
   /** User-defined extended information (BB-code rendered) */
@@ -262,7 +250,49 @@ export interface User extends UserRef {
    * `subscribersByCategory` is what says how many there are.
    */
   subscribers?: SubscriberRef[];
+  /**
+   * Whether this user is on the viewer's own blacklist (profile answers only).
+   * False for a guest and on the viewer's own profile. Only that direction is
+   * sent: whether this user blocked the viewer is not said here, and
+   * `viewer.canMessage` says no more of it than the refusal of a message does.
+   */
+  blockedByViewer?: boolean;
+  /**
+   * What the viewer may do with this user, answered by the code that refuses
+   * the request (profile answers only). Absent on the profile of "Аккаунт
+   * удален" and in the answers of the moderation.
+   */
+  viewer?: ProfileViewer;
+  /**
+   * The viewer's own note about this user (profile answers only). Absent for a
+   * guest, on a profile the viewer has written nothing about, and in the
+   * answers of lists.
+   */
+  personalNote?: PersonalNote | null;
 }
+
+/**
+ * The viewer's own note about the user of a profile (mirrors PersonalNote),
+ * read with the profile for whoever holds the session.
+ */
+export type PersonalNote = {
+  id: string;
+  text: string;
+  createdUtc: string;
+  modifiedUtc?: string | null;
+};
+
+/**
+ * What the viewer may do with the user of a profile (mirrors ProfileViewer).
+ * The server asks each flag with the code that refuses the write it stands for.
+ */
+export type ProfileViewer = {
+  /**
+   * May write to this user in private: signed in, not his own profile, and not
+   * on this user's blacklist with private messages blocked.
+   */
+  canMessage: boolean;
+};
 
 /** Subscriber totals per profile category. */
 export type SubscriberCounts = {

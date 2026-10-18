@@ -76,7 +76,9 @@ public record BlogFilter
     public DateTimeOffset? ClosedToUtc { get; init; }
 
     /// <summary>
-    /// Optional owner ids to exclude (for blacklist filtering)
+    /// Owners whose blogs are left out. Not a filter the caller chooses: the
+    /// service fills it from the viewer's personal blacklist when the viewer
+    /// switched on "Скрывать блоги" (UserBlacklistSettings.HideBlogs).
     /// </summary>
     public IReadOnlyCollection<Guid>? ExcludeOwnerIds { get; init; }
 

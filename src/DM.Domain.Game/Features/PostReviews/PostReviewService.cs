@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
@@ -11,7 +12,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
-using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using FluentValidation;
 
@@ -41,7 +41,7 @@ internal class PostReviewService : IPostReviewService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IGameBlacklistRepository _blacklistRepository;
+    private readonly IBbTagNameCase _tagNames;
 
     public PostReviewService(
         IValidator<CreatePostReview> createValidator,
@@ -51,7 +51,7 @@ internal class PostReviewService : IPostReviewService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IGameBlacklistRepository blacklistRepository)
+        IBbTagNameCase tagNames)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -60,7 +60,7 @@ internal class PostReviewService : IPostReviewService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _blacklistRepository = blacklistRepository;
+        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
@@ -80,21 +80,19 @@ internal class PostReviewService : IPostReviewService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
         }
 
-        // The blacklist closes writing, and rating a post writes into the game it
-        // belongs to. The game's rooms and posts are open to a blacklisted reader
-        // and stay open, so the refusal has to be here and not in what they see.
-        if (await _blacklistRepository.IsBlocked(postInfo.GameId, authorId))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
-        }
+        // ReviewableAsync judges by the same method, so the form the page offers
+        // and these refusals cannot part.
+        var verdict = (await JudgeAsync(authorId,
+            [new ReviewCandidate(postId, postInfo.AuthorId, postInfo.GameId)]))[postId];
 
         // Can't review own post
-        if (authorId == postInfo.AuthorId)
+        if (verdict == Verdict.OwnPost)
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Нельзя оценивать собственный пост");
         }
 
-        // Newbies can only create neutral post reviews
+        // Newbies can only create neutral post reviews. A question of the sign
+        // and not of the post: the form offers a newbie "=" alone.
         if (createReview.Sign != ReviewSign.Neutral && await IsNewbieAsync(authorId))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
@@ -102,15 +100,18 @@ internal class PostReviewService : IPostReviewService
         }
 
         // Check if already reviewed this post
-        if (await ExistsAsync(authorId, postId))
+        if (verdict == Verdict.AlreadyReviewed)
         {
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedPost);
         }
 
-        // Check cooldown: can't review posts in the same game within 3 days
-        if (await HasRecentReviewInGameAsync(authorId, postInfo.GameId))
+        // Check cooldown: can't review posts in the same game within 3 days.
+        // A conflict with the state of things, not a rate limit: the page that
+        // offered the form did not know of a review written since, and the
+        // reader is told this rule in its own words, not "too many attempts".
+        if (verdict == Verdict.InCooldown)
         {
-            throw new HttpException(HttpStatusCode.TooManyRequests,
+            throw new HttpException(HttpStatusCode.Conflict,
                 "Оценивать посты в одной игре можно раз в три дня");
         }
 
@@ -125,7 +126,7 @@ internal class PostReviewService : IPostReviewService
             Sign = createReview.Sign,
             // Review bodies render on the Comment surface where [mod] is a green
             // mod block; strip it when authored by a non-moderator.
-            Text = ModBlockSanitizer.SanitizeForAuthor(createReview.Text, author.Role)
+            Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createReview.Text, author.Role), BbTagSet.WithModBlock)
         };
 
         try
@@ -189,6 +190,14 @@ internal class PostReviewService : IPostReviewService
     public async Task<(IEnumerable<PostReview> Reviews, PagingResult Paging)> GetListAsync(
         Guid postId, PagingQuery query)
     {
+        // Through the post, under the same room scope GetAsync reads it with: a
+        // post the reader cannot open has no reviews to list, and answers as a
+        // post that is not there.
+        if (await _repository.GetPostInfoAsync(postId, _identityProvider.Current.User.UserId) == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
+        }
+
         var totalCount = await _repository.CountAsync(postId);
         var pagingData = new PagingData(
             query,
@@ -254,15 +263,15 @@ internal class PostReviewService : IPostReviewService
             // the Comment surface, where [mod] is a green mod block.
             Text: updateReview.Text == null
                 ? null
-                : ModBlockSanitizer.SanitizeForAuthor(updateReview.Text, currentUser.Role),
+                : _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(updateReview.Text, currentUser.Role), BbTagSet.WithModBlock),
             ModifiedUtc: _dateTimeProvider.Now,
             ModifiedByUserId: currentUser.UserId);
 
-        // Both signs at once, in the call that writes the row. Neutral is zero,
-        // so an edit that leaves the sign alone owes the counter nothing, and one
-        // that moves it owes the difference — the old sign taken back and the new
-        // one applied, which used to be two commits of their own.
-        return await _repository.UpdateAsync(entity, (int)newSign - (int)oldSign);
+        // What the post author's counter owes is worked out by the write, from the
+        // row it locks: the sign this edit asks for is the whole of what the
+        // service knows, and a difference computed here would be a difference from
+        // the review as it was read, which another change may already have moved.
+        return await _repository.UpdateAsync(entity);
     }
 
     /// <inheritdoc />
@@ -281,19 +290,67 @@ internal class PostReviewService : IPostReviewService
             DeletedByUserId: _identityProvider.Current.User.UserId);
 
         // The post author's QualityRating gives back what the review gave it, in
-        // the same write as the removal. Neutral is zero and owes nothing.
-        await _repository.UpdateAsync(entity, -(int)review.Sign);
+        // the same write as the removal and worked out there: a review already
+        // taken down by somebody else gives nothing back a second time.
+        await _repository.UpdateAsync(entity);
     }
 
     /// <inheritdoc />
-    public Task<bool> ExistsAsync(Guid authorId, Guid postId) =>
-        _repository.ExistsAsync(authorId, postId);
-
-    /// <inheritdoc />
-    public Task<bool> HasRecentReviewInGameAsync(Guid authorId, Guid gameId)
+    public async Task<IReadOnlySet<Guid>> ReviewableAsync(IReadOnlyCollection<ReviewCandidate> posts)
     {
-        var cutoffDate = _dateTimeProvider.Now - CooldownPerGame;
-        return _repository.HasRecentReviewInGameAsync(authorId, gameId, cutoffDate);
+        if (posts.Count == 0 || !_intentionManager.IsAllowed(PostReviewIntention.Create))
+        {
+            return new HashSet<Guid>();
+        }
+
+        var verdicts = await JudgeAsync(_identityProvider.Current.User.UserId, posts);
+        return verdicts.Where(v => v.Value == Verdict.Allowed).Select(v => v.Key).ToHashSet();
+    }
+
+    /// <summary>
+    /// What stands between the rater and a review of each post: his own post,
+    /// a review of his already on it, a review of his in the same game during
+    /// the last three days. In that order, the order CreateAsync tells them in.
+    /// </summary>
+    /// <remarks>
+    /// One method for the write and for the flags on a page of posts, two
+    /// queries for the whole page. Sequential on purpose: both read the one
+    /// DmDbContext of the scope, and a context refuses parallel operations.
+    /// </remarks>
+    private async Task<IReadOnlyDictionary<Guid, Verdict>> JudgeAsync(
+        Guid raterId, IReadOnlyCollection<ReviewCandidate> posts)
+    {
+        var others = posts.Where(p => p.AuthorId != raterId).ToArray();
+        IReadOnlyCollection<Guid> reviewed = [];
+        IReadOnlyCollection<Guid> cooling = [];
+        if (others.Length > 0)
+        {
+            reviewed = await _repository.SelectReviewedPostIdsAsync(
+                raterId, others.Select(p => p.PostId).Distinct().ToArray());
+            cooling = await _repository.SelectGamesReviewedSinceAsync(
+                raterId, others.Select(p => p.GameId).Distinct().ToArray(), _dateTimeProvider.Now - CooldownPerGame);
+        }
+
+        var verdicts = new Dictionary<Guid, Verdict>();
+        foreach (var post in posts)
+        {
+            verdicts[post.PostId] =
+                post.AuthorId == raterId ? Verdict.OwnPost
+                : reviewed.Contains(post.PostId) ? Verdict.AlreadyReviewed
+                : cooling.Contains(post.GameId) ? Verdict.InCooldown
+                : Verdict.Allowed;
+        }
+
+        return verdicts;
+    }
+
+    /// <summary>What <see cref="JudgeAsync" /> found for one post.</summary>
+    private enum Verdict
+    {
+        Allowed,
+        OwnPost,
+        AlreadyReviewed,
+        InCooldown
     }
 
     /// <inheritdoc />

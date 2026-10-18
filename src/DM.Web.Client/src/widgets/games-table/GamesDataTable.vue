@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent } from "@/shared/ui/Tooltip";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { CounterPair } from "@/shared/ui/CounterPair";
 import Paging from "@/shared/ui/Paging/Paging.vue";
-import { UserLink } from "@/entities/user";
+import { RemovedAccountLink, UserLink } from "@/entities/user";
 import {
   useGamesStore,
   useGameDisplay,
@@ -82,42 +82,42 @@ function isNewHighlight(game: Game): boolean {
 // Columns that have direct mapping to sort options
 const sortableColumnKeys = new Set(["title", "status"]);
 
-// Define table columns
+// Define table columns. "Название" takes what the others leave; the shares
+// are of the whole table, the "#" column and the padding of each cell
+// included, and stand every column where it stood when the table was laid
+// out "fixed" (1920).
 const columns: Column[] = [
   {
     key: "title",
     label: "Название",
-    width: "28%",
     align: "left",
   },
-  { key: "master", label: "Ведущие", width: "18%", align: "left" },
+  { key: "master", label: "Ведущие", width: "17.4%", align: "left" },
   {
     key: "tags",
     label: "Теги",
-    width: "20%",
+    width: "19.2%",
     align: "left",
-    hideOnMobile: true,
   },
   {
     key: "status",
     label: "Статус игры",
-    width: "16.3%",
+    width: "15.9%",
     align: "left",
   },
   // One column, one meaning. It used to hold two counts behind a muted "/" —
   // reviews OF THE GAME and ratings of POSTS in it — told apart only by an
   // aria-label. A listing of games is about games, so the column keeps the
   // reviews; the ratings of posts address a player's post and are a row of the
-  // game's own fact table now. The 1.7% comes out of "Статус игры", the only
+  // game's own fact table now. Its width comes out of "Статус игры", the only
   // column with spare width, so the header word fits inside its cell.
   {
     key: "reviews",
     label: "Рецензии",
-    width: "7.7%",
+    width: "8.5%",
     align: "center",
-    hideOnMobile: true,
   },
-  { key: "readers", label: "Читатели", width: "7%", align: "center" },
+  { key: "readers", label: "Читатели", width: "7.9%", align: "center" },
 ];
 
 // Current sort state for DataTable (only when sorting by a column that exists in the table)
@@ -243,7 +243,7 @@ function pagingAnchor(): HTMLElement | null {
           :user="row.master"
           :search-query="filterState.search"
           hide-badge
-        /><template v-if="row.assistants?.length"
+        /><RemovedAccountLink v-else /><template v-if="row.assistants?.length"
           >{{ " "
           }}<Tooltip :text="buildAssistantTooltip(row.assistants)" focusable>
             <span class="assistant-count">[+{{ row.assistants.length }}]</span>
@@ -293,9 +293,8 @@ function pagingAnchor(): HTMLElement | null {
             <Tooltip>
               <template #content>
                 <TooltipContent
-                  :text="
-                    getTagInfo(tagId).description || getTagInfo(tagId).title
-                  "
+                  :html="getTagInfo(tagId).description"
+                  :text="getTagInfo(tagId).title"
                 />
               </template>
               <router-link
@@ -346,6 +345,7 @@ function pagingAnchor(): HTMLElement | null {
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
 @use "@/assets/styles/Skeleton" as *
 
 .games-data-table
@@ -359,24 +359,16 @@ function pagingAnchor(): HTMLElement | null {
 
 .game-link
   color: $link
-  word-wrap: break-word
-  overflow-wrap: break-word
   &:hover
     color: $link-hover
   &.new-item
-    color: $accent-green
-    &:hover
-      color: $accent-green-hover
+    +link-tone($accent-green, $accent-green-hover)
   &.closed-item
-    color: $text-muted
-    &:hover
-      color: $link-hover
+    +muted-link
   // .search-highlight styled globally in Reset.sass
 
 .tags-list
   line-height: 1.4
-  word-wrap: break-word
-  overflow-wrap: break-word
 
 .tag-link
   color: $link
@@ -397,9 +389,12 @@ function pagingAnchor(): HTMLElement | null {
 .status-wrapper
   cursor: help
 
+// One token, "[0/∞]": the status wraps between its words, never inside the
+// brackets.
 .slots-indicator
   color: $text-muted
   cursor: help
+  white-space: nowrap
 
 .assistant-count
   color: $text-muted

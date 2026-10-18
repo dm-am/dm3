@@ -12,6 +12,9 @@ import type {
 } from "@/shared/api/models/common";
 import globalChatApi from "../api/globalChatApi";
 import { unwrapResource } from "@/shared/api";
+import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { createFreshness } from "@/shared/lib/utils/keyedCache";
+import { fromSiteInput } from "@/shared/lib/utils/datetime";
 import { useAuthStore } from "@/shared/stores";
 import { NotificationType } from "@/shared/api/models/notifications";
 
@@ -42,6 +45,32 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
 
   /** Max messages in memory to prevent unbounded growth during long scrolling sessions */
   const MAX_MESSAGES = 500;
+
+  /** How many messages "the latest page" holds, asked for and read back: a
+   * short answer means the server had nothing more to give, which is how
+   * pollForNewer tells a quiet chat from a window that has drifted off. */
+  const LATEST_PAGE_SIZE = 50;
+
+  /** The held window, guarded. Every wholesale replacement of it (a fresh
+   * load, a jump to a message or a date, a catch-up that found the window
+   * drifted off) bumps the guard. A request that started before the bump
+   * describes a window nobody is looking at any more, so its answer is dropped
+   * rather than merged into the one now on screen: appending a tail read
+   * against the old window would put its messages after ones that are newer
+   * than they are. The shared guard rather than a counter of this store's own,
+   * because a store that keeps its own renders whichever reply lands last. */
+  const windowGuard = createRequestGuard();
+
+  /** Catch-up reads are coalesced: one is in flight at a time, and the calls
+   * that arrive meanwhile are served by one more run after it. A push and a
+   * timer tick otherwise start two reads of the same page at once, and the
+   * slower answer applies on top of the faster one. */
+  let pollInFlight = false;
+  let pollQueued = false;
+  /** Where the reader stood when the queued call was made. The run it asks for
+   * happens after the one in flight, so the position measured by the caller
+   * that arrived last is the one it is answered with. */
+  let queuedAtTail = true;
 
   // Sync Map when messages array changes
   function syncMessagesMap() {
@@ -83,12 +112,13 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     error.value = null;
     try {
       const { data, error: apiError } = await globalChatApi.getMessages({
-        limit: 50,
+        limit: LATEST_PAGE_SIZE,
       });
       if (apiError) {
         error.value = "Не удалось загрузить сообщения";
         return;
       }
+      windowGuard.next();
       messages.value = data?.resources || [];
       prevCursor.value = data?.paging?.prevCursor ?? null;
       nextCursor.value = data?.paging?.nextCursor ?? null;
@@ -178,19 +208,93 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   // Its paging metadata describes the latest page rather than a position, so it
   // still must not touch nextCursor/hasMoreAfter (owned by fetchMessages and
   // fetchMoreAfter), and only messages not already held are appended.
-  async function pollForNewer() {
+  //
+  // Unless the page and the held window no longer touch. A quiet socket, a
+  // slept tab or a long enough outage lets more than a page go by, and then not
+  // one line of the answer is recognised. Appending it there would join two
+  // windows with a hole between them, and the hole is unreachable: the cursors
+  // on either side belong to the edges of a window that is now a splice, and
+  // nothing on screen says a stretch of the conversation is missing. So a full
+  // page of strangers is not caught up to: it is read as "the window has
+  // drifted off", and the page in hand IS the window to show, applied here
+  // with its own paging instead of being asked for a second time. The
+  // second read used to go through fetchMessages, which raises `loading`: the
+  // feed blinked into skeletons, the sentinels went with it, and a failure of
+  // that second request replaced a feed that was perfectly readable with an
+  // error. A SHORT page of strangers means the opposite: the server gave
+  // everything it had, so there is nothing between it and what is held,
+  // however little the two share. The same replacement serves a feed that is
+  // still empty, because a first load that failed leaves no cursors behind and
+  // a page appended over that leaves the top sentinel with nowhere to go.
+  async function readLatestPage(atTail: boolean) {
+    const heldWindow = windowGuard.current();
+    const { data } = await globalChatApi.getMessages({
+      limit: LATEST_PAGE_SIZE,
+    });
+    // The window was replaced while this was in flight. The answer describes
+    // the window that used to be there.
+    if (!windowGuard.isCurrent(heldWindow)) return;
+    if (!data || data.resources.length === 0) return;
+
+    const fresh = data.resources.filter((m) => !messagesById.has(m.id));
+    if (fresh.length === LATEST_PAGE_SIZE) {
+      // A reader who has scrolled up is reading, and the window under him is
+      // the page he is reading: replacing it takes that page away and leaves
+      // him at the end of a conversation he never asked to be taken to. So the
+      // replacement waits for his return to the tail, and the read that finds
+      // him there makes it. A window that holds nothing has no reader in it to
+      // take anything away from, which is the case a first load that failed
+      // leaves behind.
+      if (!atTail && messages.value.length > 0) return;
+      windowGuard.next();
+      messages.value = data.resources;
+      prevCursor.value = data.paging?.prevCursor ?? null;
+      hasMoreBefore.value = data.paging?.hasPrev ?? false;
+      // The latest page has nothing after it by definition, whatever the
+      // paging says about the direction nobody asked for.
+      nextCursor.value = null;
+      hasMoreAfter.value = false;
+      syncMessagesMap();
+      return;
+    }
+    if (fresh.length > 0) {
+      messages.value = [...messages.value, ...fresh];
+      syncMessagesMap();
+      trimOldMessages();
+    }
+  }
+
+  /**
+   * Catch up with what arrived since the last read.
+   *
+   * `atTail` is where the reader stands in the feed, which only the page can
+   * measure, and it is what decides whether a window that has drifted off may
+   * be replaced under him. It is measured BEFORE the call, for the same reason
+   * the page measures it before appending: growing the feed moves its bottom
+   * away from a reader standing at it, so a measurement taken afterwards
+   * answers "no" for everybody. A caller that holds no feed of its own — and
+   * so has no reader to move — is at the tail by definition.
+   */
+  async function pollForNewer(atTail = true) {
+    if (pollInFlight) {
+      pollQueued = true;
+      queuedAtTail = atTail;
+      return;
+    }
+    pollInFlight = true;
     try {
-      const { data } = await globalChatApi.getMessages({ limit: 50 });
-      if (data && data.resources.length > 0) {
-        const fresh = data.resources.filter((m) => !messagesById.has(m.id));
-        if (fresh.length > 0) {
-          messages.value = [...messages.value, ...fresh];
-          syncMessagesMap();
-          trimOldMessages();
-        }
+      await readLatestPage(atTail);
+      // Whatever asked while the read was in flight is served by one more run
+      // after it, in order, rather than by a second read alongside it.
+      while (pollQueued) {
+        pollQueued = false;
+        await readLatestPage(queuedAtTail);
       }
     } catch {
       // Silent — next poll tick will retry.
+    } finally {
+      pollInFlight = false;
+      pollQueued = false;
     }
   }
 
@@ -208,6 +312,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
         return;
       }
       if (data && data.resources.length > 0) {
+        windowGuard.next();
         messages.value = data.resources;
         prevCursor.value = data.paging?.prevCursor ?? null;
         nextCursor.value = data.paging?.nextCursor ?? null;
@@ -233,15 +338,21 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     error.value = null;
     landedOnRequestedDate.value = false;
     try {
-      // Anchor from LOCAL midnight (not UTC midnight) so "Перейти к дате"
-      // lands on the day the guest actually picked in their own timezone —
-      // a UTC anchor resolves to the previous local day for users east of
-      // UTC (and the next local day for some users west of it near DST
-      // edges). The exact first-of-day message is then resolved client-side
-      // (GlobalChatPage.loadArchiveDate) once results are in, since the
-      // backend's nearest-cursor window can still start slightly before the
-      // requested day.
-      const timestampUtc = new Date(`${date}T00:00:00`).toISOString();
+      // Anchor from midnight on the site's clock (siteTime: the account's
+      // zone for a signed-in reader, the device's for a guest), so "Перейти к
+      // дате" lands on the day the reader picked by the dates the chat shows
+      // them. The device's midnight was a day off for a reader whose account
+      // keeps another zone, and a UTC anchor for everyone east of UTC. The
+      // exact first-of-day message is then resolved client-side
+      // (useChatHistoryWindow.loadDate) once results are in, since the
+      // backend answers with a window around the first message at or after
+      // that midnight, and up to half of the window stands before the day.
+      const timestampUtc = fromSiteInput(`${date}T00:00`);
+      if (!timestampUtc) {
+        // Not a day at all: the latest messages, as a failed jump lands.
+        await fetchMessages();
+        return;
+      }
       const { data, error: apiError } = await globalChatApi.getMessagesNearDate(
         timestampUtc,
         50,
@@ -251,14 +362,15 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
         return;
       }
       if (data && data.resources.length > 0) {
+        windowGuard.next();
         messages.value = data.resources;
         prevCursor.value = data.paging?.prevCursor ?? null;
         nextCursor.value = data.paging?.nextCursor ?? null;
         hasMoreBefore.value = data.paging?.hasPrev ?? false;
         hasMoreAfter.value = data.paging?.hasNext ?? false;
-        // Highlighting/scroll target resolution is owned by the page
-        // (GlobalChatPage.loadArchiveDate resolves the exact first-of-day
-        // message client-side and highlights it directly) — no store-level
+        // The scroll target is resolved by the feed's history window
+        // (useChatHistoryWindow.loadDate resolves the exact first-of-day
+        // message client-side and scrolls to it) — no store-level
         // highlightedMessageId here, avoiding a race with that logic.
         landedOnRequestedDate.value = true;
         syncMessagesMap();
@@ -353,7 +465,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   /**
    * Returns the error when the delete failed. Striking the message through on
    * a refusal is the worst of both: the moderator reads the deleted-message
-   * placeholder beside the toast that says it was not deleted, and leaves
+   * placeholder beside the line that says it was not deleted, and leaves
    * believing the text is gone for everyone else.
    */
   async function deleteMessage(id: string) {
@@ -375,7 +487,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
   }
 
   async function likeMessage(id: string) {
-    const { data } = await globalChatApi.likeMessage(id);
+    const { data, error } = await globalChatApi.likeMessage(id);
     // Out of the envelope: a like erased the line it was given to.
     const liked = unwrapResource<GlobalChatMessage>(data);
     if (liked) {
@@ -385,6 +497,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
         messagesById.set(id, liked);
       }
     }
+    return { error };
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -411,11 +524,61 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
       .sort((a, b) => (a.startsUtc < b.startsUtc ? -1 : 1)),
   );
 
-  // Silent on failure — events are supplementary, not primary content.
+  /** Every read of the list is tagged by the shared guard, and an answer that
+   * is not the newest tag is dropped. Two reads overlap easily (the page asks
+   * on mount, the socket coming up asks again, a push about an event lands on
+   * top), and whichever answer is slower would otherwise be the one that stays,
+   * putting an older list on screen than the one already read. */
+  const eventsGuard = createRequestGuard();
+
+  /** How recently the list has to have been read for a caller that has just
+   * had it read to leave it alone. Wide enough to cover the gap between the
+   * read a page makes on open and the connection that follows it, short enough
+   * that a reconnection after any real outage falls outside and does re-read. */
+  const EVENTS_FRESH_MS = 5000;
+
+  /** Whether the list has been read recently enough to be left alone. The
+   * moment and the arithmetic over it are one thing and live in one place: the
+   * moment used to be written here and subtracted from the clock on the page,
+   * which is a rule nothing can read whole and nothing can check. */
+  const eventsFreshness = createFreshness(EVENTS_FRESH_MS);
+
+  /**
+   * How the newest read of the list ended, for the strip above the feed: an
+   * empty list says "no events" only once a read has answered with one.
+   * "pending" until the first answer, so the strip says nothing yet;
+   * "failed" when the newest read was refused, so it says the events did not
+   * load and offers to read again, instead of claiming there are none. A
+   * refused re-read keeps the list it had.
+   */
+  const eventsLoad = ref<"pending" | "loaded" | "failed">("pending");
+
+  // No toast on failure: events are supplementary, not primary content, and
+  // the strip says it in its own line (eventsLoad).
   async function fetchEvents() {
+    const request = eventsGuard.next();
+    // Marked read before the request rather than on its answer: a caller that
+    // asks while this one is still in flight would otherwise get no sign that
+    // the question is already being asked, and ask it again. That is what a
+    // socket coming up during the read on mount used to do.
+    eventsFreshness.touch();
     const { data, error: apiError } = await globalChatApi.getEvents();
-    if (apiError) return;
+    if (!eventsGuard.isCurrent(request)) return;
+    if (apiError) {
+      // A read that failed is not a read: the list is as old as it was, and the
+      // next caller has to go and get it.
+      eventsFreshness.clear();
+      eventsLoad.value = "failed";
+      return;
+    }
     events.value = data?.resources ?? [];
+    eventsLoad.value = "loaded";
+  }
+
+  /** Read the list unless it has only just been read. */
+  async function fetchEventsIfFresh() {
+    if (eventsFreshness.isFresh()) return;
+    await fetchEvents();
   }
 
   /**
@@ -515,6 +678,7 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
         messagesById.set(id, updated);
       }
     }
+    return { error };
   }
 
   return {
@@ -549,10 +713,12 @@ export const useGlobalChatStore = defineStore("globalChat", () => {
     likeMessage,
     unlikeMessage,
     events,
+    eventsLoad,
     eventDetails,
     liveEvent,
     upcomingEvents,
     fetchEvents,
+    fetchEventsIfFresh,
     refreshEventsOnNotification,
     fetchEventDetails,
     joinEvent,

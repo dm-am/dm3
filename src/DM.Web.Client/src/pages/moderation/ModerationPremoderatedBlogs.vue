@@ -11,9 +11,9 @@ import PremoderatedQueue from "./PremoderatedQueue.vue";
 
 const columns: Column[] = [
   { key: "title", label: "Блог" },
-  { key: "author", label: "Владелец", width: "20%" },
-  { key: "created", label: "Создан", width: "20%", hideOnMobile: true },
-  { key: "status", label: "Статус премодерации", width: "20%" },
+  { key: "author", label: "Владелец", width: "22%" },
+  { key: "created", label: "Создан", width: "22%" },
+  { key: "status", label: "Статус премодерации", width: "22%" },
 ];
 </script>
 

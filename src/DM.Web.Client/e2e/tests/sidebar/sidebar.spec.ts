@@ -1,5 +1,6 @@
 import { test, expect } from "../../fixtures/auth";
-import type { Locator, Page } from "@playwright/test";
+import { phonePage } from "../../fixtures/phone";
+import type { Browser, Locator, Page } from "@playwright/test";
 
 /**
  * The two sidebar columns and the blocks in them.
@@ -36,7 +37,7 @@ const block = (page: Page, token: string): Locator =>
 const blockFold = (page: Page, token: string): Locator =>
   page.locator(`.expand-fold-clip:has(#sidebar-list-${token})`);
 
-/** The +/- control in the block heading; it carries the expanded state. */
+/** The fold sign in the block heading; it carries the expanded state. */
 const blockToggle = (page: Page, token: string): Locator =>
   page.locator(`#sidebar-toggle-${token}`);
 
@@ -162,7 +163,7 @@ test.describe("Sidebars", () => {
       const fold = blockFold(page, "PopularGames");
       const toggle = blockToggle(page, "PopularGames");
 
-      // Initially expanded. Only the +/- control toggles: the heading text
+      // Initially expanded. Only the fold sign toggles: the heading text
       // is deliberately not clickable, which is why clicking the header
       // asserted nothing.
       await expect(fold).toBeVisible();
@@ -483,24 +484,116 @@ test.describe("Sidebars", () => {
   });
 
   test.describe("Sidebar Responsiveness", () => {
-    test("should hide sidebars on mobile viewport", async ({ page }) => {
-      await page.setViewportSize({ width: 375, height: 667 });
-      await page.goto("/");
-
-      // Below the shell breakpoint the left column is gone and its content is
-      // reachable through the burger drawer; the right column reflows under
-      // the page instead of disappearing.
-      await expect(page.locator(".sidebar-left")).toBeHidden();
-      await expect(page.locator(".burger-btn")).toBeVisible();
-      await expect(page.locator(".sidebar-right")).toBeVisible();
-    });
-
     test("should show sidebars on desktop viewport", async ({ page }) => {
       await page.setViewportSize({ width: 1920, height: 1080 });
       await page.goto("/");
 
       await expect(page.locator(".sidebar-left")).toBeVisible();
       await expect(page.locator(".sidebar-right")).toBeVisible();
+    });
+  });
+
+  /**
+   * Below the shell breakpoint, a phone included, both columns stand off the
+   * page as the two views of one column, which slides in over it from the
+   * button of the header. They are the columns of the desktop, not copies:
+   * their blocks are there from the start. Out over the page the column is a
+   * modal named after its button.
+   */
+  test.describe("Side columns on a phone", () => {
+    const menuButton = (page: Page) =>
+      page.getByRole("button", { name: "Меню", exact: true });
+
+    /** A phone on the home page, the column asked for. */
+    async function openColumn(browser: Browser) {
+      const page = await phonePage(browser);
+      await page.goto("/");
+      await menuButton(page).click();
+      const column = page.getByRole("dialog", { name: "Меню" });
+      await expect(column).toBeVisible();
+      return { page, column };
+    }
+
+    test("keeps both columns off the page until one is asked for", async ({
+      browser,
+    }) => {
+      const page = await phonePage(browser);
+      await page.goto("/");
+
+      await expect(page.locator("main")).toBeVisible();
+      await expect(page.locator(".sidebar-left")).toBeHidden();
+      await expect(page.locator(".sidebar-right")).toBeHidden();
+      await page.context().close();
+    });
+
+    test("slides the column in on its left view, the menu of the header on top", async ({
+      browser,
+    }) => {
+      const { page, column } = await openColumn(browser);
+
+      await expect(column.getByRole("link", { name: "Форум" })).toBeVisible();
+      await expect(column.locator("#sidebar-list-ForumBoards")).toBeAttached();
+      await expect(column.locator(".sidebar-right")).toBeHidden();
+      // The close button is where the caret lands.
+      await expect(
+        column.getByRole("button", { name: "Закрыть" }),
+      ).toBeFocused();
+      await page.context().close();
+    });
+
+    test("puts the column back with its close button and gives the caret back", async ({
+      browser,
+    }) => {
+      const { page, column } = await openColumn(browser);
+
+      await column.getByRole("button", { name: "Закрыть" }).click();
+
+      await expect(page.locator(".sidebar-left")).toBeHidden();
+      await expect(menuButton(page)).toBeFocused();
+      await page.context().close();
+    });
+
+    test("puts the column back on Escape", async ({ browser }) => {
+      const { page } = await openColumn(browser);
+
+      await page.keyboard.press("Escape");
+
+      await expect(page.locator(".sidebar-left")).toBeHidden();
+      await page.context().close();
+    });
+
+    test("puts the column back on a link inside, and follows it", async ({
+      browser,
+    }) => {
+      const { page, column } = await openColumn(browser);
+
+      await column.getByRole("link", { name: "Форум" }).click();
+
+      await expect(page).toHaveURL(/\/forum/);
+      await expect(page.locator(".sidebar-left")).toBeHidden();
+      await page.context().close();
+    });
+
+    // The settings of the site are at the gear of the column of buttons, on
+    // every width, and not in the column.
+    test("switches to the right view, the statistics first and the legal pages last", async ({
+      browser,
+    }) => {
+      const { page, column } = await openColumn(browser);
+      await column.getByRole("tab", { name: "О сайте" }).click();
+
+      const right = column.locator(".sidebar-right");
+      await expect(right).toBeVisible();
+      await expect(
+        right.getByRole("region", { name: "Статистика сайта" }),
+      ).toBeVisible();
+      await expect(right.locator("#sidebar-list-ActivePolls")).toBeAttached();
+      await expect(right.locator(".sidebar-title").last()).toHaveText(
+        /Правовая информация/i,
+      );
+      await expect(column.locator(".settings-panel")).toHaveCount(0);
+      await expect(column.locator(".sidebar-left")).toBeHidden();
+      await page.context().close();
     });
   });
 

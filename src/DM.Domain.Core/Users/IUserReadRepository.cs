@@ -90,4 +90,26 @@ public interface IUserReadRepository
     /// indistinguishable from a user who really has none.
     /// </remarks>
     Task<IEnumerable<UserReference>> GetUserReferencesAsync(IEnumerable<Guid> userIds);
+
+    /// <summary>
+    /// Identifiers of every removed account: the rows behind "Аккаунт удален"
+    /// (<see cref="RemovedAccount" />).
+    /// </summary>
+    /// <remarks>
+    /// For narrowing a list by host or author on the server. The identifiers never
+    /// travel further than the query they narrow.
+    /// </remarks>
+    Task<IReadOnlyCollection<Guid>> GetRemovedAccountIdsAsync();
+
+    /// <summary>
+    /// The profile of "Аккаунт удален": the public counters of every removed account,
+    /// added up, and nothing else of them.
+    /// </summary>
+    /// <remarks>
+    /// Sums of what each profile already shows in public - the rating, the posts
+    /// written, the posts rated - and the games and blogs where a removed account
+    /// hosts or plays, each counted once however many removed accounts it holds. No
+    /// name, address, date or identifier of any removed row is part of it.
+    /// </remarks>
+    Task<GeneralUser> GetRemovedAccountSummaryAsync();
 }

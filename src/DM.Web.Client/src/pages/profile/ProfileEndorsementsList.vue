@@ -45,9 +45,6 @@ const props = defineProps<{
   routeName: "received-endorsements" | "given-endorsements";
 }>();
 
-// Do not detach the methods — both calls go through
-// `this.buildListParams(q)`, and a detached `const fn = userApi.getX` loses
-// `this` and crashes with a TypeError.
 function fetchPage(q: EndorsementsQuery) {
   return props.mode === "received"
     ? userApi.getUserEndorsements(props.username as Username, q)

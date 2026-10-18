@@ -49,37 +49,42 @@ internal class NotificationRepository : INotificationRepository
         .LongCountAsync(r => r.UserId == userId && !r.IsRead);
 
     /// <inheritdoc />
-    public async Task<IEnumerable<UserNotification>> GetNotifications(Guid userId, PagingData pagingData)
+    public async Task<IEnumerable<ListedNotification>> GetNotifications(Guid userId, PagingData pagingData)
     {
+        // The mark is the recipient row's, read alongside the notification it
+        // joins: the list shows read and unread alike, and only this row knows
+        // which one this reader is looking at.
         var rows = await _dbContext.NotificationRecipients
             .TagWith("DM.Notifications.Page")
             .Where(r => r.UserId == userId)
             .Join(_dbContext.Notifications,
                 r => r.NotificationId,
                 n => n.NotificationId,
-                (r, n) => n)
-            .OrderByDescending(n => n.CreatedUtc)
-            .ThenByDescending(n => n.NotificationId)
+                (r, n) => new { Notification = n, r.IsRead })
+            .OrderByDescending(x => x.Notification.CreatedUtc)
+            .ThenByDescending(x => x.Notification.NotificationId)
             .Skip(pagingData.Skip)
             .Take(pagingData.Take)
-            .Select(n => new
+            .Select(x => new
             {
-                n.NotificationId,
-                n.EventType,
-                n.CreatedUtc,
-                n.Metadata,
+                x.Notification.NotificationId,
+                x.Notification.EventType,
+                x.Notification.CreatedUtc,
+                x.Notification.Metadata,
+                x.IsRead,
             })
             .ToListAsync();
 
         // Metadata leaves the store the way it went in: a document. The column
         // holds its serialized form, and handing the raw string up would make
         // every reader serialize it a second time, into a JSON string literal.
-        return rows.Select(n => new UserNotification
+        return rows.Select(n => new ListedNotification
         {
             NotificationId = n.NotificationId,
             EventType = n.EventType,
             CreatedUtc = n.CreatedUtc,
             Metadata = JsonSerializer.Deserialize<JsonElement>(n.Metadata, MetadataOptions),
+            IsRead = n.IsRead,
         });
     }
 

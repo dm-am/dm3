@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Enums;
 
@@ -55,9 +54,11 @@ public class CreateGame
     public CommentsAccessMode CommentsAccessMode { get; set; }
 
     /// <summary>
-    /// Attribute schema identifier
+    /// Specifications the character sheet of the game starts with. An empty set
+    /// is a game whose characters carry no attributes, which is a choice the
+    /// master is allowed to make.
     /// </summary>
-    public Guid? AttributeSchemaId { get; set; }
+    public IEnumerable<CreateAttributeSpecification> AttributeSpecifications { get; set; } = [];
 
     /// <summary>
     /// Game tag short identifiers: the public alias the tag list and the game
@@ -76,7 +77,15 @@ public class CreateGame
     public DraftVisibility DraftVisibility { get; set; }
 
     /// <summary>
-    /// Copy personal blacklist to game blacklist on creation
+    /// Copy the creator's personal blacklist into the game's on creation.
+    /// Null leaves the choice to the creator's account setting "Переносить
+    /// черный список в новые игры и блоги" (AutoPopulateContentBlacklist).
     /// </summary>
-    public bool CopyBlacklist { get; set; }
+    /// <remarks>
+    /// Copying shows who is on the creator's personal list to whoever manages the
+    /// game's list with them, and tells the people on it that they are on the
+    /// game's list the first time they try to write there. That is the price
+    /// of the switch, and the reason it is off unless the creator turns it on.
+    /// </remarks>
+    public bool? CopyBlacklist { get; set; }
 }

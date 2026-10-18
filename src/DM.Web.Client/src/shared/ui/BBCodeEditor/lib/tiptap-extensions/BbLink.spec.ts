@@ -50,7 +50,7 @@ describe("BbLink Extension", () => {
     expect(html).toContain('href="https://example.com"');
   });
 
-  it("should preserve text attribute for [link=text]URL[/link] format", () => {
+  it('should preserve text attribute for [link text="..."]URL[/link] format', () => {
     const editor = createTestEditor();
     editor.commands.setContent(
       '<p><a href="https://example.com" data-bb-tag="link" data-bb-text="Click here">Click here</a></p>',

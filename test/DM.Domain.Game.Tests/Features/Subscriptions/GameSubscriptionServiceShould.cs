@@ -12,6 +12,7 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.Blacklists;
+using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing.Dsl;
 using DM.Testing;
@@ -26,7 +27,6 @@ public class GameSubscriptionServiceShould : UnitTestBase
     private readonly ISubscriptionRepository _repository;
     private readonly IUserLookupService _userLookupService;
     private readonly IIdentityProvider _identityProvider;
-    private readonly IGameBlacklistRepository _blacklistRepository;
     private readonly GameSubscriptionService _service;
     private readonly Guid _currentUserId;
 
@@ -46,36 +46,30 @@ public class GameSubscriptionServiceShould : UnitTestBase
         var dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _blacklistRepository = Mock<IGameBlacklistRepository>();
-
         _service = new GameSubscriptionService(
             _repository,
             _userLookupService,
             _identityProvider,
             guidFactory,
-            dateTimeProvider,
-            // The real guard over the mocked store: the rule under test is the
-            // guard's, and the generic subscription endpoint asks the same object,
-            // so a stub here would test a copy of it that no caller uses.
-            new GameSubscriptionGuard(_blacklistRepository));
+            dateTimeProvider);
     }
 
+    /// <summary>
+    /// The game's blacklist does not stand between anybody and a subscription.
+    /// </summary>
+    /// <remarks>
+    /// It closes writing, and following the game is reading. The service used to
+    /// hold the list and refuse the button with "Вы в черном списке этой игры";
+    /// now it cannot even reach it, which is what this asserts: the rule lives
+    /// with the writes it closes (GameRoleExtensions.IsBlacklisted), and the
+    /// behaviour end to end is in BlacklistRuleShould.
+    /// </remarks>
     [Fact]
-    public async Task RefuseToSubscribeAUserTheGameBlacklisted()
+    public void KnowNothingOfTheBlacklist()
     {
-        var gameId = Guid.NewGuid();
-        _blacklistRepository
-            .IsBlocked(gameId, _currentUserId, Arg.Any<CancellationToken>()).Returns(true);
-
-        var act = async () => await _service.SubscribeAsync(gameId);
-
-        // Reading the game is open to them and stays open. Joining its roster is
-        // the write the blacklist refuses: it hands out GameRole.Reader and with it
-        // the private comment thread, and a subscriber cannot be blacklisted in the
-        // first place, the owner has to remove them from the game first.
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().CreateAsync(Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>());
+        typeof(GameSubscriptionService).GetConstructors().Single().GetParameters()
+            .Select(parameter => parameter.ParameterType)
+            .Should().NotContain([typeof(IGameBlacklistRepository), typeof(IGameService)]);
     }
 
     [Fact]

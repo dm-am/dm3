@@ -1,9 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Infrastructure.Persistence.Repositories.Blog;
-using DM.Infrastructure.Persistence.Repositories.Forum;
-using DM.Infrastructure.Persistence.Repositories.Game;
+using DM.Infrastructure.Persistence.Shared.Comments;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -31,8 +29,10 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 ///
 /// Arrival order is what the defect turned on, so it is what varies here: the same
 /// two tied comments seeded each way round must give one answer, and that answer must
-/// be the other comment. All four discussions ask the same question of the same table
-/// through four repositories, so all four are asked.
+/// be the other comment. All four discussions ask the same question of the same
+/// table, so all four are asked, each through the shared query under its own tag -
+/// which is how every one of their deletions asks it now that the successor is
+/// chosen inside the transaction that writes the mark.
 /// </remarks>
 public class NewestCommentExceptShould
 {
@@ -69,9 +69,9 @@ public class NewestCommentExceptShould
     }
 
     /// <summary>
-    /// The same question through each of the four repositories. They read one table and
-    /// differ only in which entity the comments hang off, so a defect fixed in one and
-    /// left in another is invisible until a user hits that discussion.
+    /// The same question on behalf of each of the four discussions. They read one table
+    /// and differ only in which entity the comments hang off, so a defect fixed in one
+    /// and left in another is invisible until a user hits that discussion.
     /// </summary>
     public static TheoryData<string> Discussions() =>
         new("topic", "blog", "publication", "game");
@@ -79,14 +79,17 @@ public class NewestCommentExceptShould
     private static Task<Guid?> AskAsync(string discussion, DmDbContext context, Guid deleted) =>
         discussion switch
         {
-            "topic" => new TopicCommentRepository(context, null!, null!)
-                .GetNewestCommentIdExcept(EntityId, deleted),
-            "blog" => new BlogCommentRepository(context, null!, null!)
-                .GetNewestCommentIdExcept(EntityId, deleted),
-            "publication" => new PublicationCommentRepository(context, null!, null!)
-                .GetNewestCommentIdExcept(EntityId, deleted),
-            _ => new GameCommentRepository(context, null!)
-                .GetNewestCommentIdExcept(EntityId, deleted),
+            // All four ask it inside the transaction that marks the comment, and that
+            // transaction is set-based statements with no in-memory implementation, so
+            // the query is asked here in the words each of them asks it in.
+            "topic" => CommentQueries.NewestExcept(
+                context, EntityId, deleted, "DM.TopicComments.NewestCommentIdExcept"),
+            "blog" => CommentQueries.NewestExcept(
+                context, EntityId, deleted, "DM.BlogComments.NewestCommentIdExcept"),
+            "publication" => CommentQueries.NewestExcept(
+                context, EntityId, deleted, "DM.PublicationComments.NewestCommentIdExcept"),
+            _ => CommentQueries.NewestExcept(
+                context, EntityId, deleted, "DM.GameComments.NewestCommentIdExcept"),
         };
 
     /// <summary>

@@ -14,7 +14,7 @@ using IPostRepository = DM.Domain.Game.Features.Posts.IPostRepository;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// A post and its dice rolls are written both or neither (INV-6, AC-8).
+/// A post and its dice rolls are written both or neither.
 /// </summary>
 /// <remarks>
 /// A roll cannot be produced a second time — rolling again answers a different
@@ -60,7 +60,7 @@ public class PostDiceTransactionShould : IntegrationTestBase
         await act.Should().ThrowAsync<DbUpdateException>(
             "the failure still reaches the caller; what the transaction removes is the remainder");
         (await dbContext.DiceRolls.AsNoTracking().AnyAsync(d => d.PostId == entity.PostId))
-            .Should().BeFalse("a refused post leaves no rolls behind (INV-6)");
+            .Should().BeFalse("a refused post leaves no rolls behind");
     }
 
     private static CreatePostEntity Entity(Guid roomId)

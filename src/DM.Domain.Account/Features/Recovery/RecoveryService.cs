@@ -54,8 +54,24 @@ internal class RecoveryService : IRecoveryService
     {
         var normalizedEmail = email.Trim().ToLowerInvariant();
 
-        // Check if email belongs to an active user
         var user = await _emailLookupRepository.GetUserByEmail(normalizedEmail);
+
+        // A removed account answers exactly as a live one: the same result, and
+        // so the same status and body on the wire. Answered "not found" it was
+        // one half of a subtraction - "taken" on registration minus "not
+        // found" here equalled "removed", learned by a guest in two requests
+        // and without a password. Nothing leaves by mail either, and no reset
+        // token is issued, because there is no password to reset; the way back
+        // runs through support. The address is checked for the same reason the
+        // live branch below checks it: an account without one answers the same
+        // way whether it is removed or not.
+        if (user != null && user.IsRemoved && !string.IsNullOrEmpty(user.Email))
+        {
+            _logger.LogInformation("Recovery requested for a removed account");
+            return RecoveryResult.PasswordReset;
+        }
+
+        // Check if email belongs to an active user
         if (user != null && !string.IsNullOrEmpty(user.Email))
         {
             // Send password reset email
@@ -63,7 +79,7 @@ internal class RecoveryService : IRecoveryService
             await _passwordResetRepository.ReplacePasswordResetToken(user.UserId, token);
             // Secret, not TokenId: the row keeps a hash of this value and nothing
             // that would let a reader of the table redeem the link.
-            await _passwordResetEmailSender.Send(user.Email, user.Username, token.Secret);
+            await _passwordResetEmailSender.Send(user.Email, token.Secret);
 
             // The journal the owner of the account reads: a reset he did not ask
             // for is the visible half of somebody working on his mailbox, and the

@@ -12,6 +12,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Forum.Features.Comments;
+using DM.Domain.Forum.Features.Topics;
 using DM.Domain.Game.Features.Comments;
 using DM.Testing;
 using DM.Testing.Dsl;
@@ -20,7 +21,6 @@ using DM.Web.API.Features.Blog.PublicationComments;
 using DM.Web.API.Features.Forum.Comments;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Game.Comments;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using AwesomeAssertions;
 using NSubstitute;
@@ -84,8 +84,7 @@ public class CommentBlacklistShould : UnitTestBase
                 Arg.Any<IReadOnlyCollection<Guid>>()).Returns(NoComments);
 
         var service = new BlogCommentApiService(
-            commentService, _identityProvider, _blacklist, _commentMapper,
-            Mock<IQuoteSourceService>());
+            commentService, _identityProvider, _blacklist, _commentMapper);
 
         await service.Get(_entityId, new CommentsQuery());
 
@@ -102,8 +101,7 @@ public class CommentBlacklistShould : UnitTestBase
                 Arg.Any<IReadOnlyCollection<Guid>>()).Returns(NoComments);
 
         var service = new PublicationCommentApiService(
-            commentService, _identityProvider, _blacklist, _commentMapper,
-            Mock<IQuoteSourceService>());
+            commentService, _identityProvider, _blacklist, _commentMapper);
 
         await service.Get(_entityId, new CommentsQuery());
 
@@ -120,8 +118,7 @@ public class CommentBlacklistShould : UnitTestBase
                 Arg.Any<IReadOnlyCollection<Guid>>()).Returns(NoComments);
 
         var service = new PublicationCommentApiService(
-            commentService, _identityProvider, _blacklist, _commentMapper,
-            Mock<IQuoteSourceService>());
+            commentService, _identityProvider, _blacklist, _commentMapper);
 
         await service.Get(_entityId, new CommentsQuery());
 
@@ -138,7 +135,7 @@ public class CommentBlacklistShould : UnitTestBase
                 Arg.Any<IReadOnlyCollection<Guid>>()).Returns(NoComments);
 
         var service = new ForumCommentApiService(
-            commentService, _identityProvider, _blacklist,
+            commentService, Mock<ITopicService>(), _identityProvider, _blacklist,
             _discussionMapper, new ForumCommentMapper());
 
         await service.GetDiscussion(_entityId, new PagingQuery());
@@ -156,8 +153,7 @@ public class CommentBlacklistShould : UnitTestBase
                 Arg.Any<IReadOnlyCollection<Guid>>()).Returns(NoComments);
 
         var service = new GameCommentApiService(
-            commentService, _identityProvider, _blacklist, _commentMapper,
-            Mock<IQuoteSourceService>());
+            commentService, _identityProvider, _blacklist, _commentMapper);
 
         await service.Get(_entityId, new CommentsQuery());
 

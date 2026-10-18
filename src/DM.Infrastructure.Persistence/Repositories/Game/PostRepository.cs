@@ -76,6 +76,36 @@ internal class PostRepository : IPostRepository
                 RoomTitle = x.Post.Room.Title
             });
 
+    /// <summary>
+    /// Page row of a room's read: the post exactly as every other read projects it.
+    /// </summary>
+    private static readonly Expression<Func<PostWithRating, Post>> RoomPostProjection =
+        ExpressionSplicer.Expand<Func<PostWithRating, Post>>(
+            x => PostMappers.PostProjection.Splice(x.Post));
+
+    /// <summary>
+    /// The review figures a list filters and sorts by, beside the post. EF Core
+    /// translates each aggregate into a correlated subquery, but the subqueries share
+    /// a single filter (!IsRemoved) so the query planner can fuse them — net cost on
+    /// a 20-row page is three LEFT JOIN LATERALs, not 60 independent round-trips.
+    /// </summary>
+    /// <remarks>
+    /// History: a previous refactor tried to collapse these into a GROUP BY subquery
+    /// + LEFT JOIN + <c>s == null ? 0 : s.Rating</c> ternary. That shape passed in
+    /// hand-written scenarios but made EF's CountAsync path fail translation ("could
+    /// not be translated" on the ternary-over-grouped-subquery expression), which
+    /// silently broke the rated-posts listing whenever it ran against actual data.
+    /// Navigation-property aggregates have been EF's first-class story since 7.0 and
+    /// translate reliably.
+    /// </remarks>
+    private static readonly Expression<Func<DbPost, PostWithRating>> WithRating = p => new PostWithRating
+    {
+        Post = p,
+        Rating = p.Reviews.Where(r => !r.IsRemoved).Sum(r => (int?)r.SignValue) ?? 0,
+        ReviewCount = p.Reviews.Count(r => !r.IsRemoved),
+        LastReviewUtc = p.Reviews.Where(r => !r.IsRemoved).Max(r => (DateTimeOffset?)r.CreatedUtc)
+    };
+
     /// <inheritdoc />
     public PostRepository(
         DmDbContext dbContext,
@@ -89,36 +119,300 @@ internal class PostRepository : IPostRepository
 
     #region Read Operations
 
-    public Task<int> Count(Guid roomId, Guid userId)
-    {
-        return _dbContext.Rooms
-            .Where(GameAccessibilityFilters.RoomAvailable(userId))
-            .Where(r => r.RoomId == roomId)
-            .SelectMany(r => r.Posts)
-            .CountAsync();
-    }
+    public async Task<int> Count(Guid roomId, RoomPostsQuery query, Guid userId) =>
+        await RoomPosts(roomId, query, userId,
+            await RemovedAccountScope.IdsIfAsked(_dbContext.Users, query.AuthorUsernames)).CountAsync();
 
-    public async Task<IEnumerable<Post>> Get(Guid roomId, PagingData paging, Guid userId)
+    public async Task<IEnumerable<Post>> Get(Guid roomId, RoomPostsQuery query, PagingData paging, Guid userId)
     {
-        var posts = await _dbContext.Rooms
-            .Where(GameAccessibilityFilters.RoomAvailable(userId))
-            .Where(r => r.RoomId == roomId)
-            .SelectMany(r => r.Posts)
-            // Ends on the identifier, because CreatedUtc is not unique: a busy second ties
-            // on its own, and the import of DM2 carries whole rooms written under one
-            // timestamp. Paging asks for the same order once per page, and rows the order
-            // cannot tell apart may come back arranged differently between two of those
-            // asks, which shows one post on both pages and another on neither. Comments
-            // (CommentSorting) and messages (the ChatId composite) close their order the
-            // same way; the index behind this one is (RoomId, CreatedUtc, PostId).
-            .OrderBy(p => p.CreatedUtc)
-            .ThenBy(p => p.PostId)
+        var authorIds = await RemovedAccountScope.IdsIfAsked(_dbContext.Users, query.AuthorUsernames);
+        var posts = await SortRoomPosts(RoomPosts(roomId, query, userId, authorIds), query)
             .Page(paging)
-            .ProjectToPost()
+            .Select(RoomPostProjection)
             .ToArrayAsync();
+
+        if (IsTheRoomAsWritten(query))
+        {
+            // The page is a stretch of the room itself, so a post's place on it is
+            // its place in the room. The one read that needs no numbering query is
+            // also the one read nearly every visit makes.
+            for (var i = 0; i < posts.Length; i++)
+            {
+                posts[i].Number = paging.Skip + i + 1;
+            }
+        }
+        else
+        {
+            await EnrichWithNumbers(posts);
+        }
 
         await EnrichWithCharacterPictures(posts);
         await EnrichWithAttachments(posts);
+        return posts;
+    }
+
+    /// <summary>
+    /// The posts of one room the reader may see and the query admits, each with its
+    /// rating, in no particular order yet. Shared by the count and the page, so a
+    /// filter reaches pagination and page alike.
+    /// </summary>
+    /// <remarks>
+    /// Reached through the rooms, so the reader's scope is the one filter that
+    /// expresses it: a room outside it holds no posts rather than refusing.
+    ///
+    /// Keeps the posts of removed accounts, signed by nobody
+    /// (<see cref="RemovedAuthors"/>): the page projects through the post formula
+    /// itself rather than through ProjectToPost, so it lifts the account filter
+    /// on its own.
+    /// </remarks>
+    private IQueryable<PostWithRating> RoomPosts(
+        Guid roomId, RoomPostsQuery query, Guid userId, IReadOnlyCollection<Guid>? authorIds)
+    {
+        var posts = _dbContext.Rooms
+            .KeepingRemovedAuthors()
+            .AsNoTracking()
+            .TagWith("DM.Game.RoomPosts")
+            .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .Where(r => r.RoomId == roomId)
+            .SelectMany(r => r.Posts);
+
+        posts = WhereWrittenBy(posts, query.Search, query.AuthorUsernames, authorIds,
+            query.CreatedFromUtc, query.CreatedToUtc);
+
+        // The characters and "without a character" are one choice: a post matches
+        // when it is by any chosen character or, with the flag, by none.
+        var characterIds = query.CharacterIds?.Distinct().ToArray() ?? [];
+        var withoutCharacter = query.WithoutCharacter == true;
+        if (characterIds.Length > 0)
+        {
+            posts = withoutCharacter
+                ? posts.Where(p => p.CharacterId == null || characterIds.Contains(p.CharacterId.Value))
+                : posts.Where(p => p.CharacterId != null && characterIds.Contains(p.CharacterId.Value));
+        }
+        else if (withoutCharacter)
+        {
+            posts = posts.Where(p => p.CharacterId == null);
+        }
+
+        return WhereRated(posts.Select(WithRating), query.HasReviews, query.MinRating, query.MaxRating);
+    }
+
+    /// <summary>
+    /// The order the reader asked for, closed on the writing order in the same
+    /// direction.
+    /// </summary>
+    /// <remarks>
+    /// Every field ends on (CreatedUtc, PostId), because none of them is unique:
+    /// ratings and review counts tie by design, a busy second gives several posts one
+    /// timestamp, and the import of DM2 carries whole rooms written under one. Paging
+    /// asks for the same order once per page, and rows the order cannot tell apart
+    /// may come back arranged differently between two of those asks, which shows one
+    /// post on both pages and another on neither. The index behind the writing order
+    /// is (RoomId, CreatedUtc, PostId).
+    /// </remarks>
+    private static IOrderedQueryable<PostWithRating> SortRoomPosts(
+        IQueryable<PostWithRating> posts, RoomPostsQuery query)
+    {
+        var desc = string.Equals(query.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+
+        IOrderedQueryable<PostWithRating>? ordered = query.SortBy?.ToLowerInvariant() switch
+        {
+            "rating" => desc
+                ? posts.OrderByDescending(x => x.Rating)
+                : posts.OrderBy(x => x.Rating),
+            "reviewcount" => desc
+                ? posts.OrderByDescending(x => x.ReviewCount)
+                : posts.OrderBy(x => x.ReviewCount),
+            // A post nobody reviewed has no last review, and PostgreSQL puts NULL
+            // first in a descending order: "the latest reviewed" would open on every
+            // post without a review. Those go last in either direction.
+            "lastreview" => desc
+                ? posts.OrderBy(x => x.LastReviewUtc == null).ThenByDescending(x => x.LastReviewUtc)
+                : posts.OrderBy(x => x.LastReviewUtc == null).ThenBy(x => x.LastReviewUtc),
+            _ => null
+        };
+
+        if (ordered == null)
+        {
+            return desc
+                ? posts.OrderByDescending(x => x.Post.CreatedUtc).ThenByDescending(x => x.Post.PostId)
+                : posts.OrderBy(x => x.Post.CreatedUtc).ThenBy(x => x.Post.PostId);
+        }
+
+        return desc
+            ? ordered.ThenByDescending(x => x.Post.CreatedUtc).ThenByDescending(x => x.Post.PostId)
+            : ordered.ThenBy(x => x.Post.CreatedUtc).ThenBy(x => x.Post.PostId);
+    }
+
+    /// <summary>
+    /// Whether the query asks for the room itself: every post, in the order it was
+    /// written.
+    /// </summary>
+    private static bool IsTheRoomAsWritten(RoomPostsQuery query) =>
+        string.IsNullOrWhiteSpace(query.Search) &&
+        (query.AuthorUsernames == null || query.AuthorUsernames.All(string.IsNullOrWhiteSpace)) &&
+        query.CharacterIds is not { Count: > 0 } &&
+        query.WithoutCharacter != true &&
+        query.MinRating == null &&
+        query.MaxRating == null &&
+        query.HasReviews == null &&
+        query.CreatedFromUtc == null &&
+        query.CreatedToUtc == null &&
+        (string.IsNullOrEmpty(query.SortBy) ||
+         string.Equals(query.SortBy, "created", StringComparison.OrdinalIgnoreCase)) &&
+        !string.Equals(query.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Fill <see cref="Post.Number"/>: the post's place in its room, in the order the
+    /// room is written in, whatever order the posts were read in.
+    /// </summary>
+    /// <remarks>
+    /// One statement for the page, numbering every live post of its rooms once. A
+    /// count per post ("how many were written before this one") costs the post's
+    /// place in the room, and a page sorted by rating is scattered across the whole
+    /// room, so twenty of them add up to ten passes over it rather than one.
+    ///
+    /// Written in SQL because the numbering is a window function, which LINQ does
+    /// not express. The soft-delete predicate is spelled out for that reason: the
+    /// global query filter does not reach a raw statement, and a removed post has no
+    /// place in the room. The order is the one the room is paged in, (CreatedUtc,
+    /// PostId), so the number of a post is where the unfiltered room shows it.
+    /// </remarks>
+    private async Task EnrichWithNumbers(IReadOnlyCollection<Post> posts)
+    {
+        if (posts.Count == 0) return;
+
+        var roomIds = posts.Select(p => p.RoomId).Distinct().ToArray();
+        var postIds = posts.Select(p => p.Id).ToArray();
+
+        var numbers = await _dbContext.Database.SqlQuery<PostNumberRow>($"""
+            SELECT numbered."PostId", numbered."Number"
+            FROM (
+                SELECT p."PostId",
+                       CAST(row_number() OVER (
+                           PARTITION BY p."RoomId" ORDER BY p."CreatedUtc", p."PostId") AS integer) AS "Number"
+                FROM "Posts" p
+                WHERE p."RoomId" = ANY({roomIds}) AND NOT p."IsRemoved"
+            ) AS numbered
+            WHERE numbered."PostId" = ANY({postIds})
+            """).ToDictionaryAsync(row => row.PostId, row => row.Number);
+
+        foreach (var post in posts)
+        {
+            post.Number = numbers.TryGetValue(post.Id, out var number) ? number : null;
+        }
+    }
+
+    /// <summary>One row of <see cref="EnrichWithNumbers"/>.</summary>
+    private sealed class PostNumberRow
+    {
+        public Guid PostId { get; init; }
+        public int Number { get; init; }
+    }
+
+    /// <summary>
+    /// The filters on what a post says, who wrote it and when: the same on a room's
+    /// list and on the rated feed, so one name means one thing on both.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="authorIds" /> is what the names mean when "Аккаунт удален" is
+    /// among them - the removed accounts and the live ones named alongside
+    /// (<see cref="RemovedAccountScope" />) - and null otherwise.
+    /// </remarks>
+    private static IQueryable<DbPost> WhereWrittenBy(
+        IQueryable<DbPost> posts,
+        string? search,
+        IReadOnlyCollection<string>? authorUsernames,
+        IReadOnlyCollection<Guid>? authorIds,
+        DateTimeOffset? createdFromUtc,
+        DateTimeOffset? createdToUtc)
+    {
+        // Search filter (case-insensitive contains on the visible text of the post —
+        // the projection written beside the body, which both full-text searches
+        // already read).
+        //
+        // It used to match against GameText with the [private] block cut out by a
+        // regexp inside the query, and the cut is what made the filter an oracle.
+        // Cutting leaves a trace: the block becomes a space, and the whitespace
+        // around it stays, so a phrase reaching across the place where the block
+        // stood matches the post without it and misses the post with it. The reader
+        // never sees a word of the hidden text and still learns it is there, from
+        // which rows came back and which did not.
+        //
+        // The projection has nothing to cut. It is the plain-text render of the
+        // body, where [private] is filtered out as a node rather than deleted as a
+        // string, and the runs of whitespace it leaves are collapsed — so a post
+        // carrying a hidden block and the same post without one project to the same
+        // text, and this filter cannot tell them apart. It is also the string the
+        // reader is shown: the markup is gone from it, so what matches here is what
+        // is on the page.
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var pattern = LikePatterns.Contains(search);
+            posts = posts.Where(p => EF.Functions.ILike(
+                EF.Property<string>(p, "SearchText"), pattern));
+        }
+
+        // Author filter (repeated parameter, materialised before LINQ). The profile of
+        // removed accounts asks by the author column, joining no account.
+        if (authorIds is not null)
+        {
+            posts = posts.Where(p => authorIds.Contains(p.AuthorId));
+        }
+        else if (authorUsernames is { Count: > 0 })
+        {
+            var usernames = authorUsernames
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Select(u => u.Trim())
+                .ToArray();
+            if (usernames.Length > 0)
+            {
+                // Both reads lift the account filter to keep the posts of removed
+                // accounts (RemovedAuthors); a removed login matches nothing, or
+                // the old name would find what the removal took off it.
+                posts = posts.Where(p => !p.Author.IsRemoved && usernames.Contains(p.Author.Username));
+            }
+        }
+
+        // Post creation date filters
+        if (createdFromUtc.HasValue)
+        {
+            var from = createdFromUtc.Value;
+            posts = posts.Where(p => p.CreatedUtc >= from);
+        }
+        if (createdToUtc.HasValue)
+        {
+            posts = posts.WhereAtOrBefore(p => p.CreatedUtc, createdToUtc.Value);
+        }
+
+        return posts;
+    }
+
+    /// <summary>
+    /// The filters on how a post was received. Rating can be negative.
+    /// </summary>
+    private static IQueryable<PostWithRating> WhereRated(
+        IQueryable<PostWithRating> posts, bool? hasReviews, int? minRating, int? maxRating)
+    {
+        posts = hasReviews switch
+        {
+            true => posts.Where(x => x.ReviewCount > 0),
+            false => posts.Where(x => x.ReviewCount == 0),
+            null => posts
+        };
+
+        if (minRating.HasValue)
+        {
+            var min = minRating.Value;
+            posts = posts.Where(x => x.Rating >= min);
+        }
+
+        if (maxRating.HasValue)
+        {
+            var max = maxRating.Value;
+            posts = posts.Where(x => x.Rating <= max);
+        }
+
         return posts;
     }
 
@@ -143,6 +437,7 @@ internal class PostRepository : IPostRepository
         {
             await EnrichWithCharacterPictures(new[] { post });
             await EnrichWithAttachments(new[] { post });
+            await EnrichWithNumbers(new[] { post });
         }
         return post;
     }
@@ -155,7 +450,11 @@ internal class PostRepository : IPostRepository
         // projection into RatedPostRow, so nothing here reaches the change tracker
         // either way. AsNoTracking stays as the default of a read path.
         // See PERFORMANCE.md → "AsNoTracking".
+        // The account filter is lifted to keep the posts of removed accounts,
+        // signed by nobody (RemovedAuthors); the page projects through the post
+        // formula itself, not through ProjectToPost.
         var baseQuery = _dbContext.Posts
+            .KeepingRemovedAuthors()
             .AsNoTracking()
             .TagWith("DM.Game.PostsRated")
             .Where(p => !p.IsRemoved)
@@ -171,44 +470,9 @@ internal class PostRepository : IPostRepository
             baseQuery = baseQuery.Where(p => p.Room.GameId == query.GameId.Value);
         }
 
-        // Search filter (case-insensitive contains on the visible text of the post —
-        // the projection written beside the body, which both full-text searches
-        // already read).
-        //
-        // It used to match against GameText with the [private] block cut out by a
-        // regexp inside the query, and the cut is what made the filter an oracle.
-        // Cutting leaves a trace: the block becomes a space, and the whitespace
-        // around it stays, so a phrase reaching across the place where the block
-        // stood matches the post without it and misses the post with it. The reader
-        // never sees a word of the hidden text and still learns it is there, from
-        // which rows came back and which did not.
-        //
-        // The projection has nothing to cut. It is the plain-text render of the
-        // body, where [private] is filtered out as a node rather than deleted as a
-        // string, and the runs of whitespace it leaves are collapsed — so a post
-        // carrying a hidden block and the same post without one project to the same
-        // text, and this filter cannot tell them apart. It is also the string the
-        // reader is shown: the markup is gone from it, so what matches here is what
-        // is on the page.
-        if (!string.IsNullOrWhiteSpace(query.Search))
-        {
-            var pattern = LikePatterns.Contains(query.Search);
-            baseQuery = baseQuery.Where(p => EF.Functions.ILike(
-                EF.Property<string>(p, "SearchText"), pattern));
-        }
-
-        // Author filter (repeated parameter, materialised before LINQ)
-        if (query.AuthorUsernames is { Count: > 0 })
-        {
-            var usernames = query.AuthorUsernames
-                .Where(u => !string.IsNullOrWhiteSpace(u))
-                .Select(u => u.Trim())
-                .ToArray();
-            if (usernames.Length > 0)
-            {
-                baseQuery = baseQuery.Where(p => usernames.Contains(p.Author.Username));
-            }
-        }
+        baseQuery = WhereWrittenBy(baseQuery, query.Search, query.AuthorUsernames,
+            await RemovedAccountScope.IdsIfAsked(_dbContext.Users, query.AuthorUsernames),
+            query.CreatedFromUtc, query.CreatedToUtc);
 
         // Reviewer filter — keep only posts which have at least one active
         // review authored by the given username. Powers the profile page
@@ -220,17 +484,8 @@ internal class PostRepository : IPostRepository
             baseQuery = baseQuery.Where(p => _dbContext.PostReviews
                 .Any(r => r.PostId == p.PostId &&
                           !r.IsRemoved &&
+                          !r.Author.IsRemoved &&
                           r.Author.Username == reviewer));
-        }
-
-        // Post creation date filters
-        if (query.CreatedFromUtc.HasValue)
-        {
-            baseQuery = baseQuery.Where(p => p.CreatedUtc >= query.CreatedFromUtc.Value);
-        }
-        if (query.CreatedToUtc.HasValue)
-        {
-            baseQuery = baseQuery.WhereAtOrBefore(p => p.CreatedUtc, query.CreatedToUtc.Value);
         }
 
         // LastReviewedFromUtc filter — only posts that have a review at or after this date
@@ -243,45 +498,8 @@ internal class PostRepository : IPostRepository
                           r.CreatedUtc >= after));
         }
 
-        // Review stats via the Post.Reviews navigation property. EF Core
-        // translates each aggregate into a correlated subquery, but the
-        // subqueries share a single filter (!IsRemoved) so the query
-        // planner can fuse them — net cost on a 20-row page is three
-        // LEFT JOIN LATERALs, not 60 independent round-trips.
-        //
-        // History: a previous refactor tried to collapse these into a
-        // GROUP BY subquery + LEFT JOIN + `s == null ? 0 : s.Rating`
-        // ternary. That shape passed in hand-written scenarios but made
-        // EF's CountAsync path fail translation ("could not be
-        // translated" on the ternary-over-grouped-subquery expression),
-        // which silently broke the rated-posts listing whenever it ran
-        // against actual data. Navigation-property aggregates have been
-        // EF's first-class story since 7.0 and translate reliably.
-        var projectedQuery = baseQuery.Select(p => new PostWithRating
-        {
-            Post = p,
-            Rating = p.Reviews.Where(r => !r.IsRemoved).Sum(r => (int?)r.SignValue) ?? 0,
-            ReviewCount = p.Reviews.Count(r => !r.IsRemoved),
-            LastReviewUtc = p.Reviews.Where(r => !r.IsRemoved).Max(r => (DateTimeOffset?)r.CreatedUtc)
-        });
-
-        // HasReviews filter
-        if (query.HasReviews == true)
-        {
-            projectedQuery = projectedQuery.Where(x => x.ReviewCount > 0);
-        }
-
-        // MinRating filter
-        if (query.MinRating.HasValue)
-        {
-            projectedQuery = projectedQuery.Where(x => x.Rating >= query.MinRating.Value);
-        }
-
-        // MaxRating filter (rating can be negative)
-        if (query.MaxRating.HasValue)
-        {
-            projectedQuery = projectedQuery.Where(x => x.Rating <= query.MaxRating.Value);
-        }
+        var projectedQuery = WhereRated(baseQuery.Select(WithRating),
+            query.HasReviews, query.MinRating, query.MaxRating);
 
         // Sorting
         var sortBy = query.SortBy?.ToLower() ?? "rating";
@@ -325,11 +543,6 @@ internal class PostRepository : IPostRepository
                 Game = null
             };
             post.AuthorGameRole = AuthorGameRoleOf(post);
-            // The feed's card does not show edit history, and the shared formula
-            // reads it for the room view that does. Cleared rather than kept: what
-            // a card shows is a decision of its own, not a side effect of the two
-            // reads coming to share one projection.
-            post.Edits = [];
             return post;
         }).ToArray();
 
@@ -357,19 +570,15 @@ internal class PostRepository : IPostRepository
             // Two different ids on purpose. Accessibility is Guid.Empty because
             // this feed has already fixed its own visibility above — open rooms
             // of approved, non-draft games — and the real viewer could only
-            // narrow that, dropping a game they are blacklisted from out of the
-            // dictionary and leaving a live post with a null Room.Game. The
-            // viewer-scoped fields are filled for the real viewer, because
-            // otherwise a subscriber loses "reader" from the attached game's
-            // participation: the whole subscriber set used to travel in the DTO
-            // and the resolver found them in it.
+            // narrow that, dropping a game they cannot see out of the dictionary
+            // and leaving a live post with a null Room.Game. The viewer-scoped
+            // fields are filled for the real viewer, because otherwise a
+            // subscriber loses "reader" from the attached game's participation:
+            // the whole subscriber set used to travel in the DTO and the
+            // resolver found them in it.
             //
-            // Note what the accessibility choice does NOT do: it is not what
-            // lets a blacklisted user read this feed. The feed's own filter has
-            // no blacklist term at all, unlike every other post read, which goes
-            // through GameAccessibilityFilters.RoomAvailable. Closing that is a
-            // decision about what a blacklist means for reading, not a choice of
-            // sentinel here.
+            // The game's blacklist has no term here and none in any other post
+            // read (GameAccessibilityFilters): it closes writing, not reading.
             var gamesById = (await _gameRepository.GetByIds(uniqueGameIds, Guid.Empty, viewerId))
                 .ToDictionary(g => g.Id);
 
@@ -542,7 +751,7 @@ internal class PostRepository : IPostRepository
 
             _dbContext.Posts.Add(dbPost);
 
-            // The rolls of the post, in the same transaction (INV-6): a roll
+            // The rolls of the post, in the same transaction: a roll
             // cannot be produced a second time, so it must never exist without
             // the post or the post without it. EF orders the inserts under the
             // FK, so a single SaveChanges writes the post first.
@@ -572,10 +781,15 @@ internal class PostRepository : IPostRepository
             await transaction.CommitAsync();
         });
 
-        return await _dbContext.Posts
+        var created = await _dbContext.Posts
             .Where(p => p.PostId == createPost.PostId)
             .ProjectToPost()
             .FirstAsync();
+
+        // The client puts the answer into the room it is reading, and a post
+        // without its number there reads as a post outside the count.
+        await EnrichWithNumbers(new[] { created });
+        return created;
     }
 
     public async Task<Post?> Update(UpdatePostEntity updatePost)
@@ -608,6 +822,7 @@ internal class PostRepository : IPostRepository
         if (updated != null)
         {
             await EnrichWithAttachments(new[] { updated });
+            await EnrichWithNumbers(new[] { updated });
         }
 
         return updated;
@@ -627,27 +842,55 @@ internal class PostRepository : IPostRepository
     /// remove them — the sweeper walks soft-deleted upload rows, and a live row
     /// pointing at a hidden post is not one — so a deleted post used to leave its
     /// files in the bucket for the life of the bucket.
+    ///
+    /// The mark itself is the gate. The post used to be read, checked and marked
+    /// over three steps with nothing holding the row in between, so two removals
+    /// of one post both found it live and both took the author's count down: a
+    /// stored column, lowered twice for one post, with nothing that recomputes it
+    /// and no row left to say what the right number was. Here the live state is in
+    /// the predicate of the write, and how many rows it matched decides whether
+    /// anything else happens at all.
     /// </remarks>
-    public async Task Delete(Guid postId, Guid deletedByUserId)
+    /// <returns>Whether this call is the one that removed the post</returns>
+    public async Task<bool> Delete(Guid postId, Guid deletedByUserId)
     {
+        var removed = false;
+
         // The strategy wrapper is required because the API host configures
         // EnableRetryOnFailure.
         await RetryableWrite.Run(_dbContext, async () =>
         {
-            // Read inside the block: the clear above drops the tracked post, so it
-            // has to be loaded again. On the first attempt this costs nothing extra.
-            var post = await _dbContext.Posts.FindAsync(postId);
-            if (post == null)
+            // A replay decides again on what it finds, rather than carrying the
+            // answer of the attempt whose transaction rolled back.
+            removed = false;
+
+            var now = _dateTimeProvider.Now;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            // One statement reads and writes the row: a second removal arriving
+            // together with this one waits on the row lock and then re-tests the
+            // predicate against the committed state, so exactly one of the two
+            // matches. Everything below hangs off that.
+            var marked = await _dbContext.Posts
+                .Where(p => p.PostId == postId && !p.IsRemoved)
+                .ExecuteUpdateAsync(p => p
+                    .SetProperty(x => x.IsRemoved, true)
+                    .SetProperty(x => x.DeletedByUserId, (Guid?)deletedByUserId)
+                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)now));
+            if (marked == 0)
             {
                 return;
             }
 
-            var authorId = post.AuthorId;
-            var now = _dateTimeProvider.Now;
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
-
-            SoftDelete.Mark(post, deletedByUserId, now);
-            await _dbContext.SaveChangesAsync();
+            // After the mark, so the row it reads is the one this transaction now
+            // holds; IgnoreQueryFilters, because that row is removed and the
+            // global filter hides it.
+            var authorId = await _dbContext.Posts
+                .IgnoreQueryFilters()
+                .TagWith("DM.Game.RemovedPostAuthor")
+                .Where(p => p.PostId == postId)
+                .Select(p => p.AuthorId)
+                .FirstAsync();
 
             // The soft-delete filter on Uploads keeps this to the live rows, so a
             // file the author had already taken off does not get its grace period
@@ -675,7 +918,10 @@ internal class PostRepository : IPostRepository
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, x => x.QuantityRating - 1));
 
             await transaction.CommitAsync();
+            removed = true;
         });
+
+        return removed;
     }
 
     #endregion

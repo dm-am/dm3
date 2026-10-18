@@ -25,6 +25,8 @@
 interface NetworkInformationLike {
   saveData?: boolean;
   effectiveType?: string;
+  addEventListener?(type: "change", listener: () => void): void;
+  removeEventListener?(type: "change", listener: () => void): void;
 }
 
 function connection(): NetworkInformationLike | undefined {
@@ -53,4 +55,25 @@ export function savingData(): boolean {
 export function onSlowConnection(): boolean {
   const effective = connection()?.effectiveType;
   return effective === "2g" || effective === "slow-2g";
+}
+
+/**
+ * Calls back when the reader's network changes: the device comes back online,
+ * or the connection itself reports a change (wifi to mobile data, a VPN
+ * switched on or off). Returns the function that stops listening.
+ *
+ * `online` alone misses the cases that matter most — a VPN toggling leaves
+ * the device online throughout — and `navigator.connection` alone is absent
+ * in some browsers, so both are listened to where they exist. `offline` is
+ * not a reason to measure: there is nothing to reach, and the block keeps its
+ * last honest reading until the network is back.
+ */
+export function onConnectionChange(listener: () => void): () => void {
+  window.addEventListener("online", listener);
+  const info = connection();
+  info?.addEventListener?.("change", listener);
+  return () => {
+    window.removeEventListener("online", listener);
+    info?.removeEventListener?.("change", listener);
+  };
 }

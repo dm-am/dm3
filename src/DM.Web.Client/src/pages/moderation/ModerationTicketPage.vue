@@ -1,182 +1,130 @@
 <script setup lang="ts">
 /**
- * ModerationTicketPage — single ticket view for moderators (doc
- * 4.2.3.2.6 composition: ticket block 4.2.2.23 + reply block 4.2.2.24).
- * Actions: assign to me, resolve with an answer + resolution status
- * ("Закрыто" / "Спам" per backend ResolveTicketValidator) and an optional
- * warning (0-6 points) or ban (SeniorModerator+, time-boxed).
+ * ModerationTicketPage — single ticket view for moderators (doc 4.2.3.2.6
+ * composition: ticket block 4.2.2.23 + reply block 4.2.2.24).
+ *
+ * A ticket works as a topic with answers and looks like one: under a link
+ * back to the queue "Обращения", the block of the ticket (TicketThread) with
+ * its author in the caption, the answers of the author and of moderation under
+ * it and the form at their foot (TicketConversation). Nobody takes a ticket in
+ * hand: any moderator to whom its reason is shown answers and closes it.
+ *
+ * The moderator chooses in the form, over the field of the answer, the status
+ * the answer moves the ticket to: "Ожидает ответа пользователя" unless he
+ * closes it or marks it as spam, and closing needs no word. The text and the
+ * status go in one request (TicketAnswerForm), and the server answers with the
+ * ticket as it stands after them, which the page shows: a closed ticket loses
+ * its form and ends with the line of who closed it. The choice is there only
+ * where the server says the reader answers as moderation (canResolve): never
+ * on a closed ticket, never for its author, whose answer hands the ticket to
+ * moderation whatever his role.
+ *
+ * The ticket punishes nobody: a warning and a ban are given from the profile
+ * of the violator, where the rest of his record is.
+ *
+ * A ticket the moderator may not read, its reason not shown to his role or a
+ * complaint about him, is "not found", the same as one that does not exist.
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { storeToRefs } from "pinia";
 import {
+  TICKET_SUBTYPE_LABELS,
+  awaitsReader,
   ticketApi,
-  type ResolveTicketRequest,
-  type Ticket,
-  type TicketStatus,
+  type AnswerStatus,
+  type TicketDetails,
 } from "@/entities/ticket";
-import Form from "@/shared/ui/Form/Form.vue";
-import FormField from "@/shared/ui/Form/FormField.vue";
-import { Select, type SelectOption } from "@/shared/ui/Select";
-import { Button } from "@/shared/ui/Button";
+import { useAuthStore } from "@/entities/user";
+import {
+  TicketConversation,
+  TicketThread,
+  TicketThreadSkeleton,
+} from "@/widgets/ticket-thread";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
-import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { formatDateFull } from "@/shared/lib/utils/datetime";
-import { useToast } from "@/shared/lib/composables/useToast";
+import { LeadText, SecondaryText } from "@/shared/ui/Layout";
+import { MODERATION_SECTIONS } from "@/shared/config/moderationSections";
+import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import {
   joinTitleSegments,
   useDocumentTitle,
 } from "@/shared/lib/composables/useDocumentTitle";
-import TicketCard from "./tickets/TicketCard.vue";
 import { useRoleGate } from "./lib/useRoleGate";
-import { notifyFailure } from "@/shared/lib/errors";
 
 const route = useRoute();
-const toast = useToast();
-const { hasAccess, deniedText, isSeniorModerator } = useRoleGate("Moderator");
+const { hasAccess, deniedText } = useRoleGate("Moderator");
+const { user } = storeToRefs(useAuthStore());
 
 const ticketId = computed(() => String(route.params.ticketId ?? ""));
 
-const ticket = ref<Ticket | null>(null);
+const ticket = ref<TicketDetails | null>(null);
 const loading = ref(false);
 const loadError = ref<string | null>(null);
+const notFound = ref(false);
 
-// The subject first: the model carries no ticket number (the URL holds a
-// guid), so the subject line is all that tells two ticket tabs apart.
-useDocumentTitle(() => joinTitleSegments(ticket.value?.comment, "Обращение"));
+// The reason first: the model carries no ticket number (the URL holds a guid),
+// and the forms ask for no subject, so the reason is what tells two ticket tabs
+// apart.
+useDocumentTitle(() =>
+  joinTitleSegments(
+    ticket.value ? TICKET_SUBTYPE_LABELS[ticket.value.subtype] : null,
+    "Обращение",
+  ),
+);
 
 async function fetch() {
   if (!ticketId.value) return;
   loading.value = true;
+  notFound.value = false;
   const { data, error } = await ticketApi.getTicket(ticketId.value);
   loading.value = false;
   if (error) {
+    // A 404 is a ticket the reader may not read or one that does not exist;
+    // anything else is a failure he can retry.
+    if ((error as { status?: number }).status === 404) {
+      notFound.value = true;
+      ticket.value = null;
+      loadError.value = null;
+      return;
+    }
     loadError.value = "Не удалось загрузить обращение";
     return;
   }
   loadError.value = null;
   ticket.value = data?.resource ?? null;
+  notFound.value = ticket.value === null;
 }
 
 watch(ticketId, fetch, { immediate: true });
 
-const isOpen = computed(
+/** The queue every ticket belongs to, by the section table's own words. */
+const QUEUE = "moderation-tickets";
+const queueLabel =
+  MODERATION_SECTIONS.find((section) => section.name === QUEUE)?.label ?? "";
+
+/**
+ * Writes the reader's answer, and for moderation the status it moves the
+ * ticket to. The server answers with the ticket as it stands after them, and
+ * the page shows that; a refusal leaves the ticket as it was, and the form
+ * gives the text back.
+ */
+async function send(text: string, status?: AnswerStatus) {
+  const id = ticketId.value;
+  const { data, error } = await ticketApi.createComment(id, {
+    text,
+    ...(status ? { status } : {}),
+  });
+  if (error) return { error };
+  const answered = data?.resource;
+  if (answered && ticket.value?.id === id) ticket.value = answered;
+  return { error: null };
+}
+
+const awaited = computed(
   () =>
     !!ticket.value &&
-    ticket.value.status !== "Closed" &&
-    ticket.value.status !== "Spam",
+    awaitsReader(ticket.value, user.value?.id, ticket.value.canResolve),
 );
-
-// --- Assign to me ---
-const assigning = ref(false);
-
-async function assignToMe() {
-  if (!ticket.value || assigning.value) return;
-  assigning.value = true;
-  const { data, error } = await ticketApi.assignTicketToMe(ticket.value.id);
-  assigning.value = false;
-  if (error) {
-    notifyFailure(error, "Не удалось взять обращение в работу");
-    return;
-  }
-  ticket.value = data?.resource ?? ticket.value;
-  toast.success("Обращение взято в работу");
-}
-
-// --- Resolve form ---
-const answer = ref("");
-const resolutionStatus = ref<TicketStatus>("Closed");
-
-const statusOptions: SelectOption[] = [
-  { value: "Closed", label: "Закрыто" },
-  { value: "Spam", label: "Спам" },
-];
-
-// Optional warning (only when the ticket has a target user)
-const issueWarning = ref(false);
-const warningKind = ref<"verbal" | "scored">("scored");
-const warningPoints = ref("1");
-const warningText = ref("");
-
-const warningKindOptions: SelectOption[] = [
-  { value: "verbal", label: "Устное предупреждение (0 баллов)" },
-  { value: "scored", label: "Предупреждение (1-6 баллов)" },
-];
-
-const warningPointsOptions: SelectOption[] = ["1", "2", "3", "4", "5", "6"].map(
-  (v) => ({ value: v, label: v }),
-);
-
-// Optional ban (SeniorModerator+; ticket resolution bans are time-boxed)
-const issueBan = ref(false);
-const banDuration = ref(String(24));
-const banComment = ref("");
-
-const banDurationOptions: SelectOption[] = [
-  { value: String(24), label: "1 день" },
-  { value: String(2 * 24), label: "2 дня" },
-  { value: String(3 * 24), label: "3 дня" },
-  { value: String(7 * 24), label: "7 дней" },
-  { value: String(14 * 24), label: "2 недели" },
-  { value: String(28 * 24), label: "4 недели" },
-  { value: String(90 * 24), label: "3 месяца" },
-  { value: String(180 * 24), label: "6 месяцев" },
-  { value: String(365 * 24), label: "12 месяцев" },
-];
-
-const canSanction = computed(() => !!ticket.value?.targetUsername);
-
-const canSubmit = computed(() => {
-  if (!answer.value.trim() || answer.value.length > 2000) return false;
-  if (issueWarning.value) {
-    if (!warningText.value.trim() || warningText.value.length > 2000)
-      return false;
-  }
-  if (issueBan.value) {
-    if (!banComment.value.trim() || banComment.value.length > 2000)
-      return false;
-  }
-  return true;
-});
-
-const resolving = ref(false);
-
-async function resolve() {
-  if (!ticket.value || !canSubmit.value || resolving.value) return;
-  resolving.value = true;
-
-  const request: ResolveTicketRequest = {
-    status: resolutionStatus.value,
-    answer: answer.value.trim(),
-  };
-  if (issueWarning.value && canSanction.value) {
-    request.issueWarning = true;
-    request.warningPoints =
-      warningKind.value === "verbal" ? 0 : parseInt(warningPoints.value, 10);
-    request.warningText = warningText.value.trim();
-  }
-  if (issueBan.value && canSanction.value && isSeniorModerator.value) {
-    request.issueBan = true;
-    request.banDurationHours = parseInt(banDuration.value, 10);
-    request.banComment = banComment.value.trim();
-  }
-
-  const { data, error } = await ticketApi.resolveTicket(
-    ticket.value.id,
-    request,
-  );
-  resolving.value = false;
-  if (error) {
-    notifyFailure(error, "Не удалось разрешить обращение");
-    return;
-  }
-  ticket.value = data?.resource ?? ticket.value;
-  answer.value = "";
-  issueWarning.value = false;
-  issueBan.value = false;
-  toast.success("Обращение разрешено");
-}
 </script>
 
 <template>
@@ -187,242 +135,36 @@ async function resolve() {
 
     <ErrorState v-else-if="loadError" :message="loadError" :retry="fetch" />
 
-    <!-- Skeleton: geometric twin of the full TicketCard -->
-    <div
-      v-else-if="loading && !ticket"
-      class="skeleton-card"
-      aria-hidden="true"
-    >
-      <div class="skeleton-line skeleton-title"></div>
-      <div class="skeleton-line skeleton-meta"></div>
-      <div class="skeleton-line skeleton-body"></div>
-      <div class="skeleton-line skeleton-body"></div>
-      <div class="skeleton-line skeleton-body-short"></div>
-    </div>
+    <TicketThreadSkeleton v-else-if="loading && !ticket" />
 
-    <SecondaryText v-else-if="!ticket">Обращение не найдено</SecondaryText>
+    <SecondaryText v-else-if="notFound || !ticket"
+      >Обращение не найдено</SecondaryText
+    >
 
     <template v-else>
-      <TicketCard :ticket="ticket" />
+      <LeadText>
+        <router-link :to="{ name: QUEUE }">{{ queueLabel }}</router-link>
+      </LeadText>
 
-      <!-- Moderator's answer (reply block per doc 4.2.2.24) -->
-      <div v-if="ticket.answer" class="ticket-answer">
-        <div class="answer-meta">
-          <template v-if="ticket.assignedModeratorUsername">
-            <router-link
-              :to="{
-                name: 'profile',
-                params: { username: ticket.assignedModeratorUsername },
-              }"
-            >
-              {{ ticket.assignedModeratorUsername }} </router-link
-            ><span class="answer-role" title="Модератор">[M]</span>
-          </template>
-          <span v-else>Модерация</span>
-          <span v-if="ticket.resolvedUtc" class="answer-date">
-            {{ formatDateFull(ticket.resolvedUtc) }}
-          </span>
-        </div>
-        <p class="answer-body">{{ ticket.answer }}</p>
-      </div>
+      <TicketThread
+        :ticket="ticket"
+        :answers-to="{
+          name: 'moderation-ticket',
+          params: { ticketId: ticket.id },
+        }"
+        :awaited="awaited"
+      />
 
-      <!-- Actions for open tickets -->
-      <div v-if="isOpen" class="ticket-actions">
-        <Button
-          v-if="!ticket.assignedModeratorUsername"
-          type="button"
-          :loading="assigning"
-          @click="assignToMe"
-        >
-          Взять в работу
-        </Button>
-
-        <section class="resolve-form">
-          <BlockTitle>Ответ модерации</BlockTitle>
-
-          <Form
-            :valid="canSubmit"
-            :loading="resolving"
-            action="Разрешить обращение"
-            @submit="resolve"
-          >
-            <FormField label="Ответ" name="ticket-answer">
-              <BBCodeEditor
-                v-model="answer"
-                context="common"
-                placeholder="Текст ответа..."
-                :disabled="resolving"
-                :min-height="100"
-                :max-height="300"
-                :is-moderator="true"
-              />
-            </FormField>
-
-            <FormField label="Статус решения" name="ticket-resolution">
-              <Select
-                id="ticket-resolution"
-                :model-value="resolutionStatus"
-                :options="statusOptions"
-                @update:model-value="
-                  (v) => (resolutionStatus = v as TicketStatus)
-                "
-              />
-            </FormField>
-
-            <template v-if="canSanction">
-              <FormField name="ticket-issue-warning">
-                <label class="checkbox-label">
-                  <input v-model="issueWarning" type="checkbox" />
-                  Выдать предупреждение пользователю
-                  {{ ticket.targetUsername }}
-                </label>
-              </FormField>
-
-              <template v-if="issueWarning">
-                <FormField
-                  label="Тип предупреждения"
-                  name="ticket-warning-kind"
-                >
-                  <Select
-                    id="ticket-warning-kind"
-                    :model-value="warningKind"
-                    :options="warningKindOptions"
-                    @update:model-value="
-                      (v) => (warningKind = v as 'verbal' | 'scored')
-                    "
-                  />
-                </FormField>
-                <FormField
-                  v-if="warningKind === 'scored'"
-                  label="Баллы"
-                  name="ticket-warning-points"
-                >
-                  <Select
-                    id="ticket-warning-points"
-                    :model-value="warningPoints"
-                    :options="warningPointsOptions"
-                    @update:model-value="(v) => (warningPoints = v)"
-                  />
-                </FormField>
-                <FormField
-                  label="Причина предупреждения"
-                  name="ticket-warning-text"
-                >
-                  <textarea
-                    id="ticket-warning-text"
-                    v-model="warningText"
-                    rows="3"
-                    maxlength="2000"
-                    placeholder="Опишите нарушение..."
-                  ></textarea>
-                </FormField>
-              </template>
-
-              <template v-if="isSeniorModerator">
-                <FormField name="ticket-issue-ban">
-                  <label class="checkbox-label">
-                    <input v-model="issueBan" type="checkbox" />
-                    Выдать бан пользователю {{ ticket.targetUsername }}
-                  </label>
-                </FormField>
-
-                <template v-if="issueBan">
-                  <FormField label="Срок бана" name="ticket-ban-duration">
-                    <Select
-                      id="ticket-ban-duration"
-                      :model-value="banDuration"
-                      :options="banDurationOptions"
-                      @update:model-value="(v) => (banDuration = v)"
-                    />
-                  </FormField>
-                  <FormField label="Причина бана" name="ticket-ban-comment">
-                    <textarea
-                      id="ticket-ban-comment"
-                      v-model="banComment"
-                      rows="3"
-                      maxlength="2000"
-                      placeholder="Причина бана..."
-                    ></textarea>
-                  </FormField>
-                </template>
-              </template>
-            </template>
-          </Form>
-        </section>
-      </div>
+      <TicketConversation
+        :ticket="ticket"
+        :send="send"
+        :draft-key="composerDraftKey('ticket', 'comment', ticket.id)"
+      />
     </template>
   </div>
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Skeleton" as *
-
 .moderation-ticket
-  display: flex
-  flex-direction: column
-  gap: $medium
-
-// --- Answer block (doc 4.2.2.24) ---
-.ticket-answer
-  +card()
-
-.answer-meta
-  display: flex
-  align-items: baseline
-  gap: $small
-  margin-bottom: $small
-  color: $text-muted
-  font-size: $secondary-font-size
-
-.answer-role
-  color: $accent-green
-  font-weight: bold
-
-.answer-date
-  margin-left: auto
-
-.answer-body
-  margin: 0
-  white-space: pre-line
-  overflow-wrap: anywhere
-
-// --- Actions ---
-.ticket-actions
-  display: flex
-  flex-direction: column
-  gap: $medium
-  align-items: flex-start
-
-.resolve-form
   width: 100%
-
-.checkbox-label
-  display: flex
-  align-items: center
-  gap: $small
-  cursor: pointer
-
-// --- Skeleton (mirrors the full TicketCard: $medium padding, 5 lines) ---
-.skeleton-card
-  +card()
-
-.skeleton-line
-  height: 1em
-  margin-bottom: $small
-  +skeleton-shimmer
-
-  &:last-child
-    margin-bottom: 0
-
-.skeleton-title
-  width: 40%
-
-.skeleton-meta
-  width: 65%
-
-.skeleton-body
-  width: 95%
-
-.skeleton-body-short
-  width: 70%
 </style>

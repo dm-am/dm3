@@ -38,6 +38,7 @@ internal class PostService : IPostService
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IEventProducer _producer;
     private readonly IIdentityProvider _identityProvider;
+    private readonly IBbTagNameCase _tagNames;
 
     public PostService(
         IValidator<CreatePost> createValidator,
@@ -52,7 +53,8 @@ internal class PostService : IPostService
         IDiceRoller diceRoller,
         IUnreadCountersRepository unreadCountersRepository,
         IEventProducer producer,
-        IIdentityProvider identityProvider)
+        IIdentityProvider identityProvider,
+        IBbTagNameCase tagNames)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -67,6 +69,7 @@ internal class PostService : IPostService
         _unreadCountersRepository = unreadCountersRepository;
         _producer = producer;
         _identityProvider = identityProvider;
+        _tagNames = tagNames;
     }
 
     #region Create
@@ -95,10 +98,12 @@ internal class PostService : IPostService
         // green mod block; strip it when authored by a non-moderator. GameText
         // renders on the GamePost surface (no [mod]) and is left as-is.
         if (!string.IsNullOrEmpty(metaText))
-            metaText = ModBlockSanitizer.SanitizeForAuthor(metaText, identity.User.Role);
+            metaText = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(metaText, identity.User.Role), BbTagSet.WithModBlock);
 
         var now = _dateTimeProvider.Now;
-        var gameText = createPost.GameText.Trim();
+        // The names of the tags in lower case, as the site writes them
+        // (IBbTagNameCase); the game text reads no [mod].
+        var gameText = _tagNames.ToLowerCase(createPost.GameText.Trim(), BbTagSet.Common);
 
         var entity = new CreatePostEntity
         {
@@ -118,7 +123,7 @@ internal class PostService : IPostService
         // has rolling disabled.
         //
         // The rolls travel inside the entity and the repository writes them in
-        // the post's own transaction: both land or neither does (INV-6). A roll
+        // the post's own transaction: both land or neither does. A roll
         // is the one thing here that cannot be produced again — rolling a second
         // time answers a different number — and the transaction is what makes
         // "rolls without a post" and "a post without its rolls" unrepresentable.
@@ -145,7 +150,7 @@ internal class PostService : IPostService
 
     #region Read
 
-    public async Task<(IEnumerable<Post> posts, PagingResult paging)> GetAllAsync(Guid roomId, PagingQuery query)
+    public async Task<(IEnumerable<Post> posts, PagingResult paging)> GetAllAsync(Guid roomId, RoomPostsQuery query)
     {
         // Reading is gated by the scope the room was fetched through:
         // GameAccessibilityFilters.RoomAvailable admits an open room to anyone
@@ -159,9 +164,9 @@ internal class PostService : IPostService
         var room = await _roomService.GetAsync(roomId);
 
         var identity = _identityProvider.Current;
-        var totalCount = await _repository.Count(roomId, identity.User.UserId);
+        var totalCount = await _repository.Count(roomId, query, identity.User.UserId);
         var paging = new PagingData(query, identity.Settings.Paging.PostsPerPage, totalCount);
-        var posts = (await _repository.Get(roomId, paging, identity.User.UserId)).ToList();
+        var posts = (await _repository.Get(roomId, query, paging, identity.User.UserId)).ToList();
 
         // Enrich posts with dice rolls
         await EnrichWithDiceRollsAsync(posts);
@@ -227,13 +232,15 @@ internal class PostService : IPostService
             // PATCH semantics: an absent field keeps its value, an empty string
             // clears it. Without the null check, editing only the in-game text
             // wiped the out-of-character text, and omitting the in-game text threw.
-            entity.GameText = updatePost.GameText?.Trim() ?? post.GameText;
+            entity.GameText = updatePost.GameText == null
+                ? post.GameText
+                : _tagNames.ToLowerCase(updatePost.GameText.Trim(), BbTagSet.Common);
             var metaText = updatePost.MetagameText?.Trim();
             // MetagameText (OOC) renders on the Comment surface where [mod] is
             // a green mod block; strip it when the editor is a non-moderator.
             if (!string.IsNullOrEmpty(metaText))
-                metaText = ModBlockSanitizer.SanitizeForAuthor(
-                    metaText, _identityProvider.Current.User.Role);
+                metaText = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(
+                    metaText, _identityProvider.Current.User.Role), BbTagSet.WithModBlock);
             entity.MetagameText = updatePost.MetagameText == null ? post.MetagameText : metaText;
         }
         else
@@ -317,7 +324,16 @@ internal class PostService : IPostService
         // The author's post count moves inside Delete, in the transaction that
         // removes the post: asked for separately here, the two could and did
         // commit apart.
-        await _repository.Delete(postId, _identityProvider.Current.User.UserId);
+        var removed = await _repository.Delete(postId, _identityProvider.Current.User.UserId);
+        if (!removed)
+        {
+            // Somebody else removed this post between the read above and the
+            // write. The room's unread counter and the event belong to the
+            // removal that happened, and repeating them here takes the counter
+            // down twice for one post. The caller is answered the same either
+            // way: the post is gone, which is what they asked for.
+            return;
+        }
 
         await _unreadCountersRepository.DecrementAsync(post.RoomId, UnreadEntryType.Message, post.CreatedUtc);
         await _producer.SendAsync(EventType.DeletedPost, postId);

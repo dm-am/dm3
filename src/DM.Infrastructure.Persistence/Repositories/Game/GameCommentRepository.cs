@@ -39,39 +39,46 @@ internal class GameCommentRepository : IGameCommentRepository
 
     /// <inheritdoc />
     public Task<Comment?> Get(Guid commentId) =>
-        CommentQueries.Single(_dbContext, commentId, "DM.GameComments.Get");
+        CommentQueries.Single(_dbContext, commentId, CommentQueries.GameIds(_dbContext), "DM.GameComments.Get");
+
+    /// <summary>
+    /// The game's half of the last-comment move.
+    /// </summary>
+    /// <remarks>
+    /// What the statement says and why it says it that way is stated once, on
+    /// <see cref="CommentWrites.Create{TOwner}" />. Only the table is spelled out
+    /// here: EF refuses raw SQL whose text is not a compile-time constant, so the
+    /// three owners cannot share one statement with the table interpolated into it.
+    /// </remarks>
+    private const string MoveLastCommentForwardSql =
+        """
+        UPDATE "Games" SET "LastCommentId" = {1}
+        WHERE "GameId" = {0}
+          AND NOT EXISTS (
+              SELECT 1 FROM "Comments" c
+              WHERE c."CommentId" = "Games"."LastCommentId"
+                AND (c."CreatedUtc", c."CommentId") > ({2}, {1}))
+        """;
 
     /// <inheritdoc />
-    public async Task<Comment> Create(CreateGameCommentEntity createComment)
-    {
-        var comment = new CommentDal
-        {
-            CommentId = createComment.CommentId,
-            EntityId = createComment.GameId,
-            AuthorId = createComment.AuthorId,
-            Text = createComment.Text,
-            CreatedUtc = createComment.CreatedUtc,
-            IsRemoved = false
-        };
-
-        _dbContext.Comments.Add(comment);
-
-        // Update game comment count and last comment
-        var game = await _dbContext.Games.FindAsync(createComment.GameId);
-        if (game != null)
-        {
-            game.CommentCount = createComment.NewCommentCount;
-            game.LastCommentId = createComment.CommentId;
-        }
-
-        await _dbContext.SaveChangesAsync();
-
-        return await _dbContext.Comments
-            .TagWith("DM.GameComments.Created")
-            .Where(c => c.CommentId == createComment.CommentId)
-            .ProjectToComment()
-            .FirstAsync();
-    }
+    public Task<Comment> Create(CreateGameCommentEntity createComment) =>
+        CommentWrites.Create(
+            _dbContext,
+            _dbContext.Games,
+            g => g.GameId == createComment.GameId,
+            g => g.CommentCount,
+            createComment.GameId,
+            new CommentDal
+            {
+                CommentId = createComment.CommentId,
+                EntityId = createComment.GameId,
+                AuthorId = createComment.AuthorId,
+                Text = createComment.Text,
+                CreatedUtc = createComment.CreatedUtc,
+                IsRemoved = false
+            },
+            MoveLastCommentForwardSql,
+            "DM.GameComments.Created");
 
     /// <inheritdoc />
     public Task<Comment> Update(UpdateGameCommentEntity updateComment)
@@ -79,54 +86,24 @@ internal class GameCommentRepository : IGameCommentRepository
             updateComment.EditorUserId, updateComment.ModifiedUtc, "DM.GameComments.Updated");
 
     /// <inheritdoc />
-    public async Task<GameCommentToDelete?> GetForDelete(Guid commentId)
-    {
-        var comment = await _dbContext.Comments
-            .TagWith("DM.GameComments.GetForDelete")
-            .Where(c => !c.IsRemoved && c.CommentId == commentId)
-            .ProjectToGameCommentToDelete()
-            .FirstOrDefaultAsync();
-
-        if (comment == null) return null;
-
-        var gameInfo = await _dbContext.Games
-            .Where(g => g.GameId == comment.GameId)
-            .Select(g => new { g.CommentCount, g.LastCommentId })
-            .FirstOrDefaultAsync();
-
-        if (gameInfo != null)
-        {
-            comment.GameCommentCount = gameInfo.CommentCount;
-            comment.IsLastComment = gameInfo.LastCommentId == commentId;
-        }
-
-        return comment;
-    }
+    public Task<GameCommentToDelete?> GetForDelete(Guid commentId) =>
+        CommentQueries.One(_dbContext, commentId, CommentQueries.GameIds(_dbContext))
+        .TagWith("DM.GameComments.GetForDelete")
+        .ProjectToGameCommentToDelete()
+        .FirstOrDefaultAsync();
 
     /// <inheritdoc />
-    public Task<Guid?> GetNewestCommentIdExcept(Guid gameId, Guid exceptCommentId) =>
-        CommentQueries.NewestExcept(
-            _dbContext, gameId, exceptCommentId, "DM.GameComments.NewestCommentIdExcept");
-
-    /// <inheritdoc />
-    public async Task Delete(DeleteGameCommentEntity deleteComment)
-    {
-        var comment = await _dbContext.Comments.FindAsync(deleteComment.CommentId);
-        if (comment != null)
-        {
-            SoftDelete.Mark(comment, deleteComment.DeletedByUserId, deleteComment.DeletedUtc);
-        }
-
-        var game = await _dbContext.Games.FindAsync(deleteComment.GameId);
-        if (game != null)
-        {
-            game.CommentCount = deleteComment.NewCommentCount;
-            if (deleteComment.NewLastCommentId.HasValue || game.LastCommentId == deleteComment.CommentId)
-            {
-                game.LastCommentId = deleteComment.NewLastCommentId;
-            }
-        }
-
-        await _dbContext.SaveChangesAsync();
-    }
+    public Task<bool> Delete(DeleteGameCommentEntity deleteComment) =>
+        CommentWrites.Delete(
+            _dbContext,
+            _dbContext.Games,
+            g => g.GameId == deleteComment.GameId,
+            g => g.GameId == deleteComment.GameId && g.LastCommentId == deleteComment.CommentId,
+            g => g.CommentCount,
+            g => g.LastCommentId,
+            deleteComment.GameId,
+            deleteComment.CommentId,
+            deleteComment.DeletedByUserId,
+            deleteComment.DeletedUtc,
+            "DM.GameComments.NewestCommentIdExcept");
 }

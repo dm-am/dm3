@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { FormField } from "@/shared/ui/Form";
 
 const props = withDefaults(
   defineProps<{
@@ -26,9 +27,9 @@ const emit = defineEmits<{
 const displayValue = computed(() => props.modelValue || props.empty);
 const isEmpty = computed(() => !props.modelValue);
 
-// The id the label points at. Random suffix, because a page renders a column of
-// these at once and an id has to be unique on the page. Same shape as FormField
-// generates.
+// The id of the control, so the caption FormField draws points at it. Random
+// suffix, because a page renders a column of these at once and an id has to be
+// unique on the page. Same shape as FormField generates.
 const controlId = `editable-field-${Math.random().toString(36).slice(2, 9)}`;
 </script>
 
@@ -36,12 +37,10 @@ const controlId = `editable-field-${Math.random().toString(36).slice(2, 9)}`;
   <!-- Display mode: render colon + space as REAL text nodes so
        Selection.toString() yields "Label: value" instead of
        "Labelvalue" (CSS `::after` content is invisible to the Selection
-       API). Edit mode keeps label as a bare <label> for the input. -->
+       API). Edit mode is a field of the page: the caption over it, bold,
+       the way every form of a page captions its fields (FormField). -->
   <div class="editable-field" :class="{ 'is-editing': editing }">
-    <template v-if="editing">
-      <label v-if="label" class="field-label" :for="controlId">{{
-        label
-      }}</label>
+    <FormField v-if="editing" :label="label">
       <textarea
         v-if="type === 'textarea'"
         :id="controlId"
@@ -67,7 +66,7 @@ const controlId = `editable-field-${Math.random().toString(36).slice(2, 9)}`;
           emit('update:modelValue', ($event.target as HTMLInputElement).value)
         "
       />
-    </template>
+    </FormField>
 
     <template v-else>
       <span v-if="label" class="field-label">{{ label }}:</span>{{ " "
@@ -100,10 +99,8 @@ const controlId = `editable-field-${Math.random().toString(36).slice(2, 9)}`;
 .field-value
   color: $text
 
-.field-input
-  font-family: inherit
-  font-size: $font-size
-
+// The type is the site's: 14 in a field of one line, the body's 16 in the
+// text area (+input in Inputs.sass). The row of FormField gives the width.
 .field-textarea
   resize: vertical
   min-height: $grid-step * 20

@@ -47,7 +47,7 @@ public static class NotificationCategoryMapper
         EventType.StatusCharacterDeclined or EventType.StatusCharacterExiled or
         EventType.StatusCharacterRetired or EventType.StatusCharacterDied or
         EventType.StatusCharacterResurrected or EventType.StatusCharacterLeft or
-        EventType.StatusCharacterReturned or
+        EventType.StatusCharacterReadmitted or
         EventType.AssignmentRequestCreated or
         EventType.PlayerInvitationCreated or EventType.ReaderInvitationCreated or
         EventType.RoomPendencyCreated or EventType.RoomPendencyReminder or
@@ -66,8 +66,10 @@ public static class NotificationCategoryMapper
         EventType.SuspiciousLoginActivity or EventType.AccountLocked
             => NotificationCategory.Security,
 
-        EventType.TicketCreated or EventType.TicketAssigned or EventType.TicketResolved or
-        EventType.WarningIssued or EventType.BanIssued or EventType.BanLifted or
+        EventType.TicketCreated or EventType.TicketAnswered or EventType.TicketReplied or
+        EventType.TicketResolved or
+        EventType.WarningIssued or EventType.WarningPointsChanged or
+        EventType.BanIssued or EventType.BanLifted or
         EventType.AwardGranted
             => NotificationCategory.Moderation,
 

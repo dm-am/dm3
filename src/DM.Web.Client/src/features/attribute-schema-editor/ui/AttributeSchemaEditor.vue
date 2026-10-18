@@ -1,33 +1,49 @@
 <script setup lang="ts">
 /**
- * AttributeSchemaEditor — reusable editor for a game's attribute schema.
- * Embedded inline in game creation and in dedicated schema/settings pages.
+ * AttributeSchemaEditor — reusable editor for a character sheet.
+ * Embedded inline in game creation, in the game settings and in the
+ * moderation section that keeps the site's templates.
  *
  * Composition (doc 4.2.2.10 / 4.2.3.5.12):
- *  - copy-existing-schema picker (Select of public + own schemas) + "Скопировать"
- *    (client-side copy of specs into the draft; persisted only on Save; copied
- *    specs receive fresh ids so a save never re-uses the source schema's ids)
+ *  - the "Схема атрибутов" list of sources with "Скопировать" beside it, over
+ *    the table (a client-side copy of the picked sheet into the draft,
+ *    persisted only on Save; copied specs receive fresh ids, so a save never
+ *    re-uses the source's ids and never claims the source's stored values)
  *  - the attribute table (row hover, empty-state) with per-row pencil/trash,
  *    "Приватность" / "Обязательность" checkboxes and a single-select "Дескриптор"
  *    radio (hidden for BbCode rows)
- *  - a full-width "+ Новый атрибут" row-styled add button
+ *  - "+ Новый атрибут" right under the table, which adds a row and opens its
+ *    form
  *  - a region that shows either the inline attribute edit form OR the
  *    character-creation preview (the edit form replaces the preview)
  *  - "Сохранить" / "Отмена" / "Превью" actions, with a data-loss confirm modal
  *    when the game already has characters
+ *
+ * One editor, three hosts, and what differs between them arrives as props: the
+ * list of sources (the moderation section has none, and a template is named by
+ * a field instead), the title field, and whether the game behind it has
+ * characters. Persistence is the host's: the editor hands its draft to `save`
+ * and never learns what address it goes to.
+ *
+ * The data-loss confirmation runs that save as its action: it waits shut for
+ * the answer, prints a refusal in itself and closes on success alone.
  */
-import { ref, computed, watch, nextTick, onMounted } from "vue";
-import type { AttributeSpecification, AttributeSchema } from "@/entities/game";
-import { AttributeSchemaType, gameApi } from "@/entities/game";
+import { ref, computed, watch, nextTick } from "vue";
+import type {
+  AttributeSpecification,
+  AttributeSchemaDraft,
+} from "@/entities/game";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select } from "@/shared/ui/Select";
 import Button from "@/shared/ui/Button/Button.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { SvgIcon } from "@/shared/ui/Icon";
+import { RowIconButton } from "@/shared/ui/RowIconButton";
+import type { DialogActionResult } from "@/shared/lib/composables/useDialogAction";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import AttributeEditForm from "./AttributeEditForm.vue";
 import CharacterFormPreview from "./CharacterFormPreview.vue";
+import type { SchemaSource } from "../model/schemaSources";
 import {
   SPEC_TYPE_LABELS,
   createEmptySchema,
@@ -37,10 +53,34 @@ import {
   isBbCode,
 } from "@/entities/game";
 
+/**
+ * The flags the data-loss confirmation sends its save with: the window prints
+ * a refusal in itself, so the interceptor keeps quiet about a 403, a 429 and a
+ * 5xx. A structural twin of the api's own, as NotepadAdapter declares it.
+ */
+type RefusalFlags = { ownsRefusal?: boolean; ownsRateLimit?: boolean };
+
 const props = withDefaults(
   defineProps<{
     /** The schema draft (v-model). Null means "no schema yet". */
-    modelValue: AttributeSchema | null;
+    modelValue: AttributeSchemaDraft | null;
+    /**
+     * Entries of the "Схема атрибутов" list. Absent, not empty, is what hides
+     * the list: the moderation section edits one template and has nothing to
+     * copy from, while a host that reads its sources shows the control from the
+     * first frame instead of after the answer.
+     */
+    sources?: SchemaSource[];
+    /**
+     * Why the list is short of its templates, or why the last copy brought
+     * nothing: printed under the list, where the reader is looking. The
+     * host owns it with the list (useSchemaSources), and the editor only
+     * prints it.
+     */
+    sourcesRefusal?: string;
+    /** Draw the "Название схемы" field. A template has a name; a game's sheet
+     * is named by its game. */
+    showTitle?: boolean;
     /**
      * Whether the game already has characters. When true, saving prompts a
      * data-loss confirmation because schema edits can invalidate sheets.
@@ -51,28 +91,51 @@ const props = withDefaults(
     showActions?: boolean;
     /** External save-in-flight indicator for the "Сохранить" button. */
     saving?: boolean;
+    /**
+     * The host's answer that the draft on screen is the one the server has.
+     *
+     * The editor cannot know it: the draft it holds is a copy, and whether a
+     * save of it went through is the host's business. When it is true the
+     * button reads "Сохранено" and takes no press, which is the only place a
+     * schema save can be reported - the editor after a save shows the same
+     * list it showed before, and the page does not move.
+     */
+    saved?: boolean;
+    /** The host's refusal of the last save, shown under the actions. */
+    refusal?: string;
+    /**
+     * Sends the draft, and answers with the client's `{ error }`.
+     *
+     * The data-loss confirmation calls it with the refusal flags: the host
+     * hands them to the request and leaves the refusal to the window, which
+     * prints it in itself. The action bar calls it without them, and the host
+     * answers there as it always has: in `refusal`, or on a plate.
+     */
+    save?: (
+      draft: AttributeSchemaDraft,
+      options?: RefusalFlags,
+    ) => Promise<DialogActionResult>;
   }>(),
   {
+    sources: undefined,
+    sourcesRefusal: "",
+    showTitle: false,
     hasCharacters: false,
     showActions: true,
     saving: false,
+    refusal: "",
+    save: undefined,
   },
 );
 
 const emit = defineEmits<{
-  "update:modelValue": [AttributeSchema];
-  save: [AttributeSchema];
+  "update:modelValue": [AttributeSchemaDraft];
   cancel: [];
 }>();
 
-const schemaTypeOptions = [
-  { value: AttributeSchemaType.Private, label: "Приватная (только моя)" },
-  { value: AttributeSchemaType.Public, label: "Публичная (доступна всем)" },
-];
-
 // --- Draft state, synced with the v-model ---------------------------------
 
-const draft = ref<AttributeSchema>(
+const draft = ref<AttributeSchemaDraft>(
   props.modelValue ? cloneSchema(props.modelValue) : createEmptySchema(),
 );
 
@@ -97,26 +160,61 @@ watch(
   { deep: true },
 );
 
-// --- Copy-existing-schema picker ------------------------------------------
+// --- The "Схема атрибутов" list and "Скопировать" --------------------------
 
-const schemas = ref<AttributeSchema[]>([]);
-const selectedCopyId = ref("");
+const selectedSourceValue = ref("");
+const copying = ref(false);
+const showCopyConfirm = ref(false);
 
-const copyOptions = computed(() =>
-  schemas.value
-    .filter((s) => s.id)
-    .map((s) => ({ value: s.id as string, label: s.title })),
+const sourceOptions = computed(() =>
+  (props.sources ?? []).map((source) => ({
+    value: source.value,
+    label: source.label,
+  })),
 );
 
-onMounted(async () => {
-  const { data } = await gameApi.getSchemas();
-  if (data) schemas.value = data.resources;
-});
+const selectedSource = computed(
+  () =>
+    (props.sources ?? []).find((s) => s.value === selectedSourceValue.value) ??
+    null,
+);
 
-function copySchema() {
-  const source = schemas.value.find((s) => s.id === selectedCopyId.value);
+// The first entry is the default template, and it arrives picked (doc
+// 4.2.2.10). Re-picked whenever the list is replaced, because the value held
+// while the list was empty names nothing in the new one.
+watch(
+  () => props.sources,
+  (list) => {
+    if (!list?.length) return;
+    if (list.some((s) => s.value === selectedSourceValue.value)) return;
+    selectedSourceValue.value = list[0].value;
+  },
+  { immediate: true },
+);
+
+function requestCopy() {
+  if (!selectedSource.value || copying.value) return;
+  // A copy replaces the whole set, so a table with anything in it is asked
+  // about first.
+  if (draft.value.specifications.length > 0) {
+    showCopyConfirm.value = true;
+    return;
+  }
+  copyFromSource();
+}
+
+async function copyFromSource() {
+  showCopyConfirm.value = false;
+  const source = selectedSource.value;
   if (!source) return;
-  draft.value.specifications = cloneSpecsWithNewIds(source.specifications);
+
+  copying.value = true;
+  const specifications = await source.read();
+  copying.value = false;
+  // The read failed and said so; the draft the reader has is left alone.
+  if (!specifications) return;
+
+  draft.value.specifications = cloneSpecsWithNewIds(specifications);
   editingId.value = null;
   showPreview.value = true;
 }
@@ -188,7 +286,8 @@ const titleError = ref("");
 
 function validate(): boolean {
   titleError.value = "";
-  if (!draft.value.title.trim()) {
+  // Only a template carries a name, and only there is it required.
+  if (props.showTitle && !draft.value.title.trim()) {
     titleError.value = "Введите название схемы";
     return false;
   }
@@ -201,13 +300,22 @@ function requestSave() {
     showDataLossModal.value = true;
     return;
   }
-  commitSave();
+  void props.save?.(outgoing());
 }
 
-function commitSave() {
-  showDataLossModal.value = false;
+/** The draft as it leaves the editor: rows numbered in table order, copied. */
+function outgoing(): AttributeSchemaDraft {
   reindex();
-  emit("save", cloneSchema(draft.value));
+  return cloneSchema(draft.value);
+}
+
+/**
+ * The data-loss confirmation's action. The window runs it and closes on
+ * success alone, so a refused save leaves the question standing with the
+ * refusal in it and the draft as typed under it.
+ */
+function saveConfirmed() {
+  return props.save?.(outgoing(), { ownsRefusal: true, ownsRateLimit: true });
 }
 
 defineExpose({ validate, requestSave });
@@ -215,23 +323,34 @@ defineExpose({ validate, requestSave });
 
 <template>
   <div class="schema-editor">
-    <!-- Copy-existing-schema picker -->
-    <div class="copy-row">
-      <div class="copy-select">
+    <!-- The source list and its copy button -->
+    <form-field v-if="sources" label="Схема атрибутов" name="schema-source">
+      <div class="copy-row">
         <Select
-          v-model="selectedCopyId"
-          :options="copyOptions"
-          placeholder="Скопировать существующую схему"
-          aria-label="Скопировать существующую схему"
+          id="schema-source"
+          v-model="selectedSourceValue"
+          class="copy-select"
+          :options="sourceOptions"
         />
+        <Button
+          type="button"
+          :disabled="!selectedSource"
+          :loading="copying"
+          @click="requestCopy"
+        >
+          Скопировать
+        </Button>
       </div>
-      <Button type="button" :disabled="!selectedCopyId" @click="copySchema">
-        Скопировать
-      </Button>
-    </div>
+      <!-- Why the list is short, or why the copy brought nothing, under the
+           control it is about. A plate in the corner used to say this. -->
+      <p v-if="sourcesRefusal" class="form-error" role="alert">
+        {{ sourcesRefusal }}
+      </p>
+    </form-field>
 
     <!-- Schema meta -->
     <form-field
+      v-if="showTitle"
       label="Название схемы *"
       name="schema-title"
       :errors="titleError ? [titleError] : []"
@@ -243,15 +362,6 @@ defineExpose({ validate, requestSave });
         placeholder="Например, D&D 5e"
         maxlength="100"
         @input="titleError = ''"
-      />
-    </form-field>
-
-    <form-field label="Доступность">
-      <Select
-        id="schema-type"
-        :model-value="draft.type"
-        :options="schemaTypeOptions"
-        @update:model-value="draft.type = $event as AttributeSchemaType"
       />
     </form-field>
 
@@ -309,31 +419,25 @@ defineExpose({ validate, requestSave });
               }}</span>
             </td>
             <td class="col-actions">
-              <button
-                type="button"
-                class="icon-btn"
-                aria-label="Редактировать атрибут"
+              <RowIconButton
+                icon="pencil"
+                label="Редактировать атрибут"
                 @click="editAttribute(spec.id)"
-              >
-                <SvgIcon name="pencil" />
-              </button>
-              <button
-                type="button"
-                class="icon-btn danger"
-                aria-label="Удалить атрибут"
+              />
+              <RowIconButton
+                icon="trash"
+                label="Удалить атрибут"
                 @click="removeAttribute(spec.id)"
-              >
-                <SvgIcon name="trash" />
-              </button>
+              />
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <button type="button" class="add-attribute" @click="addAttribute">
+    <Button type="button" class="add-attribute" @click="addAttribute">
       + Новый атрибут
-    </button>
+    </Button>
 
     <!-- Region: inline edit OR character-creation preview -->
     <div class="editor-region">
@@ -347,20 +451,38 @@ defineExpose({ validate, requestSave });
 
     <!-- Action bar -->
     <div v-if="showActions" class="editor-actions">
-      <Button type="button" :loading="saving" @click="requestSave">
-        Сохранить
+      <Button
+        type="button"
+        variant="primary"
+        :loading="saving"
+        :disabled="saved"
+        @click="requestSave"
+      >
+        {{ saved ? "Сохранено" : "Сохранить" }}
       </Button>
       <Button type="button" @click="emit('cancel')">Отмена</Button>
       <Button type="button" @click="togglePreview">Превью</Button>
     </div>
 
+    <p v-if="refusal" class="form-error" role="alert">{{ refusal }}</p>
+
+    <!-- Replacing the whole set from another sheet -->
+    <ConfirmDialog
+      v-model:show="showCopyConfirm"
+      title="Скопировать схему атрибутов?"
+      message="Параметры выбранной схемы целиком заменят текущие"
+      confirm-label="Скопировать"
+      @confirm="copyFromSource"
+    />
+
     <!-- Data-loss confirmation -->
     <ConfirmDialog
       v-model:show="showDataLossModal"
-      title="Изменение схемы атрибутов"
-      message="В игре уже есть персонажи. Изменение схемы может затронуть заполненные анкеты. Сохранить изменения?"
+      title="Сохранить схему атрибутов?"
+      message="В игре уже есть персонажи, и правка схемы может затронуть их заполненные анкеты"
       confirm-label="Сохранить"
-      @confirm="commitSave"
+      failure="Не удалось сохранить схему атрибутов"
+      :action="saveConfirmed"
     />
   </div>
 </template>
@@ -377,13 +499,25 @@ defineExpose({ validate, requestSave });
   display: flex
   gap: $small
   align-items: stretch
+  width: 100%
 
   .copy-select
     flex: 1
 
 // --- Table ---
+// Every column stands at every width: the cells are 4 apart at their sides,
+// so the least the six columns take (the longest words of the headers and of
+// the type, a bold name, the two signs) is under 580, and the narrowest box
+// the table stands in at 1366, and on a phone, which lays out the same boxes,
+// is 600, the form of a new game. With cells 8 apart it would be 626, wider
+// than that box. The box asks the column for no width of its own
+// (inline-size containment, as DataTable's wrapper does). Where the box is
+// narrower than that least width, as the middle of three columns is in a
+// window of 1024 (300), the table scrolls sideways in it as a DataTable does,
+// and the page stays put.
 .table-wrap
   overflow-x: auto
+  contain: inline-size
 
 .attr-table
   width: 100%
@@ -391,7 +525,7 @@ defineExpose({ validate, requestSave });
 
   th
     text-align: left
-    padding: $small
+    padding: $small $grid-step
     font-size: $secondary-font-size
     color: $text-muted
     font-weight: normal
@@ -399,7 +533,7 @@ defineExpose({ validate, requestSave });
     white-space: nowrap
 
   td
-    padding: $small
+    padding: $small $grid-step
     border-bottom: 1px solid $border
     vertical-align: middle
 
@@ -431,9 +565,11 @@ defineExpose({ validate, requestSave });
 .dash
   color: $text-muted
 
+// No width here: the checkbox is the site's own drawing and its side belongs
+// to +checkbox. A width: auto on a box with appearance: none is its two
+// border lines and nothing between them.
 input[type="checkbox"],
 input[type="radio"]
-  width: auto
   margin: 0
   cursor: pointer
 
@@ -441,33 +577,10 @@ input[type="radio"]
   padding: $big
   color: $text-muted
 
-.icon-btn
-  padding: $tiny $small
-  background: none
-  border: none
-  color: $text-muted
-  cursor: pointer
-  font-size: 1.1em
-
-  &:hover
-    color: $text
-
-  &.danger:hover
-    color: $accent-red
-
+// The shared secondary button, at the left edge like every other control of
+// the page; the one primary of the editor is the save below.
 .add-attribute
-  width: 100%
-  padding: $small
-  background: none
-  border: 1px dashed $border
-  border-radius: $border-radius
-  color: $link
-  cursor: pointer
-  transition: background-color 0.15s ease, color 0.15s ease
-
-  &:hover
-    background-color: $bg-element-hover
-    color: $link-hover
+  align-self: flex-start
 
 .editor-region
   margin-top: $small
@@ -475,6 +588,16 @@ input[type="radio"]
 .editor-actions
   display: flex
   gap: $small
+  margin-top: $small
+
+.form-error
+  margin: 0
+  color: $accent-red
+  font-size: $secondary-font-size
+
+// Under the source list the line has no column gap to stand it off the
+// control, so it carries the step itself.
+.copy-row + .form-error
   margin-top: $small
 
 // --- Modal ---

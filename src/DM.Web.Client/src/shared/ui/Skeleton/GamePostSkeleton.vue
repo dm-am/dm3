@@ -4,14 +4,18 @@
  *
  * Layout contract — matches the real <GamePost> with show-navigation:
  *   1. Breadcrumb row (.post-nav) — OUTSIDE the card, ~21px tall.
- *   2. Post card (.post-card) with two columns:
- *        - left post-meta: 160px wide (character, avatar, date, rating)
- *        - right post-body: truncated content lines
+ *   2. Post card (.post-card) with two columns, side by side at every width:
+ *        - left post-meta: 140px wide, its content 128 (character, login,
+ *          portrait, date, rating)
+ *        - right post-body: truncated content lines, 22px under the top of
+ *          the column and 10px in from its edges, where the text starts
  *   3. Card has 5px padding + 1px dashed border.
  *
- * When count > 1 (pulse mode), renders multiple cards with $medium gap.
+ * When count > 1, renders multiple cards as far apart as the posts of the list
+ * it stands in for: 16 in the feeds, whose posts carry the way to their room
+ * (PulseFeed, RatedPostsList), and 20 in a room, whose posts stand without it,
+ * as DM2 set the posts of a room (GameRoom.vue, count=3).
  * Single-post usage (count=1): BestWeeklyPost, LatestRatedPost, ProfileBestPost.
- * Multi-post usage (count=5): PulseFeed.
  */
 withDefaults(
   defineProps<{
@@ -25,7 +29,11 @@ withDefaults(
 </script>
 
 <template>
-  <div class="game-post-skeleton" aria-hidden="true">
+  <div
+    class="game-post-skeleton"
+    :class="{ 'in-room': !showNavigation }"
+    aria-hidden="true"
+  >
     <div v-for="i in count" :key="i" class="skeleton-post">
       <!-- Navigation breadcrumb (Game > Room) — outside card, matching .post-nav -->
       <div v-if="showNavigation" class="skeleton-nav">
@@ -37,7 +45,7 @@ withDefaults(
       <!-- Card matches .post-card (padding 5px, dashed border) -->
       <div class="skeleton-card">
         <div class="skeleton-columns">
-          <!-- Left column: post-meta (width 160px) -->
+          <!-- Left column: post-meta (width 140px) -->
           <div class="skeleton-meta">
             <div class="skeleton-character" />
             <div class="skeleton-username" />
@@ -68,10 +76,17 @@ withDefaults(
 <style scoped lang="sass">
 @use "@/assets/styles/Skeleton" as *
 
+// The gap shows only when count > 1: the feeds' ($medium, .posts-list of
+// PulseFeed and RatedPostsList).
 .game-post-skeleton
   display: flex
   flex-direction: column
-  gap: $medium  // visible only when count > 1
+  gap: $medium
+
+// The posts of a room, which stand without the way to it, 20 apart as on DM2
+// (GameRoom.vue, .posts-list).
+.game-post-skeleton.in-room
+  gap: 5 * $grid-step
 
 // Breadcrumb: matches .post-nav (font-size 16 × line-height 1.3 = 21px
 // line, margin-bottom $small = 8px).
@@ -106,11 +121,14 @@ withDefaults(
   gap: 10px
   align-items: flex-start
 
-// Left column: 160px wide (= .post-meta width), with .meta-inner margin.
+// Left column: 140px wide padding included (= .post-meta width), the padding
+// being the .meta-inner margin and its padding on the right, which leave 128
+// for the content.
 .skeleton-meta
   flex-shrink: 0
-  width: 160px
-  padding: 11px 5px
+  box-sizing: border-box
+  width: 140px
+  padding: 11px 7px 11px 5px
   display: flex
   flex-direction: column
   gap: 4px
@@ -125,33 +143,34 @@ withDefaults(
   width: 95px
   height: 14px
 
-// Avatar: square, constrained by meta column width (150px after padding).
-// margin-top: 2px matches .post-avatar { margin: 2px 0 }.
+// Avatar: square, the width of the column's content (128px), as the portrait
+// fills it, 57 under the top of the column where the portrait stands (11, the
+// two lines of 20 of the character and the login, the portrait's own 2).
 .skeleton-avatar
-  +skeleton-shimmer
-  width: 150px
-  height: 150px
-  margin-top: 2px
+  +skeleton-shimmer($square: true)
+  width: 128px
+  height: 128px
+  margin-top: 8px
 
 .skeleton-date
   +skeleton-shimmer
   width: 110px
   height: 13px
-  margin-top: 4px
 
 .skeleton-rating
   +skeleton-shimmer
   width: 80px
   height: 16px
 
-// Right column: body lines (matches default maxHeight truncation).
-// padding-top: $small matches .post-body { padding-top: $small }.
+// Right column: body lines (matches default maxHeight truncation), where the
+// text stands: .post-body { padding: 11px 0 } and .game-text { margin: 11px
+// 10px }.
 .skeleton-body
   flex: 1
   display: flex
   flex-direction: column
   gap: 8px
-  padding-top: $small
+  padding: 22px 10px 0
 
 .skeleton-line
   +skeleton-shimmer

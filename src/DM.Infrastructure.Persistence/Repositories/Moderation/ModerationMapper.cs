@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using DM.Domain.Core.Enums;
 using DM.Domain.Moderation.Features.ProfileNotes;
 using DM.Domain.Moderation.Features.Tickets;
 using DM.Domain.Moderation.Features.Warnings;
@@ -8,6 +9,7 @@ using DM.Infrastructure.Persistence.Shared.Users;
 using DbWarning = DM.Infrastructure.Persistence.Entities.Moderation.Warning;
 using DbBan = DM.Infrastructure.Persistence.Entities.Moderation.Ban;
 using DbTicket = DM.Infrastructure.Persistence.Entities.Moderation.Ticket;
+using DbTicketComment = DM.Infrastructure.Persistence.Entities.Moderation.TicketComment;
 using DbModeratedProfileNote = DM.Infrastructure.Persistence.Entities.Account.ModeratedProfileNote;
 
 namespace DM.Infrastructure.Persistence.Repositories.Moderation;
@@ -22,11 +24,18 @@ namespace DM.Infrastructure.Persistence.Repositories.Moderation;
 internal static class ModerationMapper
 {
     /// <summary>
-    /// EF projection to the domain warning. The address and the "edited
-    /// since" mark are not columns - both are resolved per read by
-    /// IWarningEntityResolver, because they change without the warning
-    /// being touched. Only the snapshot is stored.
+    /// EF projection to the domain warning. The address and the place are not
+    /// columns - both are resolved per read by IWarningEntityResolver, because
+    /// they change without the warning being touched. Only the snapshot is
+    /// stored.
     /// </summary>
+    /// <remarks>
+    /// The profile of a warning on a profile comes without its picture: the
+    /// pinned avatar is usually a deleted upload, behind the filter every
+    /// navigation to an upload goes through, and WarningRepository reads it
+    /// past the filter for the rows of the page. Nothing of the profile is given
+    /// for a removed account, as nothing of a removed account is shown anywhere.
+    /// </remarks>
     public static IQueryable<Warning> ProjectToWarning(this IQueryable<DbWarning> query) =>
         query.Select(ExpressionSplicer.Expand<Func<DbWarning, Warning>>(w => new Warning
         {
@@ -36,8 +45,17 @@ internal static class ModerationMapper
             CreatedUtc = w.CreatedUtc,
             Text = w.Text,
             Points = w.Points,
-            IsRemoved = w.IsRemoved,
+            OriginalPoints = w.OriginalPoints,
+            // The name alone, not the whole user: the second signature is a line
+            // of text under the warning wherever it is shown, and the open log
+            // shows it to strangers.
+            PointsChangedByUsername = w.PointsChangedBy == null ? null : w.PointsChangedBy.Username,
+            PointsChangedUtc = w.PointsChangedUtc,
+            PointsChangeText = w.PointsChangeText,
             EntitySnapshot = w.EntitySnapshot,
+            Profile = w.EntityType == WarningEntityType.Profile && !w.TargetUser.IsRemoved
+                ? new WarningProfile { Status = w.ProfileStatusSnapshot, Info = w.EntitySnapshot }
+                : null,
             TargetUser = GeneralUserProjections.Projection.Splice(w.TargetUser),
             Author = GeneralUserProjections.Projection.Splice(w.Author)
         }));
@@ -63,18 +81,23 @@ internal static class ModerationMapper
         }));
 
     /// <summary>
-    /// EF projection to the domain ticket (list shape - no thread). The
-    /// member list repeats in the details projection below on purpose: the
-    /// navigations must be dereferenced inside the Select for EF to join
-    /// them, so the two shapes cannot share a compiled formula.
+    /// EF projection to the domain ticket: the one shape every ticket read
+    /// takes, the lists, the ticket page and the guest tracking page alike
     /// </summary>
+    /// <remarks>
+    /// The reporter is a whole user, for the [online] mark of the signature, and
+    /// null both for a guest and for an account removed since: IsGuest, read off
+    /// the column and not off the navigation, tells the two apart. The closing
+    /// moderator is a name, the one thing the closing line says of him.
+    /// </remarks>
     public static IQueryable<Ticket> ProjectToTicket(this IQueryable<DbTicket> query) =>
-        query.Select(t => new Ticket
+        query.Select(ExpressionSplicer.Expand<Func<DbTicket, Ticket>>(t => new Ticket
         {
             TicketId = t.TicketId,
             ReporterUserId = t.UserId,
-            ReporterUsername = t.Author != null ? t.Author.Username : null,
-            TargetUsername = t.Target != null ? t.Target.Username : null,
+            Reporter = GeneralUserProjections.Projection.Splice(t.Author),
+            IsGuest = t.UserId == null,
+            TargetUserId = t.TargetId,
             GuestEmail = t.GuestEmail,
             TrackingToken = t.TrackingToken,
             EntityId = t.EntityId,
@@ -84,48 +107,25 @@ internal static class ModerationMapper
             CreatedUtc = t.CreatedUtc,
             Description = t.Description,
             Comment = t.Comment,
-            AssignedModeratorUsername = t.AssignedModerator != null ? t.AssignedModerator.Username : null,
+            CommentsCount = t.TicketComments.Count(),
             ResolvedUtc = t.ResolvedUtc,
-            Answer = t.Answer,
-            HasWarning = t.WarningId.HasValue,
-            HasBan = t.BanId.HasValue
-        });
+            ResolvedByUsername = t.ResolvedBy != null ? t.ResolvedBy.Username : null
+        }));
 
     /// <summary>
-    /// EF projection to the ticket details - the base shape plus the
-    /// conversation thread, oldest response first
+    /// EF projection to a comment of the conversation of a ticket. The author is
+    /// null for the guest and for a removed account alike; IsGuest is read off
+    /// the column, as on the ticket
     /// </summary>
-    public static IQueryable<TicketDetails> ProjectToTicketDetails(this IQueryable<DbTicket> query) =>
-        query.Select(ExpressionSplicer.Expand<Func<DbTicket, TicketDetails>>(t => new TicketDetails
+    public static IQueryable<TicketComment> ProjectToTicketComment(this IQueryable<DbTicketComment> query) =>
+        query.Select(ExpressionSplicer.Expand<Func<DbTicketComment, TicketComment>>(c => new TicketComment
         {
-            TicketId = t.TicketId,
-            ReporterUserId = t.UserId,
-            ReporterUsername = t.Author != null ? t.Author.Username : null,
-            TargetUsername = t.Target != null ? t.Target.Username : null,
-            GuestEmail = t.GuestEmail,
-            TrackingToken = t.TrackingToken,
-            EntityId = t.EntityId,
-            EntityType = t.EntityType,
-            Status = t.Status,
-            Subtype = t.Subtype,
-            CreatedUtc = t.CreatedUtc,
-            Description = t.Description,
-            Comment = t.Comment,
-            AssignedModeratorUsername = t.AssignedModerator != null ? t.AssignedModerator.Username : null,
-            ResolvedUtc = t.ResolvedUtc,
-            Answer = t.Answer,
-            HasWarning = t.WarningId.HasValue,
-            HasBan = t.BanId.HasValue,
-            Responses = t.Responses
-                .OrderBy(r => r.CreatedUtc)
-                .Select(r => new TicketResponseItem
-                {
-                    Author = GeneralUserProjections.Projection.Splice(r.Author),
-                    Text = r.Text,
-                    CreatedUtc = r.CreatedUtc,
-                    IsFromModerator = r.IsFromModerator
-                })
-                .ToList()
+            TicketCommentId = c.TicketCommentId,
+            TicketId = c.TicketId,
+            Author = GeneralUserProjections.Projection.Splice(c.Author),
+            IsGuest = c.AuthorId == null,
+            CreatedUtc = c.CreatedUtc,
+            Text = c.Text
         }));
 
     /// <summary>

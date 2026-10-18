@@ -15,7 +15,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.Account;
 /// The one door a privileged account has when both its devices are gone.
 /// </summary>
 /// <remarks>
-/// AC-24. The administrator is handed nothing by this: no session of the other
+/// The administrator is handed nothing by this: no session of the other
 /// account and none of its rights. What the action does is end every session that
 /// account had and leave its owner a way in by password, and it says so in both
 /// journals - an administrator can already ban, demote and delete anybody, so the

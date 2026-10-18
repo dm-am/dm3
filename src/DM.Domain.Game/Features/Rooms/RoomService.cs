@@ -61,10 +61,6 @@ internal class RoomService : IRoomService
         var game = await _gameService.GetAsync(createRoom.GameId);
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, game);
 
-        // Get last room order number
-        var lastRoomInfo = await _repository.GetLastRoomInfo(createRoom.GameId);
-        var orderNumber = (lastRoomInfo?.OrderNumber ?? 0) + 1;
-
         var roomId = _guidFactory.Create();
         var entity = new CreateRoomEntity
         {
@@ -75,8 +71,7 @@ internal class RoomService : IRoomService
             AccessType = createRoom.AccessType,
             ViewPrivateText = createRoom.ViewPrivateText,
             ViewDiceResults = createRoom.ViewDiceResults,
-            DiceEnabled = createRoom.DiceEnabled,
-            OrderNumber = orderNumber
+            DiceEnabled = createRoom.DiceEnabled
         };
 
         // Markers first, row second, commit on the line after it returns.
@@ -119,11 +114,15 @@ internal class RoomService : IRoomService
         await _unreadCountersRepository.FillEntityCounters(rooms, currentUserId,
             r => r.Id, r => r.UnreadPostsCount);
 
-        // A room the reader may not open is listed by its name and nothing
-        // else: who has access to it, whose turn it is inside and how much of
-        // it is unread are all things only its readers get to know.
+        // A room the reader may not open is listed by its name and the names of
+        // the characters let in to write in it, as the game menu writes it:
+        // "[Лес] - Густав, Эодор". Those names are on the character list of
+        // the game already, which everybody who sees the game reads. Who else
+        // is let in, whose turn it is inside and how much of it is unread are
+        // things only its readers get to know.
         foreach (var room in rooms.Where(r => !r.CanView))
         {
+            room.CharacterNames = WriterNames(room);
             room.Accesses = [];
             room.Pendencies = [];
             room.TotalPostsCount = 0;
@@ -132,6 +131,22 @@ internal class RoomService : IRoomService
 
         return rooms;
     }
+
+    /// <summary>
+    /// The characters let in to write, in the order they joined the game.
+    /// The grant is the whole test, whatever became of the character since:
+    /// the old site goes on naming a dead one in the room he was let into.
+    /// A grant to read is a reader, whoever holds it, and a removed character
+    /// comes back from the grant as nobody.
+    /// </summary>
+    private static string[] WriterNames(Room room) => room.Accesses
+        .Where(a => a.TargetType == RoomAccessTargetType.Character
+                    && a.Policy == RoomAccessPolicy.Full
+                    && a.Character != null)
+        .OrderBy(a => a.Character.CreatedUtc)
+        .ThenBy(a => a.Character.Name, StringComparer.Ordinal)
+        .Select(a => a.Character.Name)
+        .ToArray();
 
     public async Task<Room> GetAsync(Guid roomId)
     {
@@ -207,6 +222,11 @@ internal class RoomService : IRoomService
 
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
 
+        if (updateRoom.PreviousRoomId?.Value is { } previousRoomId)
+        {
+            await ThrowIfNotAPlaceInGame(room, previousRoomId, currentUserId);
+        }
+
         var entity = new UpdateRoomEntity
         {
             RoomId = updateRoom.RoomId,
@@ -229,6 +249,24 @@ internal class RoomService : IRoomService
         await _producer.SendAsync(EventType.ChangedRoom, result.Id);
 
         return result;
+    }
+
+    /// <summary>
+    /// A room is put after another room of its own game. Any other id is refused
+    /// by name: taken silently, the move would answer 200 and change nothing.
+    /// </summary>
+    private async Task ThrowIfNotAPlaceInGame(Room room, Guid previousRoomId, Guid currentUserId)
+    {
+        var previous = previousRoomId == room.Id
+            ? null
+            : await _repository.GetForUpdate(previousRoomId, currentUserId);
+        if (previous == null || previous.GameId != room.GameId)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                ["previousRoomId"] = ValidationError.Invalid
+            });
+        }
     }
 
     #endregion

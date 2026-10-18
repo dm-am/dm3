@@ -10,7 +10,6 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Users;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostPendencies;
@@ -32,8 +31,8 @@ public class PostPendencyServiceShould : UnitTestBase
     private readonly IRoomService _roomService;
     private readonly IPostPendencyRepository _repository;
     private readonly IEventProducer _producer;
-    private readonly IUserLookupService _userLookupService;
     private readonly IIdentityProvider _identityProvider;
+    private readonly IPostPendencyFactory _factory;
     private readonly PostPendencyService _service;
 
     public PostPendencyServiceShould()
@@ -47,11 +46,9 @@ public class PostPendencyServiceShould : UnitTestBase
 
         _roomService = Mock<IRoomService>();
 
-        var factory = Mock<IPostPendencyFactory>();
+        var factory = _factory = Mock<IPostPendencyFactory>();
         factory.Create(Arg.Any<CreatePostPendency>(), Arg.Any<Guid>(), Arg.Any<Guid>())
             .Returns(new CreatePostPendencyEntity());
-
-        _userLookupService = Mock<IUserLookupService>();
 
         _repository = Mock<IPostPendencyRepository>();
 
@@ -67,7 +64,6 @@ public class PostPendencyServiceShould : UnitTestBase
             _roomService,
             _intentionManager,
             factory,
-            _userLookupService,
             _repository,
             _producer,
             _identityProvider);
@@ -76,13 +72,11 @@ public class PostPendencyServiceShould : UnitTestBase
     [Fact]
     public async Task AuthorizeCreatePostPendencyAction()
     {
-        var targetUserId = Guid.NewGuid();
-        var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), WaitingForUsername = "targetuser" };
-        var room = CreateRoomWithAccesses(targetUserId);
+        var characterId = Guid.NewGuid();
+        var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), CharacterId = characterId };
+        var room = CreateRoomWithAccesses(characterId, Guid.NewGuid());
 
         _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
-        _userLookupService.FindUserIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((true, targetUserId));
         _repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency());
 
         await _service.CreateAsync(createPendency);
@@ -94,8 +88,9 @@ public class PostPendencyServiceShould : UnitTestBase
     public async Task PreventDuplicatePendencyForSameUser()
     {
         var waitingForUserId = Guid.NewGuid();
+        var characterId = Guid.NewGuid();
         var currentUserId = _identityProvider.Current.User.UserId;
-        var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), WaitingForUsername = "targetuser" };
+        var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), CharacterId = characterId };
 
         var room = new RoomToUpdate
         {
@@ -110,13 +105,18 @@ public class PostPendencyServiceShould : UnitTestBase
             },
             Accesses = new List<RoomAccess>
             {
-                new RoomAccess { Character = new Character { Author = new GeneralUser { UserId = waitingForUserId } } }
+                new RoomAccess
+                {
+                    Character = new Character
+                    {
+                        Id = characterId,
+                        Author = new GeneralUser { UserId = waitingForUserId, Username = "targetuser" }
+                    }
+                }
             }
         };
 
         _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
-        _userLookupService.FindUserIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((true, waitingForUserId));
 
         var act = async () => await _service.CreateAsync(createPendency);
 
@@ -128,19 +128,64 @@ public class PostPendencyServiceShould : UnitTestBase
     public async Task CreatePendencyAndPublishEvent()
     {
         var pendencyId = Guid.NewGuid();
-        var targetUserId = Guid.NewGuid();
-        var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), WaitingForUsername = "targetuser" };
-        var room = CreateRoomWithAccesses(targetUserId);
+        var characterId = Guid.NewGuid();
+        var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), CharacterId = characterId };
+        var room = CreateRoomWithAccesses(characterId, Guid.NewGuid());
 
         _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
-        _userLookupService.FindUserIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns((true, targetUserId));
         _repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency { Id = pendencyId });
 
         await _service.CreateAsync(createPendency);
 
         await _repository.Received(1).Create(Arg.Any<CreatePostPendencyEntity>());
         await _producer.Received(1).SendAsync(EventType.RoomPendencyCreated, pendencyId);
+    }
+
+    /// <summary>
+    /// The site names the character and nothing else: the one waited for is
+    /// the player of that character, and the one who waits is the caller.
+    /// </summary>
+    [Fact]
+    public async Task WaitForThePlayerOfTheCharacterOnBehalfOfTheCaller()
+    {
+        var characterId = Guid.NewGuid();
+        var playerId = Guid.NewGuid();
+        var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), CharacterId = characterId };
+        var room = CreateRoomWithAccesses(characterId, playerId);
+        room.Accesses = room.Accesses.Append(new RoomAccess
+        {
+            Character = new Character { Id = Guid.NewGuid(), Author = new GeneralUser { UserId = Guid.NewGuid() } }
+        }).ToList();
+
+        _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
+        _repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency());
+
+        await _service.CreateAsync(createPendency);
+
+        _factory.Received(1).Create(createPendency, _identityProvider.Current.User.UserId, playerId);
+    }
+
+    /// <summary>
+    /// A character the room does not let in, or one with no player behind it,
+    /// is nobody to wait for.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RefuseACharacterNobodyCanBeWaitedOnThrough(bool inTheRoom)
+    {
+        var characterId = Guid.NewGuid();
+        var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), CharacterId = characterId };
+        var room = inTheRoom
+            ? CreateRoomWithAccesses(characterId, playerId: null)
+            : CreateRoomWithAccesses(Guid.NewGuid(), Guid.NewGuid());
+
+        _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
+
+        var act = async () => await _service.CreateAsync(createPendency);
+
+        await act.Should().ThrowAsync<HttpBadRequestException>();
+        await _repository.DidNotReceive().Create(Arg.Any<CreatePostPendencyEntity>());
     }
 
     [Fact]
@@ -177,16 +222,20 @@ public class PostPendencyServiceShould : UnitTestBase
     /// reads: asked with the flat one the manager finds no resolver and refuses
     /// everybody.
     /// </summary>
-    private RoomToUpdate CreateRoomWithAccesses(Guid? userId = null)
+    private static RoomToUpdate CreateRoomWithAccesses(Guid characterId, Guid? playerId) => new()
     {
-        return new RoomToUpdate
+        Game = new GameDto(),
+        Pendencies = new List<PostPendency>(),
+        Accesses = new List<RoomAccess>
         {
-            Game = new GameDto(),
-            Pendencies = new List<PostPendency>(),
-            Accesses = new List<RoomAccess>
+            new RoomAccess
             {
-                new RoomAccess { Character = new Character { Author = new GeneralUser { UserId = userId ?? Guid.NewGuid() } } }
+                Character = new Character
+                {
+                    Id = characterId,
+                    Author = playerId == null ? null : new GeneralUser { UserId = playerId.Value, Username = "targetuser" }
+                }
             }
-        };
-    }
+        }
+    };
 }

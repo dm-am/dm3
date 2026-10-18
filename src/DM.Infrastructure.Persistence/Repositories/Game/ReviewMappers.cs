@@ -11,7 +11,9 @@ using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
 /// <summary>
-/// Projection formulas for game and post reviews.
+/// Projection formulas for game and post reviews. Both keep the reviews of
+/// removed accounts, and the posts of removed authors under a review, with the
+/// user nested as nobody (<see cref="RemovedAuthors"/>).
 /// </summary>
 internal static class ReviewMappers
 {
@@ -20,7 +22,7 @@ internal static class ReviewMappers
     /// the navigation join
     /// </summary>
     public static IQueryable<GameReview> ProjectToGameReview(this IQueryable<DbGameReview> query) =>
-        query.Select(ExpressionSplicer.Expand<Func<DbGameReview, GameReview>>(r => new GameReview
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<DbGameReview, GameReview>>(r => new GameReview
         {
             Id = r.GameReviewId,
             GameId = r.GameId,
@@ -36,7 +38,7 @@ internal static class ReviewMappers
     /// numeric value; the enum member on the entity is not mapped.
     /// </summary>
     public static IQueryable<PostReview> ProjectToPostReview(this IQueryable<DbPostReview> query) =>
-        query.Select(ExpressionSplicer.Expand<Func<DbPostReview, PostReview>>(r => new PostReview
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<DbPostReview, PostReview>>(r => new PostReview
         {
             Id = r.PostReviewId,
             PostId = r.PostId,

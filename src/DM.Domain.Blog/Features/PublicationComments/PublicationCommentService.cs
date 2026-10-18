@@ -32,6 +32,7 @@ internal class PublicationCommentService : IPublicationCommentService
     private readonly IPublicationCommentRepository _repository;
     private readonly IUnreadCountersRepository _countersRepository;
     private readonly IEventProducer _invokedEventProducer;
+    private readonly IBbTagNameCase _tagNames;
 
     public PublicationCommentService(
         IValidator<CreateComment> createValidator,
@@ -43,7 +44,8 @@ internal class PublicationCommentService : IPublicationCommentService
         IDateTimeProvider dateTimeProvider,
         IPublicationCommentRepository repository,
         IUnreadCountersRepository countersRepository,
-        IEventProducer invokedEventProducer)
+        IEventProducer invokedEventProducer,
+        IBbTagNameCase tagNames)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -55,6 +57,7 @@ internal class PublicationCommentService : IPublicationCommentService
         _repository = repository;
         _countersRepository = countersRepository;
         _invokedEventProducer = invokedEventProducer;
+        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
@@ -63,15 +66,16 @@ internal class PublicationCommentService : IPublicationCommentService
         await _createValidator.ValidateAndThrowAsync(createComment);
 
         var publication = await _publicationService.GetPublication(createComment.EntityId);
-        _intentionManager.ThrowIfForbidden(PublicationIntention.CreateComment, publication);
-
-        // Check blacklist
         var blog = await _blogService.GetBlogAsync(publication.BlogId);
         var currentUser = _identityProvider.Current.User;
-        if (blog.BlacklistedUserIds.Contains(currentUser.UserId))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromBlog);
-        }
+
+        // The blog's blacklist covers the comments under its publications, and
+        // is asked before the gate, the way the blog's own discussion asks it.
+        // The three refusals below are the three conditions of MayCreate, one
+        // for one and in its order: whatever is added to one side goes to the
+        // other, or the page offers a form this method refuses.
+        blog.ThrowIfBlacklisted(currentUser.UserId);
+        _intentionManager.ThrowIfForbidden(PublicationIntention.CreateComment, publication);
 
         // Ban check lives here rather than in PublicationIntentionResolver: the
         // rule is about whose blog this is, and the publication carries no blog
@@ -83,13 +87,12 @@ internal class PublicationCommentService : IPublicationCommentService
 
         // Strip [mod] authored by a non-moderator (it renders as a green mod
         // block on the Comment surface); Moderator+ may author it.
-        createComment.Text = ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role);
+        createComment.Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role), BbTagSet.WithModBlock);
 
         var (createdComment, commentId) = await _repository.Create(
             createComment,
             currentUser.UserId,
-            publication.Id,
-            publication.CommentCount + 1);
+            publication.Id);
 
         await _countersRepository.IncrementAsync(publication.Id, UnreadEntryType.Message);
         // The publication event, not the blog one: a comment carries the id of
@@ -99,6 +102,22 @@ internal class PublicationCommentService : IPublicationCommentService
         await _invokedEventProducer.SendAsync(EventType.NewPublicationComment, commentId);
 
         return createdComment;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Reads the blog the way CreateAsync reads it: the blacklist and whose blog
+    /// this is are the blog's, and the publication carries neither.
+    /// </remarks>
+    public async Task<bool> MayCreateAsync(Publication publication)
+    {
+        var blog = await _blogService.GetBlogAsync(publication.BlogId);
+        var currentUser = _identityProvider.Current.User;
+
+        // CreateAsync's three refusals, asked as questions in the same order.
+        return !blog.IsBlacklisted(currentUser.UserId) &&
+               _intentionManager.IsAllowed(PublicationIntention.CreateComment, publication) &&
+               currentUser.MaySpeak(inOwnSpace: blog.IsOwnBlog(currentUser.UserId));
     }
 
     /// <inheritdoc />
@@ -118,37 +137,62 @@ internal class PublicationCommentService : IPublicationCommentService
     /// <inheritdoc />
     public async Task<Comment> GetAsync(Guid commentId)
     {
-        return await _repository.Get(commentId) ??
-               throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
+        var comment = await FindAsync(commentId);
+
+        // The four discussions share one table and the row above is read by its
+        // id alone, so the discussion is asked here exactly as the listing asks it.
+        // A discussion that is not there to the reader - hidden, removed, or of
+        // another kind, which this route has nothing to check by - answers exactly
+        // as a comment that is not there: a different answer would tell a
+        // stranger that the id resolves, and to what.
+        await DiscussionRefusal.AsCommentNotFound(commentId,
+            () => _publicationService.GetPublication(comment.EntityId));
+
+        return comment;
     }
+
+    /// <summary>
+    /// The comment by its identifier, among the comments of publications only
+    /// (the repository narrows it: a lookup by id alone let this route edit a
+    /// comment of another discussion past that discussion's rules). The edit
+    /// keeps to this lookup: who may edit is CommentIntention.Edit's answer on
+    /// the row.
+    /// </summary>
+    private async Task<Comment> FindAsync(Guid commentId) =>
+        await _repository.Get(commentId) ??
+        throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
 
     /// <inheritdoc />
     public async Task<Comment> UpdateAsync(UpdateComment updateComment)
     {
         await _updateValidator.ValidateAndThrowAsync(updateComment);
-        var comment = await GetAsync(updateComment.CommentId);
+        var comment = await FindAsync(updateComment.CommentId);
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
         // Rewriting a comment publishes text exactly as writing one does, so the
-        // ban is asked here too, on the same terms as in CreateAsync. Only the
-        // author is asked, a moderator editing somebody else's comment is
-        // moderating and a ban takes no moderator tool away. Reaching the blog
-        // from a comment costs two reads, so they are made only for somebody the
-        // ban actually restricts.
+        // blacklist and the ban are asked here too, on the same terms as in
+        // CreateAsync. Only the author is asked, a moderator editing somebody
+        // else's comment is moderating and neither list takes a moderator tool
+        // away.
         var currentUser = _identityProvider.Current.User;
-        if (comment.Author?.UserId == currentUser.UserId && !currentUser.MaySpeak())
+        if (comment.Author?.UserId == currentUser.UserId)
         {
-            var publication = await _publicationService.GetPublication(comment.EntityId);
+            var publication = await DiscussionRefusal.AsCommentNotFound(updateComment.CommentId,
+                () => _publicationService.GetPublication(comment.EntityId));
             var blog = await _blogService.GetBlogAsync(publication.BlogId);
-            currentUser.ThrowIfMayNotComment(inOwnSpace: blog.IsOwnBlog(currentUser.UserId));
+            blog.ThrowIfBlacklisted(currentUser.UserId);
+            if (!currentUser.MaySpeak())
+            {
+                currentUser.ThrowIfMayNotComment(inOwnSpace: blog.IsOwnBlog(currentUser.UserId));
+            }
         }
 
         var text = updateComment.Text?.Trim();
         if (!string.IsNullOrEmpty(text))
         {
             // Strip [mod] authored by a non-moderator before comparing/saving.
-            text = ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role);
+            text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role), BbTagSet.WithModBlock);
         }
         if (string.IsNullOrEmpty(text) || text == comment.Text)
         {
@@ -180,23 +224,27 @@ internal class PublicationCommentService : IPublicationCommentService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Delete, (Comment)comment);
 
-        Guid? newLastCommentId = null;
-        if (comment.IsLastComment)
-        {
-            newLastCommentId = await _repository.GetNewestCommentIdExcept(comment.PublicationId, commentId);
-        }
-
         var entity = new DeletePublicationCommentEntity
         {
             CommentId = commentId,
             PublicationId = comment.PublicationId,
             DeletedByUserId = _identityProvider.Current.User.UserId,
-            DeletedUtc = _dateTimeProvider.Now,
-            NewCommentCount = Math.Max(0, comment.PublicationCommentCount - 1),
-            NewLastCommentId = newLastCommentId
+            DeletedUtc = _dateTimeProvider.Now
         };
 
-        await _repository.Delete(entity);
+        // The publication's comment count and its last-comment pointer move inside
+        // Delete, in the transaction that marks the comment.
+        var removed = await _repository.Delete(entity);
+        if (!removed)
+        {
+            // Somebody else removed this comment between the read above and the
+            // write. The publication's unread counter and the event belong to the
+            // removal that happened, and repeating them here takes the counter down
+            // twice for one comment. The caller is answered the same either way:
+            // the comment is gone, which is what they asked for.
+            return;
+        }
+
         await _countersRepository.DecrementAsync(comment.PublicationId, UnreadEntryType.Message, comment.CreatedUtc);
 
         await _invokedEventProducer.SendAsync(EventType.DeletedPublicationComment, commentId);

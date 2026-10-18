@@ -1,3 +1,5 @@
+using DM.Web.API.Shared.BbRendering;
+
 namespace DM.Web.API.Features.Game.Games;
 
 /// <summary>
@@ -16,9 +18,9 @@ public class Tag
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// Tag description
+    /// Tag description, rendered: the hint surface, whose one tag is [tip]
     /// </summary>
-    public string? Description { get; set; }
+    public HintBbText? Description { get; set; }
 
     /// <summary>
     /// Sort order within group

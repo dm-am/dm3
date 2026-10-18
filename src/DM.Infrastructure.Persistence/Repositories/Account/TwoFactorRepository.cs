@@ -52,7 +52,11 @@ internal class TwoFactorRepository : ITwoFactorRepository
         var normalized = email.Trim().ToLowerInvariant();
         return _dbContext.Users
             .Where(u => !u.IsRemoved && u.Email != null && u.Email.ToLower() == normalized)
-            .Select(u => new TwoFactorAccount(u.UserId, u.Username, u.Email, u.Role))
+            .Select(u => new TwoFactorAccount(u.UserId, u.Username, u.Email, u.Role,
+                _dbContext.UserSettings
+                    .Where(s => s.UserId == u.UserId)
+                    .Select(s => s.TimeZoneId)
+                    .FirstOrDefault()))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -63,7 +67,11 @@ internal class TwoFactorRepository : ITwoFactorRepository
         var normalized = username.Trim().ToLowerInvariant();
         return _dbContext.Users
             .Where(u => !u.IsRemoved && u.Username.ToLower() == normalized)
-            .Select(u => new TwoFactorAccount(u.UserId, u.Username, u.Email, u.Role))
+            .Select(u => new TwoFactorAccount(u.UserId, u.Username, u.Email, u.Role,
+                _dbContext.UserSettings
+                    .Where(s => s.UserId == u.UserId)
+                    .Select(s => s.TimeZoneId)
+                    .FirstOrDefault()))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -71,44 +79,57 @@ internal class TwoFactorRepository : ITwoFactorRepository
     public Task<TwoFactorAccount?> FindAccount(Guid userId, CancellationToken cancellationToken = default) =>
         _dbContext.Users
             .Where(u => !u.IsRemoved && u.UserId == userId)
-            .Select(u => new TwoFactorAccount(u.UserId, u.Username, u.Email, u.Role))
+            .Select(u => new TwoFactorAccount(u.UserId, u.Username, u.Email, u.Role,
+                _dbContext.UserSettings
+                    .Where(s => s.UserId == u.UserId)
+                    .Select(s => s.TimeZoneId)
+                    .FirstOrDefault()))
             .FirstOrDefaultAsync(cancellationToken);
 
     /// <inheritdoc />
-    public async Task IssueSecret(
+    public async Task<bool> IssueSecret(
         Guid userId, string encryptedSecret, DateTimeOffset createdUtc,
         CancellationToken cancellationToken = default)
     {
-        // Both halves or neither: a refusal between them would leave the account
-        // with the previous secret gone and no new one in its place, on the one
-        // screen a person reaches when they are trying to make the account safer.
-        await RetryableWrite.Run(_dbContext, async () =>
-        {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        // One statement, so there is no window between the two halves for
+        // anything to arrive in. A delete followed by an insert let two setups
+        // started at the same moment both delete nothing and then insert the
+        // same key, and the one that lost answered its owner with a failure of
+        // the storage engine on the screen where they were making the account
+        // safer.
+        //
+        // Only an unconfirmed row is replaced. A confirmed one is refused above
+        // this layer as well, and the predicate is repeated in the write because
+        // that is the only place it can be checked and acted on at once: zero
+        // rows is what the caller turns into the refusal.
+        //
+        // The replacement leaves the row as clean as the insert does. Every column
+        // the update does not name would otherwise survive from the setup this one
+        // replaces: a verification stamp from an attempt that was never confirmed,
+        // an issue date for a set of recovery codes that belongs to no factor, a
+        // removal already scheduled from the mailbox. Before this was a single
+        // statement the previous row was deleted, so a new setup began on nothing;
+        // it has to keep beginning on nothing.
+        var affected = await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "UserTwoFactors" ("UserId", "Secret", "CreatedUtc", "LastAcceptedStep")
+            VALUES ({userId}, {encryptedSecret}, {createdUtc}, 0)
+            ON CONFLICT ("UserId") DO UPDATE SET
+                "Secret" = {encryptedSecret},
+                "CreatedUtc" = {createdUtc},
+                "LastAcceptedStep" = 0,
+                "LastVerifiedUtc" = NULL,
+                "RecoveryCodesIssuedUtc" = NULL,
+                "RemovalDueUtc" = NULL
+            WHERE "UserTwoFactors"."ConfirmedUtc" IS NULL
+            """, cancellationToken);
 
-            // Only an unconfirmed row is replaced. A confirmed one is refused
-            // above this layer, and the predicate is repeated here so that the
-            // refusal does not depend on the caller remembering it.
-            await _dbContext.UserTwoFactors
-                .Where(f => f.UserId == userId && f.ConfirmedUtc == null)
-                .ExecuteDeleteAsync(cancellationToken);
-
-            _dbContext.UserTwoFactors.Add(new UserTwoFactor
-            {
-                UserId = userId,
-                Secret = encryptedSecret,
-                CreatedUtc = createdUtc,
-                LastAcceptedStep = 0
-            });
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-        });
+        return affected == 1;
     }
 
     /// <inheritdoc />
     public async Task<bool> Confirm(
-        Guid userId, DateTimeOffset confirmedUtc, IReadOnlyList<byte[]> recoveryCodeHashes,
+        Guid userId, DateTimeOffset createdUtc, DateTimeOffset confirmedUtc,
+        IReadOnlyList<byte[]> recoveryCodeHashes,
         CancellationToken cancellationToken = default)
     {
         var rows = RecoveryCodeRows(userId, recoveryCodeHashes, confirmedUtc);
@@ -124,17 +145,26 @@ internal class TwoFactorRepository : ITwoFactorRepository
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
+            // The issue moment as well as the stamp: the row is replaced in place
+            // by a setup started elsewhere, so "still unconfirmed" alone would let
+            // this stamp switch the account on to a secret whose QR nobody here
+            // ever saw. Written as one predicate rather than a read and a write,
+            // because a read of the moment stops being true the instant it returns.
             var updated = await _dbContext.UserTwoFactors
-                .Where(f => f.UserId == userId && f.ConfirmedUtc == null)
+                .Where(f => f.UserId == userId &&
+                            f.CreatedUtc == createdUtc &&
+                            f.ConfirmedUtc == null)
                 .ExecuteUpdateAsync(
                     s => s.SetProperty(f => f.ConfirmedUtc, confirmedUtc), cancellationToken);
 
             switchedOn = updated == 1;
             if (!switchedOn)
             {
-                // Two confirmations raced and this one lost. There is nothing to
-                // issue: the set belongs to the confirmation that won, and this
-                // caller is refused above.
+                // The secret this confirmation was checked against is gone -
+                // replaced by another setup, or already stamped by a confirmation
+                // that arrived first. There is nothing to issue: the set belongs
+                // to whichever call switched the factor on, and this caller is
+                // refused above.
                 await transaction.RollbackAsync(cancellationToken);
                 return;
             }
@@ -174,10 +204,17 @@ internal class TwoFactorRepository : ITwoFactorRepository
     /// <inheritdoc />
     public async Task Remove(Guid userId, CancellationToken cancellationToken = default)
     {
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
-        await strategy.ExecuteAsync(async () =>
+        await RetryableWrite.Run(_dbContext, async () =>
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            // The factor row first, the codes after it. Every write that touches
+            // both takes them in this order - a removal, a scheduled removal, a
+            // reissue - so two of them arriving together queue up instead of each
+            // holding the row the other is waiting for.
+            await _dbContext.UserTwoFactors
+                .Where(f => f.UserId == userId)
+                .ExecuteDeleteAsync(cancellationToken);
 
             // The codes go with the factor. Left behind, they would be accepted
             // by the next factor the account switches on - a set of credentials
@@ -186,29 +223,83 @@ internal class TwoFactorRepository : ITwoFactorRepository
                 .Where(c => c.UserId == userId)
                 .ExecuteDeleteAsync(cancellationToken);
 
-            await _dbContext.UserTwoFactors
-                .Where(f => f.UserId == userId)
-                .ExecuteDeleteAsync(cancellationToken);
-
             await transaction.CommitAsync(cancellationToken);
         });
     }
 
     /// <inheritdoc />
-    public async Task ReplaceRecoveryCodes(
+    public async Task<bool> RemoveIfDue(
+        Guid userId, DateTimeOffset now, CancellationToken cancellationToken = default)
+    {
+        var removed = false;
+        await RetryableWrite.Run(_dbContext, async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            // The due date is part of the delete. The sweep listed this account a
+            // moment ago, and a cancellation committed since then clears the date:
+            // asked as a read, the sweep would take the factor off an owner who
+            // had just called the removal off and tell nobody.
+            var deleted = await _dbContext.UserTwoFactors
+                .Where(f => f.UserId == userId &&
+                            f.RemovalDueUtc != null &&
+                            f.RemovalDueUtc <= now)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            removed = deleted == 1;
+            if (removed)
+            {
+                // Same order as Remove, and the codes only go when the factor did.
+                await _dbContext.UserTwoFactorRecoveryCodes
+                    .Where(c => c.UserId == userId)
+                    .ExecuteDeleteAsync(cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        });
+
+        return removed;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> ReplaceRecoveryCodes(
         Guid userId, IReadOnlyList<byte[]> codeHashes, DateTimeOffset issuedUtc,
         CancellationToken cancellationToken = default)
     {
         var rows = RecoveryCodeRows(userId, codeHashes, issuedUtc);
 
+        var replaced = false;
         await RetryableWrite.Run(_dbContext, async () =>
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-            await ReplaceRecoveryCodesWith(userId, rows, issuedUtc, cancellationToken);
+            // The factor row is claimed before the codes are touched, which is the
+            // order every other write here takes. The replacement below writes the
+            // codes first and the row second, so without this a reissue and a
+            // removal arriving together would each sit on the row the other needs.
+            await _dbContext.Database.ExecuteSqlRawAsync(
+                """SELECT "UserId" FROM "UserTwoFactors" WHERE "UserId" = {0} FOR UPDATE""",
+                [userId], cancellationToken);
+
+            replaced = await ReplaceRecoveryCodesWith(userId, rows, issuedUtc, cancellationToken) == 1;
+            if (!replaced)
+            {
+                // There is no factor to issue a set for: it was taken off between
+                // the caller's read of the state and this write, and the lock above
+                // had no row to hold. The new codes are staged in the tracker and
+                // the old ones are deleted inside this transaction, so both go back
+                // - a set stored against nothing would be accepted by the next
+                // factor the account switches on.
+                _dbContext.ChangeTracker.Clear();
+                await transaction.RollbackAsync(cancellationToken);
+                return;
+            }
+
             await SaveOrClearTracker(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         });
+
+        return replaced;
     }
 
     /// <summary>The rows of one set, identifiers and all.</summary>
@@ -232,7 +323,11 @@ internal class TwoFactorRepository : ITwoFactorRepository
     /// Retire the whole previous set and stage the new one. Runs inside a
     /// transaction the caller owns.
     /// </summary>
-    private async Task ReplaceRecoveryCodesWith(
+    /// <returns>
+    /// How many factor rows were dated by this set - one, or none when the
+    /// account has no confirmed factor to date.
+    /// </returns>
+    private async Task<int> ReplaceRecoveryCodesWith(
         Guid userId, IReadOnlyList<UserTwoFactorRecoveryCode> rows, DateTimeOffset issuedUtc,
         CancellationToken cancellationToken)
     {
@@ -243,8 +338,13 @@ internal class TwoFactorRepository : ITwoFactorRepository
             .ExecuteDeleteAsync(cancellationToken);
 
         _dbContext.UserTwoFactorRecoveryCodes.AddRange(rows);
-        await _dbContext.UserTwoFactors
-            .Where(f => f.UserId == userId)
+        // A confirmed factor, not merely a row: a setup that was started and never
+        // confirmed is switched off, and a set stored against it would be accepted
+        // by whatever secret that row is replaced with next. The confirmation path
+        // stamps the moment inside this same transaction, so it sees its own write
+        // and passes here.
+        return await _dbContext.UserTwoFactors
+            .Where(f => f.UserId == userId && f.ConfirmedUtc != null)
             .ExecuteUpdateAsync(
                 s => s.SetProperty(f => f.RecoveryCodesIssuedUtc, issuedUtc), cancellationToken);
     }
@@ -368,11 +468,19 @@ internal class TwoFactorRepository : ITwoFactorRepository
             .ExecuteDeleteAsync(cancellationToken);
 
     /// <inheritdoc />
-    public Task ScheduleRemoval(
-        Guid userId, DateTimeOffset dueUtc, CancellationToken cancellationToken = default) =>
-        _dbContext.UserTwoFactors
+    public async Task<bool> ScheduleRemoval(
+        Guid userId, DateTimeOffset dueUtc, CancellationToken cancellationToken = default)
+    {
+        // The predicate is the decision, and the count is how the caller hears it:
+        // the factor may have been switched off between the read that let this
+        // link through and the write, and everything the caller does next - ending
+        // the sessions, the journal entry, the letter naming a date - belongs to a
+        // waiting period that this statement did not start.
+        var updated = await _dbContext.UserTwoFactors
             .Where(f => f.UserId == userId && f.ConfirmedUtc != null)
             .ExecuteUpdateAsync(s => s.SetProperty(f => f.RemovalDueUtc, dueUtc), cancellationToken);
+        return updated == 1;
+    }
 
     /// <inheritdoc />
     public async Task<bool> CancelScheduledRemoval(

@@ -10,15 +10,16 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
-using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.GameReviews;
 using DM.Domain.Game.Features.Games;
 using DM.Testing.Dsl;
 using DM.Testing;
+using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.GameReviews;
@@ -32,7 +33,7 @@ public class GameReviewServiceShould : UnitTestBase
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IGameBlacklistRepository _blacklistRepository;
+    private readonly IGameService _gameService;
     private readonly GameReviewService _service;
     private readonly Guid _currentUserId;
 
@@ -60,7 +61,7 @@ public class GameReviewServiceShould : UnitTestBase
         _dateTimeProvider = Mock<IDateTimeProvider>();
         _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _blacklistRepository = Mock<IGameBlacklistRepository>();
+        _gameService = Mock<IGameService>();
 
         _service = new GameReviewService(
             _createValidator,
@@ -70,25 +71,8 @@ public class GameReviewServiceShould : UnitTestBase
             _identityProvider,
             _guidFactory,
             _dateTimeProvider,
-            _blacklistRepository);
-    }
-
-    [Fact]
-    public async Task ThrowForbiddenWhenBlacklistedFromTheGame()
-    {
-        var gameId = Guid.NewGuid();
-        SetupSuccessfulCreate(gameId);
-        _blacklistRepository
-            .IsBlocked(gameId, _currentUserId, Arg.Any<CancellationToken>()).Returns(true);
-
-        var act = async () => await _service.CreateAsync(new CreateGameReview { GameId = gameId, Text = "Great game!" });
-
-        // Reading the game is open to a blacklisted user, so they reach the review
-        // form, and the right to review survives being removed from the game: one
-        // post in it is enough and it is not taken back. The blacklist closes
-        // writing, and a review is writing.
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+            new TagNamesAsTyped(),
+            _gameService);
     }
 
     #region Create Tests
@@ -163,10 +147,11 @@ public class GameReviewServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowNotFoundWhenReviewDoesNotExist()
     {
+        var gameId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
         _repository.GetAsync(reviewId).Returns((GameReview?)null);
 
-        var act = async () => await _service.GetAsync(reviewId);
+        var act = async () => await _service.GetAsync(gameId, reviewId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -175,13 +160,50 @@ public class GameReviewServiceShould : UnitTestBase
     [Fact]
     public async Task ReturnReviewWhenExists()
     {
+        var gameId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
-        var review = new GameReview { Id = reviewId, Text = "Great game!" };
+        var review = new GameReview { Id = reviewId, GameId = gameId, Text = "Great game!" };
         _repository.GetAsync(reviewId).Returns(review);
 
-        var result = await _service.GetAsync(reviewId);
+        var result = await _service.GetAsync(gameId, reviewId);
 
         result.Should().Be(review);
+        await _gameService.Received(1).GetAsync(gameId);
+    }
+
+    /// <summary>
+    /// A game the reader may not open answers as a game that is not there, before
+    /// the review is looked at: its reviews are as hidden as the game.
+    /// </summary>
+    [Fact]
+    public async Task AnswerAReviewOfAHiddenGameAsTheGameNotBeingThere()
+    {
+        var gameId = Guid.NewGuid();
+        var reviewId = Guid.NewGuid();
+        _repository.GetAsync(reviewId).Returns(new GameReview { Id = reviewId, GameId = gameId, Text = "Тайное" });
+        _gameService.GetAsync(gameId).ThrowsAsync(new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound));
+
+        var act = async () => await _service.GetAsync(gameId, reviewId);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound && e.Message == RefusalMessage.GameNotFound);
+    }
+
+    /// <summary>
+    /// A review of another game, reached through this game's address, is not
+    /// this game's review.
+    /// </summary>
+    [Fact]
+    public async Task AnswerAReviewOfAnotherGameAsAReviewThatIsNotThere()
+    {
+        var gameId = Guid.NewGuid();
+        var reviewId = Guid.NewGuid();
+        _repository.GetAsync(reviewId).Returns(new GameReview { Id = reviewId, GameId = Guid.NewGuid(), Text = "Чужое" });
+
+        var act = async () => await _service.GetAsync(gameId, reviewId);
+
+        await act.Should().ThrowAsync<HttpException>()
+            .Where(e => e.StatusCode == HttpStatusCode.NotFound && e.Message == "Рецензия не найдена");
     }
 
     #endregion
@@ -282,7 +304,8 @@ public class GameReviewServiceShould : UnitTestBase
 
         await _service.DeleteAsync(reviewId);
 
-        await _repository.Received(1).UpdateAsync(Arg.Is<UpdateGameReviewEntity>(e => e.IsRemoved == true));
+        await _repository.Received(1).UpdateAsync(Arg.Is<UpdateGameReviewEntity>(e =>
+            e.IsRemoved == true && e.DeletedByUserId == _currentUserId && e.DeletedUtc != null));
     }
 
     #endregion
@@ -307,6 +330,46 @@ public class GameReviewServiceShould : UnitTestBase
         var result = _service.CanEdit(review);
 
         result.Should().BeFalse();
+    }
+
+    #endregion
+
+    #region MayCreate Tests
+
+    /// <summary>
+    /// The flag rides on every read of a game's details, so a guest, whom the
+    /// intention already refuses, costs no query at all.
+    /// </summary>
+    [Fact]
+    public async Task AnswerAGuestWithoutAskingTheDatabase()
+    {
+        var gameId = Guid.NewGuid();
+        _intentionManager.IsAllowed(GameReviewIntention.Create).Returns(false);
+
+        var result = await _service.MayCreateAsync(gameId);
+
+        result.Should().BeFalse();
+        await _repository.DidNotReceiveWithAnyArgs().GetUserPostCountAsync(default);
+        await _repository.DidNotReceiveWithAnyArgs().CanReviewGameAsync(default, default);
+        await _repository.DidNotReceiveWithAnyArgs().ExistsAsync(default, default);
+    }
+
+    [Theory]
+    [InlineData(50, true, false, false)]
+    [InlineData(200, false, false, false)]
+    [InlineData(200, true, true, false)]
+    [InlineData(200, true, false, true)]
+    public async Task OfferTheReviewOnlyWhereTheWriteTakesIt(int posts, bool hasPostInGame, bool reviewed, bool expected)
+    {
+        var gameId = Guid.NewGuid();
+        _intentionManager.IsAllowed(GameReviewIntention.Create).Returns(true);
+        _repository.GetUserPostCountAsync(_currentUserId).Returns(posts);
+        _repository.CanReviewGameAsync(_currentUserId, gameId).Returns(hasPostInGame);
+        _repository.ExistsAsync(_currentUserId, gameId).Returns(reviewed);
+
+        var result = await _service.MayCreateAsync(gameId);
+
+        result.Should().Be(expected);
     }
 
     #endregion

@@ -16,9 +16,12 @@
  * "nothing written yet" apart from "nothing matches the filter".
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import type { Comment, PagingInfo } from "@/shared/api/models/common";
+import { useToast } from "@/shared/lib/composables/useToast";
+import RefusalNote from "@/shared/ui/Layout/RefusalNote.vue";
+import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import DiscussionSection from "./DiscussionSection.vue";
 
 /** The URL the section reads its filter, sort and page out of. */
@@ -46,11 +49,15 @@ vi.mock("@/features/comment-filter/ui/CommentsFilter.vue", () => ({
   default: { template: "<div class='filter-stub' />" },
 }));
 
-// The item has its own spec; here only the number it is given matters.
-vi.mock("@/features/comment", () => ({
+// The item has its own spec; here only what it is given matters: the number,
+// and whether the reader is on the blacklist of the record. The form is the
+// real one (CommentComposer): what the section owes a send is what it does.
+vi.mock("@/features/comment", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/comment")>()),
   CommentItem: {
-    props: ["comment", "number"],
-    template: "<article class='comment-stub'>{{ number }}</article>",
+    props: ["comment", "number", "viewerBlacklisted"],
+    template:
+      "<article class='comment-stub' :data-blacklisted='String(!!viewerBlacklisted)'>{{ number }}</article>",
   },
   useCommentWarnDialog: () => ({ warnComment: vi.fn() }),
 }));
@@ -65,7 +72,8 @@ vi.mock("@/shared/ui/BBCodeEditor", () => ({
   BBCodeEditor: {
     props: ["modelValue"],
     emits: ["update:modelValue", "submit"],
-    template: "<textarea class='editor-stub' :value='modelValue' />",
+    template:
+      "<textarea class='editor-stub' :value='modelValue' @input='$emit(\"update:modelValue\", $event.target.value)' />",
   },
 }));
 
@@ -193,6 +201,173 @@ describe("the discussion section", () => {
 
     expect(render().wrapper.find(".discussion-none").text()).toBe(
       "Комментариев по заданным фильтрам не найдено",
+    );
+  });
+
+  // The interceptor leaves a 400 to the page, and that is the refusal that
+  // names what is wrong with the text. The section handed the text back and
+  // said nothing, so the reader saw it return and learnt nothing.
+  it("names the server's reason and keeps the text when a send is refused", async () => {
+    const { toasts, dismiss } = useToast();
+    [...toasts.value].forEach((t) => dismiss(t.id));
+    const reason = "Скрытый текст работает только в игровом тексте поста";
+    const create = vi.fn().mockResolvedValue({
+      error: {
+        type: "",
+        title: "",
+        status: 400,
+        traceId: "t",
+        errors: { Text: [reason] },
+      },
+    });
+    const { wrapper } = render({ canComment: true, create });
+
+    await wrapper.get(".editor-stub").setValue("[private]секрет[/private]");
+    await wrapper.get(".discussion-composer button").trigger("click");
+    await flushPromises();
+
+    expect(create).toHaveBeenCalledWith("[private]секрет[/private]");
+    // Under the "Отправить" that sent it, and in no plate.
+    expect(wrapper.get(".comment-composer__refusal").text()).toBe(reason);
+    expect(toasts.value.map((t) => t.message)).toEqual([]);
+    expect(
+      (wrapper.get(".editor-stub").element as HTMLTextAreaElement).value,
+    ).toBe("[private]секрет[/private]");
+  });
+
+  /**
+   * The blacklist of the game or blog closes the composer (the page says so
+   * through canComment and closedHint) and reaches every comment, where it
+   * takes "Редактировать" off the viewer's own. The list is memoised per
+   * item, so a flag that changes after the first page has rendered - the game
+   * answering after the comments - has to be one of the things the memo
+   * watches, or the comments keep offering what the server will refuse.
+   */
+  it("says why there is no composer and tells every comment about the blacklist", async () => {
+    localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
+    const { wrapper } = render({
+      comments: [comment("c-1"), comment("c-2")],
+      canComment: true,
+    });
+    const flags = () =>
+      wrapper
+        .findAll(".comment-stub")
+        .map((item) => item.attributes("data-blacklisted"));
+    expect(flags()).toEqual(["false", "false"]);
+
+    await wrapper.setProps({
+      canComment: false,
+      closedHint: "Вы в черном списке этой игры: писать в обсуждении нельзя",
+      viewerBlacklisted: true,
+    });
+
+    expect(flags()).toEqual(["true", "true"]);
+    expect(wrapper.find(".editor-stub").exists()).toBe(false);
+    expect(wrapper.get(".discussion-hint").text()).toBe(
+      "Вы в черном списке этой игры: писать в обсуждении нельзя",
+    );
+  });
+
+  // A signed-in reader the record takes no comment from and says nothing
+  // about (a ban): no block at all, so no empty step under the list.
+  it("leaves no empty block where there is nothing to offer and nothing to say", () => {
+    localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
+    const { wrapper } = render({ comments: [comment("c-1")] });
+
+    expect(wrapper.find(".discussion-composer").exists()).toBe(false);
+  });
+});
+
+/**
+ * A discussion the viewer may read and not write in: a game read-only to
+ * those outside it, the blacklist of the game or the blog. It stays whole,
+ * empty or not, and the plaque of a refusal (RefusalNote) stands where the
+ * composer would be. The plaque is what tells it from the empty line,
+ * "Комментариев пока нет", which stays grey: the two never read alike.
+ */
+describe("a discussion closed to writing", () => {
+  const OFF = "Писать в обсуждении могут только участники игры";
+
+  beforeEach(() => {
+    route.query = {};
+    route.hash = "";
+    localStorage.clear();
+  });
+
+  it("says so under the comments, with no form", async () => {
+    localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
+    const { wrapper } = render({
+      closedHint: OFF,
+      comments: [comment("c-1")],
+      paging: paging({ total: 1, pages: 1 }),
+    });
+    await flushPromises();
+
+    expect(wrapper.findAll(".comment-stub")).toHaveLength(1);
+    expect(wrapper.find(".editor-stub").exists()).toBe(false);
+    expect(wrapper.get(".discussion-composer .discussion-hint").text()).toBe(
+      OFF,
+    );
+  });
+
+  // Signing in would not open the form, so the guest is told why there is
+  // none rather than invited to sign in.
+  it("tells a guest the same instead of inviting him in", async () => {
+    const { wrapper } = render({ closedHint: OFF });
+    await flushPromises();
+
+    expect(wrapper.get(".discussion-hint").text()).toBe(OFF);
+    expect(wrapper.find(".login-prompt").exists()).toBe(false);
+  });
+
+  it("invites a guest in where signing in opens the composer", async () => {
+    const { wrapper } = render();
+    await flushPromises();
+
+    expect(wrapper.find(".login-prompt").exists()).toBe(true);
+    expect(wrapper.find(".discussion-hint").exists()).toBe(false);
+  });
+
+  // The discussion with nothing in it used to vanish, filter bar and all, and
+  // the page left its address: there is something to read in it after all,
+  // "Комментариев пока нет", and the line under it.
+  it("keeps an empty one whole: the filter bar, the empty line and the line under it", async () => {
+    const { wrapper } = render({
+      closedHint: OFF,
+      paging: paging({ total: 0, pages: 0 }),
+    });
+    await flushPromises();
+
+    expect(wrapper.find(".filter-stub").exists()).toBe(true);
+    expect(wrapper.get(".discussion-none").text()).toBe(
+      "Комментариев пока нет",
+    );
+    expect(wrapper.get(".discussion-hint").text()).toBe(OFF);
+  });
+
+  // The refusal is the plaque and the empty line is grey, each drawn by its
+  // own component, so a refusal set back in grey reads as nothing here.
+  it("draws the refusal as a plaque and the empty line in grey", async () => {
+    localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
+    const { wrapper } = render({
+      closedHint: OFF,
+      paging: paging({ total: 0, pages: 0 }),
+    });
+    await flushPromises();
+
+    const plaques = wrapper.findAllComponents(RefusalNote);
+    expect(plaques.map((plaque) => plaque.text())).toEqual([OFF]);
+    expect(plaques[0].classes()).toContain("discussion-hint");
+    const grey = wrapper.findAllComponents(SecondaryText);
+    expect(grey.map((line) => line.text())).toEqual(["Комментариев пока нет"]);
+  });
+
+  it("keeps an open empty discussion and its words", async () => {
+    const { wrapper } = render({ paging: paging({ total: 0, pages: 0 }) });
+    await flushPromises();
+
+    expect(wrapper.find(".discussion-none").text()).toBe(
+      "Комментариев пока нет",
     );
   });
 });

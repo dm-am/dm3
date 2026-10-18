@@ -32,9 +32,9 @@ public readonly record struct PrivateAddressee(
 /// </param>
 /// <param name="AddresseeNamesByAttribute">
 /// Names of the frozen addressees per tag attribute value, for the recipients
-/// line. A key is absent when the snapshot does not name every addressee under
-/// it — an old snapshot does not name any — and the caller then has nothing to
-/// print but the author's own text.
+/// the block carries. A key is absent when the snapshot does not name every
+/// addressee under it — an old snapshot does not name any — and the caller then
+/// has nothing to name but the author's own text.
 /// </param>
 public sealed record PrivateAddresseeSnapshotView(
     IReadOnlyDictionary<string, IReadOnlySet<Guid>> OwnerUserIdsByAttribute,
@@ -145,7 +145,7 @@ public static class PrivateAddresseeSnapshot
     /// The names of frozen addressees are refreshed from the roster by character
     /// id whenever the character is still in the room. That moves no access — the
     /// reader is the frozen owner either way — and it is what keeps the recipients
-    /// line naming the addressee as they are called now.
+    /// of the block naming the addressee as they are called now.
     /// </remarks>
     public static string Build(
         string? rawBbCode,
@@ -457,9 +457,9 @@ public static class PrivateAddresseeSnapshot
 
     /// <summary>
     /// Characters named by one tag attribute. The value is a list of names — the
-    /// block header renders it as "Получатели" — so it splits on commas; a name
-    /// that itself contains one resolves to nobody, which shows the block to
-    /// nobody rather than to the wrong reader.
+    /// tooltip over the block names them as its recipients — so it splits on
+    /// commas; a name that itself contains one resolves to nobody, which shows
+    /// the block to nobody rather than to the wrong reader.
     /// </summary>
     private static List<PrivateAddressee> Resolve(
         string attribute,

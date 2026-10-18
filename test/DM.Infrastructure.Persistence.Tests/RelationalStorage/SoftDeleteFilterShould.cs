@@ -22,17 +22,15 @@ namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 public class SoftDeleteFilterShould
 {
     /// <summary>
-    /// Entities that opt out of the global filter on purpose: their write paths
-    /// have to see tombstone rows. An upsert over a tombstoned unread marker
-    /// deliberately revives it for a re-added participant, and a game resolves
-    /// its removed attribute schema through its own reference. Each of their
-    /// reads spells its own IsRemoved predicate instead — see the entity
-    /// remarks. Adding here is a decision, not a convenience.
+    /// Entities that opt out of the global filter: an upsert over a tombstoned
+    /// unread marker deliberately revives it for a re-added participant, so that
+    /// write path has to see tombstone rows, and it spells its own IsRemoved
+    /// predicate in every read instead - see the entity remarks. Adding here is a
+    /// decision, not a convenience.
     /// </summary>
     private static readonly string[] OwnTheirPredicates =
     [
         nameof(Entities.Shared.UnreadCounter),
-        "AttributeSchema",
     ];
 
     private static DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()

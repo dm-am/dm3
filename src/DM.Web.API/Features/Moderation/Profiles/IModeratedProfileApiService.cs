@@ -45,4 +45,24 @@ public interface IModeratedProfileApiService
     /// <param name="role">New role</param>
     /// <returns>Updated user profile</returns>
     Task<UserProfile> SetUserRole(string username, UserRole role);
+
+    /// <summary>
+    /// Remove a user's account on a moderator's decision (SeniorModerator+ only)
+    /// </summary>
+    /// <param name="username">User's display name</param>
+    /// <param name="request">Why the account is being removed</param>
+    Task RemoveAccount(string username, RemoveAccountRequest request);
+
+    /// <summary>
+    /// Bring a removed account back on a moderator's decision (SeniorModerator+ only)
+    /// </summary>
+    /// <param name="username">Whose account to bring back</param>
+    Task RestoreAccount(string username);
+
+    /// <summary>
+    /// List the accounts moderation has removed (SeniorModerator+ only)
+    /// </summary>
+    /// <param name="query">Search term and page bounds</param>
+    /// <returns>Page of removed accounts, addresses included only for an administrator</returns>
+    Task<ListEnvelope<RemovedAccount>> GetRemovedAccounts(RemovedAccountsQuery query);
 }

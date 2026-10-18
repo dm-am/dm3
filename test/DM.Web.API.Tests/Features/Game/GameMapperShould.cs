@@ -2,15 +2,19 @@ using System;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
+using DM.Infrastructure.Core.Parsing;
 using DM.Testing;
 using DM.Web.API.Features.Game.AttributeSchemas;
 using DM.Web.API.Features.Game.Games;
+using DM.Web.API.Shared.BbRendering;
 using AwesomeAssertions;
 using Xunit;
 using DomainGame = DM.Domain.Game.Features.Games.Game;
 using DomainGameDetails = DM.Domain.Game.Features.Games.GameDetails;
 using DomainRecruitment = DM.Domain.Game.Features.Games.GameRecruitment;
+using DomainGameAttributeSchema = DM.Domain.Game.Features.Games.GameAttributeSchema;
 using DomainCharacterShortInfo = DM.Domain.Game.Features.Games.CharacterShortInfo;
+using DomainGameTag = DM.Domain.Game.Features.Games.GameTag;
 
 namespace DM.Web.API.Tests.Features.Game;
 
@@ -105,6 +109,7 @@ public class GameMapperShould : UnitTestBase
         {
             Master = Master(),
             Recruitment = new DomainRecruitment(),
+            AttributeSchema = new DomainGameAttributeSchema(),
             Characters =
             [
                 new DomainCharacterShortInfo
@@ -135,6 +140,7 @@ public class GameMapperShould : UnitTestBase
         {
             Master = Master(),
             Recruitment = new DomainRecruitment(),
+            AttributeSchema = new DomainGameAttributeSchema(),
             Characters =
             [
                 new DomainCharacterShortInfo
@@ -201,5 +207,34 @@ public class GameMapperShould : UnitTestBase
         query.Statuses.Should().BeNull();
         query.OwnerUsernames.Should().BeNull("whitespace-only usernames are not a filter");
         query.RequiredTags.Should().BeNull();
+    }
+
+    /// <summary>
+    /// The description of a tag reaches the public catalog as the hint surface,
+    /// which the server renders like every text: the client puts nothing but
+    /// server markup into the page, the [tip] of a description included.
+    /// </summary>
+    [Fact]
+    public void CarryATagDescriptionAsTheHint()
+    {
+        var tag = CreateMapper().ToTag(new DomainGameTag
+        {
+            ShortId = 63,
+            Title = "ERP",
+            GroupTitle = "Деликатный контент",
+            Description = "[tip img=\"/images/erp-tooltip.gif\"]эротические сцены[/tip]"
+        });
+
+        tag.Description.Should().BeOfType<HintBbText>();
+        tag.Description!.Value.Should().Be("[tip img=\"/images/erp-tooltip.gif\"]эротические сцены[/tip]");
+        tag.Description.Surface.Should().Be(BbSurface.Hint);
+    }
+
+    [Fact]
+    public void KeepATagWithoutDescriptionWithoutOne()
+    {
+        var tag = CreateMapper().ToTag(new DomainGameTag { ShortId = 1, Title = "D&D", GroupTitle = "Система" });
+
+        tag.Description.Should().BeNull();
     }
 }

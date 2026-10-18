@@ -35,7 +35,14 @@
         ><secondary-text class="testimonial-date">
           {{ formatDate(testimonial.createdUtc) }}
         </secondary-text></Tooltip
-      ><slot name="controls"></slot>
+      >
+    </template>
+
+    <!-- The edit and delete icons of whoever may act on the entry, forwarded
+         to the bubble corner. Only the gallery page passes them; every other
+         surface draws the card read-only. -->
+    <template v-if="$slots.actions" #actions>
+      <slot name="actions" />
     </template>
   </SpeechBubble>
 </template>

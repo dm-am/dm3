@@ -1,3 +1,4 @@
+using DM.Domain.Core.Content;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,6 +35,7 @@ internal class CharacterService : ICharacterService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly IBbTagNameCase _tagNames;
 
     public CharacterService(
         IValidator<CreateCharacter> createValidator,
@@ -47,7 +49,8 @@ internal class CharacterService : ICharacterService
         IEventProducer producer,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider)
+        IDateTimeProvider dateTimeProvider,
+        IBbTagNameCase tagNames)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -61,6 +64,7 @@ internal class CharacterService : ICharacterService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
+        _tagNames = tagNames;
     }
 
     #region Create
@@ -69,16 +73,13 @@ internal class CharacterService : ICharacterService
     {
         await _createValidator.ValidateAndThrowAsync(createCharacter);
         var game = await _gameService.GetAsync(createCharacter.GameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.CreateCharacter, game);
-
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        // The blacklist closes writing: reading this game is open to the user it
-        // blacklisted, applying to it with a character is not.
-        if (game.IsBlacklisted(currentUserId))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.BlacklistedFromGame);
-        }
+        // The application is one of the two things the game's blacklist closes.
+        // The intention carries the same rule; asked first, it answers with the
+        // reason.
+        game.ThrowIfBlacklisted(currentUserId);
+        _intentionManager.ThrowIfForbidden(GameIntention.CreateCharacter, game);
 
         var gameRoles = game.GetRoles(currentUserId);
 
@@ -99,11 +100,12 @@ internal class CharacterService : ICharacterService
             IsNpc = isNpc,
             AccessPolicy = createCharacter.AccessPolicy,
             InitialStatus = initialStatus,
-            Attributes = createCharacter.Attributes.Select(a => new CharacterAttributeInput
-            {
-                Id = a.Id,
-                Value = a.Value
-            }),
+            Attributes = await WithTagNamesInLowerCase(createCharacter.GameId,
+                createCharacter.Attributes.Select(a => new CharacterAttributeInput
+                {
+                    Id = a.Id,
+                    Value = a.Value
+                })),
             CreatedUtc = _dateTimeProvider.Now
         };
 
@@ -134,7 +136,10 @@ internal class CharacterService : ICharacterService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
         }
 
-        var game = await _gameService.GetAsync(character.GameId);
+        // A character of a game the reader may not open answers as a character
+        // that is not there, not as the game: see HiddenContainerRefusal.
+        var game = await HiddenContainerRefusal.AsNotFound(RefusalMessage.CharacterNotFound,
+            () => _gameService.GetAsync(character.GameId));
         await _attributeValueFiller.Fill(new[] { character }, game, _identityProvider.Current.User.UserId);
         return character;
     }
@@ -161,6 +166,17 @@ internal class CharacterService : ICharacterService
 
         _intentionManager.ThrowIfForbidden(CharacterIntention.Edit, characterToUpdate);
 
+        // Editing one's own application is applying again, which the game's
+        // blacklist closes. The sheet of a character in play or retired is not an
+        // application, and a lead editing somebody else's is on no list of the
+        // game.
+        var currentUserId = _identityProvider.Current.User.UserId;
+        if (characterToUpdate.UserId == currentUserId && IsApplication(characterToUpdate))
+        {
+            var game = await _gameService.GetAsync(characterToUpdate.GameId);
+            game.ThrowIfBlacklisted(currentUserId);
+        }
+
         // A field the caller may not set is refused, not dropped. Asking IsAllowed
         // and leaving the value out answered 200 with the character unchanged,
         // which is what success looks like. Asked only when the request actually
@@ -184,6 +200,10 @@ internal class CharacterService : ICharacterService
         var invokedEvents = new List<EventType> { EventType.ChangedCharacter };
 
         var attributeInputs = await BuildAttributeInputs(characterToUpdate, updateCharacter.Attributes);
+        if (attributeInputs != null)
+        {
+            attributeInputs = await WithTagNamesInLowerCase(characterToUpdate.GameId, attributeInputs);
+        }
 
         // No status here: a character's place in the game is moved by
         // ChangeStatusAsync. This method used to move it through a target status plus
@@ -268,11 +288,11 @@ internal class CharacterService : ICharacterService
                 statusEvent = EventType.StatusCharacterResurrected;
                 break;
 
-            case CharacterStatusTransition.Return:
+            case CharacterStatusTransition.Readmit:
                 RequireStatus(character, transition, CharacterStatus.Retired);
-                _intentionManager.ThrowIfForbidden(CharacterIntention.Return, character);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Readmit, character);
                 entity.Status = CharacterStatus.Active;
-                statusEvent = EventType.StatusCharacterReturned;
+                statusEvent = EventType.StatusCharacterReadmitted;
                 break;
 
             default:
@@ -293,7 +313,9 @@ internal class CharacterService : ICharacterService
             new List<EventType> { EventType.ChangedCharacter, statusEvent }, characterId);
 
         // A player who has lost their last active character stays with the game as a
-        // reader rather than dropping out of it entirely.
+        // reader rather than dropping out of it entirely - a blacklisted one too:
+        // the list closes the discussion and the application, and following the
+        // game is reading.
         if (entity.Status != CharacterStatus.Active &&
             character.Status == CharacterStatus.Active &&
             !character.IsNpc)
@@ -312,6 +334,13 @@ internal class CharacterService : ICharacterService
 
         return updated;
     }
+
+    /// <summary>
+    /// The character is an application: waiting for the lead's verdict or
+    /// declined by it, not yet in play.
+    /// </summary>
+    private static bool IsApplication(CharacterToUpdate character) =>
+        character.Status is CharacterStatus.UnderReview or CharacterStatus.Declined;
 
     private static void RequireStatus(
         CharacterToUpdate character, CharacterStatusTransition transition,
@@ -350,11 +379,6 @@ internal class CharacterService : ICharacterService
         }
 
         var game = await _gameService.GetAsync(character.GameId);
-        if (!game.AttributeSchemaId.HasValue)
-        {
-            return inputs;
-        }
-
         var currentUserId = _identityProvider.Current.User.UserId;
         var canSeeHidden = game.GetRoles(currentUserId).HasEditAccess() ||
                            character.UserId == currentUserId;
@@ -385,6 +409,35 @@ internal class CharacterService : ICharacterService
         }
 
         return inputs;
+    }
+
+    /// <summary>
+    /// The values, with the names of the tags of every value written in the
+    /// site markup in lower case, as the site writes them (IBbTagNameCase). A
+    /// value of any other type is plain text and stays as typed.
+    /// </summary>
+    private async Task<List<CharacterAttributeInput>> WithTagNamesInLowerCase(
+        Guid gameId, IEnumerable<CharacterAttributeInput> inputs)
+    {
+        // A value with no capital A-Z has no name to change, and the schema is
+        // not read for it.
+        var values = inputs.ToList();
+        if (!values.Any(value => value.Value?.Any(char.IsAsciiLetterUpper) == true))
+        {
+            return values;
+        }
+
+        var schema = await _repository.GetGameSchema(gameId);
+        var markup = schema?.Specifications
+            .Where(specification => specification.Type == AttributeSpecificationType.BbCode)
+            .Select(specification => specification.Id)
+            .ToHashSet() ?? [];
+        foreach (var value in values.Where(value => markup.Contains(value.Id)))
+        {
+            value.Value = _tagNames.ToLowerCase(value.Value, BbTagSet.Common);
+        }
+
+        return values;
     }
 
     #endregion

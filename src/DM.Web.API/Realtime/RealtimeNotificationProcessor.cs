@@ -41,12 +41,9 @@ internal class RealtimeNotificationProcessor(
     public async Task<ProcessResult> Process(
         string key, RealtimeNotification message, CancellationToken cancellationToken)
     {
-        var notification = new Notification
-        {
-            Id = message.NotificationId,
-            EventType = message.EventType,
-            Payload = message.Metadata
-        };
+        // The DTO the list writes, through the same mapper, so the open tab reads
+        // one shape from both transports. Unread: this is the moment it appears.
+        var notification = NotificationMapper.ToNotification(message, isRead: false);
 
         if (Broadcast.Contains(message.EventType))
         {

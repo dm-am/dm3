@@ -27,15 +27,26 @@
  *   - anybody else, open event: "Участвовать"
  *   - anybody else, closed event: one quiet line saying why there is no control
  *   - request in flight: the control stays put and goes disabled
- *   - refusal: the sentence the server sent, through the site's one toast
+ *   - refusal: the sentence the server sent, in a line under the control
+ *
+ * SUCCESS IS SILENT, and the states above are the reason. All four endpoints
+ * answer with the whole event, the store drops that answer straight into the
+ * details cache, and every line of the list is read back out of it — so the
+ * press rewrites the very word it was made on. "Участвовать" becomes "Отменить
+ * участие" and back; "Начать" becomes "Закончить"; the end of an event takes
+ * the control away with it. The card around the control moves in the same
+ * breath, its "участников: N" being the length of the same participants list,
+ * and so does the strip above the feed, which the store re-reads. A plate in
+ * the corner would be a second, quieter copy of all of that — the rule is
+ * UI_STANDARDS, "Всплывающие сообщения".
  */
 import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import type { GeneralError } from "@/shared/api/models/common";
 import { useGlobalChatStore } from "@/entities/global-chat";
 import { useAuthStore } from "@/shared/stores";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { notifyFailure } from "@/shared/lib/errors";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { ActionResult } from "@/shared/ui/ActionResult";
 
 const props = defineProps<{
   /** The event the surrounding card describes. */
@@ -45,7 +56,6 @@ const props = defineProps<{
 const store = useGlobalChatStore();
 const { eventDetails } = storeToRefs(store);
 const { user } = storeToRefs(useAuthStore());
-const toast = useToast();
 
 const pending = ref(false);
 
@@ -86,13 +96,6 @@ const LABELS: Record<ActionKind, string> = {
   end: "Закончить",
 };
 
-const DONE: Record<ActionKind, string> = {
-  join: "Вы записаны на эвент",
-  leave: "Вы больше не участвуете в эвенте",
-  start: "Эвент начался",
-  end: "Эвент закончен",
-};
-
 const FAILED: Record<ActionKind, string> = {
   join: "Не удалось записаться на эвент",
   leave: "Не удалось отменить участие",
@@ -125,19 +128,21 @@ const RUN: Record<ActionKind, (id: string) => Outcome> = {
   end: (id) => store.endEvent(id),
 };
 
+// The refusal of the last press, under the control that was pressed.
+const result = useActionResult();
+
 async function run() {
   const kind = action.value;
   if (!kind || pending.value) return;
   pending.value = true;
+  result.clear();
   try {
     const { error } = await RUN[kind](props.eventId);
-    if (error) {
-      // The server names its own refusals, "Сейчас уже идет другой эвент"
-      // among them. The fallback is for a request that never reached it.
-      notifyFailure(error, FAILED[kind]);
-      return;
-    }
-    toast.success(DONE[kind]);
+    // Only the refusal is spoken. The server names its own, "Уже идет другой
+    // эвент" among them; the fallback is for a request that never reached it.
+    // Success needs no sentence: the store has already rewritten the control
+    // and the card around it (see the header).
+    if (error) result.refuse(error, FAILED[kind]);
   } finally {
     pending.value = false;
   }
@@ -157,6 +162,7 @@ async function run() {
       {{ label }}
     </button>
     <span v-else class="event-note">{{ note }}</span>
+    <ActionResult :result="result" class="event-refusal" />
   </div>
 </template>
 
@@ -180,10 +186,11 @@ async function run() {
     text-decoration: none
   &:focus:not(:focus-visible)
     outline: none
-  &:focus-visible
-    outline: 2px solid $link
-    outline-offset: 2px
 
 .event-note
   color: $text-muted
+
+// One step under the control, the step the row keeps from the card above it.
+.event-refusal
+  --action-result-margin: #{$tiny} 0 0
 </style>

@@ -31,6 +31,23 @@ public class UserNotification
 }
 
 /// <summary>
+/// A notification as it stands in the list of one of its recipients
+/// </summary>
+/// <remarks>
+/// Whether it was read belongs to the recipient and not to the notification: one
+/// stored notification reaches several people, and each of them reads it in their
+/// own time. The mark is not on UserNotification itself because the push derives
+/// from it, and a push has many recipients and no reader yet.
+/// </remarks>
+public class ListedNotification : UserNotification
+{
+    /// <summary>
+    /// Whether the recipient whose list this is has read it
+    /// </summary>
+    public bool IsRead { get; set; }
+}
+
+/// <summary>
 /// Entity DTO for creating a notification (repository level)
 /// </summary>
 public class CreateNotificationEntity

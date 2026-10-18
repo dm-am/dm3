@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Dto;
+using DM.Infrastructure.Core.Parsing;
 using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -60,7 +61,9 @@ public class PostReviewLifecycleShould : IntegrationTestBase
     /// <param name="authorId">Who wrote it.</param>
     /// <param name="sign">Its rating impact.</param>
     /// <param name="ageMinutes">How long ago, which is what decides the edit window.</param>
-    private async Task<Guid> SeedReview(Guid authorId, short sign, int ageMinutes = 0)
+    /// <param name="text">What it says.</param>
+    private async Task<Guid> SeedReview(
+        Guid authorId, short sign, int ageMinutes = 0, string text = "Исходный текст оценки")
     {
         var reviewId = Guid.NewGuid();
         await using var db = DatabaseFixture.CreateDbContext();
@@ -72,7 +75,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             PostAuthorId = PostAuthorId,
             GameId = TestConstants.TestGameId,
             CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-ageMinutes),
-            Text = "Исходный текст оценки",
+            Text = text,
             SignValue = sign,
             IsRemoved = false
         });
@@ -111,10 +114,14 @@ public class PostReviewLifecycleShould : IntegrationTestBase
     }
 
     /// <summary>The rating and the review count the rated listing reports for the post.</summary>
+    /// <remarks>
+    /// No hasReviews: the post is wanted whether it has reviews or not, and
+    /// hasReviews=false now asks for the posts without any.
+    /// </remarks>
     private async Task<(int Rating, int ReviewCount)> ListedPost()
     {
         var response = await Client.GetAsync(
-            $"/v1/posts?gameId={TestConstants.TestGameId}&hasReviews=false&take=100");
+            $"/v1/posts?gameId={TestConstants.TestGameId}&take=100");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -132,6 +139,34 @@ public class PostReviewLifecycleShould : IntegrationTestBase
 
     private async Task<HttpResponseMessage> Delete(Guid reviewId, GeneralUser user) =>
         await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Delete, ReviewUrl(reviewId), user));
+
+    /// <summary>
+    /// The editor opens a review with the audience that hands its author the text
+    /// as typed. The display rendering turns "--" into a dash entity the editor
+    /// does not turn back, and saving what it was handed wrote the entity into the
+    /// review as text.
+    /// </summary>
+    [Fact]
+    public async Task HandTheAuthorTheTextAsTypedForEditing()
+    {
+        const string typed = "Раз -- два --- три";
+        var reviewId = await SeedReview(Moderator.UserId, sign: 1, text: typed);
+        try
+        {
+            var forEditing = CreateAuthenticatedRequest(HttpMethod.Get, ReviewUrl(reviewId), Moderator);
+            forEditing.Headers.Add(BbAudienceHeader.HeaderName, "author_edit");
+            var response = await Client.SendAsync(forEditing);
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            document.RootElement.GetProperty("resource").GetProperty("text").GetString()
+                .Should().Be(BbParserWrapper.LineBreaksWritten + typed);
+        }
+        finally
+        {
+            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
+        }
+    }
 
     [Fact]
     public async Task LetTheAuthorCorrectTheirOwnWordsInsideTheWindow()

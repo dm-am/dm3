@@ -42,41 +42,50 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
 
     /// <inheritdoc />
     public Task<Comment?> Get(Guid commentId, CancellationToken ct = default) =>
-        CommentQueries.Single(_dbContext, commentId, "DM.PublicationComments.Get", ct);
+        CommentQueries.Single(_dbContext, commentId, CommentQueries.PublicationIds(_dbContext), "DM.PublicationComments.Get", ct);
+
+    /// <summary>
+    /// The publication's half of the last-comment move.
+    /// </summary>
+    /// <remarks>
+    /// What the statement says and why it says it that way is stated once, on
+    /// <see cref="CommentWrites.Create{TOwner}" />. Only the table is spelled out
+    /// here: EF refuses raw SQL whose text is not a compile-time constant, so the
+    /// three owners cannot share one statement with the table interpolated into it.
+    /// </remarks>
+    private const string MoveLastCommentForwardSql =
+        """
+        UPDATE "Publications" SET "LastCommentId" = {1}
+        WHERE "PublicationId" = {0}
+          AND NOT EXISTS (
+              SELECT 1 FROM "Comments" c
+              WHERE c."CommentId" = "Publications"."LastCommentId"
+                AND (c."CreatedUtc", c."CommentId") > ({2}, {1}))
+        """;
 
     /// <inheritdoc />
-    public async Task<(Comment comment, Guid commentId)> Create(CreateComment createComment, Guid authorId, Guid publicationId, int newCommentCount, CancellationToken ct = default)
+    public async Task<(Comment comment, Guid commentId)> Create(CreateComment createComment, Guid authorId, Guid publicationId, CancellationToken ct = default)
     {
         var commentId = _guidFactory.Create();
-        var now = _dateTimeProvider.Now;
 
-        var dbComment = new DbComment
-        {
-            CommentId = commentId,
-            EntityId = publicationId,
-            AuthorId = authorId,
-            Text = createComment.Text,
-            CreatedUtc = now,
-            IsRemoved = false
-        };
-
-        _dbContext.Comments.Add(dbComment);
-
-        // Update publication comment count and last comment ID
-        var publication = await _dbContext.Publications.FindAsync([publicationId], ct);
-        if (publication != null)
-        {
-            publication.CommentCount = newCommentCount;
-            publication.LastCommentId = commentId;
-        }
-
-        await _dbContext.SaveChangesAsync(ct);
-
-        var comment = await _dbContext.Comments
-            .TagWith("DM.PublicationComments.Created")
-            .Where(c => c.CommentId == commentId)
-            .ProjectToComment()
-            .FirstAsync(ct);
+        var comment = await CommentWrites.Create(
+            _dbContext,
+            _dbContext.Publications,
+            p => p.PublicationId == publicationId,
+            p => p.CommentCount,
+            publicationId,
+            new DbComment
+            {
+                CommentId = commentId,
+                EntityId = publicationId,
+                AuthorId = authorId,
+                Text = createComment.Text,
+                CreatedUtc = _dateTimeProvider.Now,
+                IsRemoved = false
+            },
+            MoveLastCommentForwardSql,
+            "DM.PublicationComments.Created",
+            ct);
 
         return (comment, commentId);
     }
@@ -87,60 +96,26 @@ internal class PublicationCommentRepository : IPublicationCommentRepository
             entity.EditorUserId, entity.LastUpdateUtc, "DM.PublicationComments.Updated", ct);
 
     /// <inheritdoc />
-    public async Task<PublicationCommentToDelete?> GetForDelete(Guid commentId, CancellationToken ct = default)
-    {
-        var comment = await _dbContext.Comments
+    public Task<PublicationCommentToDelete?> GetForDelete(
+        Guid commentId, CancellationToken ct = default) =>
+        CommentQueries.One(_dbContext, commentId, CommentQueries.PublicationIds(_dbContext))
             .TagWith("DM.PublicationComments.GetForDelete")
-            .Where(c => !c.IsRemoved && c.CommentId == commentId)
             .ProjectToPublicationCommentToDelete()
             .FirstOrDefaultAsync(ct);
 
-        if (comment == null) return null;
-
-        var publicationInfo = await _dbContext.Publications
-            .Where(p => p.PublicationId == comment.PublicationId)
-            .Select(p => new { p.CommentCount, p.LastCommentId })
-            .FirstOrDefaultAsync(ct);
-
-        if (publicationInfo != null)
-        {
-            comment.PublicationCommentCount = publicationInfo.CommentCount;
-            comment.IsLastComment = publicationInfo.LastCommentId == commentId;
-        }
-
-        return comment;
-    }
-
     /// <inheritdoc />
-    public Task<Guid?> GetNewestCommentIdExcept(
-        Guid publicationId, Guid exceptCommentId, CancellationToken ct = default) =>
-        CommentQueries.NewestExcept(
-            _dbContext, publicationId, exceptCommentId, "DM.PublicationComments.NewestCommentIdExcept", ct);
-
-    /// <inheritdoc />
-    public async Task Delete(DeletePublicationCommentEntity entity, CancellationToken ct = default)
-    {
-        var dbComment = await _dbContext.Comments.FindAsync([entity.CommentId], ct);
-        if (dbComment != null)
-        {
-            SoftDelete.Mark(dbComment, entity.DeletedByUserId, entity.DeletedUtc);
-        }
-
-        // Update publication comment count and last comment ID. The pointer moves
-        // only when the row it points at is the one going away: the service computes
-        // NewLastCommentId for the last comment and leaves it null for every other,
-        // so assigning it unconditionally erased the pointer whenever somebody
-        // deleted a comment from the middle of the discussion.
-        var publication = await _dbContext.Publications.FindAsync([entity.PublicationId], ct);
-        if (publication != null)
-        {
-            publication.CommentCount = entity.NewCommentCount;
-            if (entity.NewLastCommentId.HasValue || publication.LastCommentId == entity.CommentId)
-            {
-                publication.LastCommentId = entity.NewLastCommentId;
-            }
-        }
-
-        await _dbContext.SaveChangesAsync(ct);
-    }
+    public Task<bool> Delete(DeletePublicationCommentEntity entity, CancellationToken ct = default) =>
+        CommentWrites.Delete(
+            _dbContext,
+            _dbContext.Publications,
+            p => p.PublicationId == entity.PublicationId,
+            p => p.PublicationId == entity.PublicationId && p.LastCommentId == entity.CommentId,
+            p => p.CommentCount,
+            p => p.LastCommentId,
+            entity.PublicationId,
+            entity.CommentId,
+            entity.DeletedByUserId,
+            entity.DeletedUtc,
+            "DM.PublicationComments.NewestCommentIdExcept",
+            ct);
 }

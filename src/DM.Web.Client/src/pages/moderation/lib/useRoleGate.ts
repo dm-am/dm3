@@ -1,16 +1,19 @@
-// Client-side role gate for the moderation pages. The router only knows
-// requiresAuth; role checks live in the pages themselves (the backend
-// enforces roles again with [RequireRole], this is purely presentational).
+// Client-side role gate for the moderation pages. The zone shell
+// (ModerationPage) answers a viewer below a section's role with the 403 page
+// before the section mounts; a page still asks the same question of its own
+// before it loads anything, and the backend enforces roles again with
+// [RequireRole]. All of it is presentational: the server decides.
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useAuthStore } from "@/shared/stores";
+import type { ModerationRole } from "@/shared/config/moderationSections";
 import {
   userIsAdmin,
   userIsModerator,
   userIsSeniorModerator,
 } from "@/entities/user";
 
-export type RequiredRole = "Moderator" | "SeniorModerator" | "Admin";
+export type RequiredRole = ModerationRole;
 
 /**
  * Who the page is for, in the words the refusal uses. The sentence below stood
@@ -24,8 +27,8 @@ const AUDIENCE: Record<RequiredRole, string> = {
 };
 
 /**
- * The role check itself, shared with the admin tab strip (ModerationPage),
- * which filters its tabs by the same answer the pages under them give.
+ * The role check itself, shared with the zone shell (ModerationPage), which
+ * opens a section by the same answer the section's page gives.
  */
 export function hasRequiredRole(
   user: Parameters<typeof userIsModerator>[0],

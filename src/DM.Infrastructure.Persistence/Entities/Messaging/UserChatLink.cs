@@ -36,6 +36,13 @@ public class UserChatLink : ISoftDeletable
     public DateTimeOffset? DeletedUtc { get; set; }
 
     /// <summary>
+    /// Moment the participant cleared the history of the conversation for
+    /// himself: messages created at or before it are not given to him, and the
+    /// other participants keep them. Null while he never cleared it.
+    /// </summary>
+    public DateTimeOffset? HistoryClearedUtc { get; set; }
+
+    /// <summary>
     /// Participant
     /// </summary>
     [ForeignKey(nameof(UserId))]

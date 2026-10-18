@@ -47,17 +47,19 @@ const { open: openLogin, close: closeLogin } = useModal({
       closeLogin();
       openRecovery();
     },
-    onResendActivation: (email: string) => {
-      prefillEmail.value = email;
-      closeLogin();
-      openRecovery();
-    },
+    // The second activation letter is not a dialog of its own any more: the
+    // sign-in card sends it and states the outcome where the reader is
+    // standing, so there is nothing here to open for it.
     // Neither the phone nor the recovery codes. The mailed path is the only
     // way back from there, and it starts here rather than in the recovery
     // dialog next door: that one resets a password, which this reader knows.
     onCantPassSecondFactor: () => {
       closeLogin();
       openTwoFactorRemoval();
+    },
+    onRegister: () => {
+      closeLogin();
+      openRegistrar();
     },
   },
 });
@@ -131,6 +133,12 @@ function handleActionParam() {
       openRegistrar();
     } else if (action === "reset" || action === "recovery") {
       openRecovery();
+    } else if (action === "two-factor") {
+      // The request to switch the second factor off, which the sign-in card
+      // opens from its code step. The support page names it too, under the
+      // reason a reader who lost the phone picks there, so the way is one
+      // click from where he is and not a sign-in he cannot finish.
+      openTwoFactorRemoval();
     }
   }
 }

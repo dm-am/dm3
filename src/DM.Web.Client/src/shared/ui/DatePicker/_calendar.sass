@@ -1,0 +1,8 @@
+@use "@/assets/styles/Variables" as *
+
+/// The outer width of the calendar panel, frame included: a 62-step grid of
+/// seven days, the $small padding on both sides and the 1px frame. Written once
+/// because two boxes take it: the panel itself (CalendarGrid) and a date field
+/// that stands as wide as the calendar it opens (DateInput, `narrow`), so the
+/// icon of the field sits over the right edge of the panel under it.
+$calendar-width: $grid-step * 62 + $small * 2 + 2px

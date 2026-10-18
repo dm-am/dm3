@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
+using DM.Domain.Personal.Features.Notifications;
 using DM.Workers.NotificationDispatcher.Dispatching;
 using DM.Workers.NotificationDispatcher.Bot;
 using DM.Workers.NotificationDispatcher.Email;
@@ -87,6 +90,61 @@ public class NotificationLinkShould
         NotificationLink.GetUrl(
                 EventType.StatusGameFrozen, GameMetadata, new SiteAddressConfiguration())
             .Should().BeNull("a path resolves against nothing in a letter");
+
+    /// <summary>
+    /// The address a channel sends is the root of the site in front of the path the
+    /// list in the application is given, for every event, whichever spelling the bag
+    /// arrives in.
+    /// </summary>
+    /// <remarks>
+    /// The table of paths is shared with the API, and this is what says the
+    /// dispatcher reads it rather than a copy of its own: a copy can agree with it
+    /// row for row today and still answer the stored spelling of the bag, gameId,
+    /// with nothing.
+    /// </remarks>
+    [Fact]
+    public void TakeEveryPathFromTheSharedTable()
+    {
+        var written = new
+        {
+            GameId = GameIdentifier,
+            TopicId = "obsuzhdenie~eFgH-3_4",
+            BlogId = "zapiski~iJkL-5_6",
+            PublicationId = "pervaja~mNoP-7_8",
+            Username = "Player-Two",
+            TicketId = "2f1c9a8e-4b7d-4e3a-9c1f-0a2b3c4d5e6f"
+        };
+        var stored = JsonSerializer.Deserialize<JsonElement>(
+            JsonSerializer.Serialize(written, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        var drift = new List<string>();
+        var linked = 0;
+        foreach (var eventType in Enum.GetValues<EventType>())
+        {
+            foreach (var bag in new object[] { written, stored })
+            {
+                var path = NotificationDestination.GetPath(eventType, bag);
+                var expected = path == null ? null : PublicUrl + path;
+                var sent = NotificationLink.GetUrl(eventType, bag, Addresses);
+                if (sent != expected)
+                {
+                    drift.Add($"{eventType} from {bag.GetType().Name}: " +
+                              $"{expected ?? "nothing"} in the list, {sent ?? "nothing"} in the letter");
+                }
+
+                if (path != null)
+                {
+                    linked++;
+                }
+            }
+        }
+
+        linked.Should().BeGreaterThan(80,
+            "a rule that matches nothing passes: most events lead somewhere, in both spellings");
+        drift.Should().BeEmpty(
+            "the list and the letter reach one person minutes apart, and a destination " +
+            "that differs between them sends him to two places for one event");
+    }
 
     [Fact]
     public void PutTheLinkIntoTheLetter() =>

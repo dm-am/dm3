@@ -43,11 +43,23 @@ public class PublishAfterCommitShould
 
     /// <summary>
     /// Every way a repository here makes a write durable. The change tracker is
-    /// one of them; the two set-based operations write and commit in one statement
-    /// and never touch it, which is how the inactivity sweep writes.
+    /// one of them; the set-based operations write and commit in one statement and
+    /// never touch it, which is how the inactivity sweep writes.
     /// </summary>
+    /// <remarks>
+    /// Raw SQL is on the list for the same reason DurableWritesShould has it
+    /// there: a conditional insert is how a claim is made against a unique index
+    /// (the digest takes its period with ON CONFLICT DO NOTHING), and a statement
+    /// sent that way is exactly as durable as one EF composed.
+    /// </remarks>
     private static readonly string[] DurableWrite =
-        [Commit, "ExecuteUpdateAsync(", "ExecuteDeleteAsync("];
+    [
+        Commit,
+        "ExecuteUpdateAsync(",
+        "ExecuteDeleteAsync(",
+        "ExecuteSqlRawAsync(",
+        "ExecuteSqlInterpolatedAsync(",
+    ];
 
     /// <summary>Publication of a domain event, as every call site spells it.</summary>
     private const string Publish = "SendAsync(EventType.";
@@ -68,7 +80,7 @@ public class PublishAfterCommitShould
             "ClaimPendingReminders(",
             "src/DM.Infrastructure.Persistence/Repositories/Game/PostPendencyRepository.cs"),
         ("src/DM.Domain.Forum/Features/Digests/PeriodDigestProcessor.cs",
-            "TryRecordDigest(",
+            "TryClaimPeriod(",
             "src/DM.Infrastructure.Persistence/Repositories/Forum/PeriodDigestRepository.cs"),
         ("src/DM.Domain.Game/Features/Inactivity/GameInactivityProcessor.cs",
             "SetInactivityWarning(",
@@ -144,9 +156,9 @@ public class PublishAfterCommitShould
             // The method body and not the rest of the file: "a commit somewhere
             // below" is satisfied by the next method down, which is not the one
             // the caller is announcing out of.
-            // Compensation is not the claim. The digest claim writes the marker in
-            // the try and takes the topic back in the catch, both durably, so a
-            // body read whole stays green with the claim itself deleted.
+            // Compensation is not the claim: a write that only runs when the claim
+            // failed is not the write the caller is about to announce, and a body
+            // read whole would stay green with the claim itself deleted.
             var body = WithoutCatchBlocks(BodyAt(repositoryText, callAt));
             DurableWrite.Any(write => body.Contains(write, StringComparison.Ordinal))
                 .Should().BeTrue(

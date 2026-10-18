@@ -17,7 +17,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// assumes: they all upsert on that triple. The primary key is what makes it
 /// true, and the write paths are INSERT ... ON CONFLICT so that the server
 /// settles an encountering pair instead of turning an ordinary request into an
-/// error (INV-3). Neither fact exists anywhere but in a live store, hence the
+/// error. Neither fact exists anywhere but in a live store, hence the
 /// container Postgres.
 /// </summary>
 public class UnreadCountersRepositoryShould : IntegrationTestBase

@@ -1,6 +1,11 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
+/**
+ * "Связанные профили", a section of the profile's "Модерация" tab: the
+ * accounts that signed in from an address this one used, as a list the way the
+ * site draws its lists ("- " and the name) with what ties them in brackets.
+ */
 import type { LinkedProfile } from "@/shared/api/models/moderation";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { pluralize } from "@/shared/lib/utils/pluralize";
 
@@ -15,51 +20,38 @@ function sharedIpsLabel(count: number): string {
 </script>
 
 <template>
-  <div class="mod-section">
-    <h4 class="mod-section_title">Связанные профили ({{ profiles.length }})</h4>
+  <section class="mod-section">
+    <BlockTitle>Связанные профили</BlockTitle>
 
-    <div v-if="profiles.length" class="mod-linked-list">
-      <div v-for="p in profiles" :key="p.userId" class="mod-linked-item">
-        <router-link
+    <ul v-if="profiles.length" class="mod-linked-list">
+      <li v-for="p in profiles" :key="p.userId">
+        <span class="mod-linked-dash" aria-hidden="true">- </span
+        ><router-link
           :to="{ name: 'profile', params: { username: p.username } }"
-          class="mod-linked-username"
+          >{{ p.username }}</router-link
+        >{{ " "
+        }}<span class="mod-linked-why"
+          >({{ sharedIpsLabel(p.sharedIpsCount) }}, последний
+          {{ formatDate(p.lastSharedLoginUtc) }})</span
         >
-          {{ p.username }}
-        </router-link>
-        <secondary-text>
-          {{ sharedIpsLabel(p.sharedIpsCount) }}, последний
-          {{ formatDate(p.lastSharedLoginUtc) }}
-        </secondary-text>
-      </div>
-    </div>
+      </li>
+    </ul>
 
-    <secondary-text v-else>Нет связанных профилей</secondary-text>
-  </div>
+    <SecondaryText v-else>Нет связанных профилей</SecondaryText>
+  </section>
 </template>
 
 <style scoped lang="sass">
-.mod-section
-  margin-bottom: $medium
-
-.mod-section_title
-  margin: 0 0 $small 0
-  color: $heading
-
 .mod-linked-list
-  display: flex
-  flex-direction: column
-  gap: $small
+  list-style: none
+  margin: 0
+  padding: 0
+  line-height: 1.5
 
-.mod-linked-item
-  display: flex
-  align-items: baseline
-  gap: $small
+.mod-linked-dash,
+.mod-linked-why
+  color: $text-muted
 
-.mod-linked-username
-  color: $link
-  font-weight: bold
-  text-decoration: none
-  &:hover
-    color: $link-hover
-    text-decoration: underline
+.mod-linked-why
+  font-size: $secondary-font-size
 </style>

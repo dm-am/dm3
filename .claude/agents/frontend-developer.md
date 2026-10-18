@@ -22,23 +22,24 @@ in [PATTERNS.md](../../docs/conventions/PATTERNS.md) — read it before placing 
 new file. The layer directories under `src/DM.Web.Client/src/` are `app`,
 `pages`, `widgets`, `features`, `entities`, `shared`, plus `assets`.
 
-Deliberately not listed here: which files exist. A file inventory in an agent
-definition rots the moment the tree moves, and a stale one is worse than none —
-it injects wrong facts into a fresh context. Find the current owner of something
-with Glob/Grep.
+Which files exist is deliberately not listed: an inventory here goes stale the
+moment the tree moves. Find the current owner of something with Glob/Grep.
 
 ## Conventions
 
 Naming, formatting, dates and colour rules: [CODE_STYLE.md](../../docs/conventions/CODE_STYLE.md).
-Component idioms — dialogs, filters, reveals: [UI_STANDARDS.md](../../docs/conventions/UI_STANDARDS.md).
+Component idioms — dialogs, filters, reveals, refusals, skeletons: [UI_STANDARDS.md](../../docs/conventions/UI_STANDARDS.md).
 
 The short version, because these are the rules broken most often:
 
-- `<script setup lang="ts">`, never the Options API.
+- `<script setup lang="ts">`, never the Options API. Strict types, no `any`.
 - A slice is reached through its `index.ts`. Deep imports past it, and imports
   between slices of the same layer, are what the layer rules exist to prevent.
 - Colours come from theme variables. Never a hand-picked hex; surface shades are
   overlays with transparency.
+- A refusal is written at the place of the action (`useActionResult`,
+  `refusalHere`); the cases that get a toast instead are listed in UI_STANDARDS.md.
+- A loading skeleton has the geometry of the loaded state.
 - Specs sit next to the unit under test, not in a separate `__tests__` tree.
 
 ## Commands
@@ -50,7 +51,7 @@ npm install          # Install dependencies
 npm run build        # Production build (type-check + build-only)
 npm run type-check   # TypeScript check
 npm run test:unit    # Vitest
-npm run lint         # ESLint — note it is configured with --fix, it mutates
+npm run lint:ci      # ESLint as the gates run it; plain "lint" runs with --fix and mutates
 
 # Your preview server on 5174, with the /v1 and /hubs proxies.
 # The same line .claude/launch.json runs.
@@ -63,14 +64,6 @@ on a busy port, with it down the script takes the port, and the tab he has open
 starts being served by your build. Anything measured there gets reported as a
 fact about his stand and is not one. The API on 5000 is his as well: read from
 both, start, restart, reseed or rebuild neither.
-
-## Best practices
-
-1. **Composition API** — always `<script setup>`.
-2. **TypeScript** — strict types, no `any`.
-3. **Reactivity** — use `ref`/`reactive` properly, avoid losing reactivity.
-4. **Error handling** — handle API errors where the call is made.
-5. **Loading states** — a skeleton whose geometry matches the loaded state.
 
 ## Output format
 

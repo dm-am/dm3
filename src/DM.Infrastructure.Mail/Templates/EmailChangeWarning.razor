@@ -1,0 +1,43 @@
+@*
+    Предупреждение на нынешний адрес: кто-то попросил перевести учетную запись
+    на другую почту.
+
+    Письмо уходит туда, где владелец еще есть, и именно по нему он узнает о
+    чужом запросе.
+
+    Новый адрес показан целиком. Замаскированный, он не давал владельцу главного,
+    отличить свою вторую почту от чужой, а прятал он адрес того, кто запрос и
+    подал.
+
+    Сначала факты, потом что делать. Короб отвечает на вопрос "что случилось",
+    и строка под ним читается уже поверх увиденных адресов: до них она говорит
+    об угрозе, которую читателю еще не показали.
+
+    Кнопки нет, как и в письме о незнакомом устройстве, сделать здесь нечего,
+    кроме как сменить пароль, если запрос чужой.
+*@
+<EmailLayout Title="Запрос на смену почты">
+    <div style="@EmailConstants.BoxStyles">
+    <table style="@EmailConstants.FactTableStyles">
+        <tr>
+            <td style="@EmailConstants.FactLabelStyles">Текущий адрес</td>
+            <td style="@EmailConstants.FactValueStyles">@Model.CurrentEmail</td>
+        </tr>
+        <tr>
+            <td style="@EmailConstants.FactLabelStyles">Новый адрес</td>
+            <td style="@EmailConstants.FactValueStyles">@Model.NewEmail</td>
+        </tr>
+    </table>
+    </div>
+    <p style="@EmailConstants.ParagraphStyles">
+        Если это были не вы, то срочно обновите пароль для автоматической отмены запроса
+    </p>
+</EmailLayout>
+
+@code {
+
+    /// <summary>Данные письма</summary>
+    [Parameter]
+    public EmailChangeWarningViewModel Model { get; set; } = null!;
+
+}

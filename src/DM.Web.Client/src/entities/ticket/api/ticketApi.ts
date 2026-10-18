@@ -1,4 +1,4 @@
-import type { Envelope, ListEnvelope } from "@/shared/api/models/common";
+import type { Envelope, ListEnvelope, User } from "@/shared/api/models/common";
 import { Api, X_DM_TICKET_TOKEN } from "@/shared/api";
 
 /**
@@ -24,11 +24,21 @@ export type TicketSubtype =
   | "SiteImprovementSuggestion"
   | "Bug"
   | "AccessRecovery"
-  | "RegistrationIssue";
+  | "RegistrationIssue"
+  | "AccountRemoval"
+  | "AccountRestoration"
+  | "PersonalData"
+  | "AgreementQuestion";
 
 export type CreateTicketIntake = {
   subtype: TicketSubtype;
-  subject: string;
+  /**
+   * A short subject line. The support and complaint forms do not ask for one:
+   * the reason and the text say it, and the screens that read a ticket back
+   * name it by its reason when there is none.
+   */
+  subject?: string;
+  /** The ticket text, in the site markup */
   text: string;
   contact?: string;
   violationUrl?: string;
@@ -39,10 +49,12 @@ export type CreateTicketIntake = {
 
 /**
  * Response of the intake submission. Mirrors backend
- * CreateTicketIntakeResponse: a guest tracking token (null for authenticated
- * authors, who track their tickets from "Мои обращения").
+ * CreateTicketIntakeResponse: the ticket just filed, which a signed-in author
+ * opens at /my-tickets/<id>, and a guest tracking token (null for signed-in
+ * authors), which is a guest's only way back to the answer.
  */
 export type CreateTicketIntakeResult = {
+  ticketId: string;
   trackingToken?: string | null;
 };
 
@@ -69,28 +81,76 @@ export type TicketStatus =
  */
 export type Ticket = {
   id: string;
-  /** Reporter username (null for guest submissions) */
-  reporterUsername?: string | null;
-  /** Username the complaint is about (null when not applicable) */
-  targetUsername?: string | null;
-  /** Contact email left by a guest author */
+  /**
+   * The reporter: null for a guest submission and for an account removed since;
+   * `isGuest` tells the two apart.
+   */
+  reporter?: User | null;
+  /** Whether the ticket was filed without an account */
+  isGuest: boolean;
+  /**
+   * Contact email left by a guest author. For moderation to work with, and not
+   * a part of the text: the text is the author's words alone.
+   */
   guestEmail?: string | null;
   entityId?: string | null;
   entityType?: string | null;
   status: TicketStatus;
   subtype: TicketSubtype;
   createdUtc: string;
-  /** Ticket body text (intake message) */
+  /**
+   * Ticket body as it was written, in the site markup. The fields of the form
+   * that are not the text (the violator, the link, the contact of an author
+   * with an account) are lines of it, written there by the server at filing.
+   */
   description: string;
+  /**
+   * The body rendered by the server for display. The forms write it in the
+   * markup editor, so the screens that read a ticket back show this and not
+   * the text above, which would print the tags as brackets.
+   */
+  descriptionHtml: string;
   /** Short subject line (intake Subject is stored here) */
   comment: string;
-  /** Moderator assigned to the ticket */
-  assignedModeratorUsername?: string | null;
+  /** How many answers the conversation of the ticket holds */
+  commentsCount: number;
   resolvedUtc?: string | null;
-  /** Moderation's answer (null until answered) */
-  answer?: string | null;
-  hasWarning: boolean;
-  hasBan: boolean;
+};
+
+/**
+ * One comment of the conversation of a ticket. Mirrors backend TicketComment.
+ * Not edited, not deleted, not liked.
+ */
+export type TicketComment = {
+  id: string;
+  /**
+   * The author: null for the guest who filed the ticket and for an account
+   * removed since; `isGuest` tells the two apart.
+   */
+  author?: User | null;
+  isGuest: boolean;
+  createdUtc: string;
+  /** The text rendered by the server for display */
+  text: string;
+};
+
+/**
+ * A ticket with its conversation, the page of a ticket. Mirrors backend
+ * TicketDetails.
+ */
+export type TicketDetails = Ticket & {
+  /** From the oldest comment to the newest */
+  comments: TicketComment[];
+  /** Whether the caller may write in the conversation */
+  canComment: boolean;
+  /**
+   * Whether the caller answers as moderation: it is open, and he moderates it
+   * without being its author. He then chooses with his answer the status the
+   * ticket moves to (AnswerTicketRequest), closing it among them.
+   */
+  canResolve: boolean;
+  /** The moderator who closed the ticket (null while it is open) */
+  resolvedByUsername?: string | null;
 };
 
 /**
@@ -104,39 +164,44 @@ export type TrackedTicket = {
   subtype: TicketSubtype;
   /** Short subject line */
   subject: string;
-  /** Ticket body text */
+  /** Ticket body as it was written, in the site markup */
   description: string;
+  /** The body rendered by the server for display (see Ticket) */
+  descriptionHtml: string;
   createdUtc: string;
   resolvedUtc?: string | null;
-  /** Moderation's answer (null until answered) */
-  answer?: string | null;
-  responses: TrackedTicketResponse[];
+  /** The moderator who closed the ticket (null while it is open) */
+  resolvedByUsername?: string | null;
+  /** The conversation, from the oldest comment to the newest */
+  comments: TicketComment[];
+  /** Whether the guest may write in the conversation */
+  canComment: boolean;
 };
 
-/** A single response in the guest-facing ticket thread */
-export type TrackedTicketResponse = {
+/**
+ * The statuses moderation moves a ticket to with its answer. Waiting for
+ * moderation is not one of them: it comes of the author's answer alone.
+ */
+export type AnswerStatus = Extract<
+  TicketStatus,
+  "WaitingForUser" | "Closed" | "Spam"
+>;
+
+/**
+ * An answer in the conversation of a ticket. Mirrors backend
+ * AnswerTicketRequest. The author sends the text alone (a status from him is
+ * refused with 403); moderation sends the status it moves the ticket to, and
+ * may leave the text empty when it closes the ticket or marks it as spam.
+ */
+export type AnswerTicketRequest = {
   text: string;
-  createdUtc: string;
-  isFromModerator: boolean;
-};
-
-/** Mirrors backend ResolveTicketRequest */
-export type ResolveTicketRequest = {
-  status: TicketStatus;
-  answer: string;
-  issueWarning?: boolean;
-  warningText?: string;
-  /** 0-6, 0 = verbal warning */
-  warningPoints?: number;
-  /** SeniorModerator+ only */
-  issueBan?: boolean;
-  banDurationHours?: number | null;
-  banComment?: string;
+  status?: AnswerStatus;
 };
 
 /**
  * The whole life of a ticket ("обращение"): filed by a visitor or a member,
- * tracked by its author, then picked up and resolved by moderation.
+ * talked over by its author and moderation, then closed by moderation with
+ * its last answer.
  *
  * All three phases speak about the same entity over the same wire shape, so
  * they share one client — splitting by caller role is what left the intake and
@@ -148,9 +213,15 @@ export default new (class TicketApi {
    * Anonymous submissions are allowed - guests without an account
    * must be able to reach support. Returns the guest tracking token when the
    * author is a guest.
+   *
+   * The flags are the caller's: the form prints the refusal and the wait in
+   * itself and claims both at the press.
    */
-  public createTicket(request: CreateTicketIntake) {
-    return Api.post<CreateTicketIntakeResult>("tickets", request);
+  public createTicket(
+    request: CreateTicketIntake,
+    options?: { ownsRefusal?: boolean; ownsRateLimit?: boolean },
+  ) {
+    return Api.post<CreateTicketIntakeResult>("tickets", request, options);
   }
 
   /**
@@ -195,6 +266,21 @@ export default new (class TicketApi {
     );
   }
 
+  /**
+   * Write a comment in the conversation of a guest ticket, as its guest.
+   * POST /v1/tickets/track/comments, the token in the X-Dm-Ticket-Token header
+   * for the reason the read above carries it there. The comment is the guest's
+   * because it came by the token: the server writes it with no author, whoever
+   * may be signed in.
+   */
+  public createTrackedComment(token: string, text: string) {
+    return Api.post<Envelope<TicketComment>>(
+      "tickets/track/comments",
+      { text },
+      { headers: { [X_DM_TICKET_TOKEN]: token } },
+    );
+  }
+
   // ==================== Moderation view ====================
 
   /**
@@ -211,23 +297,27 @@ export default new (class TicketApi {
     });
   }
 
-  /** Get a single ticket (moderators see full details). */
+  /**
+   * Get a single ticket with its conversation: a moderator gets a ticket
+   * whose reason his role is shown and which does not name him, an author his
+   * own ("Мои обращения" opens one by it), anybody else a 404.
+   */
   public getTicket(ticketId: string) {
-    return Api.get<Envelope<Ticket>>(`moderation/tickets/${ticketId}`);
-  }
-
-  /** Assign a ticket to the current moderator. */
-  public assignTicketToMe(ticketId: string) {
-    return Api.post<Envelope<Ticket>>(`moderation/tickets/${ticketId}/assign`);
+    return Api.get<Envelope<TicketDetails>>(`moderation/tickets/${ticketId}`);
   }
 
   /**
-   * Resolve a ticket with an answer, target status and optional
-   * warning/ban (ban part requires SeniorModerator+ server-side).
+   * Answer in the conversation of a ticket, as its author or as a moderator
+   * to whom its reason is shown. POST /v1/moderation/tickets/{id}/comments.
+   * Who wrote it is the session's to say. The author's answer hands the
+   * ticket to moderation; moderation's moves it to the status sent with it,
+   * waiting for the author when none is. The ticket comes back whole, as it
+   * stands after the answer: a closing changes what the page offers, and a
+   * closing without a text writes no comment at all.
    */
-  public resolveTicket(ticketId: string, request: ResolveTicketRequest) {
-    return Api.post<Envelope<Ticket>>(
-      `moderation/tickets/${ticketId}/resolve`,
+  public createComment(ticketId: string, request: AnswerTicketRequest) {
+    return Api.post<Envelope<TicketDetails>>(
+      `moderation/tickets/${ticketId}/comments`,
       request,
     );
   }

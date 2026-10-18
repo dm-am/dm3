@@ -108,11 +108,29 @@ public interface ITopicRepository
     Task<TopicUpdateResult> Update(UpdateTopicEntity updateTopic, Guid? boardId = null);
 
     /// <summary>
-    /// Soft delete a topic
+    /// Soft delete a topic and drop the subscriptions to it
     /// </summary>
     /// <param name="topicId">Topic identifier</param>
     /// <param name="deletedByUserId">User who removed the topic</param>
     Task Delete(Guid topicId, Guid deletedByUserId);
+
+    /// <summary>
+    /// Recompute a board's stored topic count and its "last topic" block from the
+    /// topics the board actually holds.
+    /// </summary>
+    /// <remarks>
+    /// For a caller that changed a topic behind this repository's back - the
+    /// period digest backdates the topic it has just created - and needs the
+    /// board's summary brought back in line with it. Creating, deleting and
+    /// moving a topic recompute it themselves.
+    ///
+    /// One definition of "the last topic" and no other: a second one, written
+    /// where it was needed, ordered by the timestamp alone and disagreed with this
+    /// one whenever two topics shared a second.
+    /// </remarks>
+    /// <param name="boardId">Board to recompute</param>
+    /// <param name="ct">Cancellation token</param>
+    Task RefreshBoardSummary(Guid boardId, CancellationToken ct = default);
 
     /// <summary>
     /// Ids of the board's pinned topics, in the order they are shown now
@@ -200,6 +218,12 @@ public class UpdateTopicEntity
     /// Updated closed status (optional)
     /// </summary>
     public bool? IsClosed { get; set; }
+
+    /// <summary>
+    /// Whether the author is the one closing the topic (optional; written together
+    /// with <see cref="IsClosed"/> when the closed state changes, false on reopening)
+    /// </summary>
+    public bool? ClosedByAuthor { get; set; }
 
     /// <summary>
     /// Updated attached status (optional)

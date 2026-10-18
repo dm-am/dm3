@@ -29,9 +29,15 @@ internal static class SearchSnippet
     /// </summary>
     public const string PrivateBlockPattern = PrivateBlockMarkup.BlockPattern;
 
+    /// <summary>
+    /// The flags PostgreSQL applies <see cref="PrivateBlockPattern"/> with. The
+    /// pattern spells the casing it forgives itself, so .NET reads it with none.
+    /// </summary>
+    public const string PrivateBlockPatternFlags = PrivateBlockMarkup.BlockPatternFlags;
+
     private static readonly Regex PrivateBlockRegex = new(
         PrivateBlockPattern,
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        RegexOptions.Compiled);
 
     /// <summary>
     /// Removes [private] blocks from a raw snippet and collapses the whitespace

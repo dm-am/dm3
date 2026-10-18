@@ -1,3 +1,4 @@
+using DM.Infrastructure.Core;
 using DM.Infrastructure.Core.Storage;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
@@ -55,6 +56,10 @@ internal static class HostedServiceExtensions
         services.AddHostedService<GameInactivityService>();
         services.AddHostedService<PopularityScoreService>();
         services.AddHostedService<UploadOrphanCleanupService>();
+
+        // This host sends the sign-in letter that names a country, so this host
+        // keeps the table it names it by fresh.
+        services.AddDmCountryTableRefresh();
 
         return services;
     }

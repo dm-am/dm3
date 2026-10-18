@@ -46,6 +46,7 @@ async function handleRetry() {
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
 
+// Square, as every panel of content on a page: the radius belongs to controls.
 .error-state
   display: flex
   align-items: center
@@ -53,7 +54,6 @@ async function handleRetry() {
   padding: $medium
   color: $text-on-red
   background-color: $bg-highlight-red
-  border-radius: $border-radius
 
 .error-message
   flex: 1

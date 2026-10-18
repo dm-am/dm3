@@ -1,3 +1,4 @@
+using DM.Domain.Core.Dto;
 using DM.Domain.Game.Features.GameReviews;
 using DM.Domain.Game.Features.PostReviews;
 using DM.Web.API.Features.Community.Users;
@@ -8,16 +9,17 @@ namespace DM.Web.API.Features.Game.Reviews;
 
 /// <summary>
 /// Compile-time mapper for game and post reviews.
-///
-/// No render-context envelope on the review texts - a decision, not an
-/// omission. The review editor does ask for author_edit
-/// (getPostReviewForEdit), and without an owner id the converter degrades
-/// the request to Display, which fails closed: nothing leaks, and plain
-/// review markup survives the editor round-trip. The degradation costs
-/// fidelity only for privileged blocks, which review texts do not carry -
-/// an authorized [mod] use case for reviews is the trigger to add the same
-/// envelope step CommentMapper takes.
 /// </summary>
+/// <remarks>
+/// Both review texts carry the render-context envelope CommentMapper gives a
+/// comment, and for the same reason: the review editor asks for author_edit
+/// (getPostReviewForEdit, getGameReviewForEdit), and the converter honors it
+/// only when the envelope names the author. Without one the author's fetch
+/// degrades to Display, and Display is not the source: it turns "--" into
+/// &amp;ndash; and reading-only markup into HTML the editor cannot turn back
+/// into BBCode, so saving what the editor was handed rewrote the review.
+/// Any other viewer's author_edit still degrades to Display.
+/// </remarks>
 [Mapper]
 [UseStaticMapper(typeof(BbTextMappers))]
 internal partial class ReviewMapper
@@ -33,12 +35,40 @@ internal partial class ReviewMapper
     /// <summary>
     /// Domain post review to its response DTO
     /// </summary>
-    [MapperRequiredMapping(RequiredMappingStrategy.Target)]
-    public partial PostReviewDto ToPostReview(PostReview review);
+    public PostReviewDto ToPostReview(PostReview review)
+    {
+        var result = ToPostReviewCore(review);
+        AttachAuthor(result.Text, review.Author);
+        return result;
+    }
 
     /// <summary>
     /// Domain game review to its response DTO
     /// </summary>
+    public GameReviewDto ToGameReview(GameReview review)
+    {
+        var result = ToGameReviewCore(review);
+        AttachAuthor(result.Text, review.Author);
+        return result;
+    }
+
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
-    public partial GameReviewDto ToGameReview(GameReview review);
+    private partial PostReviewDto ToPostReviewCore(PostReview review);
+
+    [MapperRequiredMapping(RequiredMappingStrategy.Target)]
+    private partial GameReviewDto ToGameReviewCore(GameReview review);
+
+    private static void AttachAuthor(BbText? text, GeneralUser? author)
+    {
+        if (text is null)
+        {
+            return;
+        }
+
+        text.Context = new RenderContextEnvelope
+        {
+            Surface = text.Surface,
+            PostAuthorUserId = author?.UserId
+        };
+    }
 }

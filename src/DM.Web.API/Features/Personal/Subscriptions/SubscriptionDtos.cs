@@ -37,6 +37,20 @@ public class Subscription
     public string? TargetUsername { get; set; }
 
     /// <summary>
+    /// Status of a Game or Blog target: the page names it in the colour of its
+    /// status, as the site names games and blogs everywhere. Null for a topic,
+    /// a user and a target that is gone.
+    /// </summary>
+    public ModuleStatus? TargetStatus { get; set; }
+
+    /// <summary>
+    /// When a Game or Blog target was first activated, what a "new" game or blog
+    /// is counted from (the same date as activatedUtc of GameRef and BlogRef).
+    /// Null for a topic, a user, a target that is gone and one never activated.
+    /// </summary>
+    public DateTimeOffset? TargetActivatedUtc { get; set; }
+
+    /// <summary>
     /// Notification settings flags
     /// </summary>
     public SubscriptionSettings Settings { get; set; }

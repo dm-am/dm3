@@ -50,13 +50,18 @@ public enum CharacterIntention
     /// </summary>
     Leave = 9,
 
-    /// <summary>
-    /// Return to the game
-    /// </summary>
-    Return = 10,
+    // Slot 10 was Return, the player bringing back a character he took out of
+    // the game himself. Nobody brings such a character back: leaving is final,
+    // and a lead undoes only his own moves (Accept after Decline, Resurrect after
+    // Kill, Readmit after Exile).
 
     /// <summary>
     /// Exile the character from the game
     /// </summary>
-    Exile = 15
+    Exile = 15,
+
+    /// <summary>
+    /// Bring an exiled character back into the game
+    /// </summary>
+    Readmit = 16
 }

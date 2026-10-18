@@ -14,7 +14,7 @@ namespace DM.Domain.Game.Features.Games;
 /// release. A group with no number set limits nothing.
 ///
 /// One implementation for both write paths on purpose. Creation and the settings
-/// page reach it through <see cref="IGameCreationDataResolver.ResolveTagIds"/>,
+/// page reach it through <see cref="IGameTagResolver.ResolveTagIds"/>,
 /// which is the single place a submitted set of tags is read, so the two cannot
 /// drift into two rules.
 /// </remarks>

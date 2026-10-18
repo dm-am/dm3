@@ -19,7 +19,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// The retention sweep replaces the TTL indexes of the retired document store:
 /// one pass per policy, DELETE by the stamped column. Each of the policies is
 /// asserted the same way — a row older than the term goes, a row younger
-/// stays (AC-5). Against a live Postgres because the sweep is raw SQL over the
+/// stays. Against a live Postgres because the sweep is raw SQL over the
 /// registry, and nothing else executes it.
 /// </summary>
 public class RetentionSweepShould : IntegrationTestBase
@@ -132,7 +132,7 @@ public class RetentionSweepShould : IntegrationTestBase
         var fresh = OutboxRow(publishedDaysAgo: 1);
         // An unpublished row has no stamp at all, and the sweep's cutoff
         // predicate can never match its NULL - however old the row grows, only
-        // the backlog alert may deal with it (AC-6, INV-6).
+        // the backlog alert may deal with it.
         var pending = OutboxRow(publishedDaysAgo: null);
         dbContext.OutboxEvents.AddRange(expired, fresh, pending);
         await dbContext.SaveChangesAsync();

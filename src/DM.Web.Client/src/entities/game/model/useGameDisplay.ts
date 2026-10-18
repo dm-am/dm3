@@ -213,9 +213,11 @@ export function useGameDisplay() {
   /**
    * Check if game was activated (became Active) less than 7 days ago
    * Used to highlight "new" games with green color
-   * Optimized: uses cached timestamp instead of creating Date per call
+   * Optimized: uses cached timestamp instead of creating Date per call.
+   * Reads the activation alone, so a row that carries only that (a
+   * subscription to the game) is asked by the same rule.
    */
-  function isNew(game: Game | GameRef): boolean {
+  function isNew(game: Pick<Game | GameRef, "activatedUtc">): boolean {
     if (!game.activatedUtc) return false;
     const activatedMs = new Date(game.activatedUtc).getTime();
     const diffMs = nowTimestamp.value - activatedMs;

@@ -1,0 +1,48 @@
+@*
+    Кнопка письма и мелкая ссылка под ней на тот же шаг через другую дверь сайта.
+
+    Кнопка ведет на адрес, из которого построено письмо, и для читателя, у
+    которого этот адрес не открывается, она мертвая. Строка адресов под карточкой
+    его не спасает: она ведет на корень сайта, а путь с токеном руками не
+    собрать - токен стоит после решетки, и в поле браузера его не перенести.
+    Поэтому под кнопкой идет тот же самый путь на остальных адресах сайта.
+
+    Печатается имя двери как есть, хост едет в ссылке. Имя не склоняется и не
+    опускается в строчные: оно начинается с букв домена.
+    Ссылка появляется, только когда письмо построено от адреса самого сайта: на
+    стенде хост чужой, и звать оттуда на прокси значило бы обещать страницу,
+    которой там нет.
+*@
+<a href="@Url" style="@EmailConstants.ButtonStyles">@ChildContent</a>
+@foreach (var address in Alternates)
+{
+    <p style="@EmailConstants.AlternateLinkStyles">
+        <a href="@Through(address.Host)" style="@EmailConstants.AlternateLinkAnchorStyles">Ссылка через @address.Name</a>
+    </p>
+}
+
+@code {
+
+    /// <summary>Адрес, на который ведет кнопка</summary>
+    [Parameter]
+    public string Url { get; set; } = null!;
+
+    /// <summary>Надпись на кнопке</summary>
+    [Parameter]
+    public RenderFragment ChildContent { get; set; } = null!;
+
+    private Uri Address => new(Url);
+
+    /// <summary>Остальные двери сайта, если письмо построено от одной из них</summary>
+    private IReadOnlyList<DM.Domain.Core.Site.SiteAddress> Alternates =>
+        DM.Domain.Core.Site.SiteAddresses.Hosts.Contains(Address.Host)
+            ? DM.Domain.Core.Site.SiteAddresses.All
+                .Where(address => address.Host != Address.Host)
+                .ToList()
+            : [];
+
+    /// <summary>Тот же путь и тот же токен, только через другой хост</summary>
+    private string Through(string host) =>
+        new UriBuilder(Address) { Host = host, Port = -1 }.Uri.ToString();
+
+}

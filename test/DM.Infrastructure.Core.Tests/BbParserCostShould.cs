@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 using AwesomeAssertions;
 using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
 using DM.Testing.Dsl;
@@ -47,6 +49,11 @@ public class BbParserCostShould
     /// work: 4 KB / 158 ms, 16 KB / 2 039 ms, 64 KB / 28 907 ms, measured before
     /// the fix, on a render path that is not cached and that every reader of the
     /// page pays.
+    ///
+    /// Each opening is closed right after it. A broken tag is a node like any
+    /// other, so openings alone nest, and past the depth guard the parse stops
+    /// at the guard rather than at the end of the text - a measurement of the
+    /// guard, not of the scan.
     /// </remarks>
     [Fact]
     public void ParseUnterminatedAttribute_WithoutQuadraticCost()
@@ -54,36 +61,199 @@ public class BbParserCostShould
         var parser = _parserProvider.GetForSurface(BbSurface.Comment);
 
         MeasureGrowth(
-                length => parser.Parse(BbTestText.Repeat("[quote=\"", length) + "tail"),
+                length => parser.Parse(BbTestText.Repeat("[quote=\"x [/quote]", length) + "tail"),
                 baseLength: 250)
             .Should().BeLessThan(QuadraticThreshold);
     }
 
     /// <summary>
-    /// The same for the whole render, which is where the extraction passes in
-    /// this wrapper are spent.
+    /// The shapes of the parameter grammar that cost the square of the input in
+    /// a reader that backtracks: a name followed by thousands of spaces, many
+    /// pairs, many openings each running to the next, many quotes in one value.
     /// </summary>
     /// <remarks>
-    /// The input is the one from the analysis: every tag the wrapper cuts out
-    /// before the parser, each left unclosed. Six of its ten passes carried the
-    /// same lazy scan the reader did, so the cost was paid twice over - 17 KB of
-    /// it cost 3.6 s of CPU per render and 34 KB cost 16.5 s.
+    /// Each shape is the one row L of bbcodeGrammar.cases.ts holds, grown. The
+    /// reader scans a tag once, stopping at the next opening bracket at the
+    /// latest, and a value asks at each quote only whether "]" or the next
+    /// name= follows it - so no character is read more than a few times, however
+    /// the text is arranged. The openings are closed one by one for the reason
+    /// the test above gives.
+    /// </remarks>
+    [Theory]
+    [InlineData("name-then-spaces")]
+    [InlineData("repeated-pairs")]
+    [InlineData("repeated-openings")]
+    [InlineData("many-quotes")]
+    public void ReadTheParametersOfATag_WithoutQuadraticCost(string shape)
+    {
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
+        Func<int, string> text = shape switch
+        {
+            "name-then-spaces" => length => "[img" + BbTestText.Repeat(" ", length * 8) + "x",
+            "repeated-pairs" => length => "[img" + BbTestText.Repeat(" a=\"1\"", length) + " x",
+            "repeated-openings" => length => BbTestText.Repeat("[img width=\"x [/img]", length),
+            "many-quotes" => length => "[spoiler text=\"" + BbTestText.Repeat("\"", length * 8) + " x",
+            _ => throw new ArgumentOutOfRangeException(nameof(shape))
+        };
+
+        var inputs = Inputs(text, baseLength: 250);
+
+        MeasureGrowth(length => parser.Parse(inputs[length]).ToHtml(), baseLength: 250)
+            .Should().BeLessThan(QuadraticThreshold);
+    }
+
+    /// <summary>
+    /// The save path reads hidden blocks by a scanner of its own, over the same
+    /// shapes and the ones only a hidden block has: an attribute that never ends
+    /// and a [noparse] nobody closed.
+    /// </summary>
+    [Theory]
+    [InlineData("[private=\"")]
+    [InlineData("[private ")]
+    [InlineData("[noparse][private]")]
+    [InlineData("[private=\"x\"][/private][noparse]")]
+    public void CheckHiddenBlocksOnSave_WithoutQuadraticCost(string fragment)
+    {
+        var inputs = Inputs(length => BbTestText.Repeat(fragment, length), baseLength: 250);
+
+        MeasureGrowth(
+                length =>
+                {
+                    var text = inputs[length];
+                    PrivateBlockMarkup.IsBalanced(text);
+                    PrivateBlockMarkup.ContainsPrivateMarkup(text);
+                    PrivateBlockMarkup.ReadAddresseeAttributes(text);
+                },
+                baseLength: 250)
+            .Should().BeLessThan(QuadraticThreshold);
+    }
+
+    /// <summary>
+    /// The inputs of the three sizes, built before the clock starts.
+    /// </summary>
+    /// <remarks>
+    /// Building one inside the measured work measures the allocator: the largest
+    /// of them lands on the large object heap, which costs out of proportion to
+    /// its length and reads as a quadratic step on code that is linear.
+    /// </remarks>
+    private static System.Collections.Generic.Dictionary<int, string> Inputs(
+        Func<int, string> build, int baseLength) =>
+        new[] { baseLength, baseLength * 4, baseLength * 16 }.ToDictionary(length => length, build);
+
+    /// <summary>
+    /// The same for the whole render.
+    /// </summary>
+    /// <remarks>
+    /// The input is the one from the analysis that found the extraction passes
+    /// this renderer used to run before the parser: every tag they cut out and a
+    /// tag whose attribute one of them encoded, each left unclosed. Six of the
+    /// ten passes carried the same lazy scan the reader did, so the cost was paid
+    /// twice over - 17 KB of it cost 3.6 s of CPU per render and 34 KB cost
+    /// 16.5 s. The passes are gone; the input stays as the record of what they
+    /// cost.
+    ///
+    /// Each piece stands inside a note that is closed, for the reason the first
+    /// test gives: a tag nobody closed is a node, and openings alone would nest
+    /// past the depth guard. The [code] in it is still never closed, and every
+    /// one of them asks where its closing tag is - the question the reader
+    /// answers once for the whole text rather than once per opening.
     /// </remarks>
     [Fact]
     public void RenderTagSoup_WithoutQuadraticCost()
     {
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Comment);
+        var wrapper = BbAttributeTagParser.Wrapper;
         var ctx = new RenderContext
         {
             Audience = RenderAudience.Display,
             Surface = BbSurface.Comment,
             Viewer = Viewer()
         };
+        var inputs = Inputs(
+            length => BbTestText.Repeat("[note][img][code][link=x][note=\"[img=1][/note][/note]", length),
+            baseLength: 100);
 
-        MeasureGrowth(
-                length => wrapper.RenderHtml(BbTestText.Repeat("[img][code][link=x][quote=\"[img=1]", length), ctx),
-                baseLength: 100)
+        MeasureGrowth(length => wrapper.RenderHtml(inputs[length], ctx), baseLength: 100)
             .Should().BeLessThan(QuadraticThreshold);
+    }
+
+    /// <summary>
+    /// A generated text written out again and again costs the renderer, the
+    /// plain text and the save path time in proportion to its length, whatever
+    /// it holds.
+    /// </summary>
+    /// <remarks>
+    /// The shapes above are the ones somebody found. These are the soups of the
+    /// generated checks (markupAlphabet.ts, MarkupGenerator), each repeated
+    /// until the text is some tens of kilobytes: a piece that makes any reader
+    /// look back or look ahead once per opening shows as a quadratic step here
+    /// without anybody having thought of it. A soup that leaves tags open is
+    /// passed over, because repeated it nests past the depth guard, and the
+    /// guard, not the reading, is then what gets measured; the ones taken are
+    /// the first few of a fixed sequence of seeds, the same on every run.
+    /// </remarks>
+    [Fact]
+    public void ReadGeneratedTexts_WithoutQuadraticCost()
+    {
+        var parser = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var ctx = new RenderContext
+        {
+            Audience = RenderAudience.Display,
+            Surface = BbSurface.GamePost,
+            Viewer = Viewer(),
+            PostAuthorUserId = Viewer().UserId
+        };
+        var plain = RenderContext.ForPlainText() with { Surface = BbSurface.GamePost };
+        // A reader the blocks are erased for: the tags they leave empty are
+        // looked for, and left out, on the same walk (BBCodeParser.Nodes.Visibility).
+        var stranger = ctx with { PostAuthorUserId = Guid.NewGuid() };
+        var tagNames = new BbTagNameCase(_parserProvider);
+
+        // Each reader on its own: timed together, the renderer, which costs
+        // the most, hid a square step in the save path under its own line.
+        var readers = new (string Name, Action<string> Read)[]
+        {
+            ("the page", text => parser.RenderHtml(text, ctx)),
+            ("the page of a stranger", text => parser.RenderHtml(text, stranger)),
+            ("the plain text", text => parser.RenderText(text, plain)),
+            ("the save path", text =>
+            {
+                PrivateBlockMarkup.IsBalanced(text);
+                PrivateBlockMarkup.ContainsPrivateMarkup(text);
+                PrivateBlockMarkup.ReadAddresseeAttributes(text);
+                tagNames.ToLowerCase(text, BbTagSet.Common);
+            })
+        };
+
+        var measured = 0;
+        for (var seed = 0UL; measured < 2 && seed < 400; seed++)
+        {
+            var chunk = DM.Testing.Markup.MarkupGenerator.Soup(new DM.Testing.Markup.MarkupRandom(seed)).Text;
+
+            // Long enough to be timed, and holding hiding markup, without which
+            // the save path reads nothing at all.
+            if (chunk.Length < 40 || !chunk.Contains("[private", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var times = Math.Max(1, 1500 / chunk.Length);
+            var inputs = Inputs(length => BbTestText.Repeat(chunk, length), baseLength: times);
+            try
+            {
+                parser.Parse(inputs[times * 16]);
+            }
+            catch (BBCodeParser.BbParserException)
+            {
+                continue;
+            }
+
+            measured++;
+            foreach (var (name, read) in readers)
+            {
+                MeasureGrowth(length => read(inputs[length]), baseLength: times)
+                    .Should().BeLessThan(QuadraticThreshold,
+                        $"{name} of {DM.Testing.Markup.MarkupLiteral.Of(chunk)} written out again and again");
+            }
+        }
+
+        measured.Should().Be(2, "a check of no text passes");
     }
 
     /// <summary>

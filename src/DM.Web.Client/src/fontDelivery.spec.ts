@@ -20,7 +20,7 @@
  * delivery around them does not quietly go back to what it was.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readdirSync, readFileSync } from "fs";
 import { basename, dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 
@@ -33,11 +33,28 @@ const fontsSass = readFileSync(join(HERE, "assets/styles/Fonts.sass"), "utf8");
 const indexHtml = readFileSync(join(CLIENT_ROOT, "index.html"), "utf8");
 
 /** Every @font-face block of the stylesheet, its own body only. */
-const faces = (): string[] =>
+const allFaces = (): string[] =>
   fontsSass
     .split("@font-face")
     .slice(1)
     .map((body) => body.split(/\n(?=\S)/)[0]);
+
+/** The family a block declares. */
+const familyOf = (body: string): string =>
+  /font-family:\s*"([^"]+)"/.exec(body)?.[1] ?? "";
+
+/** The faces of PT Sans itself, the files the page waits for. */
+const faces = (): string[] =>
+  allFaces().filter((body) => familyOf(body) === "PT Sans");
+
+/** The family the first frame is drawn in until PT Sans arrives. */
+const FALLBACK = "PT Sans Fallback";
+const fallbackFaces = (): string[] =>
+  allFaces().filter((body) => familyOf(body) === FALLBACK);
+
+/** "400 normal": the weight and the style a block answers for. */
+const slotOf = (body: string): string =>
+  `${/font-weight:\s*(\d+)/.exec(body)?.[1]} ${/font-style:\s*(\w+)/.exec(body)?.[1]}`;
 
 /** File name of the face a block points at. */
 const faceFile = (body: string): string => {
@@ -94,6 +111,60 @@ describe("font delivery", () => {
       expect(tag).toContain('as="font"');
       expect(tag).toContain("crossorigin");
     }
+  });
+
+  /**
+   * The first frame is drawn in the next family of the stack, and the
+   * system's sans-serif set the headings of the site 14 percent wider than PT
+   * Sans: a heading of one line took two until the file landed. The fallback
+   * family is the system's Arial scaled to PT Sans (Fonts.sass), one face for
+   * every face of PT Sans, so no weight or style is drawn from an unfitted
+   * face or synthesised from another one.
+   */
+  it("fits a fallback face to every face of PT Sans", () => {
+    const fitted = fallbackFaces();
+
+    expect(fitted.map(slotOf).sort()).toEqual(faces().map(slotOf).sort());
+    for (const body of fitted) {
+      // Installed faces only: a file of its own would be one more thing the
+      // first frame waits for.
+      expect(body, slotOf(body)).toMatch(/src:\s*local\(/);
+      expect(body, slotOf(body)).not.toContain("url(");
+      for (const descriptor of [
+        "size-adjust",
+        "ascent-override",
+        "descent-override",
+        "line-gap-override",
+      ]) {
+        expect(body, `${slotOf(body)}: ${descriptor}`).toMatch(
+          new RegExp(`${descriptor}:\\s*\\S`),
+        );
+      }
+    }
+  });
+
+  /**
+   * A fitted face nobody names is never drawn. The family stands between PT
+   * Sans and the generic family in every stack of the stylesheets that sets
+   * PT Sans by name.
+   */
+  it("names the fallback family in every stack that names PT Sans", () => {
+    const stylesDir = join(HERE, "assets/styles");
+    const stacks = readdirSync(stylesDir)
+      .filter((file) => file.endsWith(".sass"))
+      .flatMap((file) =>
+        readFileSync(join(stylesDir, file), "utf8")
+          .split("\n")
+          // A stack, not the name of a face: "PT Sans" followed by more.
+          .filter((line) => /^\s*font-family:\s*"PT Sans",/.test(line))
+          .map((line) => `${file}: ${line.trim()}`),
+      );
+
+    expect(stacks.length, "no stack names PT Sans").toBeGreaterThan(0);
+    const unfitted = stacks.filter(
+      (line) => !line.endsWith(`"PT Sans", "${FALLBACK}", sans-serif`),
+    );
+    expect(unfitted).toEqual([]);
   });
 
   it("compresses the files on both hops", () => {

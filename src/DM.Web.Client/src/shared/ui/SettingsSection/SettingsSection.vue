@@ -21,9 +21,10 @@ defineProps<{ title?: string }>();
 </template>
 
 <style scoped lang="sass">
+// Square: a panel of content and not a control (owner's standard, 27
+// September 2026; the radius is the mark of what the reader operates).
 .settings-section
   margin-bottom: $big
   padding: $medium
   background-color: $bg-element
-  border-radius: $border-radius
 </style>

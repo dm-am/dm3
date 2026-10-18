@@ -22,16 +22,10 @@ internal class TicketApiService : ITicketApiService
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Ticket>> GetTickets(PagingQuery query, TicketStatus? status = null, TicketSubtype? subtype = null)
+    public async Task<ListEnvelope<Ticket>> GetTickets(PagingQuery query, TicketStatus? status = null,
+        TicketSubtype? subtype = null)
     {
         var (tickets, paging) = await _ticketService.GetTickets(query, status, subtype);
-        return new ListEnvelope<Ticket>(tickets.Select(_mapper.ToTicket), new PagingInfo(paging));
-    }
-
-    /// <inheritdoc />
-    public async Task<ListEnvelope<Ticket>> GetMyAssignedTickets(PagingQuery query)
-    {
-        var (tickets, paging) = await _ticketService.GetMyAssignedTickets(query);
         return new ListEnvelope<Ticket>(tickets.Select(_mapper.ToTicket), new PagingInfo(paging));
     }
 
@@ -44,10 +38,10 @@ internal class TicketApiService : ITicketApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<TicketDetails>?> GetTicket(Guid ticketId)
+    public async Task<Envelope<TicketDetails>> GetTicket(Guid ticketId)
     {
         var ticket = await _ticketService.GetTicket(ticketId);
-        return ticket != null ? new Envelope<TicketDetails>(_mapper.ToTicketDetails(ticket)) : null;
+        return new Envelope<TicketDetails>(_mapper.ToTicketDetails(ticket));
     }
 
     /// <inheritdoc />
@@ -59,18 +53,10 @@ internal class TicketApiService : ITicketApiService
     }
 
     /// <inheritdoc />
-    public async Task<Envelope<Ticket>> AssignToMe(Guid ticketId)
+    public async Task<Envelope<TicketDetails>> CreateComment(Guid ticketId, AnswerTicketRequest request)
     {
-        var ticket = await _ticketService.AssignToMe(ticketId);
-        return new Envelope<Ticket>(_mapper.ToTicket(ticket));
-    }
-
-    /// <inheritdoc />
-    public async Task<Envelope<Ticket>> ResolveTicket(Guid ticketId, ResolveTicketRequest request)
-    {
-        var resolveTicket = _mapper.ToResolveTicket(request);
-        var ticket = await _ticketService.ResolveTicket(ticketId, resolveTicket);
-        return new Envelope<Ticket>(_mapper.ToTicket(ticket));
+        var ticket = await _ticketService.CreateComment(ticketId, _mapper.ToCreateTicketComment(request));
+        return new Envelope<TicketDetails>(_mapper.ToTicketDetails(ticket));
     }
 
     /// <inheritdoc />

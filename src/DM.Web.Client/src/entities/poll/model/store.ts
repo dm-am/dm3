@@ -80,9 +80,10 @@ export const usePollsStore = defineStore("polls", () => {
   }
 
   async function unvote(pollId: PollId) {
-    const { data } = await pollApi.deletePollVote(pollId);
+    const { data, error } = await pollApi.deletePollVote(pollId);
     const unvoted = unwrapResource<Poll>(data);
     if (unvoted) updatePoll(unvoted);
+    return { error };
   }
 
   return {

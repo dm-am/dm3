@@ -58,16 +58,12 @@ public record TwoFactorSetup(string Secret, string OtpAuthUri);
 /// <param name="LastVerifiedUtc">Last time it was passed</param>
 /// <param name="RecoveryCodesLeft">How many recovery codes are unspent</param>
 /// <param name="RemovalDueUtc">When a scheduled removal takes effect, if one is pending</param>
-/// <param name="Required">Whether this account's rank owes a factor</param>
-/// <param name="PrivilegeWithheld">Whether the rank is withheld for want of one</param>
 public record TwoFactorStatus(
     bool Enabled,
     DateTimeOffset? EnabledUtc,
     DateTimeOffset? LastVerifiedUtc,
     int RecoveryCodesLeft,
-    DateTimeOffset? RemovalDueUtc,
-    bool Required,
-    bool PrivilegeWithheld);
+    DateTimeOffset? RemovalDueUtc);
 
 /// <summary>
 /// A set of recovery codes at the one moment it exists in the clear.
@@ -128,5 +124,8 @@ public class TwoFactorChallengeState
 /// <param name="Username">Name, for the letters</param>
 /// <param name="Email">Confirmed address</param>
 /// <param name="Role">Role as recorded on the account</param>
+/// <param name="TimeZoneId">
+/// Zone the account keeps time in, for the letter that names a date
+/// </param>
 public record TwoFactorAccount(
-    Guid UserId, string Username, string? Email, UserRole Role);
+    Guid UserId, string Username, string? Email, UserRole Role, string? TimeZoneId);

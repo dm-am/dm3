@@ -137,7 +137,8 @@ internal class GameNotepadService : IGameNotepadService
 
         ThrowIfNotAGameNotepad(entry);
 
-        await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Read, entry, ct);
+        await HiddenContainerRefusal.AsNotFound(RefusalMessage.NotepadEntryNotFound,
+            () => ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Read, entry, ct));
         return entry;
     }
 
@@ -152,7 +153,8 @@ internal class GameNotepadService : IGameNotepadService
 
         ThrowIfNotAGameNotepad(entry);
 
-        await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Edit, entry, ct);
+        await HiddenContainerRefusal.AsNotFound(RefusalMessage.NotepadEntryNotFound,
+            () => ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Edit, entry, ct));
 
         var internalDto = new UpdateNotepadEntryInternal
         {
@@ -177,7 +179,17 @@ internal class GameNotepadService : IGameNotepadService
 
         ThrowIfNotAGameNotepad(entry);
 
-        await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Delete, entry, ct);
+        try
+        {
+            await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Delete, entry, ct);
+        }
+        catch (HttpException refusal) when (HiddenContainerRefusal.IsAbsence(refusal))
+        {
+            // An entry of a game the reader may not open is as gone to him as one
+            // already deleted, and answers the same way: see HiddenContainerRefusal.
+            return;
+        }
+
         await _repository.DeleteEntryAsync(entryId, UserId, ct);
     }
 

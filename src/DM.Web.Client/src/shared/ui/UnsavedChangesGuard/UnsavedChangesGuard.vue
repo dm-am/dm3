@@ -60,10 +60,8 @@ defineExpose({ answer });
   <ConfirmDialog
     :show="show"
     title="Уйти со страницы?"
-    message="Введенное на этой странице не сохранится."
+    message="Введенное на этой странице не сохранится"
     confirm-label="Уйти"
-    cancel-label="Остаться"
-    danger
     @confirm="answer(true)"
     @cancel="answer(false)"
   />

@@ -59,7 +59,25 @@ public static class AccessRestrictions
     {
         if (!user.MaySpeak(inOwnSpace))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Во время бана комментировать нельзя");
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalFor(user.AccessPolicy));
         }
     }
+
+    /// <summary>
+    /// What the ban in force actually forbids, said in the reader's own words.
+    /// </summary>
+    /// <remarks>
+    /// The two scopes forbid different things and cannot share a sentence. One
+    /// sentence for both used to tell a reader under the ordinary ban that
+    /// commenting was closed to him, while his own game and his own blog were
+    /// open the whole time and the screen there showed him the field.
+    ///
+    /// Addressed to the banned reader about his own ban, which he has already
+    /// been told about by notification and can read on his profile, so naming
+    /// the scope discloses nothing.
+    /// </remarks>
+    private static string RefusalFor(AccessPolicy policy) =>
+        policy.HasFlag(AccessPolicy.FullBan)
+            ? "Во время полного бана писать нельзя нигде"
+            : "Во время бана нельзя комментировать форум и чужие игры и блоги";
 }

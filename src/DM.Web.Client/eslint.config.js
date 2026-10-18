@@ -12,6 +12,13 @@ import boundaries from "eslint-plugin-boundaries";
 import vue from "eslint-plugin-vue";
 import vuejsAccessibility from "eslint-plugin-vuejs-accessibility";
 
+import {
+  FUNCTION_SCOPE,
+  LIMITS,
+  REGISTER,
+  recordedRules,
+} from "./sizeRatchet.js";
+
 /**
  * What `eslint .` walks. Flat config has no `--ext`: the extensions a bare
  * directory expands to are the ones some config block names, so this list is
@@ -262,7 +269,8 @@ export default defineConfigWithVueTs(
       ],
 
       // The design system has one confirmation dialog (shared/ui/ConfirmDialog)
-      // and one prompt (BBCodeEditor/InputDialog). Native modals ignore the
+      // and one prompt, the editor's panel under its button
+      // (BBCodeEditor/InsertPanel). Native modals ignore the
       // theme, cannot be styled, block the event loop and are untestable — seven
       // destructive actions had drifted back onto them, including two halves of
       // one copy-pasted screen. Both spellings are banned: the bare global and
@@ -369,4 +377,34 @@ export default defineConfigWithVueTs(
       ],
     },
   },
+
+  // Size: how much of a file, a component block and a function an agent has to
+  // read at once. The limits and the files already past them live in
+  // sizeRatchet.js; the blocks below are the only place they reach the linter,
+  // and src/sizeRatchet.spec.ts checks that no file is held to anything else.
+  {
+    name: "dm/size",
+    files: LINTED,
+    rules: {
+      "max-lines": ["error", { max: LIMITS.lines }],
+      complexity: ["error", LIMITS.complexity],
+    },
+  },
+  {
+    name: "dm/size/functions",
+    files: FUNCTION_SCOPE,
+    rules: {
+      "max-lines-per-function": ["error", { max: LIMITS.functionLines }],
+    },
+  },
+  {
+    name: "dm/size/blocks",
+    files: ["**/*.vue"],
+    rules: { "vue/max-lines-per-block": ["error", { ...LIMITS.blocks }] },
+  },
+  ...Object.entries(REGISTER).map(([path, entry]) => ({
+    name: `dm/size/recorded/${path}`,
+    files: [path],
+    rules: recordedRules(path, entry),
+  })),
 );

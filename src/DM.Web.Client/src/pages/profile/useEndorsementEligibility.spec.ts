@@ -50,6 +50,60 @@ describe("useEndorsementEligibility", () => {
 
     expect(vi.mocked(userApi.getEndorsementEligibility)).toHaveBeenCalledWith(
       target,
+      undefined,
+    );
+  });
+
+  /**
+   * One refusal, one carrier, and which one is the consumer's to say.
+   *
+   * The profile asks this question to decide whether to draw a control and
+   * prints nothing when the question itself fails, so it claims nothing — the
+   * assertion above — and the response interceptor answers as it always did.
+   * The write form stands the failure in its own strip, so it takes both over,
+   * the wait included, because it prints the wait. A flag nailed on inside this
+   * composable would decide for both and leave the profile silent.
+   */
+  it("passes the consumer's flags through to the request", async () => {
+    answer({ canCreate: true });
+    const { ask } = useEndorsementEligibility({
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
+
+    await ask(target);
+
+    expect(vi.mocked(userApi.getEndorsementEligibility)).toHaveBeenCalledWith(
+      target,
+      { ownsRefusal: true, ownsRateLimit: true },
+    );
+  });
+
+  /**
+   * A consumer that takes the wait over has to name the seconds: the number is
+   * the part a reader acts on, and it arrives only through the shared wording.
+   * The problem document of a 429 names the refusal without it, so relaying the
+   * title here would have cost the reader the one thing the server said.
+   */
+  it("says how long the wait is when the question hit the limit", async () => {
+    vi.mocked(userApi.getEndorsementEligibility).mockResolvedValue({
+      data: null,
+      error: {
+        status: 429,
+        title: "Слишком много запросов",
+        retryAfterSeconds: 30,
+      },
+    } as never);
+    const { canCreate, askError, ask } = useEndorsementEligibility({
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
+
+    await ask(target);
+
+    expect(canCreate.value).toBe(false);
+    expect(askError.value).toBe(
+      "Слишком много попыток, попробуйте через 30 секунд",
     );
   });
 

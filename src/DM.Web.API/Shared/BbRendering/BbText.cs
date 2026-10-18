@@ -36,6 +36,14 @@ public abstract class BbText
     /// no per-post/room overrides).
     /// </summary>
     public RenderContextEnvelope? Context { get; set; }
+
+    /// <summary>
+    /// Whether the text is rendered for the audience the request asks for
+    /// (X-Dm-Audience). A text that is not is rendered for display whatever
+    /// is asked. Internal, so the published contract of every carrier stays
+    /// the four properties above.
+    /// </summary>
+    internal virtual bool FollowsAudience => true;
 }
 
 /// <inheritdoc />
@@ -89,4 +97,27 @@ public class InfoBbText : BbText
     public override BbParseMode ParseMode => BbParseMode.Info;
     /// <inheritdoc />
     public override BbSurface Surface => BbSurface.Profile;
+}
+
+/// <summary>
+/// The description of a game tag, shown in the tag's tooltip: the hint surface,
+/// whose one tag is [tip]. Rendered by the server like every text, so the
+/// client puts nothing into the page but the server's markup.
+/// </summary>
+public class HintBbText : BbText
+{
+    /// <inheritdoc />
+    public override BbParseMode ParseMode => BbParseMode.Hint;
+    /// <inheritdoc />
+    public override BbSurface Surface => BbSurface.Hint;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The catalogue of tags is cached publicly without Vary, and a public
+    /// answer is the same bytes for every value of X-Dm-Audience (API_DESIGN.md,
+    /// "Кеширование ответов"): the copy stored for one audience is handed to
+    /// every other. A description is drawn in a tooltip and nowhere else, so
+    /// it is rendered for display on every request.
+    /// </remarks>
+    internal override bool FollowsAudience => false;
 }

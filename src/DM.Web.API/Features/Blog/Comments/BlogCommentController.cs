@@ -3,7 +3,6 @@ using DM.Domain.Core.Comments;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Comments;
 using DM.Web.API.Shared.Authentication;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Blog.Likes;
@@ -30,7 +29,7 @@ namespace DM.Web.API.Features.Blog.Comments;
 ///
 /// ## Access Control
 /// - Viewing: Whoever may see the blog — its draft visibility, its status and premoderation decide
-/// - Creating: Authenticated users (if blog has CommentsEnabled)
+/// - Creating: Authenticated users, except those on the blog's blacklist or silenced by a ban
 /// - Editing: Author or moderators
 /// - Deleting: Author or moderators
 /// - Liking: Authenticated users (cannot like own comments)
@@ -94,7 +93,6 @@ public class BlogCommentController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Adds a new comment to the blog discussion.
-    /// Requires blog to have CommentsEnabled.
     ///
     /// Example request:
     ///     POST /v1/blogs/abcde/comments
@@ -107,7 +105,7 @@ public class BlogCommentController : ControllerBase
     /// <response code="201">Comment created successfully</response>
     /// <response code="400">Invalid comment data (empty text, etc.)</response>
     /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User cannot comment (comments disabled or no permission)</response>
+    /// <response code="403">User cannot comment (blacklisted, banned, or no permission)</response>
     /// <response code="404">Blog not found</response>
     [HttpPost("{id}/comments", Name = nameof(PostBlogComment))]
     [AuthenticationRequired]
@@ -137,31 +135,11 @@ public class BlogCommentController : ControllerBase
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="200">Comment details</response>
-    /// <response code="404">Comment not found</response>
+    /// <response code="404">Comment not found, or it is not a comment of a blog the user may open</response>
     [HttpGet("comments/{id}", Name = nameof(GetBlogComment))]
     [ProducesResponseType(typeof(Envelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetBlogComment(Guid id) => Ok(await _commentApiService.Get(id));
-
-    /// <summary>
-    /// Get quotation source of a comment
-    /// </summary>
-    /// <remarks>
-    /// Returns the BBCode a reader's composer is filled with when they quote the
-    /// comment: its text, wrapped in a quotation attributed to its author.
-    /// Whoever cannot read the comment cannot read its quotation - the same
-    /// refusal, from the same read.
-    /// </remarks>
-    /// <param name="id">Comment identifier (GUID)</param>
-    /// <response code="200">Returns the quotation source</response>
-    /// <response code="400">Comment text could not be parsed</response>
-    /// <response code="404">Comment not found</response>
-    [HttpGet("comments/{id}/quote", Name = nameof(GetBlogCommentQuote))]
-    [ProducesResponseType(typeof(Envelope<QuoteSource>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetBlogCommentQuote(Guid id) =>
-        Ok(await _commentApiService.GetQuote(id));
 
     /// <summary>
     /// Update blog comment

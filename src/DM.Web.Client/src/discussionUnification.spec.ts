@@ -17,6 +17,8 @@
  * widgets/discussion is that one section. The rule is mechanical and reads the
  * template: rendering <CommentItem> is what makes a file a comments list, and
  * only the section may do it — every page asks the section for one instead.
+ * The readers that render a comment and are no discussion stand apart, each
+ * with its reason (NOT_A_DISCUSSION).
  */
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "fs";
@@ -49,6 +51,17 @@ const CONNECTED = [
 const NOT_MOVED_YET: Record<string, string> = {
   "pages/forum/CommentsList.vue":
     "the topic is the reference the section was cut from, and moves last on its own",
+};
+
+/**
+ * Files that render a comment and are no discussion, with the reason. They read
+ * no query, page nothing and filter nothing, so the section has nothing to give
+ * them, and they never move to it: unlike NOT_MOVED_YET, an entry here is no
+ * debt. It stays while the file renders a comment.
+ */
+const NOT_A_DISCUSSION: Record<string, string> = {
+  "widgets/ticket-thread/TicketConversation.vue":
+    "the conversation of a ticket: its own table, at most a hundred comments that come whole with the ticket, no filter, no paging, and every comment read only",
 };
 
 /**
@@ -122,7 +135,10 @@ describe("the discussion is one section", () => {
 
   it("renders a comment nowhere else", () => {
     const elsewhere = renderers("CommentItem").filter(
-      (file) => file !== SECTION && !(file in NOT_MOVED_YET),
+      (file) =>
+        file !== SECTION &&
+        !(file in NOT_MOVED_YET) &&
+        !(file in NOT_A_DISCUSSION),
     );
     expect(elsewhere).toEqual([]);
   });
@@ -130,6 +146,13 @@ describe("the discussion is one section", () => {
   it("keeps every unmoved list unmoved, so the exception cannot outlive it", () => {
     const own = renderers("CommentItem");
     for (const [file, reason] of Object.entries(NOT_MOVED_YET)) {
+      expect(own, `${file}: ${reason}`).toContain(file);
+    }
+  });
+
+  it("keeps every reader that is no discussion rendering a comment, so the exception cannot outlive it", () => {
+    const own = renderers("CommentItem");
+    for (const [file, reason] of Object.entries(NOT_A_DISCUSSION)) {
       expect(own, `${file}: ${reason}`).toContain(file);
     }
   });

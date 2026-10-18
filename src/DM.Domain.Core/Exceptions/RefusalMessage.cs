@@ -37,6 +37,17 @@ public static class RefusalMessage
     public const string AuthenticationRequired = "Требуется авторизация";
 
     /// <summary>
+    /// Too many wrong passwords in a row closed this door for a while
+    /// </summary>
+    /// <remarks>
+    /// The screen spells the wait itself, out of the seconds that travel beside
+    /// this title, and in the sentence it already uses for a rate limit. The
+    /// title stays the name of what happened, for a caller reading the document
+    /// without a screen.
+    /// </remarks>
+    public const string LoginLocked = "Вход заблокирован";
+
+    /// <summary>
     /// The credentials were proven and moderation has closed the account
     /// </summary>
     /// <remarks>
@@ -74,51 +85,24 @@ public static class RefusalMessage
     /// which of the five walls they are standing at, and how many tries are left
     /// - which the password path deliberately does not say either.
     /// </remarks>
-    public const string TwoFactorRejected = "Код не подошел";
+    public const string TwoFactorRejected = "Неверный код";
 
     /// <summary>
     /// An operation that needs the factor was addressed to an account without one
     /// </summary>
-    public const string TwoFactorNotEnabled = "Второй фактор не включен";
+    public const string TwoFactorNotEnabled = "Двухфакторная аутентификация не включена";
 
     /// <summary>
     /// Switching on what is already on; replacing a device is off and on again
     /// </summary>
-    public const string TwoFactorAlreadyEnabled = "Второй фактор уже включен";
+    public const string TwoFactorAlreadyEnabled = "Двухфакторная аутентификация уже включена";
 
     /// <summary>
     /// The issued secret was never confirmed inside the window and is gone
     /// </summary>
-    public const string TwoFactorSetupExpired = "Настройка второго фактора устарела, начните заново";
+    public const string TwoFactorSetupExpired =
+        "Настройка двухфакторной аутентификации устарела, начните заново";
 
-    /// <summary>
-    /// The mailed removal path is closed for the ranks that owe a factor
-    /// </summary>
-    /// <remarks>
-    /// Names its reason, unlike a refusal by rank elsewhere. Allowed here because
-    /// it is addressed to the owner of the account about his own account and
-    /// discloses nothing he does not already know.
-    /// </remarks>
-    public const string TwoFactorMailRemovalClosed =
-        "Снять второй фактор по почте нельзя: обратитесь ко второму администратору";
-
-    /// <summary>
-    /// The rank was withheld for want of a factor, and the refusal says so
-    /// </summary>
-    /// <remarks>
-    /// The one refusal by rank in the product that names its reason, and it has
-    /// to: <see cref="AccessDenied" /> is a lie to an administrator, who is one
-    /// and can read that he is one on his own profile. Allowed for the same
-    /// argument as <see cref="TwoFactorMailRemovalClosed" /> - addressed to the
-    /// owner of the account about his own account, disclosing nothing he does
-    /// not already know.
-    ///
-    /// Said only where the recorded rank would have been enough. An account
-    /// short of the rank with or without a factor gets the ordinary refusal,
-    /// which names nothing.
-    /// </remarks>
-    public const string PrivilegeWithheldWithoutTwoFactor =
-        "Полномочия выключены, пока не настроен второй фактор";
 
     // ═══ USERS ═══
 
@@ -126,6 +110,62 @@ public static class RefusalMessage
     /// The user is unknown and the request did not name them
     /// </summary>
     public const string UserNotFound = "Пользователь не найден";
+
+    // ═══ BLACKLISTS OF A GAME AND OF A BLOG ═══
+    //
+    // One wording for both lists. The two services managing them used to answer
+    // the same fact in two sentences ("...уже в черном списке" with the name and
+    // without it, "Сначала удалите..." against "Сначала уберите..."), from string
+    // literals of their own. The name is not repeated: the owner has just typed
+    // it into the field the answer appears under.
+
+    /// <summary>
+    /// The same person is already on the game's or the blog's blacklist
+    /// </summary>
+    /// <remarks>
+    /// Thrown by the pre-check of the service and by the translation of the
+    /// unique index the game repository hits when two requests race past that
+    /// pre-check: one sentence for one fact, whichever path found it.
+    /// </remarks>
+    public const string AlreadyInBlacklist = "Пользователь уже в черном списке";
+
+    /// <summary>
+    /// The person asked to be taken off a blacklist is not on it
+    /// </summary>
+    public const string NotInBlacklist = "Пользователя нет в черном списке";
+
+    /// <summary>
+    /// The master and the curating mentor run the game and cannot be shut out of it
+    /// </summary>
+    public const string CannotBlacklistGameLead =
+        "Мастера и наставника игры нельзя внести в черный список";
+
+    /// <summary>
+    /// The author and the curating mentor run the blog and cannot be shut out of it
+    /// </summary>
+    public const string CannotBlacklistBlogLead =
+        "Автора и наставника блога нельзя внести в черный список";
+
+    /// <summary>
+    /// An assistant or a player is part of the game and has to leave it first
+    /// </summary>
+    public const string RemoveFromGameFirst = "Сначала уберите пользователя из игры";
+
+    /// <summary>
+    /// An assistant is part of the blog and has to leave it first
+    /// </summary>
+    public const string RemoveFromBlogAssistantsFirst =
+        "Сначала уберите пользователя из ассистентов блога";
+
+    /// <summary>
+    /// A member already has a website testimonial written on their behalf
+    /// </summary>
+    /// <remarks>
+    /// Same pairing: the service pre-check and the repository's translation of
+    /// the partial unique index by author answer with one sentence.
+    /// </remarks>
+    public static string TestimonialAlreadyExists(string username) =>
+        $"У участника {username} уже есть отзыв";
 
     /// <summary>
     /// The user is unknown and the caller supplied the username, so echoing it
@@ -181,6 +221,11 @@ public static class RefusalMessage
     /// <summary>
     /// The game's owner put this caller on its blacklist
     /// </summary>
+    /// <remarks>
+    /// Said by GameRoleExtensions.ThrowIfBlacklisted and by nothing else: both
+    /// actions the list closes, the discussion and the application, ask that one
+    /// method, so the answer reads the same under either.
+    /// </remarks>
     public const string BlacklistedFromGame = "Вы в черном списке этой игры";
 
     /// <summary>
@@ -216,6 +261,10 @@ public static class RefusalMessage
     /// <summary>
     /// The blog's owner put this caller on its blacklist
     /// </summary>
+    /// <remarks>
+    /// Said by BlogRoleExtensions.ThrowIfBlacklisted and by nothing else, the
+    /// blog side of BlacklistedFromGame.
+    /// </remarks>
     public const string BlacklistedFromBlog = "Вы в черном списке этого блога";
 
     /// <summary>
@@ -241,9 +290,39 @@ public static class RefusalMessage
     public const string MessageNotFound = "Сообщение не найдено";
 
     /// <summary>
-    /// The user already joined this global chat event
+    /// The reader signed himself up for a global chat event he is already on
     /// </summary>
-    public const string UserAlreadyParticipant = "Пользователь уже участвует";
+    /// <remarks>
+    /// Second person, because the reader pressed the button about himself and
+    /// the answer is about him. The other door to the same list is opened by an
+    /// organizer about somebody else and answers with
+    /// <see cref="UserAlreadyParticipant" />.
+    ///
+    /// Said by the read that looks before the join and by the write that finds
+    /// the pair already there: two clicks racing past that read are the same
+    /// fact to the reader as a second click after it.
+    /// </remarks>
+    public const string AlreadyParticipant = "Вы уже участвуете в эвенте";
+
+    /// <summary>
+    /// An organizer added to a global chat event somebody already on its list
+    /// </summary>
+    /// <remarks>
+    /// Third person: the sentence names the user the request carried, not the
+    /// organizer reading it. Same pairing of a read and a write as
+    /// <see cref="AlreadyParticipant" />.
+    /// </remarks>
+    public const string UserAlreadyParticipant = "Пользователь уже участвует в эвенте";
+
+    /// <summary>
+    /// Only one event runs at a time, and one is running
+    /// </summary>
+    /// <remarks>
+    /// Same pairing as <see cref="AlreadyParticipant" />: the check before
+    /// the start and the partial unique index that catches the two starts which
+    /// raced past it answer with one sentence.
+    /// </remarks>
+    public const string AnotherEventIsLive = "Уже идет другой эвент";
 
     // ═══ INVITATIONS ═══
 
@@ -263,16 +342,20 @@ public static class RefusalMessage
     public const string InvitationNotForYou = "Приглашение адресовано не вам";
 
     /// <summary>
-    /// The invitee is on the blacklist of the game or blog being invited to
+    /// The invitee keeps the inviter on their personal blacklist
     /// </summary>
-    public const string CannotInviteBlacklistedUser =
-        "Нельзя пригласить пользователя из черного списка";
-
-    /// <summary>
-    /// The invitee is on the inviter's own blacklist
-    /// </summary>
-    public const string CannotInviteBlockedUser =
-        "Нельзя пригласить пользователя из личного черного списка";
+    /// <remarks>
+    /// An invitation lands in the invitee's account settings signed with the
+    /// inviter's name, so without this refusal it was a way to reach somebody
+    /// who had blocked you. The sentence names nobody and gives no reason, the
+    /// way a group chat refuses the same person (ChatService): whose list keeps
+    /// whom is the list owner's to know.
+    ///
+    /// The other direction is no longer refused. The inviter's own list restricts
+    /// the people on it, not the inviter, and inviting somebody you blocked is a
+    /// decision of the only person that list belongs to.
+    /// </remarks>
+    public const string CannotInviteThisUser = "Нельзя пригласить этого пользователя";
 
     // ═══ NOTEPADS AND NOTES ═══
 
@@ -312,6 +395,26 @@ public static class RefusalMessage
     public const string UploadNotFound = "Файл не найден";
 
     /// <summary>
+    /// There is nothing to restore: the account a moderator aimed at is alive
+    /// </summary>
+    public const string AccountNotRemoved = "Аккаунт не удален";
+
+    /// <summary>
+    /// The removed account is named "Аккаунт удален" or a spelling a reader would
+    /// take for it. Brought back, it would be a live account signing its posts the
+    /// way everything removed accounts wrote is signed, and holding the address of
+    /// the profile that gathers it
+    /// </summary>
+    public const string ReservedNameNotRestorable =
+        "Аккаунт с именем \"Аккаунт удален\" восстановить нельзя";
+
+    /// <summary>
+    /// The address and the password do not go together. One sentence for both
+    /// halves, so a caller cannot tell which of them was wrong
+    /// </summary>
+    public const string WrongCredentials = "Неверная почта или пароль";
+
+    /// <summary>
     /// The username change request is absent, on the owner's screen and in the
     /// moderation queue alike
     /// </summary>
@@ -330,6 +433,21 @@ public static class RefusalMessage
     /// </summary>
     public const string UsernameChangeAlreadyApproved =
         "Заявка уже одобрена: выберите новое имя по ссылке из письма";
+
+    /// <summary>
+    /// The chosen name is taken. Said by the read that looks before the rename and
+    /// by the translation of the two unique structures the write hits when a name
+    /// is claimed between them
+    /// </summary>
+    public const string UsernameTaken = "Это имя уже занято";
+
+    /// <summary>
+    /// The name a rollback aims at is no longer free. Same pairing as
+    /// <see cref="UsernameTaken" />, and it names the name because a rollback is
+    /// asked for by a moderator who did not choose it
+    /// </summary>
+    public static string UsernameRollbackBlocked(string username) =>
+        $"Откат невозможен: имя {username} уже занято";
 
     // ═══ COMMUNITY CATALOGS ═══
 
@@ -354,6 +472,16 @@ public static class RefusalMessage
     /// The contest series is absent
     /// </summary>
     public const string ContestSeriesNotFound = "Серия конкурсов не найдена";
+
+    /// <summary>
+    /// The starting character sheet is absent, or was hidden
+    /// </summary>
+    /// <remarks>
+    /// Said by the read and by all three writes: a template hidden between the
+    /// moment a moderator opened the list and the moment they pressed anything
+    /// is the same fact whichever of the four found it.
+    /// </remarks>
+    public const string AttributeSchemaTemplateNotFound = "Шаблон схемы не найден";
 
     /// <summary>
     /// A catalog entry was given an icon key the sprite does not carry. Reaches a

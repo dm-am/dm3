@@ -7,7 +7,9 @@
  * sort. What differs between the pages is only where the comments come from
  * and who may write, so that is what arrives as props, and everything a reader
  * sees is here: the filter bar, paging above and below the list, the comments,
- * the empty and failed states, the permalink and the composer.
+ * the empty and failed states, the permalink and the composer. The composer is
+ * the form of comments of the site (CommentComposer): the conversation of a
+ * ticket writes in the same one.
  *
  * It exists because the pages had drifted into three shapes. The game and the
  * blog rendered a bare list with a single paging block and no search at all —
@@ -26,26 +28,29 @@ import type {
   Envelope,
   GeneralError,
   PagingInfo,
-  QuoteSource,
 } from "@/shared/api/models/common";
 import type { CommentsQuery } from "@/shared/api";
 import { useUiStore } from "@/shared/stores/ui";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import Button from "@/shared/ui/Button/Button.vue";
+import RefusalNote from "@/shared/ui/Layout/RefusalNote.vue";
 import { CommentSkeleton } from "@/shared/ui/Skeleton";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { provideQuoteComposer } from "@/shared/lib/composables/useQuoteComposer";
 import { useCommentHashScroll } from "@/shared/lib/composables/useScrollToElement";
-import { BODY_TEXT_MAX_LENGTH } from "@/shared/lib/constants/content";
-import { useAuthStore, userIsModerator } from "@/entities/user";
-import { CommentItem, useCommentWarnDialog } from "@/features/comment";
+import { useAuthStore } from "@/entities/user";
+import {
+  CommentComposer,
+  CommentItem,
+  useCommentWarnDialog,
+} from "@/features/comment";
 import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
 import { LoginPrompt } from "@/features/auth";
 
 /** What a mutation answers with: null when the server took the change. */
 type SubmitResult = { error: GeneralError | null };
+
+/** Who shows a refused request: the two flags the api client reads by name. */
+type RefusalFlags = { ownsRefusal?: boolean; ownsRateLimit?: boolean };
 
 const props = defineProps<{
   /** Comments of the current page, as the caller's store holds them. */
@@ -70,30 +75,49 @@ const props = defineProps<{
   create: (text: string) => Promise<SubmitResult>;
   /** Saves an edited comment; the item keeps its editor open on a refusal. */
   submitEdit: (id: string, text: string) => Promise<SubmitResult>;
-  /** Deletes a comment. */
-  submitDelete: (id: string) => Promise<SubmitResult>;
-  /** Likes a comment. */
-  like: (id: string) => unknown;
-  /** Takes the like back. */
-  unlike: (id: string) => unknown;
+  /**
+   * Deletes a comment. The flags come from the item's confirmation, which
+   * prints a refusal in itself: passed on to the request, they keep the
+   * interceptor from saying it a second time.
+   */
+  submitDelete: (id: string, options?: RefusalFlags) => Promise<SubmitResult>;
+  /**
+   * Likes a comment. The answer goes on to the item: a refused like leaves
+   * the heart as it was, and the item is what says so.
+   */
+  like: (id: string) => Promise<SubmitResult>;
+  /** Takes the like back; answers as like does. */
+  unlike: (id: string) => Promise<SubmitResult>;
   /** Fetches a comment's raw BBCode source for the edit form. */
   fetchEditSource: (id: string) => Promise<ApiResult<Envelope<Comment>>>;
-  /**
-   * Fetches the markup of a quotation of a comment. Optional: a discussion
-   * nobody may write in shows no Quote button, and there is nothing to fetch.
-   */
-  fetchQuoteSource?: (id: string) => Promise<ApiResult<Envelope<QuoteSource>>>;
   /** Where the paging links point: the discussion's own route. */
   pagingTo: RouteLocationRaw;
   /** Composer draft key, built by composerDraftKey. */
   draftKey: string;
-  /** Whether the viewer may post right now. */
+  /**
+   * Whether the viewer may post right now: the record's `viewer.canComment`,
+   * asked by the code that refuses the comment, so a form shown here is one
+   * the server takes. False offers no form; what stands in its place is
+   * `closedHint`, else the way in for a guest.
+   */
   canComment: boolean;
   /**
-   * Why there is no composer for a viewer who is signed in and still may not
-   * write (comments closed, read-only). A guest gets the sign-in prompt.
+   * Why the viewer may read this discussion and not write in it: a game
+   * read-only to those outside it, the blacklist of the game or the blog. A
+   * plaque where the form would be (RefusalNote), under the discussion, which
+   * stays whole: the filter bar, the comments, and "Комментариев пока нет"
+   * when there are none, that one grey, so a refusal never reads like the
+   * empty line. It goes before the sign-in prompt, so a guest at a discussion
+   * read-only to everybody outside the game is told so rather than invited to
+   * a form that signing in would not open.
    */
   closedHint?: string;
+  /**
+   * The viewer is on the blacklist of the game or blog discussed here. The
+   * composer is the caller's business (canComment); this reaches the
+   * comments, where it takes "Редактировать" off the viewer's own.
+   */
+  viewerBlacklisted?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -166,41 +190,13 @@ function pagingAnchor(): HTMLElement | null {
 useCommentHashScroll(() => props.comments);
 
 // --- Composer ---
-const newComment = ref("");
-const sending = ref(false);
-const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
-const isModerator = computed(() => userIsModerator(user.value));
-
-// The composer of the discussion is what the Quote button on each comment
-// writes into, and there is one composer for the whole list, so it is handed
-// down from here rather than reached for from inside an item. Nothing is
-// offered where nobody may write: the button goes with the box.
-provideQuoteComposer({
-  enabled: () => props.canComment,
-  insert: (source) => editorRef.value?.insertBlock(source.text),
-});
-
-async function handleSend() {
-  if (!newComment.value.trim() || sending.value) return;
-
-  const text = newComment.value;
-  newComment.value = "";
-  sending.value = true;
-  const { error } = await props.create(text);
-  const failed = Boolean(error);
-  if (!failed) await props.load(searchParams.value);
-  sending.value = false;
-
-  // Give the text back on failure. Emptying the field before the request is
-  // what makes sending feel instant; losing what was written when it fails is
-  // not part of that bargain. The editor's own clear() waits for the send to
-  // land — it also drops the saved draft, and that copy is the one that
-  // outlives the tab.
-  if (failed) {
-    newComment.value = text;
-  } else {
-    editorRef.value?.clear();
-  }
+// The comment goes, then the page is read again so it stands in the list; only
+// then does the form drop the draft. A refused one stays in the form, which
+// says why under its button.
+async function send(text: string): Promise<SubmitResult> {
+  const result = await props.create(text);
+  if (!result.error) await props.load(searchParams.value);
+  return result;
 }
 </script>
 
@@ -246,17 +242,18 @@ async function handleSend() {
             comment.modifiedUtc,
             isCompactLayout,
             filterState.search,
+            viewerBlacklisted,
           ]"
           :comment="comment"
           :compact="isCompactLayout"
           :number="commentNumber(index)"
           :search-query="filterState.search"
           :fetch-edit-source="fetchEditSource"
-          :fetch-quote-source="fetchQuoteSource"
           :submit-edit="submitEdit"
           :submit-delete="submitDelete"
-          @like="like"
-          @unlike="unlike"
+          :submit-like="like"
+          :submit-unlike="unlike"
+          :viewer-blacklisted="viewerBlacklisted"
           @warn="handleWarn"
         />
       </div>
@@ -271,35 +268,14 @@ async function handleSend() {
       />
     </div>
 
-    <div class="discussion-composer">
-      <template v-if="canComment">
-        <BBCodeEditor
-          ref="editorRef"
-          v-model="newComment"
-          context="common"
-          placeholder="Написать комментарий..."
-          :draft-key="draftKey"
-          :disabled="sending"
-          :min-height="100"
-          :max-height="300"
-          :max-length="BODY_TEXT_MAX_LENGTH"
-          :resizable="true"
-          :is-moderator="isModerator"
-          @submit="handleSend"
-        />
-        <Button
-          :loading="sending"
-          :disabled="!newComment.trim()"
-          @click="handleSend"
-        >
-          Отправить
-        </Button>
-      </template>
-
-      <SecondaryText v-else-if="closedHint" class="discussion-hint">
+    <!-- Nothing to offer and nothing to say (a ban): no block at all, so the
+         list ends the section without an empty step under it. -->
+    <div v-if="canComment || closedHint || !user" class="discussion-composer">
+      <CommentComposer v-if="canComment" :send="send" :draft-key="draftKey" />
+      <RefusalNote v-else-if="closedHint" class="discussion-hint">
         {{ closedHint }}
-      </SecondaryText>
-      <LoginPrompt v-else-if="!user" action="оставить комментарий" />
+      </RefusalNote>
+      <LoginPrompt v-else action="оставить комментарий" />
     </div>
   </div>
 </template>
@@ -307,7 +283,11 @@ async function handleSend() {
 <style scoped lang="sass">
 // Three blocks: filter bar, discussion body, composer. $medium between them
 // and between the paging blocks and the list inside the body; the tighter
-// $small rhythm belongs between the comments themselves.
+// $small rhythm belongs between the comments themselves. The plaque of a
+// discussion closed to writing takes no margin of its own: it stands where
+// the form would, spaced by the gap, its frame flush with the left edge.
+// "Комментариев пока нет" keeps its $medium above, off the filter bar, and
+// none below.
 .discussion
   display: flex
   flex-direction: column
@@ -324,17 +304,15 @@ async function handleSend() {
   gap: $small
 
 .discussion-none
-  padding: $medium 0
+  padding-top: $medium
 
+// The place of the form under the discussion: the form itself
+// (CommentComposer, the editor across the column and "Отправить" under it at
+// the left), or the plaque that stands where it would (a refusal, or the way
+// in for a guest), across the column as the form would be.
 .discussion-composer
   display: flex
   flex-direction: column
-  gap: $small
+  align-items: flex-start
   width: 100%
-
-  :deep(.bbcode-editor-wrapper)
-    width: 100%
-
-.discussion-hint
-  padding: $small
 </style>

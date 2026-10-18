@@ -324,14 +324,15 @@ services:
   # touches a bucket, and the workloads wait for it to succeed.
   minio-init:
     container_name: 'dm-minio-init'
-    # Unpinned like the image backup-minio.sh runs: mc talks to the server over
-    # its admin API, and the two are released together.
+    # Тот же реестр, что у сервера выше: с Docker Hub образ minio/mc снят, и
+    # pull оттуда падает с "access denied". Та же строка стоит в backup-minio.sh
+    # и в DEPLOYMENT.md, и двигать их надо вместе.
     # Пришпилен в шаг с сервером выше: mc ходит в administrative API, где согласие
     # версий и проверяется, и двигаются обе строки одним коммитом. Метка своя —
     # у клиента отдельный цикл выпусков, поэтому взят ближайший выпуск после
     # серверного, а не та же строка. Неприпшпиленный клиент уезжает от сервера сам
     # по себе, и первым признаком будет команда, которой сервер не знает.
-    image: 'minio/mc:RELEASE.2025-05-21T01-59-54Z'
+    image: 'quay.io/minio/mc:RELEASE.2025-05-21T01-59-54Z'
     entrypoint: ["/bin/sh", "/minio-init.sh"]
     environment:
       MINIO_ENDPOINT: http://${MINIO_HOST:-dm-minio}:9000

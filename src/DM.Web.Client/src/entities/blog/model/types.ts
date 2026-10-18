@@ -35,7 +35,8 @@ export interface BlogRef {
   /** Short public identifier for URLs (5 lowercase letters), like games. */
   publicId?: string;
   title: string;
-  author: UserRef;
+  /** Null when the owner's account was removed: the blog stays, unsigned. */
+  author: UserRef | null;
   assistants?: UserRef[];
   /** Blog status (Draft, Active, Closed) */
   status: BlogStatus;
@@ -54,11 +55,11 @@ export interface BlogRef {
   unreadCommentsCount?: number;
 }
 
-/** Visibility of draft content */
+/** Who sees a blog while it is in the making ("оформляющийся блог") */
 export enum DraftVisibility {
   /** Only users with roles can view */
   Private = "Private",
-  /** Preview visible to everyone */
+  /** Visible to everyone */
   Public = "Public",
 }
 
@@ -84,10 +85,47 @@ export interface Blog extends BlogRef {
    */
   premoderationStatus?: BlogPremoderationStatus;
   draftVisibility: DraftVisibility;
-  commentsEnabled: boolean;
+  /**
+   * The viewer is on the blacklist of this blog: they may not comment on the
+   * blog or under its publications, nor edit a comment of theirs there;
+   * everything else is open to them as to anyone. False for a guest. The
+   * comment form goes by `viewer.canComment`, which says the blacklist
+   * together with every other reason.
+   */
+  viewerBlacklisted?: boolean;
+  /**
+   * What the viewer may do in this blog, answered by the code that refuses the
+   * request. On the read of one blog and the writes that return one; a list
+   * of blogs leaves it out.
+   */
+  viewer?: BlogViewer;
   publicationCount: number;
   commentsCount: number;
   rubrics?: Rubric[];
+}
+
+/**
+ * What the viewer may do in a blog (mirrors BlogViewer). The server asks each
+ * flag with the code that refuses the write it stands for.
+ */
+export interface BlogViewer {
+  /**
+   * May write a new comment in the blog's discussion: the blog in the making
+   * open to the viewer, the blacklist and the ban at once. False for a guest.
+   */
+  canComment: boolean;
+}
+
+/**
+ * What the viewer may do under a publication (mirrors PublicationViewer). The
+ * server asks each flag with the code that refuses the write it stands for.
+ */
+export interface PublicationViewer {
+  /**
+   * May write a new comment under the publication: published, the blog's
+   * blacklist and the ban at once. False for a guest.
+   */
+  canComment: boolean;
 }
 
 export interface Rubric {
@@ -136,7 +174,8 @@ export interface Publication {
   /** Parent blog title (so cards can show the blog name, not its id). */
   blogTitle?: string;
   rubric?: Rubric | null;
-  author: UserRef;
+  /** Null when the author's account was removed. */
+  author: UserRef | null;
   title: string;
   /** Pre-rendered HTML (server-side BBCode rendering). */
   content: string;
@@ -146,10 +185,15 @@ export interface Publication {
   modifiedUtc?: string | null;
   isPublished: boolean;
   publishedUtc?: string | null;
-  commentsEnabled: boolean;
   viewCount: number;
   commentCount: number;
   likes: UserRef[];
+  /**
+   * What the viewer may do under this publication, answered by the code that
+   * refuses the request. On the read of one publication and the writes that
+   * return one; a feed leaves it out.
+   */
+  viewer?: PublicationViewer;
 }
 
 // === Blog mutations (mirror the game entity's input types) ===
@@ -163,10 +207,8 @@ export interface CreateBlogInput {
   title: string;
   /** Blog description (raw BBCode source, max 5000 characters) */
   description?: string;
-  /** Default: Public */
+  /** Who sees the blog while it is in the making. Default: Public */
   draftVisibility?: DraftVisibility;
-  /** Default: true */
-  commentsEnabled?: boolean;
   /** Copy the personal blacklist into the blog blacklist on creation */
   copyBlacklist?: boolean;
 }
@@ -181,7 +223,6 @@ export interface UpdateBlogInput {
   /** Blog description (raw BBCode source) */
   description?: string;
   draftVisibility?: DraftVisibility;
-  commentsEnabled?: boolean;
 }
 
 /**
@@ -207,7 +248,6 @@ export interface CreatePublicationInput {
   preview?: string;
   /** Publish immediately instead of saving a draft */
   publishImmediately?: boolean;
-  commentsEnabled?: boolean;
 }
 
 /**
@@ -224,7 +264,6 @@ export interface UpdatePublicationInput {
   content?: string;
   preview?: string;
   isPublished?: boolean;
-  commentsEnabled?: boolean;
 }
 
 // === Blog notepad ===

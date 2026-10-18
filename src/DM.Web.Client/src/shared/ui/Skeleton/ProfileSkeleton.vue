@@ -78,7 +78,7 @@
   max-width: 100%
   // .avatar-wrapper has margin-bottom $small (on top of the column gap).
   margin-bottom: $small
-  +skeleton-shimmer
+  +skeleton-shimmer($square: true)
 
 // No role bar: the real role line renders only for staff (v-if on roles),
 // so a permanent bar makes the skeleton 24px too tall for ordinary users.

@@ -10,6 +10,11 @@
  * one: the list read asks BlogIntention.EditSettings (owner, assistants,
  * senior moderation), inviting a reader asks InviteReader (owner and
  * assistants), and cancelling asks CancelInvitation (the owner alone).
+ *
+ * Sending an invitation says nothing in the corner: the row for it is in the
+ * list right above the control, carrying the moment it was sent. That the row
+ * is there at all takes three things, and each of them is a way the list used
+ * to lose it - see `sorted`, `load` and `invite` below.
  */
 import { computed, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
@@ -21,8 +26,10 @@ import Button from "@/shared/ui/Button/Button.vue";
 import { SettingsSection } from "@/shared/ui/SettingsSection";
 import { RemoveButton } from "@/shared/ui/RemoveButton";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { notifyFailure } from "@/shared/lib/errors";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { refusalHere } from "@/shared/lib/errors";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { ActionResult } from "@/shared/ui/ActionResult";
 
 defineProps<{
   /** Whether the viewer may invite a reader. */
@@ -33,7 +40,6 @@ defineProps<{
 
 const store = useBlogDetailsStore();
 const { blog } = storeToRefs(store);
-const toast = useToast();
 
 const invitations = ref<BlogInvitation[]>([]);
 const loading = ref(false);
@@ -46,64 +52,131 @@ const typeLabels: Record<string, string> = {
   assistant: "Ассистент",
 };
 
+/**
+ * Oldest first, so the invitation just sent is the last row - the one next to
+ * the control that sent it.
+ *
+ * The order is the section's own: the endpoint hands the blog's invitations
+ * over newest first, its game twin hands them over in no order at all, and
+ * neither of those puts the new row where the reader is looking.
+ */
+const sentAt = (invitation: BlogInvitation) =>
+  new Date(invitation.createdUtc).getTime();
+
+const sorted = computed(() =>
+  [...invitations.value].sort((a, b) => sentAt(a) - sentAt(b)),
+);
+
+/** When the invitation went out, in the row that stands for it. */
+const sentLabel = (invitation: BlogInvitation) =>
+  `отправлено ${formatDateFull(invitation.createdUtc)}`;
+
 const blogId = computed(() => blog.value?.id ?? "");
 
 async function load() {
   if (!blogId.value) return;
   loading.value = true;
-  const { data } = await blogApi.getInvitations(blogId.value);
-  invitations.value = data?.resources ?? [];
+  const { data, error } = await blogApi.getInvitations(blogId.value);
   loading.value = false;
+  // A read that failed leaves the list alone. Emptying it on an error meant
+  // that a blip in the reload below answered a freshly sent invitation with
+  // "Активных приглашений нет".
+  if (error) return;
+  invitations.value = data?.resources ?? [];
 }
 
 onMounted(load);
 
+/**
+ * The invitation the server has just answered with, put into the list in
+ * place of the one it replaced.
+ *
+ * The server kills the live invitation of the same kind to the same person
+ * before issuing this one (BlogInvitationService.CreateInvitation), so
+ * inviting somebody a second time is a replacement, not an addition: what
+ * changes in the row is the moment it was sent. Taking the row from the
+ * answer also means the reload that follows is free to fail.
+ */
+function remember(invitation: BlogInvitation) {
+  invitations.value = [
+    ...invitations.value.filter(
+      (i) =>
+        !(
+          i.invitedUser.username === invitation.invitedUser.username &&
+          i.type === invitation.type
+        ),
+    ),
+    invitation,
+  ];
+}
+
+/** A refused invitation, under the row it was typed in, the name kept. */
+const inviteResult = useActionResult();
+
+/** The last refused "Отменить", under the row of the invitation it was about. */
+const cancelRefusal = ref<{ id: string; text: string } | null>(null);
+
 async function invite() {
   if (!blogId.value || !username.value.trim()) return;
   inviting.value = true;
-  const { error } = await blogApi.inviteReader(
+  inviteResult.clear();
+  const { data, error } = await blogApi.inviteReader(
     blogId.value,
     username.value.trim(),
   );
   inviting.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось отправить приглашение");
+    inviteResult.refuse(error, "Не удалось отправить приглашение");
     return;
   }
-  toast.success("Приглашение отправлено");
+  if (data) remember(data);
   username.value = "";
   await load();
 }
 
 async function cancel(invitation: BlogInvitation) {
   if (!blogId.value) return;
+  cancelRefusal.value = null;
   const { error } = await blogApi.cancelInvitation(blogId.value, invitation.id);
   if (error) {
-    notifyFailure(error, "Не удалось отменить приглашение");
+    const text = refusalHere(error, "Не удалось отменить приглашение");
+    if (text) cancelRefusal.value = { id: invitation.id, text };
     return;
   }
-  toast.success("Приглашение отменено");
   await load();
 }
 </script>
 
 <template>
   <SettingsSection title="Приглашения">
-    <ul v-if="invitations.length" class="inv-list">
-      <li v-for="inv in invitations" :key="inv.id" class="inv-item">
-        <UserLink :user="inv.invitedUser" />
-        <span class="inv-type">{{ typeLabels[inv.type] ?? inv.type }}</span>
-        <RemoveButton v-if="canCancel" @click="cancel(inv)">
-          Отменить
-        </RemoveButton>
+    <ul v-if="sorted.length" class="inv-list">
+      <li v-for="inv in sorted" :key="inv.id" class="inv-item">
+        <div class="inv-row">
+          <UserLink :user="inv.invitedUser" />
+          <span class="inv-type">{{ typeLabels[inv.type] ?? inv.type }}</span>
+          <span class="inv-sent">{{ sentLabel(inv) }}</span>
+          <RemoveButton v-if="canCancel" @click="cancel(inv)">
+            Отменить
+          </RemoveButton>
+        </div>
+        <ActionResult
+          v-if="cancelRefusal?.id === inv.id"
+          :text="cancelRefusal.text"
+          class="inv-refusal"
+        />
       </li>
     </ul>
     <SecondaryText v-else-if="!loading">Активных приглашений нет</SecondaryText>
 
     <div v-if="canInvite" class="invite-row">
-      <UserAutocomplete v-model="username" placeholder="Имя пользователя" />
+      <UserAutocomplete
+        v-model="username"
+        class="invite-row__who"
+        placeholder="Имя пользователя"
+      />
       <Button
         type="button"
+        variant="primary"
         :loading="inviting"
         :disabled="!username.trim()"
         @click="invite"
@@ -111,6 +184,7 @@ async function cancel(invitation: BlogInvitation) {
         Пригласить читателя
       </Button>
     </div>
+    <ActionResult v-if="canInvite" :result="inviteResult" />
   </SettingsSection>
 </template>
 
@@ -122,18 +196,28 @@ async function cancel(invitation: BlogInvitation) {
   gap: $tiny
   margin-bottom: $small
 
-.inv-item
+.inv-row
   display: flex
   align-items: center
   gap: $small
 
-.inv-type
+// Under the invitation it is about, one list step from it.
+.inv-refusal
+  --action-result-margin: #{$tiny} 0 0
+
+.inv-type,
+.inv-sent
   color: $text-muted
   font-size: $secondary-font-size
 
+// A field and its button in one line: the field takes what the button
+// leaves, down to 80.
 .invite-row
   display: flex
   align-items: flex-start
   gap: $small
-  flex-wrap: wrap
+
+.invite-row__who
+  flex: 1 1 0
+  min-width: $grid-step * 20
 </style>

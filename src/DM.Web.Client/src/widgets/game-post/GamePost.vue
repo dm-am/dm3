@@ -12,12 +12,7 @@ import dayjs from "dayjs";
 import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import { useRoute, type RouteLocationRaw } from "vue-router";
 import { storeToRefs } from "pinia";
-import type {
-  DiceRoll,
-  Post,
-  PostAttachment,
-  PostReview,
-} from "@/entities/game";
+import type { Post, PostAttachment, PostReview } from "@/entities/game";
 import {
   gameApi,
   GameLink,
@@ -25,6 +20,7 @@ import {
   RoomLink,
   reviewSignToNumber,
   reviewSignName,
+  reviewSignOptions,
 } from "@/entities/game";
 import { ContentText } from "@/shared/ui/Content";
 import { SecondaryText } from "@/shared/ui/Layout";
@@ -32,22 +28,25 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { UserLink, userIsModerator } from "@/entities/user";
+import { RemovedAccountLink, UserLink, userIsModerator } from "@/entities/user";
 import {
   MAX_POST_ATTACHMENTS,
   POST_ATTACHMENT_ACCEPT,
-  attachmentImageBox,
   describeAttachmentProblem,
-  isImageAttachment,
   reserveAttachmentImageBoxes,
   uploadPostAttachments,
 } from "@/features/upload";
+import { CaptionAction, CaptionLine } from "@/shared/ui/CaptionLine";
+import { SvgIcon } from "@/shared/ui/Icon";
+import PostAttachmentRow from "./PostAttachmentRow.vue";
+import { DICE_RESULTS_HEADING, formatDiceRoll } from "./diceLine";
 import { unwrapResource, uploadApi } from "@/shared/api";
 import { apiUrl } from "@/shared/api/client";
 import { formatFileSize } from "@/shared/lib/utils/fileSize";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { trimHtmlWhitespace } from "@/shared/lib/utils/bbcodeInteractive";
 import { useAuthStore } from "@/shared/stores/auth";
+import { useUiStore } from "@/shared/stores/ui";
 import {
   registerExpandable,
   notifyExpandableChanged,
@@ -55,9 +54,11 @@ import {
 import { symbols } from "@/shared/lib/utils/icons";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { scrollBlockIntoView } from "@/shared/lib/scroll";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { useQuoteAction } from "@/shared/lib/composables/useQuoteComposer";
-import { notifyFailure } from "@/shared/lib/errors";
+import { refusalHere } from "@/shared/lib/errors";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { ActionResult } from "@/shared/ui/ActionResult";
+import Button from "@/shared/ui/Button/Button.vue";
+import { SegmentedControl } from "@/shared/ui/SegmentedControl";
 
 const props = withDefaults(
   defineProps<{
@@ -105,22 +106,18 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore();
 const { user: currentUser } = storeToRefs(useAuthStore());
-const toast = useToast();
+
+// "Перенос слов" of the settings panel, over both blocks of text the author
+// wrote; the rolls between them are figures and do not take it. Both blocks are
+// flush on both sides at every width (+body-text).
+const { hyphenateWords } = storeToRefs(useUiStore());
+const typesetting = computed(() => ({
+  hyphenated: hyphenateWords.value,
+}));
 
 // 15-minute author edit window — a client-side affordance matching the
 // Comment block; moderators+ may edit/delete regardless (PostIntention).
 const EDIT_TIME_LIMIT_MINUTES = 15;
-
-// Quoting. The action exists only where there is a composer to answer in, and
-// the room's composer is what provides it — a post shown on a rating listing,
-// where there is nothing to write into, has no button.
-const { canQuote, quote } = useQuoteAction();
-
-function quotePost() {
-  const postId = props.post?.id;
-  if (!postId) return;
-  return quote(() => gameApi.getPostQuote(postId));
-}
 
 // Reviews state
 const showReviews = ref(false);
@@ -133,6 +130,12 @@ const reviewsError = ref<string | null>(null);
 const newReviewSign = ref<number>(1);
 const newReviewText = ref("");
 const submittingReview = ref(false);
+// The refusal of the last send, printed under the text it refused. A refused
+// review leaves the form exactly as it was, so the form is where the answer
+// has to stand: a toast in the corner is away from the field the reader is
+// looking at and has to be dismissed by hand (error toasts never fade), and
+// the draft it is about is down here.
+const reviewRefusal = ref<string | null>(null);
 
 // Data access
 const character = computed(() => props.post?.character);
@@ -144,15 +147,13 @@ const characterName = computed(() => character.value?.name);
 const canLinkCharacter = computed(
   () => !!character.value?.id && !!props.post?.room?.game?.id,
 );
-const hasDiceRolls = computed(
-  () => props.post?.diceRolls && props.post.diceRolls.length > 0,
-);
 // After a successful inline edit the server returns the freshly rendered
 // HTML; keep it as a local override so the post updates in place without the
 // parent having to refetch (mirrors the reviewCount/rating override idiom).
 const gameTextOverride = ref<string | null>(null);
 const metaTextOverride = ref<string | null>(null);
-const editedOverride = ref(false);
+// When the edit this page made was saved, for the edit line under the text.
+const editedAtOverride = ref<string | null>(null);
 
 const effectiveGameText = computed(
   () => gameTextOverride.value ?? props.post?.gameText,
@@ -200,31 +201,21 @@ const postId = computed(() => props.post?.id);
 const postAnchor = computed(() => `#post-${postId.value}`);
 const reviewsCollapseId = computed(() => `post-reviews-${postId.value}`);
 
-/**
- * Splits a dice roll into the muted "dNN: R +B" prefix and the bold green
- * "= T" total, built in script so the template never needs adjacent
- * mustaches (whitespace-condense would otherwise glue "+2= 6" together).
- */
-function diceLinePrefix(roll: DiceRoll): string {
-  const values = (roll.results ?? []).map((die) => die.value);
-  const bonusPart = roll.bonus
-    ? ` ${roll.bonus > 0 ? "+" : ""}${roll.bonus}`
-    : "";
-  // Several dice are shown as the throw itself, "3d6: 4 2 6", so the reader can
-  // check the total; one die needs no list beside its own value.
-  const thrown = values.length > 1 ? values.join(" ") : (values[0] ?? "");
-  return `${roll.rolls}d${roll.edges}: ${thrown}${bonusPart}`;
-}
+// ──────────────────────────────────────────────────────────────────────────────
+// Dice rolls: "Результаты бросков:" and one numbered line each on a grey strip
+// between the game text and the metagame text, as the old site has written
+// them since 4 October 2026. All of them, however many: the old site never
+// folds the rolls of a post.
+// ──────────────────────────────────────────────────────────────────────────────
+const diceLines = computed(() =>
+  (props.post?.diceRolls ?? []).map((roll, index) =>
+    formatDiceRoll(roll, index + 1),
+  ),
+);
 
-function diceLineTotal(roll: DiceRoll): string {
-  const sum = (roll.results ?? []).reduce(
-    (running: number, die) => running + die.value,
-    0,
-  );
-  return `= ${sum + (roll.bonus || 0)}`;
-}
-
-// Rating — "Рейтинг: +N" format, bold colored link
+// The sum of the post's PostReview signs — "Оценки: +N", bold colored link.
+// "Рейтинг" is the user's own number (review sum over post count, UserRating),
+// so the post line is named after what it counts: the reviews of this post.
 const postRating = computed(
   () => ratingOverride.value ?? props.post?.rating ?? null,
 );
@@ -245,11 +236,19 @@ const ratingColorClass = computed(() => {
 const hasReviews = computed(() => reviewCount.value > 0);
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Review-form gating (doc 4.2.2.14). The backend is authoritative
-// (PostReviewService): own post → forbidden, one review per post, newbies may
-// pick only "=" (need ≥100 posts for ±), one review per game every 3 days.
-// The client mirrors the deterministic gates and surfaces the server's reason
-// for the rest (cooldown) on submit.
+// Review-form gating (doc 4.2.2.14). The server answers whether this viewer may
+// rate the post (post.viewer.canReview, PostReviewService.ReviewableAsync): not
+// their own, not rated by them, and no rating of theirs in the game during the
+// last three days. The form is offered by that answer and nothing else, so a
+// rating the server would refuse is never typed. Newbies may pick only "="
+// (need ≥100 posts for ±); that narrows the sign, not the form.
+//
+// What the answer cannot know is what happened on this page since it was read.
+// A rating sent here closes its post (the list shows it, alreadyVoted) and its
+// game (gamesRatedHere, shared by every post on the page). A viewer who signs in
+// or out makes it somebody else's answer: the post is read again for them, and
+// until it answers nothing is offered. A rating that still loses a race, say to
+// one sent from another tab, gets the server's own sentence under the button.
 // ──────────────────────────────────────────────────────────────────────────────
 const alreadyVoted = computed(
   () =>
@@ -261,13 +260,74 @@ const alreadyVoted = computed(
 const isNewbieReviewer = computed(() => !!currentUser.value?.isNewbie);
 // Newbies are limited to the neutral "=" sign until they reach 100 posts.
 const canPickSignedReview = computed(() => !isNewbieReviewer.value);
-const showReviewForm = computed(
+/** The segments of the sign toggle: "=" alone for a newbie. */
+const reviewSigns = computed(() =>
+  reviewSignOptions(canPickSignedReview.value),
+);
+/**
+ * The server's answer for the viewer of the moment: the one the post came
+ * with, or the one read again for a viewer who signed in since.
+ */
+const viewerAnswer = ref<Pick<NonNullable<Post["viewer"]>, "canReview"> | null>(
+  null,
+);
+watch(
+  () => props.post,
+  () => {
+    viewerAnswer.value = null;
+  },
+);
+const postViewer = computed(() => viewerAnswer.value ?? props.post?.viewer);
+/** A rating sent from this page already closed the post's game. */
+const gameRatedHere = computed(
+  () => !!props.post?.gameId && gamesRatedHere.has(props.post.gameId),
+);
+// Somebody the server would let rate this post, once the list says they have
+// not yet. What opens the reviews on a post nobody has rated: the sum "+0" is
+// the way to the form of its first review.
+const canReview = computed(
   () =>
     authStore.isAuthenticated &&
-    !isPostAuthor.value &&
-    !alreadyVoted.value &&
-    !isDeleted.value,
+    !isDeleted.value &&
+    !!postViewer.value?.canReview &&
+    !gameRatedHere.value,
 );
+
+/**
+ * Asks the server again what the viewer may do with this post. A failed read
+ * leaves the form off: nothing is offered on an answer nobody gave.
+ */
+async function askViewerAgain(username: string): Promise<boolean> {
+  const id = postId.value;
+  if (!id) return false;
+  const { data } = await gameApi.getPost(id, {
+    ownsRefusal: true,
+    ownsRateLimit: true,
+  });
+  // A post replaced or a viewer changed again meanwhile owns the answer.
+  if (postId.value !== id || currentUser.value?.username !== username) {
+    return false;
+  }
+  const fresh = unwrapResource<Post>(data)?.viewer;
+  if (!fresh) return false;
+  viewerAnswer.value = fresh;
+  return fresh.canReview;
+}
+
+// The answer is for whoever held the session when the post was read. Signing
+// in or out on this page makes it somebody else's: until the post answers for
+// the new viewer, no form; a guest is asked nothing and offered nothing.
+watch(
+  () => currentUser.value?.username ?? null,
+  (username, before) => {
+    if (username === before) return;
+    gamesRatedHere.clear();
+    viewerAnswer.value = { canReview: false };
+    if (username && !isPostAuthor.value) void askViewerAgain(username);
+  },
+);
+const showReviewForm = computed(() => canReview.value && !alreadyVoted.value);
+const canOpenReviews = computed(() => hasReviews.value || canReview.value);
 
 // Keep the selected sign valid for newbies (they may only pick "=").
 watch(
@@ -403,6 +463,9 @@ const shouldTruncate = computed(() => props.truncatable);
 const metaRef = ref<HTMLElement | null>(null);
 const dynamicMaxHeight = ref(props.maxHeight);
 
+// The budget is counted in lines: as many as stand beside the left column, at
+// every width, the column standing beside the text on a phone as on 1366. The
+// prop stays the budget until the column is laid out.
 function recalcMaxHeight() {
   if (!metaRef.value) return;
   const metaH = metaRef.value.offsetHeight;
@@ -465,14 +528,29 @@ const canDeletePost = computed(
     !isDeleted.value &&
     (isModerator.value || isPostAuthor.value),
 );
+// The latest edit leads the history the server sends.
+const editedAt = computed(
+  () => editedAtOverride.value ?? props.post?.edits?.[0]?.modifiedUtc ?? null,
+);
 const isEdited = computed(
-  () => editedOverride.value || (props.post?.edits?.length ?? 0) > 0,
+  () => !!editedAt.value || (props.post?.edits?.length ?? 0) > 0,
+);
+const formattedEditedAt = computed(() =>
+  editedAt.value ? formatDateFull(editedAt.value) : "",
 );
 
 const isEditingPost = ref(false);
 const editGameText = ref("");
 const editMetaText = ref("");
 const savingPost = ref(false);
+
+// The line under the text: when the post was last edited, and what the viewer
+// may do with it. A post with neither has no line at all.
+const showEditLine = computed(
+  () =>
+    !isEditingPost.value &&
+    (isEdited.value || canEditPost.value || canDeletePost.value),
+);
 
 async function startEditPost() {
   // Seeded from the display rendering, the editor received a post whose
@@ -516,24 +594,36 @@ async function startEditPost() {
 
 function cancelEditPost() {
   isEditingPost.value = false;
+  editResult.clear();
 }
+
+/** A refused save, under the buttons of the edit; the text stays in it. */
+const editResult = useActionResult();
 
 async function saveEditPost() {
   if (!postId.value || !editGameText.value.trim() || savingPost.value) return;
   savingPost.value = true;
+  editResult.clear();
   const { data, error } = await gameApi.updatePost(postId.value, {
     gameText: editGameText.value.trim(),
     metagameText: editMetaText.value.trim() || undefined,
   });
   savingPost.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось сохранить пост");
+    // The server refuses the game text by the command's name for it and says
+    // "too long" or "nested too deep" without saying of what: the line names
+    // it by the label the editor shows over it. The metagame text is refused
+    // with a sentence of its own, which names it already.
+    editResult.refuse(error, "Не удалось сохранить пост", {
+      gameText: "Игровой текст",
+    });
     return;
   }
   // Reflect the server-rendered result in place.
   gameTextOverride.value = data?.resource?.gameText ?? editGameText.value;
   metaTextOverride.value = data?.resource?.metagameText ?? "";
-  editedOverride.value = true;
+  editedAtOverride.value =
+    data?.resource?.edits?.[0]?.modifiedUtc ?? new Date().toISOString();
   isEditingPost.value = false;
   emit("edited", postId.value);
 }
@@ -553,6 +643,56 @@ const attachmentBusy = ref(false);
 const attachmentsFull = computed(
   () => attachments.value.length >= MAX_POST_ATTACHMENTS,
 );
+
+// The files are not drawn in the post. A paper clip in the card's top right
+// corner, the mirror of the number in the bottom right one, opens a strip of
+// them over the text; one file opens the same strip, so the clip always does
+// the same thing. The strip is content like the reviews, so it is a member of
+// the page's "Развернуть все".
+const showAttachments = ref(false);
+// The editor lists the files with their controls itself; the clip would open a
+// second list of the same files beside it.
+const hasAttachmentsClip = computed(
+  () => attachments.value.length > 0 && !isEditingPost.value,
+);
+const attachmentsStripId = computed(() => `post-attachments-${postId.value}`);
+const attachmentsLabel = computed(() =>
+  attachments.value.length > 1
+    ? `Вложения: ${attachments.value.length}`
+    : "Вложение",
+);
+const attachmentsHandleId = Symbol("post-attachments");
+let unregisterAttachmentsHandle: (() => void) | null = null;
+
+watch(
+  () => attachments.value.length > 0,
+  (has) => {
+    if (has && !unregisterAttachmentsHandle) {
+      unregisterAttachmentsHandle = registerExpandable({
+        id: attachmentsHandleId,
+        isExpanded: () => showAttachments.value,
+        expand: () => {
+          showAttachments.value = true;
+        },
+        collapse: () => {
+          showAttachments.value = false;
+        },
+      });
+    } else if (!has && unregisterAttachmentsHandle) {
+      unregisterAttachmentsHandle();
+      unregisterAttachmentsHandle = null;
+      showAttachments.value = false;
+    }
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => unregisterAttachmentsHandle?.());
+
+/** Manual toggle by the clip — notifies the registry so pendingAction resets. */
+function toggleAttachments() {
+  showAttachments.value = !showAttachments.value;
+  notifyExpandableChanged();
+}
 
 /**
  * Absolute address of an attachment.
@@ -604,10 +744,13 @@ async function addAttachments(event: Event) {
 async function removeAttachment(attachment: PostAttachment) {
   if (attachmentBusy.value) return;
   attachmentBusy.value = true;
+  attachmentError.value = null;
   const { error } = await uploadApi.deleteUpload(attachment.id);
   attachmentBusy.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось убрать вложение");
+    // Under the attachments of the edit, where the other refusals about
+    // files already stand.
+    attachmentError.value = refusalHere(error, "Не удалось убрать вложение");
     return;
   }
   attachmentsOverride.value = attachments.value.filter(
@@ -632,24 +775,28 @@ async function refreshAttachments() {
 
 const isDeleted = ref(false);
 const showDeleteConfirm = ref(false);
-const deletingPost = ref(false);
 
 function requestDeletePost() {
   showDeleteConfirm.value = true;
 }
 
-async function confirmDeletePost() {
-  if (!postId.value || deletingPost.value) return;
-  deletingPost.value = true;
-  const { error } = await gameApi.deletePost(postId.value);
-  deletingPost.value = false;
-  showDeleteConfirm.value = false;
-  if (error) {
-    notifyFailure(error, "Не удалось удалить пост");
-    return;
+/**
+ * The confirmation's action: it waits shut for the answer, prints a refusal
+ * in itself and closes on success alone, so the post is taken off only once
+ * the server has taken it down.
+ */
+async function deletePost() {
+  const id = postId.value;
+  if (!id) return;
+  const result = await gameApi.deletePost(id, {
+    ownsRefusal: true,
+    ownsRateLimit: true,
+  });
+  if (!result.error) {
+    isDeleted.value = true;
+    emit("deleted", id);
   }
-  isDeleted.value = true;
-  emit("deleted", postId.value);
+  return result;
 }
 
 // Review functions
@@ -703,6 +850,7 @@ async function submitReview() {
   if (!postId.value || !newReviewText.value.trim() || submittingReview.value)
     return;
   submittingReview.value = true;
+  reviewRefusal.value = null;
   // Newbies may only submit the neutral sign (backend enforces ≥100 posts
   // for ±); clamp defensively even though the ± buttons are hidden for them.
   const sign = canPickSignedReview.value ? newReviewSign.value : 0;
@@ -716,7 +864,9 @@ async function submitReview() {
     // disagreed on the same screen.
     const created = unwrapResource<PostReview>(data);
     if (created) {
-      reviews.value.push(created);
+      // First: the server lists the newest rating first and numbers the list
+      // by that order, so at the end it took a number a reload would change.
+      reviews.value.unshift(created);
       newReviewText.value = "";
       newReviewSign.value = canPickSignedReview.value ? 1 : 0;
       // Keep the visible rating/reviewCount consistent with the new review
@@ -724,17 +874,22 @@ async function submitReview() {
       // itself is read-only data owned by the store/API response).
       reviewCountOverride.value = reviewCount.value + 1;
       ratingOverride.value = (postRating.value ?? 0) + sign;
+      // The rating closes the game to this rater for three days: the other
+      // posts of it on the page stop offering the form.
+      if (props.post?.gameId) gamesRatedHere.add(props.post.gameId);
     } else if (error) {
-      // The draft text is preserved (not cleared) so the user can retry.
-      // 403 (own post / newbie) and 429 (per-game cooldown) are already
-      // surfaced by the global response interceptor — only add a message
-      // for the cases it does not cover.
-      const status = (error as { status?: number }).status;
-      if (status === 409) {
-        notifyFailure(error, "Вы уже оценили этот пост");
-      } else if (status !== 403 && status !== 429) {
-        toast.error("Не удалось отправить оценку");
-      }
+      // The draft text is preserved (not cleared) so the user can retry, and
+      // the refusal stands under it in the server's own words: a 409 says the
+      // post is already rated, a 404 that it is gone. Not a toast - the form
+      // is still on screen, and a toast is one more thing to dismiss beside
+      // it (UI_STANDARDS, "Всплывающие сообщения").
+      //
+      // One carrier per refusal: a 403 (own post, newbie), a 409 (rated
+      // already, or a rating in the same game during the last three days, sent
+      // since the post was read) and a 5xx stand here too, and the plate the
+      // interceptor held for them is taken down. A 401 and a dead connection
+      // stay with the plate.
+      reviewRefusal.value = refusalHere(error, "Не удалось отправить оценку");
     }
   } finally {
     submittingReview.value = false;
@@ -766,11 +921,37 @@ function onReviewUpdated({ id, sign }: { id: string; sign: number }) {
  * again, which is exactly what the server would now allow.
  */
 function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
-  if (!reviews.value.some((r) => r.id === id)) return;
+  const deleted = reviews.value.find((r) => r.id === id);
+  if (!deleted) return;
   reviews.value = reviews.value.filter((r) => r.id !== id);
   reviewCountOverride.value = Math.max(0, reviewCount.value - 1);
   ratingOverride.value = (postRating.value ?? 0) - sign;
+  // The viewer took back a rating of their own. Whether the post is theirs to
+  // rate again is the server's to say (another rating of theirs may still hold
+  // the game's three days), so it is asked; a yes reopens the game here too.
+  const username = currentUser.value?.username;
+  if (username && deleted.author?.username === username) {
+    void askViewerAgain(username).then((reopened) => {
+      if (reopened && props.post?.gameId) {
+        gamesRatedHere.delete(props.post.gameId);
+      }
+    });
+  }
 }
+</script>
+
+<script lang="ts">
+import { reactive } from "vue";
+
+/**
+ * The games the viewer rated a post of on this page since its posts were read.
+ * A rating closes its game to the same rater for three days, and the answers
+ * the other posts came with were given before it: without this, one rating
+ * left the form under every other post of the game, to be refused once the
+ * text was typed. Module state on purpose, so every post on the page sees it.
+ * A change of viewer empties it; a rating taken back is asked about again.
+ */
+const gamesRatedHere = reactive(new Set<string>());
 </script>
 
 <template>
@@ -793,11 +974,31 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
     </div>
 
     <!-- Post card (bordered area) -->
-    <div class="post-card">
+    <div class="post-card" :class="{ 'has-attachments': hasAttachmentsClip }">
       <!-- Soft-deleted placeholder (after an author/moderator delete) -->
       <div v-if="isDeleted" class="post-deleted">Пост удален</div>
 
       <template v-else>
+        <!-- The files of the post: a grey clip in the top right corner, where
+             the number stands in the bottom right one, with their count when
+             there are several. It opens the strip over the text. -->
+        <button
+          v-if="hasAttachmentsClip"
+          type="button"
+          class="attachments-toggle"
+          :class="{ counted: attachments.length > 1 }"
+          :aria-expanded="showAttachments"
+          :aria-controls="attachmentsStripId"
+          :aria-label="attachmentsLabel"
+          @click="toggleAttachments"
+        >
+          <SvgIcon name="attachment" /><span
+            v-if="attachments.length > 1"
+            class="attachments-count"
+            >{{ attachments.length }}</span
+          >
+        </button>
+
         <div class="post-columns">
           <!-- Left column: metadata -->
           <div ref="metaRef" class="post-meta">
@@ -820,27 +1021,31 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
                 >
                 <span v-else class="character-name">{{ characterName }}</span>
                 <UserLink v-if="hasAuthor" :user="author!" hide-badge />
+                <RemovedAccountLink v-else />
               </template>
               <template v-else-if="authorGameRole">
                 <span class="game-role">{{ authorGameRole }}</span>
                 <UserLink v-if="hasAuthor" :user="author!" hide-badge />
+                <RemovedAccountLink v-else />
               </template>
               <template v-else-if="hasAuthor">
                 <UserLink :user="author!" />
               </template>
-              <template v-else>
-                <span class="system-text">Системное</span>
-              </template>
+              <!-- Every post has an author, so a post that arrives without one
+                   was written by an account removed since: the server hides
+                   the account and keeps the post. -->
+              <RemovedAccountLink v-else />
 
               <!-- Avatar: no-default for characters (no avatar = no image).
-                 size=150 — the actual render width (the 160px column minus
-                 margin); CSS stretches it to 100% width. With size=150 the browser
-                 takes medium (400px) at any DPR — a large, sharp portrait. -->
+                 size=128 — the actual render width (the 140px column minus
+                 its margins); CSS stretches it to 100% width. With size=128 the
+                 browser takes medium (400px) at any DPR — a large, sharp
+                 portrait. -->
               <AvatarImg
                 v-if="hasCharacter"
                 :picture="character?.picture"
                 :alt="characterName || ''"
-                :size="150"
+                :size="128"
                 img-class="avatar"
                 no-default
               />
@@ -848,18 +1053,21 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
               <!-- Date -->
               <span class="post-date">{{ formattedDate }}</span>
 
-              <!-- Rating: "Рейтинг: <bold value>" -->
+              <!-- Review sum: "Оценки: <bold value>". It opens the reviews
+                   under the card, and for a reader who may rate the post the
+                   "+0" of a post nobody has rated opens the form of the first
+                   one. -->
               <span class="rating-line"
-                >Рейтинг:
+                >Оценки:
                 <!--
               --><button
-                  v-if="hasReviews"
+                  v-if="canOpenReviews"
                   type="button"
                   class="rating-value"
                   :class="ratingColorClass"
                   :aria-expanded="showReviews"
                   :aria-controls="reviewsCollapseId"
-                  :aria-label="`Рейтинг ${ratingText}, показать оценки`"
+                  :aria-label="`Оценки ${ratingText}, развернуть`"
                   @click="toggleReviews"
                 >
                   <b>{{ ratingText }}</b></button
@@ -883,9 +1091,12 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
                 :is-moderator="isModerator"
               />
               <span class="edit-label">Метаигровой текст</span>
+              <!-- Checked as the comment surface the metagame text is saved
+                   on, as in the room's composer. -->
               <BBCodeEditor
                 v-model="editMetaText"
                 context="post"
+                check-context="common"
                 placeholder="Метаигровой комментарий (необязательно)..."
                 :min-height="60"
                 :max-height="200"
@@ -937,143 +1148,114 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
                   />
                   <span class="attachment-add-label">Прикрепить файл</span>
                 </label>
-                <div v-if="attachmentError" class="attachment-error">
-                  {{ attachmentError }}
-                </div>
+                <ActionResult
+                  :text="attachmentError"
+                  class="attachment-error"
+                />
               </div>
 
               <div class="edit-actions">
-                <button
+                <Button
+                  type="button"
+                  variant="primary"
                   class="edit-btn save"
                   :disabled="savingPost || !editGameText.trim()"
                   @click="saveEditPost"
                 >
                   Сохранить
-                </button>
-                <button class="edit-btn" @click="cancelEditPost">Отмена</button>
+                </Button>
+                <Button type="button" class="edit-btn" @click="cancelEditPost">
+                  Отмена
+                </Button>
               </div>
+              <ActionResult :result="editResult" />
             </div>
 
-            <TruncatedContent
-              v-else
-              :truncatable="shouldTruncate"
-              :max-height="dynamicMaxHeight"
-              :watch-key="postTextHtml"
-            >
-              <div class="game-text">
-                <content-text
-                  :html="postTextHtml"
-                  :search-query="searchQuery"
-                />
-              </div>
-
-              <div v-if="hasDiceRolls" class="dice-rolls">
-                <div
-                  v-for="(roll, rollIndex) in post.diceRolls"
-                  :key="rollIndex"
-                  class="dice-roll"
-                >
-                  <span class="dice-result"
-                    >{{ diceLinePrefix(roll) }}
-                    <span class="dice-total">{{
-                      diceLineTotal(roll)
-                    }}</span></span
-                  >
-                  <span v-if="roll.comment" class="dice-comment">{{
-                    roll.comment
-                  }}</span>
+            <template v-else>
+              <!-- The strip the clip opens: one file per line, the name in the
+                   post's text colour, a link to the file, and its size in the
+                   grey of the edit line. The address is the content endpoint,
+                   which decides who may have the bytes on every request, so a
+                   copied link hands out no access the reader did not have. -->
+              <div
+                v-if="attachments.length"
+                class="expand-fold attachments-fold"
+                :class="{ open: showAttachments }"
+              >
+                <div class="expand-fold-clip" :inert="!showAttachments">
+                  <ul :id="attachmentsStripId" class="attachments-strip">
+                    <PostAttachmentRow
+                      v-for="file in attachments"
+                      :key="file.id"
+                      :file="file"
+                    />
+                  </ul>
                 </div>
               </div>
 
-              <!-- A picture is shown as one, and everything else stays a name
-                   and a size. The address is the content endpoint, which decides
-                   who may have the bytes on every request — so drawing it here
-                   hands out no access the reader did not already have, and a
-                   file in a closed room stays in it. What the file is comes from
-                   the server's own reading of it, not from its name.
-
-                   Name and size stay under the picture: they are what the link
-                   to the file is, and the map an author attaches is rarely named
-                   by what it shows. -->
-              <div v-if="attachments.length" class="attachments">
-                <div
-                  v-for="file in attachments"
-                  :key="file.id"
-                  class="attachment-entry"
-                >
-                  <!-- The declared pair reserves the box before the bytes
-                       arrive, the same pair a picture of this post in the text
-                       gets; an attachment with no measured size simply goes
-                       without, which is the browser's own behaviour. -->
-                  <img
-                    v-if="isImageAttachment(file)"
-                    class="attachment-image"
-                    :src="attachmentHref(file)"
-                    :alt="file.fileName"
-                    :width="attachmentImageBox(file)?.width"
-                    :height="attachmentImageBox(file)?.height"
-                    loading="lazy"
+              <TruncatedContent
+                :truncatable="shouldTruncate"
+                :max-height="dynamicMaxHeight"
+                :watch-key="postTextHtml"
+              >
+                <div class="game-text" :class="typesetting">
+                  <content-text
+                    :html="postTextHtml"
+                    :search-query="searchQuery"
                   />
-                  <a
-                    class="attachment"
-                    :href="attachmentHref(file)"
-                    target="_blank"
-                    rel="noopener"
-                  >
-                    <span class="attachment-name">{{ file.fileName }}</span>
-                    <span class="attachment-size">{{
-                      formatFileSize(file.sizeBytes)
-                    }}</span>
-                  </a>
                 </div>
-              </div>
 
-              <div v-if="hasMetagameText" class="metagame-text">
-                <content-text
-                  :html="postMetagameHtml"
-                  :search-query="searchQuery"
-                />
+                <!-- The rolls, in the old site's words: the heading, then one
+                     numbered line per roll, every one of them. -->
+                <div v-if="diceLines.length" class="dice-rolls">
+                  <div class="dice-heading">{{ DICE_RESULTS_HEADING }}</div>
+                  <div
+                    v-for="(line, lineIndex) in diceLines"
+                    :key="lineIndex"
+                    class="dice-roll"
+                  >
+                    {{ line }}
+                  </div>
+                </div>
+
+                <div
+                  v-if="hasMetagameText"
+                  class="metagame-text"
+                  :class="typesetting"
+                >
+                  <content-text
+                    :html="postMetagameHtml"
+                    :search-query="searchQuery"
+                  />
+                </div>
+              </TruncatedContent>
+
+              <!-- "Отредактировано ... | Редактировать | Удалить", under the
+                   last block of the post at the left edge of its text. It
+                   wraps between parts where the text is narrower, and nothing
+                   of it is put away for want of room (owner, 12 October
+                   2026). -->
+              <div v-if="showEditLine" class="post-edit-line">
+                <CaptionLine>
+                  <span v-if="isEdited && editedAt"
+                    >Отредактировано {{ formattedEditedAt }}</span
+                  >
+                  <span v-else-if="isEdited">Отредактировано</span>
+                  <CaptionAction v-if="canEditPost" @click="startEditPost"
+                    >Редактировать</CaptionAction
+                  >
+                  <CaptionAction v-if="canDeletePost" @click="requestDeletePost"
+                    >Удалить</CaptionAction
+                  >
+                </CaptionLine>
               </div>
-            </TruncatedContent>
+            </template>
           </div>
         </div>
 
-        <!-- Post footer: number or anchor icon (inside card, like DM2 td[colspan=3]) -->
+        <!-- Post footer: the number or the anchor icon alone, in the corner
+             (inside the card, like DM2 td[colspan=3]) -->
         <div class="post-footer">
-          <span
-            v-if="
-              !isEditingPost &&
-              (canQuote || canEditPost || canDeletePost || isEdited)
-            "
-            class="post-controls"
-          >
-            <button
-              v-if="canQuote"
-              type="button"
-              class="post-action-btn"
-              @click="quotePost"
-            >
-              Цитировать
-            </button>
-            <button
-              v-if="canEditPost"
-              type="button"
-              class="post-action-btn"
-              @click="startEditPost"
-            >
-              Редактировать
-            </button>
-            <button
-              v-if="canDeletePost"
-              type="button"
-              class="post-action-btn delete"
-              @click="requestDeletePost"
-            >
-              Удалить
-            </button>
-            <span v-if="isEdited" class="post-edited">(отредактировано)</span>
-          </span>
-
           <Tooltip v-if="hasNavigation" text="Перейти к посту">
             <router-link class="post-link" :to="postRoute!">{{
               symbols.returnArrow
@@ -1093,14 +1275,12 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
 
     <!-- Delete confirmation (soft delete) -->
     <ConfirmDialog
-      :show="showDeleteConfirm"
+      v-model:show="showDeleteConfirm"
       title="Удалить пост?"
-      message="Пост будет удален. Это действие можно отменить только через модерацию."
+      message="Пост будет удален, вернуть его сможет только модерация"
       confirm-label="Удалить"
-      danger
-      :loading="deletingPost"
-      @confirm="confirmDeletePost"
-      @update:show="showDeleteConfirm = $event"
+      failure="Не удалось удалить пост"
+      :action="deletePost"
     />
 
     <!-- Reviews section (below card, grid-based collapse animation) -->
@@ -1117,8 +1297,12 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
         <SecondaryText v-else-if="reviewsError" class="reviews-status">
           {{ reviewsError }}
         </SecondaryText>
+        <!-- The reviews and, under them, the form for whoever may still
+             write one. Who may not gets the list alone: an own post and a
+             post already rated said so in a line where the form would be,
+             and a newbie read under his single "=" what it already showed. -->
         <ul
-          v-if="hasReviews || (showReviews && authStore.isAuthenticated)"
+          v-if="hasReviews || (showReviews && showReviewForm)"
           class="reviews-section"
         >
           <PostReviewItem
@@ -1133,78 +1317,32 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
             @deleted="onReviewDeleted"
           />
           <!-- Review form (eligible logged-in users) -->
+          <!-- A composer of the page: the sign as segments, the text field
+               across the column, "Отправить" under it at the left. -->
           <li v-if="showReviews && showReviewForm" class="review-form">
-            <div class="sign-selector">
-              <button
-                v-if="canPickSignedReview"
-                class="sign-btn"
-                :class="{
-                  active: newReviewSign === 1,
-                  positive: newReviewSign === 1,
-                }"
-                aria-label="Положительная оценка"
-                @click="newReviewSign = 1"
-              >
-                +
-              </button>
-              <button
-                class="sign-btn"
-                :class="{
-                  active: newReviewSign === 0,
-                  neutral: newReviewSign === 0,
-                }"
-                aria-label="Нейтральная оценка"
-                @click="newReviewSign = 0"
-              >
-                =
-              </button>
-              <button
-                v-if="canPickSignedReview"
-                class="sign-btn"
-                :class="{
-                  active: newReviewSign === -1,
-                  negative: newReviewSign === -1,
-                }"
-                aria-label="Отрицательная оценка"
-                @click="newReviewSign = -1"
-              >
-                −
-              </button>
-            </div>
-            <div class="review-input-col">
-              <textarea
-                v-model="newReviewText"
-                class="review-input"
-                placeholder="Текст оценки..."
-                aria-label="Текст оценки"
-                rows="2"
-              ></textarea>
-              <SecondaryText v-if="!canPickSignedReview" class="review-hint">
-                Новичкам доступна только нейтральная оценка (нужно 100 постов
-                для "+" и "−")
-              </SecondaryText>
-            </div>
-            <button
+            <SegmentedControl
+              :model-value="String(newReviewSign)"
+              :options="reviewSigns"
+              ariaLabel="Знак оценки"
+              @update:model-value="newReviewSign = reviewSignToNumber($event)"
+            />
+            <textarea
+              v-model="newReviewText"
+              class="review-input"
+              placeholder="Текст оценки..."
+              aria-label="Текст оценки"
+              rows="2"
+            ></textarea>
+            <Button
+              type="button"
+              variant="primary"
               class="submit-btn"
               :disabled="!newReviewText.trim() || submittingReview"
               @click="submitReview"
             >
               Отправить
-            </button>
-          </li>
-
-          <!-- Ineligible notice: own post or already voted -->
-          <li
-            v-else-if="showReviews && authStore.isAuthenticated"
-            class="review-notice"
-          >
-            <SecondaryText>
-              {{
-                isPostAuthor
-                  ? "Нельзя оценивать собственный пост"
-                  : "Вы уже оценили этот пост"
-              }}
-            </SecondaryText>
+            </Button>
+            <ActionResult :text="reviewRefusal" class="form-error" />
           </li>
         </ul>
       </div>
@@ -1215,6 +1353,7 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
 @use "@/assets/styles/Animations" as *
+@use "@/assets/styles/BbcodeContent" as *
 
 // ============================================================================
 // Game Post — layout dimensions matching DM2
@@ -1234,30 +1373,37 @@ function onReviewDeleted({ id, sign }: { id: string; sign: number }) {
   color: $text-muted
 
 // Card: DM2 .commentItem { padding: 5px; border: 1px dashed; background }
+// Positioned for the attachment clip in its top right corner.
 .post-card
+  position: relative
   padding: 5px
   background-color: $bg-element
   border: 1px dashed $border
 
-// Two-column layout: DM2 table (firstrow 180px + 10px spacer + thirdrow auto)
+// Two-column layout: DM2 table (td.firstrow 140px + td.secondrow 10px spacer +
+// td.thirdrow the rest), at every width: a phone shows the post of 1366.
 .post-columns
   display: flex
   gap: 10px
   align-items: flex-start
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Left column — DM2: td.firstrow { width: 140px }
-// Widened to 160px so LongestLoginPossible fits on one line
+// Left column — DM2: td.firstrow { width: 140px }, its lines on DM2's step of
+// 20 ("line-height: normal" of PT Sans). A name or a login wider than the
+// column wraps inside it, as there.
 // ──────────────────────────────────────────────────────────────────────────────
 .post-meta
   flex-shrink: 0
-  width: 160px
+  width: 140px
   text-align: left
   font-size: $font-size
+  line-height: 1.25
 
-// DM2: div.p { margin: 11px 5px } inside td.firstrow
+// DM2: div.p { margin: 11px 5px; padding-right: 2px } inside td.firstrow, which
+// leaves 128 for the name, the login, the portrait and the date.
 .meta-inner
   margin: 11px 5px
+  padding-right: 2px
 
   // DM2: gray6 is block, br tags separate elements — block children replicate this
   > *
@@ -1290,18 +1436,18 @@ a.character-name
   margin: 2px 0
   border: 1px solid $border
 
-// Date: normal text color (not muted)
+// Date: normal text color (not muted), on one line as on DM2. The site's
+// format, "25.07.2026 в 18:29", is a few pixels wider than the 128 of the
+// column's content and of a fixed width: it runs into the 7px the column keeps
+// at its right and ends inside the column, short of the spacer.
 .post-date
   color: $text
-
-.system-text
-  font-style: italic
-  color: $text-muted
+  white-space: nowrap
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Rating: "Рейтинг: <bold +N>"
+// Review sum: "Оценки: <bold +N>"
 // ──────────────────────────────────────────────────────────────────────────────
-// "Рейтинг:" label in normal text color, value is colored
+// "Оценки:" label in normal text color, value is colored
 .rating-line
   color: $text
   font-size: $font-size
@@ -1317,7 +1463,9 @@ a.character-name
     color: $text-muted
 
 // Reviews toggle — real <button> for keyboard access, reset to look
-// exactly like the inline link it replaced
+// exactly like the inline link it replaced. The pointer gets an underline
+// and nothing else, the way a caption action answers it: the sum keeps the
+// colour of its sign, and a grey "+0" never turns into a blue link.
 button.rating-value
   display: inline
   margin: 0
@@ -1328,76 +1476,91 @@ button.rating-value
   font-size: $font-size
   cursor: pointer
   text-decoration: none
-  &.positive:hover
-    color: $accent-green-hover
-  &.negative:hover
-    color: $accent-red-hover
-  &.neutral:hover
-    color: $link-hover
+  &:hover
+    text-decoration: underline
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Right column — DM2: td.thirdrow { valign: top; width: 100% }
-// No min-height, no explicit line-height (browser default ~1.2)
+// No min-height. The line of the text is the text's own (below), not the
+// column's: the edit view and the strips keep the line of the page.
+// The column's 11px above and below is the margin of DM2's div.dmtxt, the 11px
+// of each block inside it the margin of its div.p: the text starts 22px under
+// the top of the column, 11px under the name beside it, and ends 22px over the
+// row of the number.
 // ──────────────────────────────────────────────────────────────────────────────
 .post-body
   flex: 1
   min-width: 0
-  padding-top: $small
+  padding: 11px 0
   word-wrap: break-word
   word-break: break-word
   overflow-wrap: break-word
   color: $text
 
-// Game text: DM2 div.dmtxt { margin: 11px 5px } + #main .content { padding-right: 20px }
+// Game text: DM2 div.dmtxt { margin: 11px 5px } > div.p { margin: 11px 5px },
+// 10px in from either edge of the column.
 .game-text
   color: $text
-  margin: 11px 15px 11px 5px
-  text-align: justify
-  hyphens: auto
-  -webkit-hyphens: auto
+  margin: 11px 10px
 
-// Metagame text: DM2 div.p.postcomment { color: #7B532B }
+// "... показать полностью" of a long post at the left edge of its text, as it
+// stands under the text of a comment.
+.post-body :deep(.truncated-expand-button)
+  margin-left: 10px
+
+// Metagame text: DM2 div.p.postcomment { color: #7B532B }, set as the game
+// text is and with no caption of its own.
 .metagame-text
   color: $text-meta
-  margin: 11px 15px 11px 5px
-  text-align: justify
-  hyphens: auto
-  -webkit-hyphens: auto
+  margin: 11px 10px
 
   b, strong, i, em, u, s, strike, del, pre, code, li, span, div
     color: inherit
 
-// Dice rolls: DM2 .diceRollsbg { padding: 0 2px } + .diceLine { margin-top: 4px }
+// Right under the game text the brown text stands 33px off, as on DM2, where
+// the two stood each in a div.dmtxt of its own with a div.p inside, 11px of
+// margin apiece. That is farther than a blank line of the text (20px), so it
+// reads as a word apart. Under the rolls it keeps their 22px, as there.
+.game-text + .metagame-text
+  margin-top: 33px
+
+// DM2 set this text in 16px on a step of 20, the post and every comment alike,
+// flush on both sides, its words broken while the reader's switch on the
+// settings panel is on.
+.game-text,
+.metagame-text
+  +body-text
+
+// Dice rolls, DM2 div.diceRollsbg: a flat strip with no frame and no rounding,
+// from the text's left edge to the column's right edge, 10px past the text;
+// its text stands 7px in and 2px from the top and bottom, one roll per line,
+// and 22px of air separate it from the blocks on either side. Flush on both
+// sides like every text block of DM2, the words of a roll never broken. Its
+// ground is the grey of the theme nearest DM2's rgb(230, 230, 229) among the
+// grey grounds of the site's blocks: $bg-element-accent, #eaeaea, the ground
+// of a table's head, against the #ededed of $overlay-subtle on the card.
 .dice-rolls
-  padding: 0 2px
-
-.dice-roll
-  padding: 2px 0
-  margin-top: 4px
-
-// DM2: .diceLine SPAN { border: 1px solid; padding: 2px; font-size: 16px; bold }
-.dice-result
+  margin: 22px 0 22px 10px
+  padding: 2px 7px
+  background-color: $bg-element-accent
+  color: $text
   font-size: $font-size
-  font-weight: bold
-  color: $heading
-  padding: 2px
-  border: 1px solid $border
+  line-height: 1.25
+  text-align: justify
+  hyphens: manual
 
-.dice-total
-  font-weight: bold
-  color: $accent-green
-
-.dice-comment
-  color: $text-muted
-  font-style: italic
+  // The last block of the post: the column adds its own 11px under it.
+  &:last-child
+    margin-bottom: 11px
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Post footer — DM2: td[colspan=3] height=0, span.comment float:right
+// Post footer — DM2: td[colspan=3] height=0, span.comment float:right: the
+// number in the very corner of the card's padding.
 // ──────────────────────────────────────────────────────────────────────────────
 .post-footer
   display: flex
   justify-content: flex-end
-  padding-right: 7px
+  line-height: 15px
 
 // A flex child blockifies and takes a line box of whatever font-size it
 // inherits — 16px from the card, while the number inside is 12. Sizing this
@@ -1410,18 +1573,12 @@ button.rating-value
 // (UI_STANDARDS, owner decision 2026-08-25) - the same element renders on pages
 // where it is pure navigation, and one glyph must not wear two coats.
 .post-number
-  color: $link
   font-size: $tertiary-font-size
-  text-decoration: none
-  &:hover
-    color: $link-hover
+  +link-tone($link)
 
 .post-link
-  color: $link
   font-size: $secondary-font-size
-  text-decoration: none
-  &:hover
-    color: $link-hover
+  +link-tone($link)
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Reviews section — grid-based collapse for smooth animation
@@ -1458,70 +1615,27 @@ button.rating-value
 // ──────────────────────────────────────────────────────────────────────────────
 // Review creation form (at bottom of reviews list)
 // ──────────────────────────────────────────────────────────────────────────────
+// A column: the sign, the text, the button at its own width at the left, as
+// every composer of the site stands (the comment, the chat, the post).
 .review-form
   list-style: none
   margin-top: $small
   display: flex
-  gap: $small
+  flex-direction: column
   align-items: flex-start
+  gap: $small
 
-.sign-selector
-  display: flex
-  flex-direction: column
-  gap: 2px
-
-.sign-btn
-  width: 28px
-  height: 24px
-  border: 1px solid $border
-  background: $bg-element
-  color: $text-muted
-  cursor: pointer
-  font-size: $font-size
-  font-weight: bold
-  padding: 0
-  &:hover
-    border-color: $link
-  &.active.positive
-    color: $accent-green
-    border-color: $accent-green
-  &.active.neutral
-    color: $text-muted
-    border-color: $text-muted
-  &.active.negative
-    color: $accent-red
-    border-color: $accent-red
-
+// A text area of the site (+input): its frame, ground, padding and type,
+// across the column, growing downwards only.
 .review-input
-  flex: 1
-  min-height: 40px
-  padding: $minor
-  border: 1px solid $border
-  font-size: $font-size
-  font-family: inherit
+  box-sizing: border-box
+  width: 100%
   resize: vertical
-  color: $text
-  background: $bg-page
 
-.submit-btn
-  margin-top: $small
-  +button
-
-.review-input-col
-  flex: 1
-  display: flex
-  flex-direction: column
-  gap: $tiny
-
-.review-input-col .review-input
-  flex: none
-
-.review-hint
-  font-size: $tertiary-font-size
-
-.review-notice
-  list-style: none
-  margin-top: $small
+// The refusal of a send, under the button it refused. No margin of its own:
+// the gap of the column spaces it.
+.form-error
+  --action-result-margin: 0
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Author / moderator controls: edit, delete, edited indicator
@@ -1535,91 +1649,90 @@ button.rating-value
   display: flex
   flex-direction: column
   gap: $tiny
-  margin: 11px 15px 11px 5px
+  margin: 11px 10px
 
+// A caption of a field of the page: +field-caption, as FormField draws it.
 .edit-label
-  color: $text-muted
-  font-size: $secondary-font-size
+  +field-caption
 
 .edit-actions
   display: flex
   gap: $small
   margin-top: $small
 
-.edit-btn
-  +button
-  &.save
-    font-weight: bold
 
-// Controls sit at the left of the footer; the number/link stays pinned right.
-.post-controls
-  display: inline-flex
-  align-items: center
-  gap: $small
-  margin-right: auto
-
-.post-action-btn
-  padding: 0 $tiny
-  font-size: $secondary-font-size
-  border: none
-  background: transparent
-  cursor: pointer
-  color: $text-muted
-  &:hover
-    color: $link
-  &.delete:hover
-    color: $accent-red
-
-.post-edited
-  color: $text-muted
-  font-size: $tertiary-font-size
-  font-style: italic
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Attachments — read view under the game text, edit view inside the editor
-// ──────────────────────────────────────────────────────────────────────────────
-.attachments
-  display: flex
-  flex-wrap: wrap
-  gap: $small
-  padding: 0 2px
-  margin-top: $small
-
-// One attachment: its picture, when it is one, over the link that names it.
-// max-width and min-width are what keep a wide file inside the column instead
-// of stretching the row it wraps in.
-.attachment-entry
-  display: flex
-  flex-direction: column
-  align-items: flex-start
-  gap: $tiny
-  max-width: 100%
-  min-width: 0
-
-// Drawn to the same contract as a picture in the post's text, declared once in
-// _BbcodeContent.sass: the width/height pair the template puts on reserves the
-// box, max-width shrinks the whole box with the column, and the height follows
-// the ratio rather than being clamped on its own — with both sides declared the
-// two caps would cut each side separately and squash the picture. The cap reads
-// the same custom property the text images do, so the collapsed state of
-// TruncatedContent shrinks this picture along with them.
-.attachment-image
+// The edit line, DM2 geometry (div.p.comment { margin: 11px 5px 11px 10px }):
+// 12px grey at the left edge of the text, 22px under the last block of the
+// post (that block's 11px and this line's own), and 11px above the number in
+// the corner (the column's). The caption's size on the block as well, so the
+// line it stands on is the caption's 15px and not the text's.
+.post-edit-line
   display: block
-  max-width: 100%
-  max-height: var(--bb-image-max-height, 500px)
-  height: auto
+  margin: 11px 5px 0 10px
+  font-size: $tertiary-font-size
+  line-height: 15px
+  text-align: left
 
-.attachment
-  display: inline-flex
+// ──────────────────────────────────────────────────────────────────────────────
+// Attachments — the clip in the corner and the strip it opens, and the edit
+// view inside the editor
+// ──────────────────────────────────────────────────────────────────────────────
+// The clip mirrors the number: its ink stands as far from the top border as
+// the number's ink from the bottom one, and as far from the right border. The
+// svg box is the ink of the clip; a count is text, whose ink starts a hair
+// inside its box, so a clip with a count keeps the box where the number's box
+// is. The count is 12px and sits on the line of the clip's lowest point.
+.attachments-toggle
+  position: absolute
+  top: 8.6px
+  right: 5.55px
+  display: flex
   align-items: baseline
-  gap: $tiny
-  padding: 2px $tiny
-  border: 1px solid $border
-  border-radius: $border-radius
-  text-decoration: none
+  gap: 3px
+  margin: 0
+  padding: 0
+  border: none
+  background: none
+  font-family: inherit
+  font-size: $tertiary-font-size
+  line-height: 15px
+  color: $text-muted
+  cursor: pointer
 
-  &:hover .attachment-name
+  &.counted
+    right: 5px
+
+  // The glyph stays 14px; the pointer target grows around it to the floor.
+  &::after
+    content: ""
+    position: absolute
+    top: 50%
+    left: 50%
+    width: max(100%, #{$tap-target-min})
+    height: max(100%, #{$tap-target-min})
+    transform: translate(-50%, -50%)
+
+  :deep(.svg-icon)
+    display: block
+    width: 14px
+    height: auto
+
+  &:hover .attachments-count
     text-decoration: underline
+
+// The strip of the rolls, over the text: its left edge on the text's, its
+// right edge on the rolls' strip, 22px of air under it (its 11px and the
+// text's). It starts where the capitals of the text started, which leaves the
+// clip equal air above and below.
+.attachments-strip
+  list-style: none
+  margin: 16px 0 11px 10px
+  padding: 2px 7px
+  background-color: $bg-element-accent
+  color: $text
+  font-size: $font-size
+  text-align: left
+  hyphens: manual
 
 .attachment-name
   color: $link
@@ -1686,7 +1799,7 @@ button.rating-value
 .attachment-add-label
   +button
 
+// Under the control that adds files, spaced by the block of attachments.
 .attachment-error
-  color: $accent-red
-  font-size: $secondary-font-size
+  --action-result-margin: 0
 </style>

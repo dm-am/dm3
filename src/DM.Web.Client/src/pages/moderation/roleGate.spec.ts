@@ -10,10 +10,9 @@
  * is simply not allowed.
  *
  * ModerationPage is out of the checks: it is the shell around the pages, and
- * its tab strip filters itself from the same table the pages gate themselves
- * with (lib/sections.ts). ModerationOverview is in: it renders no data, but an
- * authenticated non-moderator opening /moderation directly must still read a
- * refusal rather than an invitation to pick a section.
+ * it answers a viewer below a section's role with the 403 page before the
+ * section mounts, by the same table the pages gate themselves with
+ * (shared/config/moderationSections.ts).
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "fs";

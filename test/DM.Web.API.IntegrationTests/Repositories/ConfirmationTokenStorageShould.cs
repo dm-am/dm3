@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Account.Features.EmailChange;
 using DM.Domain.Account.Features.PasswordChange;
 using DM.Domain.Account.Features.Tokens;
 using DM.Domain.Account.Features.Recovery;
@@ -123,6 +124,90 @@ public class ConfirmationTokenStorageShould : IntegrationTestBase
         // Still findable without a window: that is how the form tells "expired"
         // apart from "no such link".
         (await change.FindUser(secret, DateTimeOffset.MinValue)).Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// A confirmed change of address spends the link it came in through.
+    /// </summary>
+    /// <remarks>
+    /// The spending was written as a search by row identifier while the value in
+    /// hand is the secret, so it matched no row whatever it was handed: nothing
+    /// was written, nothing failed, and the link stayed live. A substitute cannot
+    /// show that - it answers the call it was told to expect - so the second
+    /// lookup here is made against the row the first one left behind.
+    /// </remarks>
+    [Fact]
+    public async Task SpendTheLinkTheSecretCameFrom()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var confirmation = scope.ServiceProvider
+            .GetRequiredService<IEmailChangeConfirmationRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var userId = await AddUserAsync(dbContext);
+        var secret = Guid.NewGuid();
+        dbContext.Tokens.Add(new DbToken
+        {
+            TokenId = Guid.NewGuid(),
+            SecretHash = ConfirmationSecret.Hash(secret),
+            UserId = userId,
+            Type = TokenType.EmailChange,
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+        await dbContext.SaveChangesAsync();
+        dbContext.ChangeTracker.Clear();
+
+        var since = DateTimeOffset.UtcNow.AddHours(-1);
+        (await confirmation.FindEmailChangeTokenOwner(secret, since)).Should().Be(userId);
+
+        await confirmation.MarkTokenUsed(secret);
+
+        (await confirmation.FindEmailChangeTokenOwner(secret, since)).Should().BeNull(
+            "the same link followed a second time has nothing left to redeem");
+
+        await using var db = DatabaseFixture.CreateDbContext();
+        (await db.Tokens.IgnoreQueryFilters().SingleAsync(t => t.UserId == userId))
+            .IsRemoved.Should().BeTrue("and the row says so, whoever reads it next");
+    }
+
+    /// <summary>
+    /// A change of address is confirmed from the new mailbox by whoever asked
+    /// for it. The owner's answer to a request that is not theirs is a new
+    /// password, and that answer has to reach the request too: otherwise the
+    /// address moves to the intruder after the owner has already locked them
+    /// out, from a mailbox no password change can touch.
+    /// </summary>
+    [Fact]
+    public async Task DropThePendingAddressAndItsLinkWithThePassword()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var passwords = scope.ServiceProvider.GetRequiredService<IPasswordChangeRepository>();
+        var confirmation = scope.ServiceProvider
+            .GetRequiredService<IEmailChangeConfirmationRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var userId = await AddUserAsync(dbContext);
+        var user = await dbContext.Users.SingleAsync(u => u.UserId == userId);
+        user.PendingEmail = $"moved-{userId:N}@example.com";
+        var secret = Guid.NewGuid();
+        dbContext.Tokens.Add(new DbToken
+        {
+            TokenId = Guid.NewGuid(),
+            SecretHash = ConfirmationSecret.Hash(secret),
+            UserId = userId,
+            Type = TokenType.EmailChange,
+            CreatedUtc = DateTimeOffset.UtcNow,
+        });
+        await dbContext.SaveChangesAsync();
+        dbContext.ChangeTracker.Clear();
+
+        await passwords.UpdatePassword(userId, "hash2", "salt2", secretToInvalidate: null);
+
+        await using var db = DatabaseFixture.CreateDbContext();
+        (await db.Users.SingleAsync(u => u.UserId == userId)).PendingEmail
+            .Should().BeNull("the request the owner did not make goes with the old password");
+        (await confirmation.FindEmailChangeTokenOwner(secret, DateTimeOffset.UtcNow.AddHours(-1)))
+            .Should().BeNull("and the link in the other mailbox has nothing left to confirm");
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import type { Locator, Page } from "@playwright/test";
+import type { BrowserContext, Locator, Page } from "@playwright/test";
 import { API_BASE_URL, primaryUser } from "../../fixtures/auth";
+import { readTables } from "../../fixtures/tables";
 
 /**
  * /games — table, filter control, sorting, paging.
@@ -16,9 +17,10 @@ import { API_BASE_URL, primaryUser } from "../../fixtures/auth";
  *   assertions inside `if (await x.isVisible())`, so they reported green on a
  *   page that rendered nothing at all.
  *
- * Written against a desktop viewport. Two columns ("Теги", "Рецензии") are hidden
- * below 768px by design (Column.hideOnMobile), which the column test reads
- * from the same media query the CSS uses.
+ * Written against the viewport of each project. At every width, a phone
+ * included, the table is the full table: no column is left out, and its frame
+ * scrolls sideways only where even the least width of the table, every word
+ * whole, is wider than the column (fixtures/tables.ts).
  */
 
 /** The filter control: search field, "Фильтры" dropdown, sort, bubbles. */
@@ -157,8 +159,8 @@ function isGamesListRequest(url: URL): boolean {
  * The tier-wide fix is not in this file: the API already takes
  * RateLimiting:Enabled=false, and an e2e stack should be started with it.
  */
-test.beforeEach(async ({ page }) => {
-  await page.route(
+async function keepToTheList(target: Page | BrowserContext) {
+  await target.route(
     (url) => url.origin === API_BASE_URL,
     async (route) => {
       if (isGamesListRequest(new URL(route.request().url()))) {
@@ -168,12 +170,17 @@ test.beforeEach(async ({ page }) => {
       await route.abort();
     },
   );
+}
+
+test.beforeEach(async ({ page }) => {
+  await keepToTheList(page);
 });
 
 test.describe("Games List Page", () => {
   test.describe("Page Structure", () => {
     test("should display games table with required columns", async ({
       page,
+      browser,
     }) => {
       await page.goto("/games");
 
@@ -182,22 +189,49 @@ test.describe("Games List Page", () => {
       // The exact set, in order. There is no "Участники" column: the columns
       // are an owner decision and this spec predates it, so it demanded one.
       // An exact list states the decision instead of merely omitting it.
-      const compact = await page.evaluate(
-        () => window.matchMedia("(max-width: 768px)").matches,
-      );
-      await expect(table(page).getByRole("columnheader")).toHaveText(
-        compact
-          ? ["#", "Название", "Ведущие", "Статус игры", "Читатели"]
-          : [
-              "#",
-              "Название",
-              "Ведущие",
-              "Теги",
-              "Статус игры",
-              "Рецензии",
-              "Читатели",
-            ],
-      );
+      const all = [
+        "#",
+        "Название",
+        "Ведущие",
+        "Теги",
+        "Статус игры",
+        "Рецензии",
+        "Читатели",
+      ];
+      await rowsRendered(page);
+      const shown = async () =>
+        (await table(page).getByRole("columnheader").allTextContents()).map(
+          (one) => one.trim(),
+        );
+      // No column is left out, on a phone either, and the frame scrolls only
+      // a table wider than the column at its least (fixtures/tables.ts).
+      const tableProblems = async (on: Page) =>
+        (
+          await on.evaluate(readTables, {
+            within: ".games-data-table",
+            words: true,
+          })
+        ).problems;
+      expect(await shown()).toEqual(all);
+      expect(await tableProblems(page)).toEqual([]);
+
+      // A window of 1920 has the room for the whole table, so there the
+      // frame does not scroll at all. A window of its own: a phone of this
+      // project lays the page out at its own width whatever its viewport.
+      const wide = await browser.newContext({
+        viewport: { width: 1920, height: 900 },
+      });
+      await keepToTheList(wide);
+      const desktop = await wide.newPage();
+      await desktop.goto("/games");
+      await rowsRendered(desktop);
+      expect(await tableProblems(desktop)).toEqual([]);
+      expect(
+        await desktop
+          .locator(".games-data-table .data-table-scroll")
+          .evaluate((frame) => frame.scrollWidth - frame.clientWidth),
+      ).toBeLessThanOrEqual(1);
+      await wide.close();
     });
 
     test("should display filter bar", async ({ page }) => {
@@ -532,6 +566,8 @@ test.describe("Games List Page", () => {
     });
 
     test("should click tag in game row to filter by it", async ({ page }) => {
+      // "Теги" stands at every width; where the table is wider than the
+      // column, the click scrolls its frame to the tag first.
       await page.goto("/games");
 
       await rowsRendered(page);

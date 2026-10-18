@@ -1,6 +1,7 @@
 import { ref, type Ref } from "vue";
 import type { ApiResult, GeneralError } from "@/shared/api/models/common";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
+import { refusalOfTheReader, takeOverRefusal } from "@/shared/lib/errors";
 
 /**
  * The three refs a screen needs to run one request of its own, in one place.
@@ -80,6 +81,32 @@ export interface UseGuardedRequestReturn {
   clearError: () => void;
 }
 
+/**
+ * Takes down the plate the interceptor holds for a failed load whose screen
+ * says the failure itself, in the error box beside its content, and hands the
+ * answer on unchanged.
+ *
+ * The owner's rule of 26 September 2026: a plate only where the page has
+ * nowhere to say it. Every screen that runs its load here shows `error` in an
+ * ErrorState or a line of its own, so the plate in the corner was the same
+ * refusal said a second time - "Не удалось загрузить топики [Повторить]" on the
+ * page and "Запрос не выполнен: ошибка сервера" beside it. An expired session
+ * and a request that never arrived keep their plate: they are about the reader
+ * and the network, not about the list (refusalOfTheReader).
+ *
+ * `run` does this for the failure it is handed. A fetcher that waits on two
+ * requests passes each answer through here as it arrives: the plate is held
+ * only until the end of the task its answer came in, and the first answer
+ * would be up in the corner before the second one lands.
+ */
+export function shownOnPage<R extends { error?: GeneralError | null }>(
+  result: R,
+): R {
+  const failure = result.error;
+  if (failure && !refusalOfTheReader(failure.status)) takeOverRefusal(failure);
+  return result;
+}
+
 export function useGuardedRequest(
   options: UseGuardedRequestOptions,
 ): UseGuardedRequestReturn {
@@ -107,7 +134,10 @@ export function useGuardedRequest(
     if (clearErrorOnStart) error.value = null;
 
     try {
-      const { data, error: failure } = await fetcher();
+      const { data, error: failure } = shownOnPage(await fetcher());
+      // A superseded failure is taken down too: the newer request speaks for
+      // the screen now, and a plate about the list the reader has left would
+      // stand over the one that loaded.
       if (!guard.isCurrent(requestId)) return;
 
       // Lowered before `apply`, not after: applying the payload can move state

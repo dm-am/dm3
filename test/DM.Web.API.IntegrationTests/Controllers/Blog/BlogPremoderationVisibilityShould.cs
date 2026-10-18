@@ -292,7 +292,9 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
 
         var owner = AddUser(dbContext, "bph");
-        AddBlog(dbContext, owner.UserId, ModuleStatus.Active, premoderationStatus, draftVisibility);
+        // The draft visibility hides a blog only while it is a draft.
+        var status = draftVisibility == DraftVisibility.Private ? ModuleStatus.Draft : ModuleStatus.Active;
+        AddBlog(dbContext, owner.UserId, status, premoderationStatus, draftVisibility);
         await dbContext.SaveChangesAsync();
 
         return new GeneralUser
@@ -382,7 +384,6 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
             Status = status,
             PremoderationStatus = premoderationStatus,
             DraftVisibility = draftVisibility,
-            CommentsEnabled = true,
             CreatedUtc = DateTimeOffset.UtcNow
         };
         dbContext.Blogs.Add(blog);

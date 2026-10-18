@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
+using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using FluentValidation;
 
@@ -47,6 +49,55 @@ internal static class AttributeSpecificationRules
         foreach (var error in Collect(specifications))
         {
             context.AddFailure(error);
+        }
+    }
+
+    /// <summary>
+    /// Report every repeated identifier of <see cref="CollectRepeatedIdentifiers" />
+    /// to the validation context of whichever DTO is being checked.
+    /// </summary>
+    public static void AddRepeatedIdentifierFailures<TSchema>(
+        IEnumerable<Guid?>? identifiers,
+        ValidationContext<TSchema> context)
+    {
+        foreach (var error in CollectRepeatedIdentifiers(identifiers))
+        {
+            context.AddFailure(error);
+        }
+    }
+
+    /// <summary>
+    /// Identifiers submitted twice in one set.
+    /// </summary>
+    /// <remarks>
+    /// Identifiers inside a schema are unique, and a replacement keeps the ones
+    /// the stored set already holds, so a set naming the same one twice asks
+    /// for two specifications that are the same specification, and the values of
+    /// the characters written against it would answer to both. Refused here,
+    /// before anything is written, rather than settled by whichever of the two
+    /// the document happens to keep.
+    ///
+    /// An absent or empty identifier is not a repeat: those are the spelling of
+    /// "new specification", and the server hands each of them one of its own.
+    /// </remarks>
+    public static IEnumerable<string> CollectRepeatedIdentifiers(IEnumerable<Guid?>? identifiers)
+    {
+        if (identifiers == null)
+        {
+            yield break;
+        }
+
+        var repeated = identifiers
+            .Where(id => id.HasValue && id.Value != Guid.Empty)
+            .Select(id => id!.Value)
+            .GroupBy(id => id)
+            .Where(group => group.Skip(1).Any())
+            .Select(group => group.Key)
+            .ToArray();
+
+        if (repeated.Length > 0)
+        {
+            yield return AttributeValidationError.ManyDuplicated(repeated);
         }
     }
 

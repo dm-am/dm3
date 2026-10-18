@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Game.Features.Posts;
 using DM.Web.API.Shared.Authentication;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -36,14 +35,40 @@ public class PostController : ControllerBase
     /// <summary>
     /// Get list of posts in room
     /// </summary>
+    /// <remarks>
+    /// Without parameters: the room in the order it is written, oldest first.
+    ///
+    /// Sort options (sortBy), ties settled by the writing order in the same direction:
+    /// - created: The order the room is written in (default)
+    /// - rating: Sum of reviews
+    /// - reviewcount: Number of reviews
+    /// - lastreview: Most recent review; posts without reviews go last either way
+    ///
+    /// sortOrder: asc (default) or desc.
+    ///
+    /// Filters:
+    /// - search: Post text as the reader sees it (case-insensitive contains)
+    /// - authorUsernames: Post author usernames, the parameter repeated once each
+    /// - characterIds: Characters the posts are written by, the parameter repeated once each
+    /// - withoutCharacter: true adds the posts written without a character; alone, only those
+    /// - minRating / maxRating: Rating range (can be negative)
+    /// - hasReviews: true only posts with reviews, false only posts without
+    /// - createdFromUtc / createdToUtc: Post creation date range (ISO 8601)
+    ///
+    /// Every post carries its number in the room whatever the filters and the
+    /// order, so a filtered page still says where each post stands. Reading the
+    /// list marks nothing as read.
+    /// </remarks>
     /// <param name="id">Room identifier</param>
-    /// <param name="q">Paging parameters</param>
+    /// <param name="q">Filters, sort and paging</param>
     /// <response code="200">Returns the list of posts in the room</response>
+    /// <response code="400">Unknown sort field or direction, or paging out of range</response>
     /// <response code="404">Room not found</response>
     [HttpGet("~/v1/rooms/{id}/posts", Name = nameof(GetPosts))]
     [ProducesResponseType(typeof(ListEnvelope<Post>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetPosts(Guid id, [FromQuery] PagingQuery q) =>
+    public async Task<IActionResult> GetPosts(Guid id, [FromQuery] RoomPostsQuery q) =>
         Ok(await _postApiService.Get(id, q));
 
     /// <summary>
@@ -80,25 +105,6 @@ public class PostController : ControllerBase
     [ProducesResponseType(typeof(Envelope<Post>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetPost(Guid id) => Ok(await _postApiService.Get(id));
-
-    /// <summary>
-    /// Get quotation source of a post
-    /// </summary>
-    /// <remarks>
-    /// Returns the BBCode a reader's composer is filled with when they quote the
-    /// post: the post's own game text, wrapped in a quotation attributed to its
-    /// author. Whoever cannot read the post cannot read its quotation - the same
-    /// refusal, from the same read.
-    /// </remarks>
-    /// <param name="id">Post identifier</param>
-    /// <response code="200">Returns the quotation source</response>
-    /// <response code="400">Post text could not be parsed</response>
-    /// <response code="404">Post not found</response>
-    [HttpGet("{id}/quote", Name = nameof(GetPostQuote))]
-    [ProducesResponseType(typeof(Envelope<QuoteSource>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetPostQuote(Guid id) => Ok(await _postApiService.GetQuote(id));
 
     /// <summary>
     /// Update post
@@ -153,7 +159,7 @@ public class PostController : ControllerBase
     /// - created: Sort by post creation date
     ///
     /// Filters:
-    /// - hasReviews: Only posts with at least one review
+    /// - hasReviews: true only posts with at least one review, false only posts without
     /// - lastReviewedFromUtc: Posts with last review at or after this date (ISO 8601)
     /// - gameId: Filter by specific game
     /// - minRating / maxRating: Rating range (can be negative)

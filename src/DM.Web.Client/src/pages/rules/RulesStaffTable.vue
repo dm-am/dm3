@@ -2,12 +2,17 @@
 /**
  * RulesStaffTable - Staff/administration table
  *
- * Displays site administration with their roles and responsibilities.
- * Uses unified table styling from _Tables.sass.
+ * Displays site administration with their roles and responsibilities, on the
+ * list the rules page draws its other tables with (ExpandableList): a plain
+ * table of three columns at every width, its rows plain rows that hold links.
  */
 
-import { ref, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
+import {
+  ExpandableList,
+  type ExpandableListColumn,
+} from "@/shared/ui/ExpandableList";
 import { UserLink } from "@/entities/user";
 import { UserRole, type User } from "@/shared/api/models/community";
 import { userApi } from "@/entities/user";
@@ -19,6 +24,16 @@ interface RoleGroup {
   role: UserRole;
   users: User[];
 }
+
+// Type alias (not interface) so the implicit index signature satisfies the
+// ExpandableItem constraint of ExpandableList.
+type StaffRow = {
+  id: UserRole;
+  title: string;
+  nickname: string;
+  description: string;
+  users: User[];
+};
 
 const roleGroups = ref<RoleGroup[]>(
   STAFF_ROLES.map((role) => ({ role, users: [] })),
@@ -46,53 +61,74 @@ async function loadRoleGroups() {
 }
 
 onMounted(loadRoleGroups);
+
+const rows = computed<StaffRow[]>(() =>
+  roleGroups.value.map(({ role, users }) => ({
+    id: role,
+    title: ROLE_INFO[role].title,
+    nickname: ROLE_INFO[role].nickname,
+    description: ROLE_INFO[role].description,
+    users,
+  })),
+);
+
+// Every column holds its longest word ("Администраторы" in bold, a login
+// whole), and the room over that is shared (ExpandableList).
+const columns: ExpandableListColumn<StaffRow>[] = [
+  { key: "title", label: "Роль" },
+  { key: "description", label: "Функции" },
+  { key: "users", label: "Состав" },
+];
 </script>
 
 <template>
   <section id="admins" class="admin-section">
     <BlockTitle>Администрация</BlockTitle>
 
-    <div class="admin-table">
-      <div class="admin-header">
-        <span class="role-col">Роль</span>
-        <span class="desc-col">Функции</span>
-        <span class="users-col">Состав</span>
-      </div>
-      <div v-for="group in roleGroups" :key="group.role" class="admin-row">
-        <span class="role-col">
-          <router-link
-            :to="{ name: 'community', query: { role: group.role } }"
-            class="role-title"
+    <ExpandableList
+      :items="rows"
+      :columns="columns"
+      :allow-multiple="true"
+      row-align="baseline"
+      plain-rows
+    >
+      <template #cell-title="{ item }">
+        <router-link
+          :to="{ name: 'community', query: { role: item.id } }"
+          class="role-title"
+        >
+          {{ item.title }}
+        </router-link>
+        <span v-if="item.nickname" class="role-nickname">
+          ({{ item.nickname }})
+        </span>
+      </template>
+
+      <template #cell-description="{ item }">
+        <span class="role-functions">{{ item.description }}</span>
+      </template>
+
+      <template #cell-users="{ item }">
+        <!-- One shimmer line per cell while the batched request is in flight -->
+        <span v-if="loading" class="skeleton-line" aria-hidden="true" />
+        <span v-else-if="error" class="load-error"
+          >Не удалось загрузить.
+          <button type="button" class="retry-link" @click="loadRoleGroups">
+            Повторить
+          </button></span
+        >
+        <template v-else-if="item.users.length">
+          <span
+            v-for="user in item.users"
+            :key="user.username"
+            class="user-item"
           >
-            {{ ROLE_INFO[group.role].title }}
-          </router-link>
-          <span v-if="ROLE_INFO[group.role].nickname" class="role-nickname">
-            ({{ ROLE_INFO[group.role].nickname }})
+            <UserLink :user="user" hide-badge />
           </span>
-        </span>
-        <span class="desc-col">{{ ROLE_INFO[group.role].description }}</span>
-        <span class="users-col">
-          <!-- One shimmer line per cell while the batched request is in flight -->
-          <span v-if="loading" class="skeleton-line" aria-hidden="true" />
-          <span v-else-if="error" class="load-error"
-            >Не удалось загрузить.
-            <button type="button" class="retry-link" @click="loadRoleGroups">
-              Повторить
-            </button></span
-          >
-          <template v-else-if="group.users.length">
-            <span
-              v-for="user in group.users"
-              :key="user.username"
-              class="user-item"
-            >
-              <UserLink :user="user" hide-badge />
-            </span>
-          </template>
-          <span v-else class="no-users">{{ VALUE_UNAVAILABLE }}</span>
-        </span>
-      </div>
-    </div>
+        </template>
+        <span v-else class="no-users">{{ VALUE_UNAVAILABLE }}</span>
+      </template>
+    </ExpandableList>
 
     <p class="useful-links">
       <span class="links-label">Полезные ссылки:</span>{{ " "
@@ -111,59 +147,31 @@ onMounted(loadRoleGroups);
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Tables" as *
 @use "@/assets/styles/Inputs" as *
 @use "@/assets/styles/Skeleton" as *
 
+// The last block of the rules page: the space above it is the step between
+// the blocks of the page, and none goes under it. The page ends where it ends,
+// and what stands under the page is the shell's to space; a margin here stood
+// on top of that, and the rules ended 80 above it.
 .admin-section
-  margin: $big 0
-
-.admin-table
-  +table
-
-// CSS table, not grid, and the header and the rows share the one geometry:
-// grid items copy with newlines between cells (the header copied as
-// "Роль\nФункции\nСостав" and a row as four lines), table cells copy
-// tab-separated like the site's real data tables. Fixed layout with explicit
-// column widths (180px / auto / 220px, no gap) keeps header and rows aligned.
-.admin-header,
-.admin-row
-  display: table
-  width: 100%
-  box-sizing: border-box
-  table-layout: fixed
-
-  > span
-    display: table-cell
-    vertical-align: top
-
-  > .role-col
-    width: 180px
-
-  > .users-col
-    width: 220px
-
-.admin-header
-  +table-header
-
-.admin-row
-  +table-row
+  margin-top: $big
 
 // Color and hover come from the global `a` rule (Reset.sass); only the
-// weight is local.
+// weight is local, the site's one bold.
 .role-title
-  font-weight: 600
+  font-weight: 700
 
 // Two visual lines inside ONE cell, so the break belongs to the nickname and
 // not to a layout on the cell: a cell that laid its children out would be the
-// flex box this table just left. 2px is the former gap.
+// flex box this table left. 2px is the former gap.
 .role-nickname
   display: block
   margin-top: 2px
   color: $text-muted
   font-size: $secondary-font-size
 
-.desc-col
+.role-functions
   color: $text
   font-size: $secondary-font-size
   line-height: 1.4
@@ -184,6 +192,7 @@ onMounted(loadRoleGroups);
 .skeleton-line
   display: block
   width: 90px
+  max-width: 100%
   height: 14px
   +skeleton-shimmer
 
@@ -210,22 +219,4 @@ onMounted(loadRoleGroups);
 
   a
     +muted-link
-
-@media (max-width: $bp-mobile)
-  .admin-header
-    display: none
-
-  // One column: the cells stack, so they drop the table widths with the table.
-  .admin-row
-    display: block
-
-    > span
-      display: block
-      width: auto
-
-    > span + span
-      margin-top: $tiny
-
-  .desc-col
-    color: $text-muted
 </style>

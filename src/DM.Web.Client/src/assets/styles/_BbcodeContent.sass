@@ -9,16 +9,16 @@
 // Backend (BbParserProvider.cs) classes:
 //   .spoiler, .spoiler-head       - spoiler blocks
 //   .nsfw-spoiler, .nsfw-head     - NSFW content
-//   .quote, .quote-author         - quotes (uses <div>)
-//   .code                         - code blocks (uses <pre>)
+//   .quote                        - quotes (uses <div>)
+//   .code                         - [code] (uses <code>; <pre> before)
 //   .mod-block                    - moderator blocks
-//   .private-message, .private-message-header - private text
+//   .private-message              - private text (recipients in data-recipients)
 //
 // Frontend (bbcode.ts / Tiptap) classes:
 //   .bb-spoiler                   - spoiler blocks
 //   .bb-nsfw                      - NSFW content
-//   .bb-quote, .quote-author, .quote-content - quotes (uses <blockquote>)
-//   .bb-code                      - code (uses <code>)
+//   .bb-quote                     - quotes (uses <blockquote>)
+//   code[data-bb-tag="code"]      - [code]
 //   .bb-noparse                   - unparsed content
 //   .bb-image                     - images
 //   .bb-mod                       - moderator blocks
@@ -35,7 +35,7 @@
 // Overlay Background Mixin
 // ──────────────────────────────────────────────────────────────────────────
 // Creates a colored overlay effect using ::before pseudo-element.
-// Used for quote, mod-block, and private-message.
+// Used for quote and mod-block.
 //
 // Parameters:
 //   $color - The overlay color (e.g., $highlight-overlay-blue)
@@ -54,13 +54,33 @@
     @if $border-radius != 0
       border-radius: $border-radius
 
+// ──────────────────────────────────────────────────────────────────────────
+// The text a person wrote
+// ──────────────────────────────────────────────────────────────────────────
+// The block of a post, a comment or a record of the log, set as DM2 set its
+// div.dmtxt: 16px on a step of 20 ("line-height: normal" of PT Sans), so a
+// blank line, two line breaks, stands 40 top to top; flush on both sides at
+// every width, a phone included, for a phone shows the page of the desktop.
+// Words break while "Перенос слов" of the settings panel is on: the surface
+// puts .hyphenated on the block from the switch (the ui store), and without
+// the class the block carries no hyphens of its own, so turning the switch off
+// takes them away.
+=body-text
+  line-height: 1.25
+  text-align: justify
+
+  &.hyphenated
+    hyphens: auto
+    -webkit-hyphens: auto
+
 =bbcode-content
   // ──────────────────────────────────────────────────────────────────────────
   // Typography
   // ──────────────────────────────────────────────────────────────────────────
-  // No line-height here: each surface owns its own rhythm (comments 1.6,
-  // chat messages 1.5, topic descriptions 1.6, ...) — an owner-rejected
-  // "unification" once squeezed every post to 1.25 (2026-07-22).
+  // No line-height here: the surface that holds the text sets it. The text of
+  // a post, a comment, a topic or a publication and a record of the log stand
+  // as on DM2, 16px on a step of 20 (1.25), a blank line 40 top to top,
+  // through +body-text above; the chat keeps its own line.
 
   // No inter-paragraph margin: the display path renders newlines as <br/>
   // (no <p> elements), so a p-margin would show ONLY inside the Tiptap
@@ -80,9 +100,19 @@
   s, strike, del
     text-decoration: line-through
 
-  // Code - inline <code> and block <pre class="code"> from backend
-  code, pre, pre.code, .code, .bb-code
+  // [code], as on DM2: a monospace font and nothing else. It stands in the
+  // line like [b], keeps its spaces and line breaks as typed, and takes the
+  // colour and the size of the text around it, with no box of its own. The
+  // server draws it as <code class="code">, the editor as <code>; <pre> is
+  // the block the server drew before, still in text rendered then and in
+  // markup pasted into the editor.
+  code, pre, .code
+    display: inline
     font-family: $code-font
+    white-space: pre-wrap
+    color: inherit
+    background: none
+    border: 0
 
   // ──────────────────────────────────────────────────────────────────────────
   // Links
@@ -108,7 +138,7 @@
   //   - Default size:
   //       <img class="bb-image" data-bb-tag="img" ...>
   //
-  //   - Custom size (via [img=WxH]URL[/img] or width/height attributes):
+  //   - Custom size ([img width="W" height="H"]URL[/img], either or both):
   //       <span class="bb-image-frame"
   //             data-bb-width="W" data-bb-height="H"
   //             style="--bb-image-max-width:Wpx; --bb-image-max-height:Hpx">
@@ -139,9 +169,21 @@
   // `height: auto` has to stay. With both sides declared, max-width and
   // max-height clamp each on its own and the picture comes out stretched; with
   // the height auto the ratio governs and max-width shrinks the box whole.
-  // max-height is then the one cap that still clamps alone, which is why the
-  // reader shrinks the pair to fit under it first — see MAX_DRAWN_HEIGHT in
-  // features/upload/model/postAttachments.ts, mirroring the 500 below.
+  // max-height is then the one cap that still clamps alone, which is why an
+  // attachment that declares its size narrows its own max-width to the width
+  // that height allows (--bb-image-max-width, DRAWN_HEIGHT_CAP in
+  // features/upload/model/postAttachments.ts). Should the pair still be clamped
+  // in height alone, `object-fit: contain` draws the picture whole inside the
+  // box instead of squashing it.
+  //
+  // The cap is 500 pixels, DM2's: a picture in the text is drawn no taller
+  // than it was there, whatever the height of the window. A taller picture, a
+  // map or a sheet, opens whole on a click (bbcodeInteractive.ts,
+  // shared/ui/ImageViewer), and the pointer says so. The help of the editor
+  // says both (markupHelp.ts). A picture inside [link] is the link's and keeps
+  // the link's pointer, and one in the editor is text being written: neither
+  // opens. `:is()` reads its list against the whole page, so the editor is
+  // found even where this mixin is included inside it.
   //
   // The collapsed state in TruncatedContent still declares width auto, on
   // purpose: there the media is clamped to a fixed budget and the file's own
@@ -150,8 +192,15 @@
     max-width: var(--bb-image-max-width, 100%)
     max-height: var(--bb-image-max-height, 500px)
     height: auto
+    object-fit: contain
     display: inline-block
     vertical-align: middle
+
+  .bb-image
+    cursor: zoom-in
+
+    &:is(a *, [contenteditable="true"] *)
+      cursor: inherit
 
   .bb-image-frame
     display: inline-block
@@ -172,8 +221,8 @@
 
   // ──────────────────────────────────────────────────────────────────────────
   // Quote
-  // Backend: div.quote with div.quote-author inside
-  // Frontend: blockquote.bb-quote with cite or .quote-author inside
+  // Backend: div.quote
+  // Frontend: blockquote.bb-quote
   // ──────────────────────────────────────────────────────────────────────────
 
   // Base quote styling - works for both div.quote and blockquote.bb-quote
@@ -186,18 +235,6 @@
     background-color: $bg-element
     color: $text
     +overlay-bg($highlight-overlay-blue)
-
-  // Quote author - works for cite, div.quote-author, .quote-author
-  blockquote cite,
-  blockquote .quote-author,
-  .quote .quote-author,
-  .bb-quote cite,
-  .bb-quote .quote-author
-    display: block
-    font-weight: 600
-    font-style: italic
-    margin-bottom: $tiny
-    color: $text
 
   // ──────────────────────────────────────────────────────────────────────────
   // Collapse wrapper (shared by spoiler and NSFW)
@@ -326,31 +363,28 @@
 
   // ──────────────────────────────────────────────────────────────────────────
   // Private
-  // Backend: div.private-message + div.private-message-header
+  // Backend: span.private-message[data-recipients] (inline)
   // Frontend: span.bb-private (inline)
   // ──────────────────────────────────────────────────────────────────────────
 
-  // Inline private text (frontend) - uses overlay approach with linear-gradient
-  .private-text, .bb-private
-    color: $text-on-green
-    background: linear-gradient($highlight-overlay-green, $highlight-overlay-green), $bg-element
-    padding: 0 2px
-    border-radius: 2px
+  // Hidden text, as on DM2: green text and nothing else. No fill, no frame, no
+  // space of its own around it; it is text of the line it stands in, in
+  // another colour. The server and the editor both draw it in the line, and
+  // both take the same colour.
+  //
+  // Who reads it is no text of the line: the tooltip over the green words says
+  // it (bbcodeInteractive). It stood after the block as a line of its own,
+  // " (Получатели: ...)", whose long unbreakable words ("DungeonMaster,", a
+  // name) did not fit at the end of a justified line, and the rest of that
+  // line was shared out between its few spaces: the gaps between the words of
+  // the hidden text grew to several spaces wide (the owner, 05.10: "что за
+  // дебильные огромные отступы между каждым словом?").
+  .private-text, .bb-private, .private-message
+    color: $text-green
 
-  // Block private message (backend) - uses overlay approach
-  .private-message
-    color: $text-on-green
-    background-color: $bg-element
-    padding: $small $medium
-    border-radius: $border-radius
-    margin: $small 0
-    +overlay-bg($highlight-overlay-green, $border-radius)
-
-  .private-message-header
-    font-size: $secondary-font-size
-    color: $text-on-green
-    font-style: italic
-    margin-top: $tiny
+  // No rule touches the line breaks around the block: it is text in the line,
+  // and the breaks the author typed around it are drawn as typed
+  // (BBCODE_RENDERING.md, "Перевод строки после блока").
 
   // ──────────────────────────────────────────────────────────────────────────
   // Mod Block
@@ -398,25 +432,3 @@
   .bb-mention--invalid
     color: $text-muted
     font-weight: 500
-
-
-// ============================================================================
-// Editor-specific additions (optional)
-// ============================================================================
-// The editor uses the same +bbcode-content mixin as display.
-// This just adds minor enhancements for the Tiptap quote structure.
-
-=bbcode-content-editor
-  +bbcode-content
-
-  // Quote with structured content (Tiptap generates .quote-author + .quote-content)
-  .bb-quote
-    .quote-author
-      padding: $small $medium
-      background-color: $bg-element
-      border-bottom: 1px solid $border
-      margin-bottom: 0
-      +overlay-bg($highlight-overlay-blue)
-
-    .quote-content
-      padding: $small $medium

@@ -4,6 +4,7 @@ using System.Linq;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
+using DM.Domain.Game.Features.Games;
 using DM.Web.API.Features.Game.AttributeSchemas;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
@@ -18,6 +19,8 @@ using DtoGameTag = DM.Domain.Game.Features.Games.GameTag;
 using DtoGamesQuery = DM.Domain.Game.Features.Games.GamesQuery;
 using DtoCreateGame = DM.Domain.Game.Features.Games.CreateGame;
 using DtoUpdateGame = DM.Domain.Game.Features.Games.UpdateGame;
+using DtoGameAttributeSchema = DM.Domain.Game.Features.Games.GameAttributeSchema;
+using DtoReplaceGameAttributeSchema = DM.Domain.Game.Features.GameAttributeSchemas.ReplaceGameAttributeSchema;
 
 namespace DM.Web.API.Features.Game.Games;
 
@@ -91,9 +94,6 @@ internal partial class GameMapper
 
         var result = ToGameDetailsCore(game);
         result.Participation = ParticipationOf(game);
-        // The schema member is `= null!` on the domain side yet null for
-        // every game without one; the guard keeps null flowing through.
-        result.Schema = game.AttributeSchema == null ? null : _schemaMapper.ToSchema(game.AttributeSchema);
         result.PrivacySettings = new GamePrivacySettings
         {
             ViewPrivates = game.ShowPrivateMessages,
@@ -104,6 +104,8 @@ internal partial class GameMapper
         // Readers ("Читатели") == game subscribers (GameRole.Reader is
         // subscription based); same source, roster-named.
         result.Readers = result.Subscribers;
+        result.ViewerBlacklisted = AnonymousIdentity.Of(_identityProvider.Current?.User) is { } viewerId &&
+                                   game.IsBlacklisted(viewerId);
         if (result.Info is not null && game.Master is not null)
         {
             result.Info.Context = new RenderContextEnvelope
@@ -155,8 +157,7 @@ internal partial class GameMapper
 
     /// <summary>
     /// Create request to the write model. Draft visibility is not part of
-    /// the API contract yet (the enum defaults to Private server-side), and
-    /// the blacklist copy switch is not surfaced either.
+    /// the API contract yet (the enum defaults to Private server-side).
     /// </summary>
     public DtoCreateGame ToCreateGame(CreateGameRequest request)
     {
@@ -250,7 +251,6 @@ internal partial class GameMapper
     [MapperIgnoreTarget(nameof(GameRef.Participation))]
     [MapProperty(nameof(DtoGame.SystemName), nameof(Game.System))]
     [MapProperty(nameof(DtoGame.NarrativeSetting), nameof(Game.Setting))]
-    [MapProperty(nameof(DtoGame.AttributeSchemaId), nameof(Game.SchemaId))]
     // Conditional expansion: hydrated only by the player-filtered list path;
     // a null source keeps null (instead of an empty collection) so
     // unfiltered responses omit the field entirely.
@@ -258,18 +258,27 @@ internal partial class GameMapper
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial Game ToGameCore(DtoGame game);
 
-    // Participation, privacy fold, schema and the info envelope live in the
-    // wrapper; Readers shares the Subscribers projection there too.
+    // Participation, privacy fold and the info envelope live in the wrapper;
+    // Readers shares the Subscribers projection there too. The sheet maps by
+    // convention: both sides carry the specifications and the version. What
+    // the viewer may do is the domain's answer, composed by GameApiService.
     [MapperIgnoreTarget(nameof(GameRef.Participation))]
     [MapperIgnoreTarget(nameof(GameDetails.PrivacySettings))]
-    [MapperIgnoreTarget(nameof(GameDetails.Schema))]
     [MapperIgnoreTarget(nameof(GameDetails.Readers))]
+    [MapperIgnoreTarget(nameof(GameDetails.ViewerBlacklisted))]
+    [MapperIgnoreTarget(nameof(GameDetails.Viewer))]
     [MapProperty(nameof(DtoGame.SystemName), nameof(Game.System))]
     [MapProperty(nameof(DtoGame.NarrativeSetting), nameof(Game.Setting))]
-    [MapProperty(nameof(DtoGame.AttributeSchemaId), nameof(Game.SchemaId))]
+    [MapProperty(nameof(DtoGameDetails.AttributeSchema), nameof(GameDetails.Schema))]
     [MapProperty(nameof(DtoGame.FilteredPlayerCharacters), nameof(Game.PlayerCharacters))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial GameDetails ToGameDetailsCore(DtoGameDetails game);
+
+    /// <summary>
+    /// Domain sheet to its response DTO
+    /// </summary>
+    [MapperRequiredMapping(RequiredMappingStrategy.Target)]
+    public partial GameAttributeSchema ToGameAttributeSchema(DtoGameAttributeSchema schema);
 
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial GameRecruitment ToGameRecruitment(DtoGameRecruitment recruitment);
@@ -294,6 +303,8 @@ internal partial class GameMapper
     [MapperIgnoreTarget(nameof(DtoGamesQuery.ExcludedTags))]
     [MapperIgnoreTarget(nameof(DtoGamesQuery.OwnerUsernames))]
     [MapperIgnoreTarget(nameof(DtoGamesQuery.PremoderationStatuses))]
+    // Filled by the service from the viewer's blacklist, never by the caller.
+    [MapperIgnoreTarget(nameof(DtoGamesQuery.ExcludedMasterIds))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial DtoGamesQuery ToGamesQueryCore(GamesQuery query);
 
@@ -303,15 +314,21 @@ internal partial class GameMapper
     [MapperIgnoreTarget(nameof(DtoCreateGame.CommentsAccessMode))]
     // API exposes only the `Draft` bool, not draft visibility; the enum
     // defaults to Private server-side until the API surfaces it. The
-    // blacklist copy switch is not surfaced either - an Ignore here is not a
-    // mapping detail, see the creation form notes.
+    // blacklist copy switch maps by name: absent, the account setting decides.
     [MapperIgnoreTarget(nameof(DtoCreateGame.DraftVisibility))]
-    [MapperIgnoreTarget(nameof(DtoCreateGame.CopyBlacklist))]
     [MapProperty(nameof(CreateGameRequest.System), nameof(DtoCreateGame.SystemName))]
     [MapProperty(nameof(CreateGameRequest.Setting), nameof(DtoCreateGame.NarrativeSetting))]
-    [MapProperty(nameof(CreateGameRequest.SchemaId), nameof(DtoCreateGame.AttributeSchemaId))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial DtoCreateGame ToCreateGameCore(CreateGameRequest request);
+
+    /// <summary>
+    /// Replacement request to the domain command. The game comes from the
+    /// route, the service sets it.
+    /// </summary>
+    [MapperIgnoreTarget(nameof(DtoReplaceGameAttributeSchema.GameId))]
+    [MapperRequiredMapping(RequiredMappingStrategy.Target)]
+    public partial DtoReplaceGameAttributeSchema ToReplaceGameAttributeSchema(
+        ReplaceGameAttributeSchemaRequest request);
 
     // Tags map by convention: both sides are the short identifiers the tag
     // list serves, and both spell "leave them alone" as null.

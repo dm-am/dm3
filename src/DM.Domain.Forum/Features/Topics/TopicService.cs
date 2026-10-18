@@ -36,6 +36,7 @@ internal class TopicService : ITopicService
     private readonly IEventProducer _invokedEventProducer;
     private readonly IGuidFactory _guidFactory;
     private readonly ICache _cache;
+    private readonly IBbTagNameCase _tagNames;
 
     public TopicService(
         IValidator<CreateTopic> createValidator,
@@ -49,7 +50,8 @@ internal class TopicService : ITopicService
         IUserLookupService userLookupService,
         IEventProducer invokedEventProducer,
         IGuidFactory guidFactory,
-        ICache cache)
+        ICache cache,
+        IBbTagNameCase tagNames)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -63,6 +65,7 @@ internal class TopicService : ITopicService
         _invokedEventProducer = invokedEventProducer;
         _guidFactory = guidFactory;
         _cache = cache;
+        _tagNames = tagNames;
     }
 
     // Aliases of boards whose listings are cheap to cache at the service
@@ -80,6 +83,8 @@ internal class TopicService : ITopicService
         await _createValidator.ValidateAndThrowAsync(createTopic, ct);
 
         var board = await _boardService.GetBoard(createTopic.BoardTitle);
+        // MayCreate's question, so the button the page offers and this refusal
+        // cannot part.
         _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, board);
 
         var author = _identityProvider.Current.User;
@@ -90,7 +95,7 @@ internal class TopicService : ITopicService
             Title = createTopic.Title,
             // Topic bodies render on the Comment surface where [mod] is a green
             // mod block; strip it when authored by a non-moderator.
-            Text = ModBlockSanitizer.SanitizeForAuthor(createTopic.Text, author.Role)
+            Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createTopic.Text, author.Role), BbTagSet.WithModBlock)
         };
 
         // Markers first, row second, commit on the line after it returns.
@@ -114,6 +119,26 @@ internal class TopicService : ITopicService
         // every (take, accessPolicy) cache key combination.
         return topic;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The one gate CreateAsync is refused by once the board is found: the
+    /// board's policy against the role and the ban are both in it
+    /// (BoardIntentionResolver.CreateTopic).
+    /// </remarks>
+    public bool MayCreate(Board board) =>
+        _intentionManager.IsAllowed(ForumIntention.CreateTopic, board);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The policy half of BoardIntentionResolver.CreateTopic, asked for the role
+    /// a signed-in member has (a fresh account is not under a ban). A moderator
+    /// who is not signed in is not invited on the news board: the page cannot
+    /// tell him from anybody else, and the head of the site is where he signs in.
+    /// </remarks>
+    public bool MayCreateAfterSignIn(Board board) =>
+        !_identityProvider.Current.User.IsAuthenticated &&
+        (board.CreateTopicPolicy & _accessPolicyConverter.Convert(UserRole.RegularUser)) != BoardAccessPolicy.None;
 
     /// <inheritdoc />
     public async Task<Topic> GetAsync(Guid topicId, CancellationToken ct = default)
@@ -339,7 +364,22 @@ internal class TopicService : ITopicService
         await _updateValidator.ValidateAndThrowAsync(updateTopic, ct);
         var oldTopic = await GetAsync(updateTopic.TopicId, ct);
 
-        _intentionManager.ThrowIfForbidden(TopicIntention.Edit, oldTopic);
+        // Closing and reopening belong to the author as well as to the board's
+        // moderators. A topic the board's moderators closed is shut to its author's
+        // edits (one the author closed stays theirs), and reopening it is what opens
+        // them again, so a request that reopens the topic is not refused for the
+        // topic being closed: whoever may reopen a topic may edit it once it is open
+        // (TopicIntentionResolverShould holds that).
+        var changesClosed = updateTopic.IsClosed.HasValue && updateTopic.IsClosed != oldTopic.IsClosed;
+        if (changesClosed)
+        {
+            _intentionManager.ThrowIfForbidden(TopicIntention.Close, oldTopic);
+        }
+
+        if (!changesClosed || updateTopic.IsClosed == true)
+        {
+            _intentionManager.ThrowIfForbidden(TopicIntention.Edit, oldTopic);
+        }
 
         Guid? newBoardId = null;
 
@@ -351,25 +391,23 @@ internal class TopicService : ITopicService
                 var board = await _boardService.GetBoard(updateTopic.BoardTitle, false);
                 _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, board);
                 newBoardId = board.Id;
-                await _unreadCountersRepository.ChangeParentAsync(oldTopic.Board.Id, UnreadEntryType.Message, board.Id);
+                await _unreadCountersRepository.ChangeParentAsync(oldTopic.Id, UnreadEntryType.Message, board.Id);
             }
         }
         else
         {
             // Asking for one of these is refused; round-tripping the value the topic
-            // already has is not. All three used to be dropped in silence, so a user
-            // closing somebody else's topic got 200 and an open topic back, and a
+            // already has is not. Both used to be dropped in silence, so a user
+            // pinning somebody else's topic got 200 and an unpinned topic back, and a
             // user moving their own topic to another board got 200 and the topic
             // still in the old one -- the move is reachable from HTTP through
-            // UpdateTopicRequest.Board.
-            if ((updateTopic.IsClosed.HasValue && updateTopic.IsClosed != oldTopic.IsClosed) ||
-                (updateTopic.IsAttached.HasValue && updateTopic.IsAttached != oldTopic.IsAttached) ||
+            // UpdateTopicRequest.Board. The closed state was checked above.
+            if ((updateTopic.IsAttached.HasValue && updateTopic.IsAttached != oldTopic.IsAttached) ||
                 (updateTopic.BoardTitle != default && oldTopic.Board.Title != updateTopic.BoardTitle))
             {
                 _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, oldTopic.Board);
             }
 
-            updateTopic.IsClosed = null;
             updateTopic.IsAttached = null;
         }
 
@@ -377,7 +415,7 @@ internal class TopicService : ITopicService
         // Topic bodies render on the Comment surface where [mod] is a green mod
         // block; strip it when the editor is a non-moderator.
         if (!string.IsNullOrEmpty(bodyText))
-            bodyText = ModBlockSanitizer.SanitizeForAuthor(bodyText, _identityProvider.Current.User.Role);
+            bodyText = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(bodyText, _identityProvider.Current.User.Role), BbTagSet.WithModBlock);
 
         var updateEntity = new UpdateTopicEntity
         {
@@ -385,6 +423,12 @@ internal class TopicService : ITopicService
             Title = updateTopic.Title,
             Text = bodyText,
             IsClosed = updateTopic.IsClosed,
+            // Who closed the topic decides whether its author may reopen it
+            // (TopicIntention.Close), so it is written with every change of the
+            // closed state and left alone otherwise.
+            ClosedByAuthor = changesClosed
+                ? updateTopic.IsClosed == true && oldTopic.Author?.UserId == _identityProvider.Current.User.UserId
+                : null,
             IsAttached = updateTopic.IsAttached,
             // The editor is not necessarily the author: TopicIntention.Edit is
             // open to moderators and administrators too. The ChangedTopic

@@ -115,19 +115,6 @@ public class CommentControllerShould : IntegrationTestBase
     #region GetForumComment Tests
 
     /// <summary>
-    /// Get existing comment should return NotFound (comment not seeded in test DB due to FK constraints)
-    /// </summary>
-    [Fact]
-    public async Task GetForumComment_WithValidId_ReturnsNotFound()
-    {
-        // Act
-        var response = await Client.GetAsync($"/v1/forum/comments/{TestConstants.TestCommentId}");
-
-        // Assert - comment is not seeded, so returns NotFound
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    /// <summary>
     /// Get non-existent comment should return NotFound, the same code the delete
     /// of the same missing comment has always answered. The read used to answer
     /// Gone, so one resource had two codes for one absence.
@@ -174,7 +161,7 @@ public class CommentControllerShould : IntegrationTestBase
             text = "Updated comment text"
         };
         var content = JsonContent.Create(commentUpdate);
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/forum/comments/{TestConstants.TestCommentId}")
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/forum/comments/{TestConstants.UnseededCommentId}")
         {
             Content = content
         };
@@ -222,7 +209,7 @@ public class CommentControllerShould : IntegrationTestBase
     public async Task DeleteForumComment_WhenNotAuthenticated_ReturnsUnauthorized()
     {
         // Act
-        var response = await Client.DeleteAsync($"/v1/forum/comments/{TestConstants.TestCommentId}");
+        var response = await Client.DeleteAsync($"/v1/forum/comments/{TestConstants.UnseededCommentId}");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -255,7 +242,7 @@ public class CommentControllerShould : IntegrationTestBase
     public async Task PostForumCommentLike_WhenNotAuthenticated_ReturnsUnauthorized()
     {
         // Act
-        var response = await Client.PostAsync($"/v1/forum/comments/{TestConstants.TestCommentId}/likes", null);
+        var response = await Client.PostAsync($"/v1/forum/comments/{TestConstants.UnseededCommentId}/likes", null);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -288,7 +275,7 @@ public class CommentControllerShould : IntegrationTestBase
     public async Task DeleteForumCommentLike_WhenNotAuthenticated_ReturnsUnauthorized()
     {
         // Act
-        var response = await Client.DeleteAsync($"/v1/forum/comments/{TestConstants.TestCommentId}/likes");
+        var response = await Client.DeleteAsync($"/v1/forum/comments/{TestConstants.UnseededCommentId}/likes");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);

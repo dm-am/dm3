@@ -53,6 +53,11 @@ public class UserSettings
     public int EntitiesPerPage { get; set; }
 
     /// <summary>
+    /// IANA name of the reader's time zone. Null = UTC.
+    /// </summary>
+    public string? TimeZoneId { get; set; }
+
+    /// <summary>
     /// Discord notification channel preferences. Null = channel not connected.
     /// </summary>
     public NotificationChannelPreference? DiscordPreferences { get; set; }

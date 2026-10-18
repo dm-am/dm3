@@ -67,6 +67,13 @@ public class Ban
     public Guid? LiftedByUserId { get; set; }
 
     /// <summary>
+    /// The moderator who lifted the ban early, null while it runs its course or
+    /// when that account is gone. Read by the ban lists on top of the row: the
+    /// column holds an identifier with no navigation behind it.
+    /// </summary>
+    public GeneralUser? LiftedBy { get; set; }
+
+    /// <summary>
     /// Why the ban was lifted early
     /// </summary>
     public string? LiftReason { get; set; }
@@ -78,6 +85,12 @@ public class Ban
     /// query could still return.
     /// </summary>
     public bool IsLifted => LiftedUtc.HasValue;
+
+    /// <summary>
+    /// Whether the reader of the list may lift this ban. Derived per reader by
+    /// the rule that refuses the lift itself (BanService), never stored.
+    /// </summary>
+    public bool CanLift { get; set; }
 
     /// <summary>
     /// How far into the future a permanent ban is written. Permanence is not a
@@ -115,6 +128,57 @@ public class Ban
     /// </summary>
     public bool IsPermanentAt(DateTimeOffset moment) =>
         !IsVoluntary && EndedUtc > moment.AddYears(PermanentThresholdYears);
+}
+
+/// <summary>
+/// What happened to a ban at a moment of the ban list
+/// </summary>
+public enum BanLogEntryKind
+{
+    /// <summary>
+    /// The ban was issued, at its start
+    /// </summary>
+    Issued = 1,
+
+    /// <summary>
+    /// The ban was lifted early, at the moment of the lift
+    /// </summary>
+    Lifted = 2
+}
+
+/// <summary>
+/// One entry of the ban list: an issue or a lift, at the moment it happened
+/// </summary>
+/// <remarks>
+/// The list is the bot's ban log of DM2, where every issue and every lift is a
+/// comment of its own in the order they were written. A ban is one row, issued
+/// and lifted in place, so a lifted ban gives two entries: its issue at its
+/// start and its lift at the moment of the lift, which can stand above the
+/// issues of later bans.
+/// </remarks>
+public class BanLogEntry
+{
+    /// <summary>
+    /// The number of the entry in the whole list, counted from the oldest entry,
+    /// which is 1. A new entry happens after every entry there is, so the number
+    /// of an entry never changes, and it is the same in the list of one person.
+    /// </summary>
+    public int Number { get; set; }
+
+    /// <summary>
+    /// Whether the entry is the issue or the lift
+    /// </summary>
+    public BanLogEntryKind Kind { get; set; }
+
+    /// <summary>
+    /// When it happened: the start for an issue, the lift for a lift
+    /// </summary>
+    public DateTimeOffset OccurredUtc { get; set; }
+
+    /// <summary>
+    /// The ban as it stands now, the same for both entries of a lifted one
+    /// </summary>
+    public Ban Ban { get; set; } = null!;
 }
 
 /// <summary>

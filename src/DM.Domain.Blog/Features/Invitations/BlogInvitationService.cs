@@ -63,12 +63,12 @@ internal class BlogInvitationService : IBlogInvitationService
     public async Task<BlogInvitation> InviteAssistant(Guid blogId, string username)
     {
         var blog = await _blogService.GetBlogAsync(blogId);
-        _intentionManager.ThrowIfForbidden(BlogIntention.InviteAssistant, blog);
+        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.InviteAssistant, blog);
 
         var user = await _userLookupService.GetAsync(username);
         var userId = user.UserId;
 
-        await ValidateInvitation(blog, userId);
+        await ValidateInvitation(userId);
 
         return await CreateInvitation(blogId, userId, username, TokenType.BlogAssistantInvitation);
     }
@@ -77,29 +77,28 @@ internal class BlogInvitationService : IBlogInvitationService
     public async Task<BlogInvitation> InviteReader(Guid blogId, string username)
     {
         var blog = await _blogService.GetBlogAsync(blogId);
-        _intentionManager.ThrowIfForbidden(BlogIntention.InviteReader, blog);
+        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.InviteReader, blog);
 
         var user = await _userLookupService.GetAsync(username);
         var userId = user.UserId;
 
-        await ValidateInvitation(blog, userId);
+        await ValidateInvitation(userId);
 
         return await CreateInvitation(blogId, userId, username, TokenType.BlogReaderInvitation);
     }
 
-    private async Task ValidateInvitation(BlogDto blog, Guid userId)
+    private async Task ValidateInvitation(Guid userId)
     {
-        // Check content blacklist
-        if (blog.BlacklistedUserIds.Contains(userId))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotInviteBlacklistedUser);
-        }
-
-        // Check personal blacklist - cannot invite someone you've blocked
+        // The blog's own blacklist is not asked: inviting somebody the blog
+        // listed is the owner's own decision, and the list closes comments only.
+        //
+        // The invitee's personal blacklist, the way the game asks it
+        // (GameInvitationService): not the inviter's own list, which restricts
+        // the people on it and not its owner.
         var currentUserId = _identityProvider.Current.User.UserId;
-        if (await _userBlacklistChecker.IsBlockedAsync(currentUserId, userId))
+        if (await _userBlacklistChecker.IsBlockedAsync(userId, currentUserId))
         {
-            throw new HttpException(HttpStatusCode.UnprocessableEntity, RefusalMessage.CannotInviteBlockedUser);
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotInviteThisUser);
         }
     }
 
@@ -234,7 +233,7 @@ internal class BlogInvitationService : IBlogInvitationService
         // The invitations list feeds the settings page, and assistants can
         // invite readers, so the read follows EditSettings — the same shape the
         // game side takes, where GetPendingInvitations demands EditSettings too.
-        _intentionManager.ThrowIfForbidden(BlogIntention.EditSettings, blog);
+        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.EditSettings, blog);
 
         return await _repository.GetPendingInvitations(blogId);
     }

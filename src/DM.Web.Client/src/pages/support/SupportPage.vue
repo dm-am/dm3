@@ -1,119 +1,65 @@
 <script setup lang="ts">
 /**
- * SupportPage - support form (bug reports, questions, lost access).
+ * SupportPage - the way to the administration: security errors of the site
+ * and trouble with an account. Guests may write too.
  *
- * Hosts the real submission form (SupportTicketForm); guests are allowed
- * to submit. When arriving with ?reason=access (e.g. from a "lost access"
- * link elsewhere on the site) it leads with the account-recovery action
- * before the form.
+ * The words are the old site's error report page, carried over where the site
+ * works the same: who reads what is sent, what belongs here, and that the rest
+ * is a topic in the forum's "Ошибки", where the community answers. What
+ * differs is said the way the site says it: the reader is the administration,
+ * the forum entity is a "топик", and suggestions go to "Улучшение сайта". One
+ * sentence is DM3's own, at the end: a question about how the site works goes
+ * to the mentors or to "Для новичков", the place a page of questions and
+ * answers holds on other sites.
+ *
+ * The address may name the reason the reader came with
+ * (?subtype=<TicketSubtype>, built by supportFor); the form opens on it. The
+ * note the form keeps under a reason says what can be done without the
+ * administration, and the page draws the one line of it the form cannot, the
+ * site's "Войдите, чтобы" for a reason filed from an account.
  */
-import { computed } from "vue";
-import { useRoute } from "vue-router";
-import { storeToRefs } from "pinia";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import LeadText from "@/shared/ui/Layout/LeadText.vue";
-import { DashSeparator } from "@/shared/ui/DashSeparator";
-import { SvgIcon } from "@/shared/ui/Icon";
-import { DISCORD_INVITE_URL } from "@/shared/config/contacts";
+import { LoginPrompt } from "@/features/auth";
 import { SupportTicketForm } from "@/features/support-ticket";
-import { useAuthStore } from "@/entities/user";
-
-const route = useRoute();
-const { user } = storeToRefs(useAuthStore());
-
-// The ?action=recovery CTA below is consumed by the guest-only GuestActions
-// widget — for an already authenticated user it would be a silent no-op, so
-// the branch only leads with account recovery when there is no active user.
-const isAccessRecovery = computed(
-  () => route.query.reason === "access" && !user.value,
-);
-// Authenticated users can still land here with ?reason=access (e.g. a stale
-// link) — access is not actually lost, so point them at account settings
-// instead of the guest-only recovery flow.
-const isAccessRecoveryAuthenticated = computed(
-  () => route.query.reason === "access" && !!user.value,
-);
 </script>
 
 <template>
   <page-title>Поддержка</page-title>
 
-  <template v-if="isAccessRecovery">
-    <LeadText
-      >Доступ можно восстановить прямо сейчас, а если не получится, напишите нам
-      через форму ниже</LeadText
+  <LeadText
+    ><strong>ВНИМАНИЕ!</strong><br />Это сообщение отправится только
+    администрации сайта, поэтому настоятельно рекомендуем сообщать здесь только
+    об ошибках безопасности (например, у вас появилась возможность редактировать
+    чужие профили) и о проблемах с аккаунтом (например, вы не можете войти или
+    ваш аккаунт забанен, а написать о проблеме нужно). В других ситуациях лучше
+    создать топик на форуме в разделе "<router-link
+      :to="{ name: 'forum', params: { alias: 'bugs' } }"
+      >Ошибки</router-link
+    >", наше отзывчивое сообщество, скорее всего, быстро вам поможет.
+    Предложения по развитию сайта обсуждаются там же, в разделе "<router-link
+      :to="{ name: 'forum', params: { alias: 'improvements' } }"
+      >Улучшение сайта</router-link
+    >". Вопросы о том, как все устроено, задают
+    <router-link :to="{ name: 'community', query: { role: 'Mentor' } }"
+      >наставникам</router-link
     >
-    <div class="recovery-card">
-      <router-link
-        :to="{ query: { ...route.query, action: 'recovery' } }"
-        class="recovery-link"
-      >
-        Перейти к восстановлению доступа
-      </router-link>
-    </div>
-    <DashSeparator spacing="small" />
-  </template>
-
-  <LeadText v-else-if="isAccessRecoveryAuthenticated">
-    Вы уже авторизованы, поэтому доступ к аккаунту не потерян: изменить пароль
-    или другие данные можно в
-    <router-link to="/account">настройках аккаунта</router-link>
-  </LeadText>
-
-  <LeadText v-else
-    >Если нашли ошибку или не можете разобраться, опишите проблему, и мы
-    поможем</LeadText
+    или в разделе "<router-link
+      :to="{ name: 'forum', params: { alias: 'newbies' } }"
+      >Для новичков</router-link
+    >".</LeadText
   >
 
-  <SupportTicketForm kind="support" />
-
-  <p class="discord-fallback">
-    <SvgIcon name="discord" class="discord-icon" />
-    Если удобнее, напишите нам в
-    <a :href="DISCORD_INVITE_URL" target="_blank" rel="noopener noreferrer"
-      >Discord</a
-    >
-  </p>
+  <SupportTicketForm kind="support">
+    <template #login="{ action }">
+      <LoginPrompt class="ticket-login" :action="action" />
+    </template>
+  </SupportTicketForm>
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Variables" as *
-@use "@/assets/styles/Themes" as *
-
-.recovery-card
-  display: flex
-  flex-direction: column
-  gap: $small
-  padding: $medium
-  margin: $medium 0
-  background-color: $bg-element
-  border: 1px dashed $border
-
-.recovery-link
-  color: $link
-  font-weight: 700
-  text-decoration: none
-
-  &:hover
-    color: $link-hover
-    text-decoration: underline
-
-// Inline flow, not flex: a flex item is blockified, so the note copied as
-// "Если удобнее, напишите нам в\nDiscord". The gap the flex drew is already a
-// real space in the markup, right after the icon.
-.discord-fallback
-  margin-top: $medium
-  color: $text-muted
-  font-size: $secondary-font-size
-
-  a
-    color: $link
-
-    &:hover
-      color: $link-hover
-
-.discord-icon
-  width: 16px
-  height: 16px
-  vertical-align: text-bottom
+// The site's sign-in line stands among the lines of the note, flush with them:
+// its own padding is for a line that stands alone under a block.
+.login-prompt.ticket-login
+  padding: 0
 </style>

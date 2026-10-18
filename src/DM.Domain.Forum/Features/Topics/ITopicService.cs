@@ -20,6 +20,25 @@ public interface ITopicService
     Task<Topic> CreateAsync(CreateTopic createTopic, CancellationToken ct = default);
 
     /// <summary>
+    /// Whether the current user may open a topic on the board: true exactly when
+    /// <see cref="CreateAsync" /> takes one there, the title and the text aside.
+    /// The page offers "Создать топик" by this answer instead of refusing what
+    /// was typed.
+    /// </summary>
+    /// <param name="board">The board, read for the current user</param>
+    bool MayCreate(Boards.Board board);
+
+    /// <summary>
+    /// Whether signing in is the way to a topic on the board: the current user
+    /// is a guest, and an ordinary signed-in member may open topics there. False
+    /// for anybody signed in, and on a board whose topics come from the
+    /// moderation (the news, the contests): signing in opens nothing there for a
+    /// member, so the page does not invite a guest to it.
+    /// </summary>
+    /// <param name="board">The board, read for the current user</param>
+    bool MayCreateAfterSignIn(Boards.Board board);
+
+    /// <summary>
     /// Get topic by id
     /// </summary>
     /// <param name="topicId">Topic identifier</param>

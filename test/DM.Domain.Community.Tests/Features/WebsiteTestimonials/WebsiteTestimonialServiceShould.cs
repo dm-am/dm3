@@ -163,6 +163,28 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
     }
 
+    /// <summary>
+    /// The pre-check reads a table two requests can both find empty, so the
+    /// partial unique index by author is what actually refuses the second entry.
+    /// The loser has to read the same sentence the pre-check writes: the storage
+    /// error on its own reached the moderator as a failure of the site.
+    /// </summary>
+    [Fact]
+    public async Task ThrowConflictWhenTheIndexRefusesTheEntryThatLostTheRace()
+    {
+        _repository.GetByAuthor(_authorId).Returns((WebsiteTestimonial?)null);
+        _repository.Create(Arg.Any<CreateWebsiteTestimonialEntity>())
+            .ThrowsAsync(new DuplicateEntityException("Duplicate website testimonial"));
+
+        var act = async () => await _service.CreateAsync(NewTestimonial());
+
+        var refusal = await act.Should().ThrowAsync<HttpException>();
+        refusal.Which.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        refusal.Which.Message.Should().Be(RefusalMessage.TestimonialAlreadyExists(AuthorUsername),
+            "the pre-check and the index answer with one sentence");
+        await _eventProducer.DidNotReceive().SendAsync(EventType.NewWebsiteTestimonial, Arg.Any<Guid>());
+    }
+
     [Fact]
     public async Task NotLookAtTheSubmittersOwnTestimonialWhenCreating()
     {

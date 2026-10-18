@@ -6,9 +6,15 @@ namespace DM.Domain.Account.Configuration;
 public class TokenConfiguration
 {
     /// <summary>
-    /// Password reset token lifetime in hours (default: 24)
+    /// Password reset token lifetime in hours (default: 48)
     /// </summary>
-    public int PasswordResetTokenLifetimeHours { get; set; } = 24;
+    /// <remarks>
+    /// The same window as the activation link, on purpose. Both letters are
+    /// read by somebody who cannot get in, and a reader who opens the mailbox
+    /// the next evening should not find that one of the two ways back expired
+    /// while the other did not.
+    /// </remarks>
+    public int PasswordResetTokenLifetimeHours { get; set; } = 48;
 
     /// <summary>
     /// Account activation token lifetime in hours (default: 48)

@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Game.Features.PostReviews;
 using DM.Domain.Game.Features.Posts;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
+using DomainPost = DM.Domain.Game.Features.Games.Post;
 
 namespace DM.Web.API.Features.Game.Posts;
 
@@ -12,69 +14,33 @@ namespace DM.Web.API.Features.Game.Posts;
 internal class PostApiService : IPostApiService
 {
     private readonly IPostService _postService;
+    private readonly IPostReviewService _reviewService;
     private readonly PostMapper _mapper;
-    private readonly IQuoteSourceService _quoteSourceService;
 
     /// <inheritdoc />
     public PostApiService(
         IPostService postService,
-        PostMapper mapper,
-        IQuoteSourceService quoteSourceService)
+        IPostReviewService reviewService,
+        PostMapper mapper)
     {
         _postService = postService;
+        _reviewService = reviewService;
         _mapper = mapper;
-        _quoteSourceService = quoteSourceService;
     }
 
     /// <inheritdoc />
-    public async Task<ListEnvelope<Post>> Get(Guid roomId, PagingQuery query)
+    public async Task<ListEnvelope<Post>> Get(Guid roomId, RoomPostsQuery query)
     {
         var (posts, paging) = await _postService.GetAllAsync(roomId, query);
-        return new ListEnvelope<Post>(posts.Select(_mapper.ToPost), new PagingInfo(paging));
+        return new ListEnvelope<Post>(await PostsForViewer(posts), new PagingInfo(paging));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Post>> Get(Guid postId)
     {
         var post = await _postService.GetAsync(postId);
-        return new Envelope<Post>(_mapper.ToPost(post));
+        return new Envelope<Post>((await PostsForViewer([post])).Single());
     }
-
-    /// <inheritdoc />
-    public async Task<Envelope<QuoteSource>> GetQuote(Guid postId)
-    {
-        // Read through the same service the ordinary read goes through: whoever
-        // is refused the post is refused its quotation by the same refusal, and
-        // there is no second permission rule here to keep in step with the first.
-        var post = await _postService.GetAsync(postId);
-        var dto = _mapper.ToPost(post);
-        return _quoteSourceService.Build(dto.GameText, QuoteAuthorName(post));
-    }
-
-    /// <summary>
-    /// Whose name goes into the header of a quotation of a game post.
-    /// </summary>
-    /// <remarks>
-    /// The same four steps the post header itself takes, and in the same order:
-    /// the character, then the game role, then the login, then "Системное" for a
-    /// post that has none of the three. Anything else and the quotation would
-    /// attribute the line to somebody the page does not show as its author.
-    ///
-    /// It is a snapshot: what the name was when the quotation was made. Renaming
-    /// a character afterwards does not go back and rewrite somebody else's reply.
-    /// </remarks>
-    private static string QuoteAuthorName(DM.Domain.Game.Features.Games.Post post)
-    {
-        if (!string.IsNullOrWhiteSpace(post.Character?.Name)) return post.Character.Name;
-        if (!string.IsNullOrWhiteSpace(post.AuthorGameRole)) return post.AuthorGameRole;
-        if (!string.IsNullOrWhiteSpace(post.Author?.Username)) return post.Author.Username;
-        return SystemAuthorName;
-    }
-
-    /// <summary>
-    /// Author of a post written by nobody, as the post header spells it.
-    /// </summary>
-    private const string SystemAuthorName = "Системное";
 
     /// <inheritdoc />
     public async Task<Envelope<Post>> Create(Guid roomId, CreatePostRequest post)
@@ -82,7 +48,7 @@ internal class PostApiService : IPostApiService
         var createPost = _mapper.ToCreatePost(post);
         createPost.RoomId = roomId;
         var createdPost = await _postService.CreateAsync(createPost);
-        return new Envelope<Post>(_mapper.ToPost(createdPost));
+        return new Envelope<Post>((await PostsForViewer([createdPost])).Single());
     }
 
     /// <inheritdoc />
@@ -91,7 +57,7 @@ internal class PostApiService : IPostApiService
         var updatePost = _mapper.ToUpdatePost(request);
         updatePost.PostId = postId;
         var updatedPost = await _postService.UpdateAsync(updatePost);
-        return new Envelope<Post>(_mapper.ToPost(updatedPost));
+        return new Envelope<Post>((await PostsForViewer([updatedPost])).Single());
     }
 
     /// <inheritdoc />
@@ -104,6 +70,26 @@ internal class PostApiService : IPostApiService
     public async Task<ListEnvelope<Post>> GetRated(PostsQuery query)
     {
         var (posts, paging) = await _postService.GetRatedAsync(query);
-        return new ListEnvelope<Post>(posts.Select(_mapper.ToPost), new PagingInfo(paging));
+        return new ListEnvelope<Post>(await PostsForViewer(posts), new PagingInfo(paging));
+    }
+
+    /// <summary>
+    /// Posts as the viewer gets them: each post, and what he may do with it.
+    /// Every answer that carries posts comes through here, the lists included,
+    /// because a post is only ever shown in a list or alone and the review form
+    /// is offered under it in both. One question for the whole page, not one
+    /// per post.
+    /// </summary>
+    private async Task<IReadOnlyList<Post>> PostsForViewer(IEnumerable<DomainPost> posts)
+    {
+        var page = posts.ToArray();
+        var reviewable = await _reviewService.ReviewableAsync(
+            page.Select(p => new ReviewCandidate(p.Id, p.AuthorUserId, p.GameId)).ToArray());
+        return page.Select(p =>
+        {
+            var mapped = _mapper.ToPost(p);
+            mapped.Viewer = new PostViewer { CanReview = reviewable.Contains(p.Id) };
+            return mapped;
+        }).ToArray();
     }
 }

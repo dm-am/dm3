@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, watch, ref } from "vue";
+import { computed, nextTick, watch, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
-import { DataTable, type Column } from "@/shared/ui/DataTable";
+import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -10,19 +10,19 @@ import { LoginPrompt } from "@/features/auth";
 import { ContentText } from "@/shared/ui/Content";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import { useBoardsStore, type Topic } from "@/entities/forum";
-import { UserLink, userIsModerator } from "@/entities/user";
+import { RemovedAccountLink, UserLink, userIsAdmin } from "@/entities/user";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { TopicsFilter, useTopicsFilter } from "@/features/topic-filter";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
-import PinnedTopicsManager from "./PinnedTopicsManager.vue";
+import { usePinnedOrder } from "./usePinnedOrder";
 import { useAuthStore } from "@/shared/stores";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { useAnimatedHeightToggle } from "@/shared/lib/composables/useAnimatedHeightToggle";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
-import { describeFailure, notifyFailure } from "@/shared/lib/errors";
-import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
+import { notifyFailure, refusalHere } from "@/shared/lib/errors";
+import { ActionResult } from "@/shared/ui/ActionResult";
 import { TOPIC_TITLE_MAX_LENGTH } from "@/shared/lib/constants/forum";
 
 const route = useRoute();
@@ -48,37 +48,38 @@ const emptyText = computed(() =>
     : "Топиков пока нет",
 );
 
-// Moderator actions state
+// The topic whose pin is on its way to the server.
 const pinningTopicId = ref<string | null>(null);
-const showPinnedManager = ref(false);
-const savingPinnedOrder = ref(false);
 
-// Check if current user can moderate this board
-const canModerate = computed(() => {
+// The pins answer to those the server lets pin a topic: an administrator and
+// the moderators of this board (BoardIntentionResolver.AdministratesTopics),
+// as the "Топик закрыт" box of the edit form does. A moderator of the site who
+// does not moderate this board is refused a pin, so he reads the listing as
+// everybody does.
+const canPin = computed(() => {
   if (!user.value) return false;
-
-  // Global moderators/admins
-  if (userIsModerator(user.value)) return true;
-
-  // Board-specific moderators
+  if (userIsAdmin(user.value)) return true;
   const boardModerators = selectedBoard.value?.moderators ?? [];
   return boardModerators.some((m) => m.username === user.value?.username);
 });
 
 // Columns for topics table. Likes column is always rendered so the
 // "sort by likes" filter has a visible target — the column doubles as
-// confirmation of the active sort. Moderator actions column tacks onto
-// the end only when the viewer can moderate this board.
+// confirmation of the active sort. The pins of a moderator stand in the title
+// cell, so every viewer has the same columns.
 const columns = computed<Column[]>(() => {
   // Alignment principle: identifier/text columns left, short values (counts
-  // and dates) center. The table uses the default "fixed" layout with
-  // hard px widths on every column except "Топик": widths are set once to
-  // fit the longest real content (longest seeded username + role badge,
-  // the full "01.01.2020 в 01:00" date-time, the one-line column labels)
-  // and therefore NEVER change between boards or pages — only "Топик"
-  // absorbs the remaining space, and that remainder is viewport-derived,
-  // not content-derived, so it is identical on every page too.
-  const base: Column[] = [
+  // and dates) center. Every column but "Топик" has a px width, set once to
+  // fit the longest real content (longest seeded username + role badge, the
+  // full "01.01.2020 в 01:00" date-time, the one-line column labels), and so
+  // the same on every board and page; "Топик" absorbs the remaining space.
+  //
+  // Those widths add up to 740px besides "Топик", and the content column is
+  // 556px at 1280 and 716px at 1440. The table lays out "auto" (DataTable):
+  // where the column has the room, 1920, every column stands at its px width;
+  // where it has not, the px columns give up what they can and their words
+  // move to a second line.
+  return [
     {
       key: "title",
       label: "Топик",
@@ -87,7 +88,7 @@ const columns = computed<Column[]>(() => {
     // NOTE: DataTable cells are content-box, so these px are the CONTENT
     // width — the 12px+12px cell padding sits on top of them.
     // 180px: longest seeded author cell "Робот-Администратор [A]" is
-    // ~176px, kept on one line (nowrap).
+    // ~176px, on one line wherever the column has the room.
     { key: "author", label: "Автор", width: "180px", align: "left" },
     // 100px: the bold "Комментарии" label (~97px) is the widest content.
     { key: "comments", label: "Комментарии", width: "100px", align: "center" },
@@ -96,29 +97,31 @@ const columns = computed<Column[]>(() => {
     // "01.01.2020 в 01:00" value (~132px at regular weight) — the bold
     // "Дата создания" is ~103px, the bold "Последняя активность" ~158px
     // (measured at 700 16px PT Sans). Each column is sized to keep its
-    // label AND value on one line; "Топик" absorbs the difference.
+    // label AND value on one line; "Топик" absorbs the difference. Where the
+    // table is narrower the date goes to two lines, over the time. The last
+    // activity writes a name before its date and takes the lines it needs.
     {
       key: "created",
       label: "Дата создания",
       width: "134px",
       align: "center",
-      hideOnMobile: true,
     },
     {
       key: "lastActivity",
       label: "Последняя активность",
       width: "160px",
       align: "center",
-      hideOnMobile: true,
     },
   ];
-
-  if (canModerate.value) {
-    base.push({ key: "actions", label: "", width: "56px", align: "center" });
-  }
-
-  return base;
 });
+
+// The sort of the listing, told to the table: its header announces the sort
+// (aria-sort). Every sort the filter offers is a column key here
+// (lastActivity, created, likes, title).
+const currentSort = computed<SortState>(() => ({
+  key: filterState.value.sortBy,
+  direction: filterState.value.sortOrder,
+}));
 
 // Display row type (Topic with isPinned flag)
 type DisplayTopic = Topic & { isPinned: boolean };
@@ -142,6 +145,25 @@ const showPinnedBlock = computed(() => {
   return !Number.isFinite(page) || page <= 1;
 });
 
+// The order of the pinned topics is changed on the block itself, by the pin of
+// a pinned topic: dragged, or moved with the arrow keys. Only where the block
+// stands on its own, at the head of the first page with no filters, and only
+// when it holds two topics to swap.
+const canReorder = computed(
+  () =>
+    canPin.value &&
+    showPinnedBlock.value &&
+    (attachedTopics.value?.length ?? 0) > 1,
+);
+
+const pinnedOrder = usePinnedOrder({
+  pinned: attachedTopics,
+  enabled: canReorder,
+  send: (topicIds) => store.reorderPinnedTopics(topicIds),
+  refused: (error) =>
+    notifyFailure(error, "Не удалось упорядочить закрепленные топики"),
+});
+
 // Combine attached + regular topics when no filters are active
 const displayTopics = computed<DisplayTopic[]>(() => {
   if (isUnifiedListing.value) {
@@ -153,9 +175,10 @@ const displayTopics = computed<DisplayTopic[]>(() => {
     }));
   }
 
-  // No filters: pinned first (from attachedTopics, page 1 only), then regular
+  // No filters: pinned first (from attachedTopics, page 1 only, in the order
+  // a move has just given them), then regular
   const pinned: DisplayTopic[] = showPinnedBlock.value
-    ? (attachedTopics.value ?? []).map((t) => ({ ...t, isPinned: true }))
+    ? pinnedOrder.order.value.map((t) => ({ ...t, isPinned: true }))
     : [];
   const regular: DisplayTopic[] = (topics.value?.resources ?? []).map((t) => ({
     ...t,
@@ -232,48 +255,154 @@ function fetchTopics() {
 // Guard ensures no-op if board not yet loaded (will fire again when board loads)
 watch(paramsKey, fetchTopics, { immediate: true });
 
+/**
+ * The last refused pin, in a line opened under the row of the topic whose pin
+ * button was pressed (DataTable `detailsFor`).
+ */
+const pinRefusal = ref<{ id: DisplayTopic["id"]; text: string } | null>(null);
+
 // Toggle pin/unpin topic (moderator action)
 async function handleTogglePin(row: DisplayTopic) {
-  if (pinningTopicId.value) return;
+  // Not while an order is being saved: the save names the topics the block
+  // holds, and a pin taken on or off under it would make it name others.
+  if (pinningTopicId.value || pinnedOrder.saving.value) return;
 
   const topicId = String(row.id);
   // Read the direction BEFORE the request: on success the row is replaced by
   // the refreshed listing, and the refusal has to name what was attempted.
   const wasPinned = row.isPinned;
   pinningTopicId.value = topicId;
+  pinRefusal.value = null;
   try {
     const { error } = await store.togglePinTopic(topicId);
     if (error) {
-      notifyFailure(
+      const text = refusalHere(
         error,
         wasPinned ? "Не удалось открепить топик" : "Не удалось закрепить топик",
       );
+      if (text) pinRefusal.value = { id: row.id, text };
     }
   } finally {
     pinningTopicId.value = null;
   }
 }
 
-// Save pinned topics order (moderator action)
-async function handleSavePinnedOrder(topicIds: string[]) {
-  savingPinnedOrder.value = true;
-  try {
-    const { error } = await store.reorderPinnedTopics(topicIds);
-    // The dialog closes only on success: closing it over a rejected save shows
-    // the new order on screen while the server keeps the old one.
-    if (error) {
-      notifyFailure(error, "Не удалось сохранить порядок закрепленных топиков");
-      return;
-    }
-    showPinnedManager.value = false;
-  } finally {
-    savingPinnedOrder.value = false;
-  }
+/**
+ * A press on the pin of a title pins or unpins its topic. The click the browser
+ * sends after a drag of the pin let go is not a press. Pressed from the
+ * keyboard, the pin keeps the caret: the row moves into the pinned block or
+ * out of it, and focus on a node moved in the page falls to <body>.
+ */
+async function onPinClick(row: DisplayTopic, event: MouseEvent) {
+  if (pinnedOrder.isDragClick()) return;
+  const fromKeyboard = event.detail === 0;
+  await handleTogglePin(row);
+  if (!fromKeyboard) return;
+  await nextTick();
+  tableScrollRef.value
+    ?.querySelector<HTMLElement>(`[data-pin-toggle="${row.id}"]`)
+    ?.focus();
 }
+
+/** What the pin of a title does, under the pointer. */
+function pinHint(row: DisplayTopic, index: number): string {
+  if (!row.isPinned) return "Закрепить топик";
+  return isMovable(row, index)
+    ? "Открепить топик. Перетащите, чтобы изменить порядок"
+    : "Открепить топик";
+}
+
+// =============================================================================
+// ORDER OF THE PINNED TOPICS (moderator action, on the listing itself)
+// =============================================================================
+
+/** Whether a row is a topic of the pinned block that can be moved. */
+function isMovable(row: DisplayTopic, index: number): boolean {
+  return (
+    canReorder.value && row.isPinned && index < pinnedOrder.order.value.length
+  );
+}
+
+/** A press on a pin starts a drag only on a topic of the block. */
+function onPinPointerDown(
+  row: DisplayTopic,
+  index: number,
+  event: PointerEvent,
+) {
+  if (!isMovable(row, index)) return;
+  pinnedOrder.onPointerDown(index, event, pinnedRows);
+}
+
+/** The rows of the pinned block on screen, in their order. */
+function pinnedRows(): HTMLElement[] {
+  const handles =
+    tableScrollRef.value?.querySelectorAll<HTMLElement>("[data-pin-handle]") ??
+    [];
+  return [...handles]
+    .map((handle) => handle.closest("tr"))
+    .filter((row): row is HTMLTableRowElement => row !== null);
+}
+
+/**
+ * Where the line of a drag stands at a row: above it when the held topic
+ * would stand before it, below the last row when after all of them.
+ */
+function dropMark(row: DisplayTopic, index: number): string | null {
+  if (!isMovable(row, index)) return null;
+  const gap = pinnedOrder.target.value;
+  if (gap === null) return null;
+  if (gap === index) return "drop-before";
+  const last = pinnedOrder.order.value.length - 1;
+  return gap === last + 1 && index === last ? "drop-after" : null;
+}
+
+// The pin that moved its topic with an arrow keeps the caret: the listing
+// draws the row anew in its place, and focus on a node taken out of the page
+// falls to <body>. Only a topic of the block moves.
+async function onPinKeydown(
+  row: DisplayTopic,
+  index: number,
+  event: KeyboardEvent,
+) {
+  if (!isMovable(row, index)) return;
+  const moved = pinnedOrder.onKeydown(index, event);
+  if (!moved) return;
+  await nextTick();
+  tableScrollRef.value
+    ?.querySelector<HTMLElement>(`[data-pin-handle="${moved}"]`)
+    ?.focus();
+}
+
+const tableScrollRef = ref<HTMLElement | null>(null);
 
 // =============================================================================
 // CREATE TOPIC
 // =============================================================================
+
+// "Создать топик" is offered by the server's answer for this viewer on this
+// board (board.viewer, TopicService.MayCreate): the board's policy against the
+// role, and the ban. The news and the contests take topics from the moderation
+// alone, and a member does not get a button there that the server would refuse.
+// A guest is invited to sign in only where signing in opens a topic to an
+// ordinary member: in the news it opens nothing.
+const canCreateTopic = computed(
+  () => !!user.value && !!selectedBoard.value?.viewer?.canCreateTopic,
+);
+const invitesSignIn = computed(
+  () => !user.value && !!selectedBoard.value?.viewer?.canCreateTopicAfterSignIn,
+);
+
+// The answer is for whoever held the session when the board was read. Signing
+// in or out on the page makes it somebody else's, so the board is read again;
+// until it answers, the button is not offered.
+watch(
+  () => user.value?.username ?? null,
+  (username, before) => {
+    if (username === before) return;
+    const alias = selectedBoard.value?.alias;
+    if (alias) void store.trySelectBoardByAlias(alias);
+  },
+);
 
 const showCreateForm = ref(false);
 // Tool reveal: unified animation via the low-level toggle, intentionally
@@ -321,9 +450,15 @@ async function handleCreateTopic() {
       createErrors.value = fieldErrors;
       // Fall back to the general error title when the response carried no
       // field-level validation errors (e.g. a GeneralError, not a
-      // BadRequestError) — this covers 403 (board policy) and 500 alike.
+      // BadRequestError) — a conflict, a board that no longer exists.
+      //
+      // The statuses the interceptor speaks for - the board policy refusing
+      // the topic, a rate limit, a dead server - are said here too, and its
+      // plate is taken down: the form stays open with the title and the text
+      // still in it, and the line is where the reader looks. An expired
+      // session and a dead connection stay with the plate.
       if (!Object.keys(fieldErrors).length) {
-        createGeneralError.value = describeFailure(
+        createGeneralError.value = refusalHere(
           error,
           "Не удалось создать топик",
         );
@@ -364,15 +499,11 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
       <ContentText :html="selectedBoard.description" />
     </div>
 
-    <!-- Moderator actions -->
-    <div v-if="canModerate && attachedTopics?.length" class="moderator-actions">
-      <Tooltip text="Изменить порядок закрепленных топиков">
-        <button class="manage-pinned-button" @click="showPinnedManager = true">
-          <SvgIcon name="pin" />
-          Управление закрепленными ({{ attachedTopics.length }})
-        </button>
-      </Tooltip>
-    </div>
+    <!-- What a move of a pinned topic did, for a screen reader: the move
+         itself is only seen. -->
+    <span v-if="canReorder" class="visually-hidden" aria-live="polite">{{
+      pinnedOrder.announcement.value
+    }}</span>
 
     <!-- Filter controls -->
     <div class="filter-row">
@@ -381,10 +512,16 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
 
     <!-- Error state: a failed load must not be presented as an empty list.
          Shown only when there are no stale rows to keep on screen
-         (stale-while-revalidate keeps already-loaded topics otherwise). -->
+         (stale-while-revalidate keeps already-loaded topics otherwise).
+
+         The sentence comes from the store, which is where the refusal is
+         read: this strip is the one carrier of it now — the request is sent
+         with the flags that keep the interceptor's plate quiet — so a fixed
+         phrase here would drop what the server said, and the seconds a rate
+         limit asks the reader to wait along with it. -->
     <ErrorState
       v-if="topicsError && !displayTopics.length"
-      message="Не удалось загрузить топики"
+      :message="topicsError"
       :retry="fetchTopics"
     />
 
@@ -394,16 +531,82 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
          content areas: the fixed columns keep their guaranteed widths and
          the "Топик" column keeps a readable remainder — the table scrolls
          inside the wrapper instead of crushing the title to zero. -->
-    <div v-else class="topics-table-scroll">
+    <div v-else ref="tableScrollRef" class="topics-table">
       <DataTable
         ref="tableRef"
         :columns="columns"
         :data="displayTopics"
         :loading="topicsLoading || !selectedBoard"
+        :sort="currentSort"
         :empty-text="emptyText"
+        :details-for="pinRefusal?.id ?? null"
       >
-        <template #cell-title="{ row }">
+        <!-- A refused pin, under the row whose pin button was pressed. -->
+        <template #details>
+          <ActionResult :text="pinRefusal?.text" class="pin-refusal" />
+        </template>
+
+        <!-- For an administrator and a moderator of the board the pin before
+             every title is a toggle, as the heart of a like is: pale where the
+             topic is not pinned, and a press pins it; the colour of the link
+             where it is, and a press unpins it. The pin of a topic of the
+             pinned block is also what moves it: dragged within the block, or
+             with the arrow keys once it has the caret. It stands beside the
+             link rather than in it, a button inside a link being two controls
+             in one, and takes the place and the look the mark has in the
+             link. -->
+        <template #cell-title="{ row, index }">
+          <span v-if="canPin" class="topic-line">
+            <Tooltip
+              :text="pinHint(row, index)"
+              :disabled="pinnedOrder.held.value !== null"
+            >
+              <button
+                type="button"
+                class="pin-toggle"
+                :class="[
+                  dropMark(row, index),
+                  {
+                    pinned: row.isPinned,
+                    'pin-handle': isMovable(row, index),
+                    held:
+                      isMovable(row, index) && pinnedOrder.held.value === index,
+                  },
+                ]"
+                :data-pin-toggle="row.id"
+                :data-pin-handle="isMovable(row, index) ? row.id : undefined"
+                :aria-label="`Закрепить топик ${row.title}`"
+                :aria-pressed="row.isPinned"
+                :aria-keyshortcuts="
+                  isMovable(row, index) ? 'ArrowUp ArrowDown' : undefined
+                "
+                @click="onPinClick(row, $event)"
+                @pointerdown="onPinPointerDown(row, index, $event)"
+                @pointermove="pinnedOrder.onPointerMove"
+                @pointerup="pinnedOrder.onPointerUp"
+                @pointercancel="pinnedOrder.onPointerCancel"
+                @keydown="onPinKeydown(row, index, $event)"
+              >
+                <SvgIcon name="pin" class="topic-icon" />
+              </button>
+            </Tooltip>
+            <router-link
+              :to="topicLink(row)"
+              :class="[
+                'topic-link',
+                { pinned: row.isPinned, closed: row.isClosed },
+              ]"
+            >
+              <SvgIcon v-if="row.isClosed" name="locked" class="topic-icon" />
+              <span
+                v-if="filterState.search"
+                v-html="highlightMatch(row.title, filterState.search)"
+              />
+              <template v-else>{{ row.title }}</template>
+            </router-link>
+          </span>
           <router-link
+            v-else
             :to="topicLink(row)"
             :class="[
               'topic-link',
@@ -421,10 +624,8 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
         </template>
 
         <template #cell-author="{ row }">
-          <span v-if="row.author" class="author-cell"
-            ><UserLink :user="row.author"
-          /></span>
-          <span v-else class="muted">удаленный пользователь</span>
+          <UserLink v-if="row.author" :user="row.author" />
+          <RemovedAccountLink v-else />
         </template>
 
         <template #cell-comments="{ row }">
@@ -451,39 +652,36 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
           <HumanDate :date="row.createdUtc" />
         </template>
 
+        <!-- Who was last, then when, written in the cell as the forum index
+             and DM2 write it ("Ян, 16.09.2026 в 14:17"): a name only in the
+             tooltip of the date could not be read on a touch screen, where
+             the tap follows the link (owner, 5 October 2026). -->
         <template #cell-lastActivity="{ row }">
           <template v-if="row.lastComment">
-            <Tooltip
-              :text="
-                row.lastComment.author?.username ?? 'удаленный пользователь'
-              "
-            >
-              <router-link
-                :to="lastCommentLink(row)"
-                class="last-activity-link"
-              >
-                <HumanDate :date="row.lastComment.createdUtc" />
-              </router-link>
-            </Tooltip>
+            <UserLink
+              v-if="row.lastComment.author"
+              :user="row.lastComment.author"
+              hide-badge
+            /><RemovedAccountLink v-else />,
+            <router-link :to="lastCommentLink(row)" class="last-activity-link"
+              ><HumanDate :date="row.lastComment.createdUtc"
+            /></router-link>
           </template>
-          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
-        </template>
-
-        <template v-if="canModerate" #cell-actions="{ row }">
-          <Tooltip :text="row.isPinned ? 'Открепить топик' : 'Закрепить топик'">
-            <button
-              class="pin-button"
-              :class="{
-                pinned: row.isPinned,
-                loading: pinningTopicId === row.id,
-              }"
-              :disabled="pinningTopicId !== null"
-              :aria-label="row.isPinned ? 'Открепить топик' : 'Закрепить топик'"
-              @click="handleTogglePin(row)"
-            >
-              <SvgIcon :name="'pin'" />
-            </button>
-          </Tooltip>
+          <!-- A topic nobody has answered was last active when it was opened.
+               The server sorts the column by that moment (last comment, else
+               creation), and the forum index names a new topic as its board's
+               last activity the same way, so the cell has a name and a date to
+               show and no reason to print the missing-value token. -->
+          <template v-else>
+            <UserLink
+              v-if="row.author"
+              :user="row.author"
+              hide-badge
+            /><RemovedAccountLink v-else />,
+            <router-link :to="topicLink(row)" class="last-activity-link"
+              ><HumanDate :date="row.createdUtc"
+            /></router-link>
+          </template>
         </template>
 
         <template v-if="topics?.paging && topics.paging.pages > 1" #footer>
@@ -513,10 +711,12 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
     </p>
 
     <!-- Create-topic affordance sits below the whole listing (like replying
-         at the end of a thread): guests get the login CTA, members the
-         toggle button with the inline form unfolding right here. -->
-    <div class="create-topic-section">
-      <LoginPrompt v-if="!user" action="создать топик" />
+         at the end of a thread): the toggle button with the inline form
+         unfolding right here for whoever may open a topic on the board, the
+         login CTA for a guest where signing in opens one, and nothing for the
+         rest. -->
+    <div v-if="canCreateTopic || invitesSignIn" class="create-topic-section">
+      <LoginPrompt v-if="invitesSignIn" action="создать топик" />
       <button
         v-else
         type="button"
@@ -531,7 +731,9 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
          empty closed zone: a 0-height flex item still consumes the page's
          column gap, leaving dead space under the button. -->
     <div
-      v-show="showCreateForm || createFormPinnedHeight !== null"
+      v-show="
+        canCreateTopic && (showCreateForm || createFormPinnedHeight !== null)
+      "
       ref="createFormZoneRef"
       class="expand-zone"
       :class="{ animating: createFormPinnedHeight !== null }"
@@ -544,7 +746,7 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
       @transitioncancel="onCreateFormTransitionEnd"
     >
       <form
-        v-if="showCreateForm"
+        v-if="showCreateForm && canCreateTopic"
         class="create-topic-form"
         @submit.prevent="handleCreateTopic"
       >
@@ -578,12 +780,11 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
           />
         </form-field>
 
-        <div v-if="createGeneralError" class="create-topic-error" role="alert">
-          {{ createGeneralError }}
-        </div>
+        <ActionResult :text="createGeneralError" class="create-topic-error" />
 
         <div class="create-topic-actions">
           <Button
+            variant="primary"
             :loading="creating"
             :disabled="!newTitle.trim() || !newText.trim()"
           >
@@ -592,15 +793,6 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
         </div>
       </form>
     </div>
-
-    <!-- Pinned topics manager modal -->
-    <PinnedTopicsManager
-      v-if="showPinnedManager && attachedTopics"
-      :topics="attachedTopics"
-      :saving="savingPinnedOrder"
-      @save="handleSavePinnedOrder"
-      @close="showPinnedManager = false"
-    />
   </div>
 </template>
 
@@ -649,28 +841,59 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
   &:hover
     color: $link-hover
 
-.pin-button
-  padding: $minor $small
-  +button
+// A refused pin, in the line the table opens under the row.
+.pin-refusal
+  --action-result-margin: 0
+
+// The title as a moderator sees it: the pin before the link, in the place and
+// the size the mark has inside the link.
+.topic-line
+  display: inline-flex
+  align-items: center
+  gap: 4px
+
+  // The tooltip wraps the pin; laid out as a line of its own it would stand
+  // the pin on the baseline instead of in the middle of the title.
+  :deep(.tooltip-trigger)
+    display: inline-flex
+
+// The pin as a toggle. The same glyph as the mark, and nothing around it: no
+// frame, no fill, the caret ring only. The muted text colour where the topic
+// is not pinned, the colour of the mark where it is, and the hover colour of
+// the link under the pointer in both.
+.pin-toggle
+  display: inline-flex
+  padding: 0
+  border: none
+  background: none
+  font: inherit
+  color: $text-muted
+  cursor: pointer
 
   &.pinned
     color: $link
-    border-color: $link
 
-  &.loading
-    opacity: 0.5
-    cursor: wait
+  &:hover
+    color: $link-hover
 
-.moderator-actions
-  display: flex
-  gap: $small
-  margin-bottom: $medium
+// The pin of a topic of the pinned block is the handle of a drag as well.
+.pin-handle
+  cursor: grab
+  touch-action: none
 
-.manage-pinned-button
-  display: inline-flex
-  align-items: center
-  gap: $small
-  +button
+  &.held
+    cursor: grabbing
+
+// The row held by a drag stays in its place, faded; a thin grey line between
+// the rows shows where it would stand if let go.
+:deep(tr:has(.pin-handle.held) > td)
+  opacity: 0.5
+
+:deep(tr:has(.pin-handle.drop-before) > td)
+  box-shadow: inset 0 2px 0 $text-muted
+
+:deep(tr:has(.pin-handle.drop-after) > td)
+  box-shadow: inset 0 -2px 0 $text-muted
 
 // No extra margin-top: the page's own $small flex gap is the whole
 // table-to-caption distance — the muted line sits close to its table.
@@ -684,39 +907,6 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
   // :deep — the links come from the UserLink child component
   :deep(a)
     +muted-link
-
-// Longest username + role badge must stay on one line
-.author-cell
-  white-space: nowrap
-
-// Date-time values ("01.01.2020 в 01:00") must never break across lines —
-// the fixed column widths are sized to fit them, nowrap is the guarantee.
-// :deep — the td elements belong to the DataTable child component.
-:deep(td.col-created),
-:deep(td.col-lastActivity)
-  white-space: nowrap
-
-// Floor for narrow content areas: the fixed columns total ~748px, so
-// without a minimum the flexible "Топик" column would collapse to zero
-// when the viewport squeezes the content column. min-width keeps a
-// readable title share and the wrapper scrolls the overflow; at normal
-// desktop widths the table fits and the wrapper is inert. (min-width on
-// individual cells is ignored by table-layout: fixed — it must live on
-// the table box itself.)
-.topics-table-scroll
-  overflow-x: auto
-  // width:0 + min-width:100% — the standard intrinsic-size containment
-  // trick: the wrapper contributes ~0 to every ancestor's min-content
-  // (so the wide table can NOT stretch the page's content column through
-  // the flex min-width:auto chain), while min-width stretches the
-  // rendered box back to the full content width. Without it the table's
-  // 950px would propagate up and widen the whole page instead of
-  // scrolling inside this wrapper.
-  width: 0
-  min-width: 100%
-
-  :deep(.data-table)
-    min-width: 950px
 
 .filter-row
   display: flex
@@ -739,19 +929,16 @@ const textError = computed(() => getFieldError(createErrors.value, "text"));
   padding: $medium
   background-color: $bg-element
   border: 1px dashed $border
-  border-radius: $border-radius
 
 .create-topic-title-input
   width: 100%
   +input()
 
+// The refusal line of the site's forms, over the buttons; the form spaces
+// its rows with a gap of its own.
 .create-topic-error
-  padding: $small
-  color: $text-on-red
-  background-color: $bg-highlight-red
-  border-radius: $border-radius
+  --action-result-margin: 0
 
 .create-topic-actions
   display: flex
-  justify-content: flex-end
 </style>

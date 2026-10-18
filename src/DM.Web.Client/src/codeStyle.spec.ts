@@ -22,7 +22,12 @@
  * for the same reason: a test may quote the wrong form in order to assert on
  * it.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+// The server scan reads every C# file in the repository. It takes three
+// seconds on a quiet machine and runs past the suite-wide 15s when every core
+// is busy, so it declares the ceiling the other whole-tree scans declare.
+vi.setConfig({ testTimeout: 30_000 });
 import { readdirSync, readFileSync, statSync } from "fs";
 import { dirname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
@@ -41,6 +46,16 @@ const ELLIPSIS = "\u2026";
 const TRUNCATION_MARKERS: Record<string, string> = {
   "src/DM.Infrastructure.Persistence/Repositories/Search/SearchSnippet.cs":
     "appends the marker to a snippet cut at the character budget",
+};
+
+/**
+ * The other exception: a sign a control draws in place of a word, hidden from
+ * the reader of the screen beside the name it carries in words. Not text, so
+ * not an ellipsis: the "…" of the site's face, where "..." would be periods.
+ */
+const SIGNS: Record<string, string> = {
+  "src/DM.Web.Client/src/pages/messenger/ConversationLine.vue":
+    '"…" of the line over a correspondence, the button of its menu, named "Действия с перепиской" for the reader of the screen',
 };
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "coverage", "bin", "obj"]);
@@ -89,7 +104,7 @@ const violationsIn = (files: string[]): string[] => {
   const violations: string[] = [];
   for (const file of files) {
     const path = relative(REPO_ROOT, file).split("\\").join("/");
-    if (path in TRUNCATION_MARKERS) continue;
+    if (path in TRUNCATION_MARKERS || path in SIGNS) continue;
     const source = readFileSync(file, "utf8");
     if (!source.includes(ELLIPSIS)) continue;
     stripComments(source)
@@ -126,7 +141,10 @@ describe("ellipsis in interface text is three dots", () => {
   });
 
   it("keeps every allowed truncation marker in use", () => {
-    for (const [path, reason] of Object.entries(TRUNCATION_MARKERS)) {
+    for (const [path, reason] of Object.entries({
+      ...TRUNCATION_MARKERS,
+      ...SIGNS,
+    })) {
       const source = stripComments(readFileSync(join(REPO_ROOT, path), "utf8"));
       expect(source, `${path}: ${reason}`).toContain(ELLIPSIS);
     }

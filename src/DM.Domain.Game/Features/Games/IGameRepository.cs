@@ -146,7 +146,7 @@ public interface IGameRepository
     Task<GameDetails> Update(UpdateGameEntity updateGame, CancellationToken ct = default);
 
     /// <summary>
-    /// Delete game (soft delete)
+    /// Delete game (soft delete) and drop the subscriptions to it
     /// </summary>
     /// <param name="gameId">Game identifier</param>
     /// <param name="deletedByUserId">User who removed the game</param>

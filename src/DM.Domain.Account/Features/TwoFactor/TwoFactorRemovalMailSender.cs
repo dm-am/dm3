@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Mail;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Dates;
 using DM.Domain.Core.Mail;
 using DM.Domain.Core.Mail.ViewModels;
 using Microsoft.Extensions.Options;
@@ -21,21 +22,19 @@ internal class TwoFactorRemovalMailSender : AccountMailSender, ITwoFactorRemoval
     }
 
     /// <inheritdoc />
-    public Task SendRequest(string email, string username, Guid secret)
+    public Task SendRequest(string email, Guid secret)
     {
-        var subject = $"Dungeon Master: запрос на снятие второго фактора для {username}";
+        const string subject = "Dungeon Master: запрос на отключение двухфакторной аутентификации";
         return Send(email, subject, new TwoFactorRemovalRequestViewModel(
-            Username: username,
             ConfirmationLinkUrl: ConfirmationLink("two-factor/removal", secret)));
     }
 
     /// <inheritdoc />
-    public Task SendScheduled(string email, string username, DateTimeOffset dueUtc, Guid secret)
+    public Task SendScheduled(string email, DateTimeOffset dueUtc, Guid secret, string? timeZoneId)
     {
-        var subject = $"Dungeon Master: второй фактор для {username} будет снят";
+        const string subject = "Dungeon Master: отключение двухфакторной аутентификации назначено";
         return Send(email, subject, new TwoFactorRemovalScheduledViewModel(
-            Username: username,
-            DueUtc: dueUtc,
+            Due: ReaderTime.Format(dueUtc, timeZoneId),
             CancellationLinkUrl: ConfirmationLink("two-factor/removal/cancel", secret)));
     }
 }

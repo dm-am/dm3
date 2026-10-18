@@ -32,11 +32,39 @@ export function provideZoneSection(): Ref<string | undefined> {
 export function useZoneSection(
   section: MaybeRefOrGetter<string | undefined>,
 ): void {
-  const shared = inject(ZONE_SECTION, null);
+  announce(inject(ZONE_SECTION, null), section);
+}
+
+const ZONE_MARKER = Symbol("zone-marker") as InjectionKey<
+  Ref<string | undefined>
+>;
+
+/**
+ * Where a zone shell keeps a muted word it draws after the heading, such as
+ * "архив" for an archived room. A marker and not part of the section: the tab
+ * title leaves it out, and the heading draws it in its own quiet style.
+ */
+export function provideZoneMarker(): Ref<string | undefined> {
+  const marker = ref<string | undefined>(undefined);
+  provide(ZONE_MARKER, marker);
+  return marker;
+}
+
+/** Announces the marker of the page; cleared when the page leaves. */
+export function useZoneMarker(
+  marker: MaybeRefOrGetter<string | undefined>,
+): void {
+  announce(inject(ZONE_MARKER, null), marker);
+}
+
+function announce(
+  shared: Ref<string | undefined> | null,
+  value: MaybeRefOrGetter<string | undefined>,
+): void {
   if (!shared) return;
 
   watchEffect((onCleanup) => {
-    shared.value = toValue(section);
+    shared.value = toValue(value);
     onCleanup(() => {
       shared.value = undefined;
     });

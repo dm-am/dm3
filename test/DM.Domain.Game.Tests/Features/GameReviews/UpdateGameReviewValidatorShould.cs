@@ -36,6 +36,26 @@ public class UpdateGameReviewValidatorShould : UnitTestBase
         result.ShouldNotHaveAnyValidationErrors();
     }
 
+    /// <summary>
+    /// Present and blank is not "keep what is stored": the service trims the text
+    /// before storing it, so a text of spaces would publish an empty review.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("            ")]
+    public void FailWhenTextIsBlank(string text)
+    {
+        var input = new UpdateGameReview
+        {
+            ReviewId = Guid.NewGuid(),
+            Text = text
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(x => x.Text)
+            .WithErrorMessage("Введите текст рецензии");
+    }
+
     [Fact]
     public void FailWhenReviewIdIsEmpty()
     {

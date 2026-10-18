@@ -14,6 +14,15 @@ internal class UpdateGameReviewValidator : AbstractValidator<UpdateGameReview>
             .NotEmpty()
             .WithMessage("Укажите рецензию");
 
+        // Omitted means "keep what is stored"; present and blank means the
+        // author is trying to publish a review with no text, which the create
+        // path refuses too. The service trims before it stores, so a text of
+        // spaces is blank here and not a text.
+        RuleFor(x => x.Text)
+            .NotEmpty()
+            .When(x => x.Text != null)
+            .WithMessage("Введите текст рецензии");
+
         RuleFor(x => x.Text)
             .MaximumLength(GameReviewFieldLimits.TextMaxLength)
             .When(x => !string.IsNullOrEmpty(x.Text))

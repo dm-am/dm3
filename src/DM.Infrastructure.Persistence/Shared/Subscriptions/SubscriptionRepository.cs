@@ -26,10 +26,10 @@ internal class SubscriptionRepository : ISubscriptionRepository
     /// subscription points at.
     /// </summary>
     /// <remarks>
-    /// One query with four correlated lookups rather than the page asking four
-    /// endpoints per row. The fan-out reads below keep the plain projection:
-    /// notification delivery never renders the name, and paying for the joins
-    /// there would tax every published event.
+    /// One query with correlated lookups by primary key rather than the page
+    /// asking an endpoint per row. The fan-out reads below keep the plain
+    /// projection: notification delivery never renders the name or the status,
+    /// and paying for the joins there would tax every published event.
     /// </remarks>
     private static IQueryable<Subscription> WithTargetNames(
         DmDbContext dbContext, IQueryable<SubscriptionEntity> query) =>
@@ -51,7 +51,21 @@ internal class SubscriptionRepository : ISubscriptionRepository
                             : dbContext.Users.Where(u => u.UserId == s.TargetId).Select(u => u.Username).FirstOrDefault(),
             TargetUsername = s.TargetType == SubscriptionTargetType.User
                 ? dbContext.Users.Where(u => u.UserId == s.TargetId).Select(u => u.Username).FirstOrDefault()
-                : null
+                : null,
+            // The colour a game or a blog is named in: its status and the day it
+            // opened. Lookups by the primary key of the same row the title reads.
+            TargetStatus =
+                s.TargetType == SubscriptionTargetType.Game
+                    ? dbContext.Games.Where(g => g.GameId == s.TargetId).Select(g => (ModuleStatus?)g.Status).FirstOrDefault()
+                    : s.TargetType == SubscriptionTargetType.Blog
+                        ? dbContext.Blogs.Where(b => b.BlogId == s.TargetId).Select(b => (ModuleStatus?)b.Status).FirstOrDefault()
+                        : null,
+            TargetActivatedUtc =
+                s.TargetType == SubscriptionTargetType.Game
+                    ? dbContext.Games.Where(g => g.GameId == s.TargetId).Select(g => g.ActivatedUtc).FirstOrDefault()
+                    : s.TargetType == SubscriptionTargetType.Blog
+                        ? dbContext.Blogs.Where(b => b.BlogId == s.TargetId).Select(b => b.ActivatedUtc).FirstOrDefault()
+                        : null
         });
 
     /// <inheritdoc />

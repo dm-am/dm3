@@ -121,7 +121,11 @@ public static class GameMappers
 
     // CanView and Description are set by the repository; the unread counter
     // is per reader. TotalPostsCount is a projection subquery over live
-    // posts, mirroring the rubric counts on blogs.
+    // posts, mirroring the rubric counts on blogs. A room of chat has no posts:
+    // its messages live in a chat the room has no navigation to, and
+    // RoomRepository counts them for the rooms it returns. The grant of a
+    // removed character stays in its table and lets nobody in: served, it is
+    // a grant to nobody, and the room settings would list it without a name.
     private static readonly Expression<Func<DbRoom, Room>> RoomProjection =
         r => new Room
         {
@@ -134,9 +138,11 @@ public static class GameMappers
             AccessType = r.AccessType,
             IsArchived = r.IsArchived,
             OrderNumber = r.OrderNumber,
-            PreviousRoomId = r.PreviousRoomId,
             TotalPostsCount = r.Posts.Count(p => !p.IsRemoved),
-            Accesses = r.RoomAccesses.Select(a => AccessProjection.Splice(a)).ToList(),
+            Accesses = r.RoomAccesses
+                .Where(a => a.CharacterId == null || a.Character != null)
+                .Select(a => AccessProjection.Splice(a))
+                .ToList(),
             Pendencies = PostPendencyFilters.OfRoom.Splice(r)
                 .Select(p => PendencyProjection.Splice(p))
                 .ToList(),
@@ -161,7 +167,6 @@ public static class GameMappers
             DraftVisibility = g.DraftVisibility,
             ClosedUtc = g.ClosedUtc,
             ActivatedUtc = g.ActivatedUtc,
-            AttributeSchemaId = g.AttributeSchemaId,
             Title = g.Title,
             SystemName = g.SystemName!,
             NarrativeSetting = g.NarrativeSetting!,
@@ -172,7 +177,12 @@ public static class GameMappers
             Mentor = GeneralUserProjections.Projection.Splice(g.Mentor),
             Tags = g.GameTags.Select(t => TagProjection.Splice(t.Tag)).ToList(),
             TagIds = g.GameTags.Select(t => t.Tag.ShortId).ToList(),
+            // Spelled out rather than left to the account filter: the game reads
+            // lift that filter to keep the games of removed masters
+            // (RemovedAuthors). A removed assistant assists nothing and is named
+            // nowhere.
             Assistants = g.Assistants
+                .Where(a => !a.User.IsRemoved)
                 .Select(a => new GameAssistantInfo
                 {
                     UserId = a.UserId,
@@ -224,6 +234,7 @@ public static class GameMappers
                 HidePostStats = g.HidePostStats,
                 Rooms = g.Rooms.Select(r => RoomProjection.Splice(r)).ToList(),
                 FullAssistants = g.Assistants
+                    .Where(a => !a.User.IsRemoved)
                     .Select(a => GeneralUserProjections.Projection.Splice(a.User))
                     .ToList(),
                 Characters = g.Characters
@@ -242,20 +253,20 @@ public static class GameMappers
 
     // ═══ Queryable projections ═══
 
+    // The room, game and pendency reads keep what removed accounts left in
+    // them - a game whose master is gone, a turn marker he set - with the
+    // user nested as nobody (RemovedAuthors).
+
     /// <summary>EF projection to the domain room</summary>
     public static IQueryable<Room> ProjectToRoom(this IQueryable<DbRoom> query) =>
-        query.Select(ExpressionSplicer.Expand(RoomProjection));
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(RoomProjection));
 
     /// <summary>
     /// EF projection to the room-for-update shape: the room plus its parent
     /// game, for authorization checks
     /// </summary>
     public static IQueryable<RoomToUpdate> ProjectToRoomToUpdate(this IQueryable<DbRoom> query) =>
-        query.Select(ExpressionSplicer.Expand(RoomToUpdateProjection));
-
-    /// <summary>EF projection to the room reorder shape</summary>
-    public static IQueryable<RoomOrderInfo> ProjectToRoomOrderInfo(this IQueryable<DbRoom> query) =>
-        query.Select(r => new RoomOrderInfo { Id = r.RoomId, OrderNumber = r.OrderNumber });
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(RoomToUpdateProjection));
 
     /// <summary>EF projection to the domain room access</summary>
     public static IQueryable<DtoRoomAccess> ProjectToRoomAccess(this IQueryable<DbRoomAccess> query) =>
@@ -263,7 +274,7 @@ public static class GameMappers
 
     /// <summary>EF projection to the domain pendency</summary>
     public static IQueryable<DtoPostPendency> ProjectToPostPendency(this IQueryable<DbPostPendency> query) =>
-        query.Select(ExpressionSplicer.Expand(PendencyProjection));
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(PendencyProjection));
 
     /// <summary>EF projection to the full domain character</summary>
     public static IQueryable<Character> ProjectToCharacter(this IQueryable<DbCharacter> query) =>
@@ -287,14 +298,15 @@ public static class GameMappers
             AccessPolicy = c.AccessPolicy,
             IsDead = c.IsDead,
             IsPlayerLeft = c.IsPlayerLeft,
+            IsPlayerExiled = c.IsPlayerExiled,
             CreatedUtc = c.CreatedUtc
         });
 
     /// <summary>EF projection to the domain game (list shape)</summary>
     public static IQueryable<GameDto> ProjectToGame(this IQueryable<DbGame> query) =>
-        query.Select(ExpressionSplicer.Expand(GameProjection));
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(GameProjection));
 
     /// <summary>EF projection to the game details</summary>
     public static IQueryable<GameDetails> ProjectToGameDetails(this IQueryable<DbGame> query) =>
-        query.Select(ExpressionSplicer.Expand(GameDetailsProjection));
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(GameDetailsProjection));
 }

@@ -35,6 +35,7 @@ public class HealthCheckShould : IntegrationTestBase
         var body = await response.Content.ReadAsStringAsync();
         body.Should().NotContain("postgresql");
         body.Should().NotContain("rabbitmq");
+        body.Should().NotContain("realtime-push");
     }
 
     /// <summary>
@@ -48,9 +49,11 @@ public class HealthCheckShould : IntegrationTestBase
     /// because an endpoint that names no check cannot report one down - the
     /// failure mode /_health has by design and /_ready must not acquire.
     ///
-    /// The broker is deliberately absent: a request is served without it, and
-    /// tagging it ready pulled the whole site out of rotation over a delayed
-    /// notification.
+    /// The broker is deliberately absent, and the realtime subscription with it: a
+    /// request is served without either, and tagging them ready pulled the whole
+    /// site out of rotation over a delayed notification. The subscription check
+    /// answers Degraded for as long as it has not opened, which is a state an
+    /// instance can serve every page from.
     /// </remarks>
     [Fact]
     public async Task Readiness_ReportsTheStoresARequestNeeds()
@@ -60,11 +63,19 @@ public class HealthCheckShould : IntegrationTestBase
         var body = await response.Content.ReadAsStringAsync();
         body.Should().Contain("postgresql");
         body.Should().NotContain("rabbitmq");
+        body.Should().NotContain("realtime-push");
     }
 
     /// <summary>
-    /// The detail endpoint is the one that hides nothing, broker included.
+    /// The detail endpoint is the one that hides nothing: broker and realtime
+    /// subscription included.
     /// </summary>
+    /// <remarks>
+    /// The subscription check is named here and nowhere else, and being named is
+    /// the whole of what it is for: an instance that never opened its subscription
+    /// serves every request and answers every other probe, so this report is the
+    /// only place inside the host that says push is not reaching it.
+    /// </remarks>
     [Fact]
     public async Task Detail_ReportsEveryCheckTheHostRegisters()
     {
@@ -73,6 +84,7 @@ public class HealthCheckShould : IntegrationTestBase
         var body = await response.Content.ReadAsStringAsync();
         body.Should().Contain("postgresql");
         body.Should().Contain("rabbitmq");
+        body.Should().Contain("realtime-push");
     }
 
     /// <summary>

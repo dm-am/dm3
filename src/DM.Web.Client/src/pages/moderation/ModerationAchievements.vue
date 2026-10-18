@@ -16,9 +16,13 @@ import type {
   AchievementCategory,
   AchievementType,
 } from "@/shared/api/models/achievements";
-import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
+import { SecondaryText } from "@/shared/ui/Layout";
 import { GameIcon } from "@/shared/ui/Icon";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { CaptionAction, CaptionLine } from "@/shared/ui/CaptionLine";
+import Button from "@/shared/ui/Button/Button.vue";
+import { DataTable, type Column } from "@/shared/ui/DataTable";
+import { RowIconButton } from "@/shared/ui/RowIconButton";
 import AchievementCategoryDialog from "./dialogs/AchievementCategoryDialog.vue";
 import AchievementTierDialog from "./dialogs/AchievementTierDialog.vue";
 import { useRoleGate } from "./lib/useRoleGate";
@@ -45,6 +49,17 @@ function tiersOf(c: AchievementCategory): AchievementType[] {
     .filter((t) => t.category.id === c.id)
     .sort((a, b) => a.threshold - b.threshold);
 }
+
+// The tiers of a category, in the site's table, as a table whose rows are
+// added and removed in place is drawn (AttributeSchemaEditor): the pencil and
+// the bin at the end of a row, "+ Тир" right under the table.
+const tierColumns: Column[] = [
+  { key: "tier", label: "Тир", align: "left" },
+  { key: "code", label: "Код", align: "left" },
+  { key: "title", label: "Название", align: "left" },
+  { key: "threshold", label: "Порог", align: "left" },
+  { key: "actions", label: "", width: "1px", align: "center" },
+];
 
 // --- Category edit dialog (shared Dialog idiom) ---
 // Null until the first openEditCategory sets it; the dialog only mounts
@@ -104,30 +119,30 @@ function openEditTier(t: AchievementType) {
 
 // --- Tier delete (ConfirmDialog) ---
 const deleteTierTarget = ref<AchievementType | null>(null);
-const deletingTier = ref(false);
 
+// The request of the confirmation. The window waits for it, prints a refusal in
+// itself and closes on success alone, so the interceptor keeps quiet about it.
 async function confirmDeleteTier() {
-  if (!deleteTierTarget.value || deletingTier.value) return;
-  deletingTier.value = true;
-  try {
-    await achievementApi.deleteAchievementType(deleteTierTarget.value.id);
-    deleteTierTarget.value = null;
-    await reload();
-  } finally {
-    deletingTier.value = false;
-  }
+  const target = deleteTierTarget.value;
+  if (!target) return;
+  const result = await achievementApi.deleteAchievementType(target.id, {
+    ownsRefusal: true,
+    ownsRateLimit: true,
+  });
+  if (!result.error) void reload();
+  return result;
 }
 </script>
 
 <template>
+  <page-title>Достижения</page-title>
+
   <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
   <section v-else class="achievements-admin">
-    <BlockTitle>Каталог достижений</BlockTitle>
     <SecondaryText>
-      Категории привязаны к серверной метрике: название и описание можно
-      править, метрику нельзя. Тиры в категории добавляются/удаляются без
-      ограничений.
+      Категория считает одно: игровые посты, дни на сайте, комментарии и так
+      далее. Тир категории выдается, когда счет доходит до его порога.
     </SecondaryText>
 
     <ul class="cat-list">
@@ -137,6 +152,10 @@ async function confirmDeleteTier() {
         class="cat-row"
         :class="{ 'is-inactive': !c.isActive }"
       >
+        <!-- The icon and the words of the category; its actions are the
+             caption line under the description, at every width. They used to
+             stand in a column of their own at the right, and on a phone the
+             whole line scrolled sideways inside the card. -->
         <div class="cat-header">
           <GameIcon :name="c.iconName" class="cat-icon" />
           <div class="cat-info">
@@ -147,82 +166,61 @@ async function confirmDeleteTier() {
               >, sort {{ c.sortOrder }}
             </div>
             <p class="cat-desc">{{ c.description }}</p>
-          </div>
-          <div class="cat-actions">
-            <button
-              type="button"
-              class="text-button"
-              @click="openEditCategory(c)"
-            >
-              Редактировать
-            </button>
-            <button
-              type="button"
-              class="text-button"
-              @click="openCreateTier(c)"
-            >
-              + Тир
-            </button>
+            <CaptionLine class="cat-actions">
+              <CaptionAction @click="openEditCategory(c)"
+                >Редактировать</CaptionAction
+              >
+            </CaptionLine>
           </div>
         </div>
 
-        <table class="tier-table">
-          <thead>
-            <tr>
-              <th>Тир</th>
-              <th>Код</th>
-              <th>Название</th>
-              <th>Порог</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="t in tiersOf(c)" :key="t.id">
-              <td>{{ t.tier }}</td>
-              <td>
-                <code>{{ t.code }}</code>
-              </td>
-              <td>{{ t.title }}</td>
-              <td>{{ formatThreshold(c.metric, t.threshold) }}</td>
-              <td>
-                <button
-                  type="button"
-                  class="text-button"
-                  @click="openEditTier(t)"
-                >
-                  Правка
-                </button>
-                <button
-                  type="button"
-                  class="text-button danger"
-                  @click="deleteTierTarget = t"
-                >
-                  Удалить
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <DataTable
+          class="tier-table"
+          :columns="tierColumns"
+          :data="tiersOf(c)"
+          empty-text="Тиров нет"
+          :aria-label="`Тиры: ${c.title}`"
+        >
+          <template #cell-code="{ row }">
+            <code>{{ row.code }}</code>
+          </template>
+          <template #cell-threshold="{ row }">
+            {{ formatThreshold(c.metric, row.threshold) }}
+          </template>
+          <template #cell-actions="{ row }">
+            <RowIconButton
+              icon="pencil"
+              :label="`Редактировать тир ${row.title}`"
+              @click="openEditTier(row)"
+            />
+            <RowIconButton
+              icon="trash"
+              :label="`Удалить тир ${row.title}`"
+              @click="deleteTierTarget = row"
+            />
+          </template>
+        </DataTable>
+        <Button type="button" class="add-tier" @click="openCreateTier(c)">
+          + Тир
+        </Button>
       </li>
     </ul>
 
     <!-- Tier delete confirmation -->
     <ConfirmDialog
       :show="deleteTierTarget !== null"
-      title="Удаление тира"
-      :message="`Удалить тир &quot;${deleteTierTarget?.title ?? ''}&quot;? Уже выданные UserAchievement останутся.`"
+      title="Удалить тир?"
+      :message="`Уже полученные достижения тира &quot;${deleteTierTarget?.title ?? ''}&quot; останутся у пользователей`"
       confirm-label="Удалить"
-      danger
-      :loading="deletingTier"
+      failure="Не удалось удалить тир"
+      :action="confirmDeleteTier"
       @update:show="(v) => !v && (deleteTierTarget = null)"
-      @confirm="confirmDeleteTier"
     />
   </section>
 </template>
 
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
-@use "@/assets/styles/Tables" as *
 
 .achievements-admin
   display: flex
@@ -243,16 +241,27 @@ async function confirmDeleteTier() {
   &.is-inactive
     opacity: 0.55
 
+// The icon and the words: the words take what the icon leaves.
 .cat-header
-  display: grid
-  grid-template-columns: 48px 1fr auto
+  display: flex
+  align-items: flex-start
   gap: $medium
-  align-items: start
   margin-bottom: $small
 
+// The codes break where the words do, at the comma, and inside a code only
+// where a column is narrower than one of them.
+.cat-info
+  flex: 1 1 0
+  min-width: 0
+  overflow-wrap: anywhere
+
+// A category spans all four tiers and has no metal of its own, so its icon
+// is neutral: the metals are for a tier (see entities/achievement tierMetal).
 .cat-icon
+  flex: none
+  width: 48px
   font-size: 36px
-  color: $heading
+  color: $text-muted
 
 .cat-title
   font-weight: 500
@@ -272,43 +281,27 @@ async function confirmDeleteTier() {
   font-size: $secondary-font-size
   color: $text
 
+// A caption line of its own under the description.
 .cat-actions
-  display: flex
-  flex-direction: column
-  gap: $tiny
+  display: block
+  margin-top: $tiny
 
-// Site table idiom: 1px gaps painted by the $border background
-// (same visual language as DataTable / +table)
+// The site's table in the size this list has always had, its headers on the
+// left as its cells are (Column.align).
 .tier-table
-  width: 100%
-  border-collapse: separate
-  border-spacing: 1px
-  background-color: $border
   font-size: $secondary-font-size
-
-  th
-    text-align: left
-    +table-header
-
-  td
-    text-align: left
-    vertical-align: middle
-    +table-row
-
-  tbody tr
-    +table-row-hover
 
   code
     background: $bg-element-accent
     padding: 0 4px
     border-radius: 3px
 
-.text-button
-  margin-right: $small
-  +inline-link-button
+  // The two signs of a row on one line.
+  :deep(.col-actions)
+    white-space: nowrap
 
-  &.danger
-    &,
-    &:hover:not(:disabled)
-      color: $accent-red
+// The shared secondary button, under the table it adds a row to, at its left
+// edge.
+.add-tier
+  margin-top: $small
 </style>

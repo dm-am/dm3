@@ -79,15 +79,20 @@ describe("BbImage Extension", () => {
     expect(editor.commands.setBbImage).toBeDefined();
   });
 
-  it("should preserve alt attribute", () => {
+  // An image has no alt: a reader never sees one, and text nobody sees on
+  // the page is where an insult goes unnoticed. The editor keeps none, from
+  // pasted HTML either, and draws the image with an empty one.
+  it.each([
+    '<p><img src="https://example.com/img.png" alt="Test image" /></p>',
+    '<p><img src="https://example.com/img.png" data-bb-tag="img" alt="кот" data-alt="кот" /></p>',
+    '<p><span class="bb-image-frame" data-bb-width="300"><img src="https://example.com/img.png" data-bb-tag="img" alt="кот" /></span></p>',
+  ])("keeps no alt: %s", (html) => {
     const editor = createTestEditor();
-    editor.commands.setContent(
-      '<p><img src="https://example.com/img.png" alt="Test image" /></p>',
-    );
-    const json = editor.getJSON();
-    const imgNode = json.content?.[0]?.content?.[0] as
-      | { attrs?: { alt?: string } }
-      | undefined;
-    expect(imgNode?.attrs?.alt).toBe("Test image");
+    editor.commands.setContent(html);
+    const out = editor.getHTML();
+    expect(out).toContain('alt=""');
+    expect(out).not.toContain("кот");
+    expect(out).not.toContain("Test image");
+    expect(out).not.toContain("data-alt");
   });
 });

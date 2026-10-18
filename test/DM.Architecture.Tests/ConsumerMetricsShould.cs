@@ -224,8 +224,7 @@ public class ConsumerMetricsShould
     [Fact]
     public void RegisterEveryMeterWithTheExporter()
     {
-        var registration = SourceText.ReadCode(Path.Combine(
-            RepositoryRoot, "src", "DM.Infrastructure.Core", "Logging", "LoggingConfiguration.cs"));
+        var registration = TelemetrySources.CompositionCode;
 
         var owners = MetricsSources()
             .SelectMany(path => MeterOwner.Matches(File.ReadAllText(path)))
@@ -598,10 +597,7 @@ public class ConsumerMetricsShould
         declared.Should().NotBeEmpty("the expression has to find the histograms it is about");
 
         var configured = Regex
-            .Matches(
-                SourceText.ReadCode(Path.Combine(RepositoryRoot,
-                    "src", "DM.Infrastructure.Core", "Logging", "LoggingConfiguration.cs")),
-                @"AddView\(\s*""(dm\.[a-z0-9._]+)""")
+            .Matches(TelemetrySources.CompositionCode, @"AddView\(\s*""(dm\.[a-z0-9._]+)""")
             .Select(match => match.Groups[1].Value)
             .ToHashSet(StringComparer.Ordinal);
 

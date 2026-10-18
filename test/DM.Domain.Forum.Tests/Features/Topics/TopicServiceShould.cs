@@ -19,6 +19,7 @@ using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Topics;
 using DM.Testing.Dsl;
 using DM.Testing;
+using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
@@ -110,7 +111,8 @@ public class TopicServiceShould : UnitTestBase
             _userLookupService,
             _eventProducer,
             _guidFactory,
-            cache);
+            cache,
+            new TagNamesAsTyped());
     }
 
     /// <summary>The store answers a creation with this topic.</summary>
@@ -358,7 +360,9 @@ public class TopicServiceShould : UnitTestBase
         var updateTopic = new UpdateTopic { TopicId = topicId, BoardTitle = "NewBoard" };
         await _service.UpdateAsync(updateTopic);
 
-        await _unreadCountersRepository.Received(1).ChangeParentAsync(oldBoardId, UnreadEntryType.Message, newBoardId);
+        // The topic carries its own markers over, not the board it leaves: by the
+        // board, every other topic of it would move too.
+        await _unreadCountersRepository.Received(1).ChangeParentAsync(topicId, UnreadEntryType.Message, newBoardId);
         await _repository.Received(1).Update(Arg.Any<UpdateTopicEntity>(), newBoardId);
     }
 
@@ -401,10 +405,10 @@ public class TopicServiceShould : UnitTestBase
     }
 
     /// <summary>
-    /// Closing or pinning somebody else's topic is refused, not dropped. Both
-    /// flags used to be set to null when the caller could not administrate the
-    /// board, so the request came back 200 with an open topic - the same answer a
-    /// successful close produces.
+    /// Closing or pinning a topic the caller may not close or pin is refused, not
+    /// dropped. Both flags used to be set to null when the caller could not
+    /// administrate the board, so the request came back 200 with an open topic -
+    /// the same answer a successful close produces.
     /// </summary>
     [Theory]
     [InlineData(true, null)]
@@ -421,6 +425,11 @@ public class TopicServiceShould : UnitTestBase
         _intentionManager
             .When(m => m.ThrowIfForbidden(ForumIntention.AdministrateTopics, board))
             .Throw(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
+        // Closing has a rule of its own now, open to the author as well
+        // (TopicIntention.Close); this caller is refused it.
+        _intentionManager
+            .When(m => m.ThrowIfForbidden(TopicIntention.Close, topic))
+            .Throw(new HttpException(HttpStatusCode.Forbidden, "нельзя"));
 
         var act = () => _service.UpdateAsync(new UpdateTopic
         {
@@ -432,6 +441,117 @@ public class TopicServiceShould : UnitTestBase
         await act.Should().ThrowAsync<HttpException>();
         // A refused change writes nothing.
         await _repository.DidNotReceive().Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>());
+    }
+
+    /// <summary>
+    /// Reopening a closed topic is not refused for the topic being closed.
+    /// </summary>
+    /// <remarks>
+    /// A closed topic is shut to its author's edits, and the edit form is how a
+    /// topic is closed and reopened: judged against the closed topic, the author's
+    /// reopening would be refused by the very state it undoes. Whoever may reopen
+    /// may edit the open topic, which TopicIntentionResolverShould holds.
+    /// </remarks>
+    [Fact]
+    public async Task ReopenAClosedTopicForWhoeverMayCloseIt()
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic
+        {
+            Id = topicId,
+            Board = board,
+            Author = new GeneralUser { UserId = _currentUserId },
+            IsClosed = true,
+            ClosedByAuthor = true,
+            IsAttached = false
+        };
+
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>()).Returns(new TopicUpdateResult(topic, true));
+        _intentionManager.IsAllowed(ForumIntention.AdministrateTopics, board).Returns(false);
+        _intentionManager
+            .When(m => m.ThrowIfForbidden(TopicIntention.Edit, topic))
+            .Throw(new HttpException(HttpStatusCode.Forbidden, "закрыт"));
+
+        await _service.UpdateAsync(new UpdateTopic
+        {
+            TopicId = topicId,
+            Title = "Reopened",
+            IsClosed = false
+        });
+
+        _intentionManager.Received(1).ThrowIfForbidden(TopicIntention.Close, topic);
+        await _repository.Received(1).Update(
+            Arg.Is<UpdateTopicEntity>(e => e.IsClosed == false && e.ClosedByAuthor == false && e.Title == "Reopened"),
+            Arg.Any<Guid?>());
+    }
+
+    /// <summary>
+    /// Closing asks both rules: the right to close, and the right to edit the topic
+    /// as it stands, since the same request carries the form's text.
+    /// </summary>
+    [Fact]
+    public async Task AskBothTheCloseAndTheEditRuleOfAClosingRequest()
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic
+        {
+            Id = topicId,
+            Board = board,
+            Author = new GeneralUser { UserId = _currentUserId },
+            IsClosed = false,
+            IsAttached = false
+        };
+
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>()).Returns(new TopicUpdateResult(topic, true));
+        _intentionManager.IsAllowed(ForumIntention.AdministrateTopics, board).Returns(false);
+
+        await _service.UpdateAsync(new UpdateTopic { TopicId = topicId, IsClosed = true });
+
+        _intentionManager.Received(1).ThrowIfForbidden(TopicIntention.Close, topic);
+        _intentionManager.Received(1).ThrowIfForbidden(TopicIntention.Edit, topic);
+        // The author is not an administrator of the board, and closing no longer
+        // needs one.
+        _intentionManager.DidNotReceive().ThrowIfForbidden(ForumIntention.AdministrateTopics, board);
+        await _repository.Received(1).Update(
+            Arg.Is<UpdateTopicEntity>(e => e.IsClosed == true && e.ClosedByAuthor == true), Arg.Any<Guid?>());
+    }
+
+    /// <summary>
+    /// Who closed the topic is written with every change of its closed state and
+    /// only then: it is what keeps a moderator's closing from being undone by the
+    /// author (TopicIntention.Close), so a close by anybody but the author records
+    /// false, and an edit that leaves the state alone leaves the record alone.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, null, null)]
+    [InlineData(true, true, null)]
+    public async Task RecordWhetherTheAuthorClosedTheTopic(bool wasClosed, bool? isClosed, bool? expected)
+    {
+        var topicId = Guid.NewGuid();
+        var board = new Board { Id = Guid.NewGuid(), Title = "General" };
+        var topic = new Topic
+        {
+            Id = topicId,
+            Board = board,
+            Author = new GeneralUser { UserId = Guid.NewGuid() },
+            IsClosed = wasClosed,
+            IsAttached = false
+        };
+
+        _repository.Get(topicId, Arg.Any<BoardAccessPolicy>(), Arg.Any<CancellationToken>()).Returns(topic);
+        _repository.Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>()).Returns(new TopicUpdateResult(topic, true));
+        _intentionManager.IsAllowed(ForumIntention.AdministrateTopics, board).Returns(true);
+
+        await _service.UpdateAsync(new UpdateTopic { TopicId = topicId, Title = "Edited", IsClosed = isClosed });
+
+        await _repository.Received(1).Update(
+            Arg.Is<UpdateTopicEntity>(e => e.ClosedByAuthor == expected), Arg.Any<Guid?>());
     }
 
     /// <summary>

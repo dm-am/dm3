@@ -54,54 +54,33 @@ public class AuthenticatedUser : GeneralUser, IAuthorizationSubject
             .Where(restriction => restriction.IsInForceAt(moment))
             .Aggregate(AccessPolicy, (seed, restriction) => seed | restriction.Policy);
 
-    private UserRole? recordedRole;
-
     /// <summary>
-    /// The role as it stands on the account, whatever role the account is acting
-    /// with right now.
+    /// When the full ban in force at the moment runs out, or null when there is
+    /// none or when the one there is runs past the permanence threshold.
     /// </summary>
     /// <remarks>
-    /// Display and the journals read this one. A moderator recorded as an
-    /// ordinary user is an entry nothing can be reconstructed from afterwards,
-    /// and the demotion below is about what may be done, not about who this is.
-    ///
-    /// Equal to <see cref="GeneralUser.Role" /> until the fold runs, so a user
-    /// built by a path that never folds still answers honestly.
+    /// The screen spells the day itself, in the reader's own time zone and in
+    /// its own words, so what travels is the moment and not a sentence. A ban
+    /// fifty years out is told as "indefinitely": a date that far reads as a
+    /// lie dressed as precision. Computed here, on the user the ban was read
+    /// for, and not on the identity of a refused sign-in, which carries the
+    /// guest and no restrictions at all.
     /// </remarks>
-    public UserRole RecordedRole => recordedRole ?? Role;
-
-    /// <summary>
-    /// Whether the rank's privileges are withheld for want of a second factor.
-    /// </summary>
-    public bool PrivilegeWithheld { get; private set; }
-
-    /// <summary>
-    /// Withhold the privileges of a rank that owes a second factor it has not
-    /// set up.
-    /// </summary>
-    /// <remarks>
-    /// Folded into <see cref="GeneralUser.Role" /> once, at the point the
-    /// identity is built, exactly as active bans are folded into
-    /// <see cref="GeneralUser.AccessPolicy" />: the role is what every resolver
-    /// and every hand-written rank comparison in the moderation services reads,
-    /// and a surface obliged to remember a second flag is a surface that will
-    /// one day forget it.
-    ///
-    /// Never a refusal to authenticate. The account signs in, reads the site and
-    /// writes its own; what it loses is the rank, and the only person who can
-    /// give it back is its owner, from an ordinary session, in the time it takes
-    /// to scan a code.
-    /// </remarks>
-    /// <param name="secondFactorConfirmed">Whether the account has a confirmed factor.</param>
-    public void ApplySecondFactorRequirement(bool secondFactorConfirmed)
+    /// <param name="moment">Current moment</param>
+    public DateTimeOffset? BanEndsAt(DateTimeOffset moment)
     {
-        recordedRole = Role;
-        PrivilegeWithheld = !secondFactorConfirmed && TwoFactorRequirement.AppliesTo(Role);
-        if (PrivilegeWithheld)
-        {
-            Role = TwoFactorRequirement.WithheldTo;
-        }
+        var end = AccessRestrictions
+            .Where(restriction => restriction.IsInForceAt(moment) &&
+                                  restriction.Policy.HasFlag(AccessPolicy.FullBan))
+            .Select(restriction => (DateTimeOffset?)restriction.EndedUtc)
+            .Max();
+        return end is { } ends && ends <= moment.AddYears(PermanenceThresholdYears) ? ends : null;
     }
+
+    /// <summary>
+    /// A ban that runs longer than this is told as one with no end
+    /// </summary>
+    private const int PermanenceThresholdYears = 50;
 
     /// <summary>
     /// Basic guest user (unauthenticated)

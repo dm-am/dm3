@@ -24,5 +24,14 @@ export interface NotepadAdapter {
     id: string,
     input: NotepadEntryInput,
   ): Promise<ApiResult<Envelope<NotepadEntry>>>;
-  remove(id: string): Promise<ApiResult<void>>;
+  /**
+   * The flags are the delete confirmation's, which prints a refusal in
+   * itself: passed on to the request, they keep the interceptor from saying
+   * it a second time. An adapter that drops them leaves the interceptor
+   * speaking as well.
+   */
+  remove(
+    id: string,
+    options?: { ownsRefusal?: boolean; ownsRateLimit?: boolean },
+  ): Promise<ApiResult<void>>;
 }

@@ -5,9 +5,10 @@ import type {
 } from "@/shared/api/models/notifications";
 import { Api } from "@/shared/api";
 
-export default new (class NotificationApi {
-  private basePath = "users/me/notifications";
+/** Where the notifications of the signed-in reader live on the API. */
+const BASE_PATH = "users/me/notifications";
 
+export default new (class NotificationApi {
   /**
    * Get notifications for the current user
    * @param skip Number of notifications to skip (default 0)
@@ -15,7 +16,7 @@ export default new (class NotificationApi {
    */
   public getNotifications(skip = 0, take = 20) {
     return Api.get<ListEnvelope<UserNotification>>(
-      `${this.basePath}?skip=${skip}&take=${take}`,
+      `${BASE_PATH}?skip=${skip}&take=${take}`,
     );
   }
 
@@ -23,7 +24,7 @@ export default new (class NotificationApi {
    * Get unread notifications count
    */
   public getUnreadCount() {
-    return Api.get<NotificationCount>(`${this.basePath}/unread`);
+    return Api.get<NotificationCount>(`${BASE_PATH}/unread`);
   }
 
   /**
@@ -32,7 +33,7 @@ export default new (class NotificationApi {
    */
   public markAsRead(id?: string) {
     return id
-      ? Api.delete(`${this.basePath}/${id}/unread`)
-      : Api.delete(`${this.basePath}/unread`);
+      ? Api.delete(`${BASE_PATH}/${id}/unread`)
+      : Api.delete(`${BASE_PATH}/unread`);
   }
 })();

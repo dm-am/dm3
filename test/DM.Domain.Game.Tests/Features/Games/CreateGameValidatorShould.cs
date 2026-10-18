@@ -251,4 +251,78 @@ public class CreateGameValidatorShould : UnitTestBase
         var result = await validator.TestValidateAsync(input);
         result.ShouldNotHaveAnyValidationErrors();
     }
+
+    /// <summary>
+    /// The sheet is created with the game, so a set the sheet cannot hold
+    /// refuses the whole request - and there is no game left over to repair.
+    /// </summary>
+    [Fact]
+    public async Task FailWhenASpecificationCarriesNoTitle()
+    {
+        var input = new CreateGame
+        {
+            Title = "Valid Game Title",
+            SystemName = "D&D 5e",
+            NarrativeSetting = "Forgotten Realms",
+            Info = new string('a', GameFieldLimits.InfoMinLength),
+            AttributeSpecifications =
+            [
+                new CreateAttributeSpecification { Title = "", Type = AttributeSpecificationType.Text }
+            ]
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldHaveValidationErrorFor("AttributeSpecifications[0].Title")
+            .WithErrorMessage(ValidationError.Empty);
+    }
+
+    /// <summary>
+    /// A schema-level rule, checked over the whole submitted set rather than
+    /// over one specification at a time.
+    /// </summary>
+    [Fact]
+    public async Task FailWhenTwoSpecificationsClaimToBeTheDescriptor()
+    {
+        var input = new CreateGame
+        {
+            Title = "Valid Game Title",
+            SystemName = "D&D 5e",
+            NarrativeSetting = "Forgotten Realms",
+            Info = new string('a', GameFieldLimits.InfoMinLength),
+            AttributeSpecifications =
+            [
+                new CreateAttributeSpecification
+                {
+                    Title = "Раса", Type = AttributeSpecificationType.Text, IsDescriptor = true
+                },
+                new CreateAttributeSpecification
+                {
+                    Title = "Класс", Type = AttributeSpecificationType.Text, IsDescriptor = true, Order = 1
+                }
+            ]
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldHaveValidationErrorFor(g => g.AttributeSpecifications);
+    }
+
+    /// <summary>
+    /// An empty sheet is a master's choice, not a refusal: characters of that
+    /// game simply carry no attributes.
+    /// </summary>
+    [Fact]
+    public async Task PassWhenNoSpecificationsAreSubmitted()
+    {
+        var input = new CreateGame
+        {
+            Title = "Valid Game Title",
+            SystemName = "D&D 5e",
+            NarrativeSetting = "Forgotten Realms",
+            Info = new string('a', GameFieldLimits.InfoMinLength),
+            AttributeSpecifications = []
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldNotHaveAnyValidationErrors();
+    }
 }

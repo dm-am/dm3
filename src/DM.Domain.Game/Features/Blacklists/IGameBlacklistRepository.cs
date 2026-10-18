@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Domain.Game.Features.Blacklists;
 
@@ -19,6 +20,13 @@ public interface IGameBlacklistRepository
     /// <summary>
     /// Add user to game blacklist
     /// </summary>
+    /// <remarks>
+    /// Throws <see cref="DuplicateEntityException" /> when the pair is already on
+    /// the list: the caller checks first, and this is the race where two requests
+    /// both pass that check. Nothing but the unique index can hold the pair in the
+    /// meantime, and a second row would show the name twice with only one of them
+    /// removable.
+    /// </remarks>
     Task<GeneralUser> Add(Guid gameId, Guid blockedUserId, Guid blockedByUserId);
 
     /// <summary>
@@ -40,9 +48,4 @@ public interface IGameBlacklistRepository
     /// Remove user from game blacklist
     /// </summary>
     Task Remove(Guid gameId, Guid userId);
-
-    /// <summary>
-    /// Check if user is blacklisted in game
-    /// </summary>
-    Task<bool> IsBlocked(Guid gameId, Guid userId, CancellationToken ct = default);
 }

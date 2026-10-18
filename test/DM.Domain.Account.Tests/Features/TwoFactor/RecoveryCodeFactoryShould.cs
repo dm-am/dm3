@@ -12,11 +12,11 @@ namespace DM.Domain.Account.Tests.Features.TwoFactor;
 /// The values that let a person in when the device is gone.
 /// </summary>
 /// <remarks>
-/// INV-4: a code is stored only as the SHA-256 of its value. The entropy is
-/// asserted as well, because it is the whole argument for a fast hash: the secret
-/// of the factor is shut behind the application key, so a recovery code is what a
-/// reader of a database dump attacks without one, and eighty bits is what makes
-/// that not worth doing.
+/// A code is stored only as the SHA-256 of its value. The entropy is asserted as
+/// well, because it is the whole argument for a fast hash: the secret of the
+/// factor is shut behind the application key, so a recovery code is what a reader
+/// of a database dump attacks without one, and eighty bits is what makes that not
+/// worth doing.
 /// </remarks>
 public class RecoveryCodeFactoryShould
 {
@@ -73,7 +73,7 @@ public class RecoveryCodeFactoryShould
             "loses them to the digits beside them");
 
     /// <summary>
-    /// INV-4: what the database keeps is the SHA-256 of the normalized value.
+    /// What the database keeps is the SHA-256 of the normalized value.
     /// </summary>
     [Fact]
     public void StoreOnlyTheHashOfTheValue()

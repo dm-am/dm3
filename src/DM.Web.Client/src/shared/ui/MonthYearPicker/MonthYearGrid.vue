@@ -20,15 +20,22 @@
  * stopping, anchored at the year handed in.
  *
  * `yearNavigable` turns the year in the month-mode header into a button to
- * the year grid. It is off by default: whoever owns the level above decides
- * whether there is a level above.
+ * the year grid, marked with the chevron of a drop-down list. It is off by
+ * default: whoever owns the level above decides whether there is a level
+ * above.
+ *
+ * The grid is one stop of Tab (a roving tabindex), like the day grid of the
+ * calendar: the arrows walk the cells, a row of three at a time up and down,
+ * Home and End go to the first and the last, PageUp and PageDown turn the
+ * year or the block of years. Enter and Space pick, as on any button.
  *
  * The header is inline flow (not flex) with zero-width `.copy-space` text
  * nodes, so a selection copies as "‹ 2026 ›" on one line — see
  * onelineCopy.spec.ts for why a flex row would not.
  */
-import { ref, computed } from "vue";
+import { ref, computed, nextTick } from "vue";
 import { RU_MONTHS_SHORT } from "@/shared/lib/utils/months";
+import { SvgIcon } from "@/shared/ui/Icon";
 
 const props = withDefaults(
   defineProps<{
@@ -47,8 +54,26 @@ const props = withDefaults(
     maxMonth?: number;
     /** Make the year of the month-mode header a button to the year grid. */
     yearNavigable?: boolean;
+    /**
+     * The year filled as the one chosen, when it is not `year`: the day
+     * calendar opens these grids on the year on view and fills the year of
+     * its date. Null fills nothing, a calendar with no date yet.
+     */
+    markedYear?: number | null;
+    /** The month filled as the one chosen, when it is not `month`. */
+    markedMonth?: number | null;
   }>(),
-  { mode: "month", month: 1, yearNavigable: false },
+  {
+    mode: "month",
+    month: 1,
+    minYear: undefined,
+    minMonth: undefined,
+    maxYear: undefined,
+    maxMonth: undefined,
+    yearNavigable: false,
+    markedYear: undefined,
+    markedMonth: undefined,
+  },
 );
 
 const emit = defineEmits<{
@@ -61,6 +86,18 @@ const MONTHS_SHORT = RU_MONTHS_SHORT;
 
 const maxM = computed(() => props.maxMonth ?? 12);
 const minM = computed(() => props.minMonth ?? 1);
+
+/** The year and month filled as chosen: the selection unless told otherwise. */
+const markYear = computed(() =>
+  props.markedYear === undefined ? props.year : props.markedYear,
+);
+const markMonth = computed(() =>
+  props.markedMonth === undefined ? props.month : props.markedMonth,
+);
+
+function isMarkedMonth(m: number): boolean {
+  return navYear.value === markYear.value && m === markMonth.value;
+}
 
 // --- month mode ------------------------------------------------------------
 
@@ -155,6 +192,92 @@ function nextBlock() {
 function pickYear(y: number) {
   emit("pick-year", y);
 }
+
+// --- keyboard ----------------------------------------------------------------
+
+/** Cells in a row of either grid. */
+const COLUMNS = 3;
+
+const gridRef = ref<HTMLElement | null>(null);
+
+/** The month or the year that holds the Tab stop, once the keyboard moved it. */
+const focusMonth = ref<number | null>(null);
+const focusYear = ref<number | null>(null);
+
+/** The month of the Tab stop: where the keyboard left it, else the selection. */
+const tabMonth = computed(() => {
+  const candidates = [
+    focusMonth.value,
+    navYear.value === props.year ? props.month : null,
+  ];
+  for (const m of candidates) if (m !== null && !monthDisabled(m)) return m;
+  for (let m = 1; m <= 12; m++) if (!monthDisabled(m)) return m;
+  return 1;
+});
+
+/** The year of the Tab stop, inside the block on view. */
+const tabYear = computed(() => {
+  for (const y of [focusYear.value, props.year])
+    if (y !== null && years.value.includes(y)) return y;
+  return years.value[0];
+});
+
+function focusTabStop() {
+  nextTick(() =>
+    gridRef.value?.querySelector<HTMLButtonElement>('[tabindex="0"]')?.focus(),
+  );
+}
+
+/** Where a key moves within a run of cells, or null for a key of no move. */
+function stepOf(e: KeyboardEvent, at: number, last: number): number | null {
+  switch (e.key) {
+    case "ArrowLeft":
+      return at - 1;
+    case "ArrowRight":
+      return at + 1;
+    case "ArrowUp":
+      return at - COLUMNS;
+    case "ArrowDown":
+      return at + COLUMNS;
+    case "Home":
+      return 0;
+    case "End":
+      return last;
+    default:
+      return null;
+  }
+}
+
+function onMonthKeydown(e: KeyboardEvent) {
+  if (e.key === "PageUp" || e.key === "PageDown") {
+    e.preventDefault();
+    if (e.key === "PageUp") prevNavYear();
+    else nextNavYear();
+    focusTabStop();
+    return;
+  }
+  const to = stepOf(e, tabMonth.value - 1, 11);
+  if (to === null) return;
+  e.preventDefault();
+  if (to >= 0 && to <= 11 && !monthDisabled(to + 1)) focusMonth.value = to + 1;
+  focusTabStop();
+}
+
+function onYearKeydown(e: KeyboardEvent) {
+  if (e.key === "PageUp" || e.key === "PageDown") {
+    e.preventDefault();
+    if (e.key === "PageUp") prevBlock();
+    else nextBlock();
+    focusTabStop();
+    return;
+  }
+  const list = years.value;
+  const to = stepOf(e, list.indexOf(tabYear.value), list.length - 1);
+  if (to === null) return;
+  e.preventDefault();
+  if (to >= 0 && to < list.length) focusYear.value = list[to];
+  focusTabStop();
+}
 </script>
 
 <template>
@@ -177,7 +300,8 @@ function pickYear(y: number) {
           class="myp-year myp-year-button"
           @click.stop="emit('open-years')"
         >
-          {{ navYear }}</button
+          {{ navYear
+          }}<SvgIcon name="chevronDown" class="myp-chevron" /></button
         ><span v-else class="myp-year">{{ navYear }}</span
         ><span class="copy-space">{{ " " }}</span
         ><button
@@ -190,16 +314,19 @@ function pickYear(y: number) {
           ›
         </button>
       </div>
-      <div class="myp-grid myp-grid--months">
+      <div
+        ref="gridRef"
+        class="myp-grid myp-grid--months"
+        @keydown="onMonthKeydown"
+      >
         <button
           v-for="(m, i) in MONTHS_SHORT"
           :key="m"
           type="button"
           class="myp-cell"
-          :class="{ selected: navYear === year && i + 1 === month }"
-          :aria-current="
-            navYear === year && i + 1 === month ? 'date' : undefined
-          "
+          :class="{ selected: isMarkedMonth(i + 1) }"
+          :tabindex="i + 1 === tabMonth ? 0 : -1"
+          :aria-current="isMarkedMonth(i + 1) ? 'date' : undefined"
           :disabled="monthDisabled(i + 1)"
           @click.stop="pickMonth(i + 1)"
         >
@@ -232,14 +359,19 @@ function pickYear(y: number) {
           ›
         </button>
       </div>
-      <div class="myp-grid myp-grid--years">
+      <div
+        ref="gridRef"
+        class="myp-grid myp-grid--years"
+        @keydown="onYearKeydown"
+      >
         <button
           v-for="y in years"
           :key="y"
           type="button"
           class="myp-cell"
-          :class="{ selected: y === year }"
-          :aria-current="y === year ? 'date' : undefined"
+          :class="{ selected: y === markYear }"
+          :tabindex="y === tabYear ? 0 : -1"
+          :aria-current="y === markYear ? 'date' : undefined"
           @click.stop="pickYear(y)"
         >
           {{ y }}
@@ -281,6 +413,15 @@ function pickYear(y: number) {
   &:hover
     background-color: $bg-element-accent
 
+// The chevron of a drop-down list (Select), after the year: the year opens a
+// choice of years, as the month and the year of the day grid above it do.
+.myp-chevron
+  width: 14px
+  height: 14px
+  margin-left: $tiny
+  vertical-align: -2px
+  color: $text-muted
+
 .myp-nav
   width: $grid-step * 7
   height: $grid-step * 7
@@ -315,16 +456,26 @@ function pickYear(y: number) {
   font: inherit
   font-size: $secondary-font-size
 
-  &:hover:not(:disabled)
+  &:hover:not(:disabled):not(.selected)
     background-color: $bg-highlight-blue
 
-  &.selected
-    background-color: $button-bg
-    color: $button-text
-    font-weight: bold
+  // The cells stand flush in a grid: the ring goes inside (UI_STANDARDS,
+  // "Клавиатура и фокус").
+  &:focus-visible
+    outline: 2px solid $link
+    outline-offset: -2px
 
+  // Out of reach the way everything out of reach is on the site: the
+  // standard dimming and the plain pointer. A cell has no box of its own to
+  // hatch, only its number.
   &:disabled
     color: $text-muted
-    opacity: 0.4
+    opacity: $disabled-opacity
     cursor: default
+
+  // The month or the year on view, filled as the picked day of the calendar
+  // is: the fill, ink and weight of the main action, its lighter hover and
+  // its ring a pixel out, where a ring of the fill's own colour shows.
+  &.selected
+    +button-primary
 </style>

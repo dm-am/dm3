@@ -80,8 +80,6 @@ public class DurableWritesShould
     /// </summary>
     private static readonly Dictionary<string, string> Deliberate = new(StringComparer.Ordinal)
     {
-        ["TryRecordDigest"] =
-            "compensation on a lost race, asserted by PublishAfterCommitShould",
         ["AddAsync"] =
             "two branches of one if/else, so a call writes once",
         ["UpdateUser"] =

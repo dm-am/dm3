@@ -1,74 +1,217 @@
 <script setup lang="ts">
 /**
- * ModerationWarnings — "Последние предупреждения" (doc 4.2.1.5 / 4.2.2.21).
- * All warnings across the website, newest first (GET v1/moderation/warnings).
- * Warning block composition per doc 4.2.2.21: type ("Предупреждение
- * (N баллов)" / "Устное предупреждение (0 баллов)"), reason,
- * "от {Имя}, dd.MM.yyyy HH:mm", delete button (Moderator+).
+ * ModerationWarnings, "Последние предупреждения" (doc 4.2.1.5 / 4.2.2.21).
+ * Warnings across the website, newest first, a page at a time
+ * (GET v1/moderation/warnings). The card itself lives in the moderation
+ * entity: the open log draws the same block, and one warning must not read
+ * two ways depending on which screen it is on.
  *
- * The evidence block below the reason is the snapshot the server took when the
- * warning was issued. Nothing here reads the offending object: the warning used
- * to point at it and nothing else, and the author is free to edit or delete it,
- * so the page showed a reference to a text that no longer existed. Its address
- * and the "edited since" mark come from the same response, resolved server-side
- * per read.
+ * What this page adds to the shared card is what only a moderator gets: the
+ * address of every text, where the open log keeps it from a guest who could
+ * not follow it, and the control that changes the points. There is no control
+ * that removes a warning, because there is no way to remove one: the record of
+ * a decision stays, and a correction moves its points and signs itself. Who
+ * may correct which row is the server's answer — `canChangePoints` on the row —
+ * and not a role read here.
+ *
+ * The other control is "Удалить картинку" on a record of a profile. The avatar
+ * the profile had when the warning was issued stays in both logs after the
+ * person changes it, as the text of a comment does; a picture that may not be
+ * shown even as evidence comes out here, after the site's question, for good.
+ * It is offered where the record has a picture, and not on the moderator's own
+ * record (one issued to him before his promotion or by a higher rank): the
+ * server reads a mark set by the owner of a picture as the owner's own doing,
+ * so the picture would stay in the log and leave his profile instead. The
+ * server checks the role and refuses a moderator's own record.
+ *
+ * The order is the server's. It used to be re-sorted here after the fetch,
+ * which was harmless while the answer was the whole history and wrong the
+ * moment it became one page: sorting a page reorders that page against the
+ * others, not the log.
+ *
+ * One filter narrows the list, the name of the warned user, in the search line
+ * the sitewide uploads list carries: the site's search field as wide as the
+ * column and "Найти" beside it, no caption over it. It looks the name up on
+ * "Найти" and not as the reader types, because the server finds the user by
+ * his exact name, and the placeholder says so. It lives in the address rather
+ * than in a ref here, so a narrowed list is a link a moderator can hand to
+ * another one.
  */
-import { computed, onMounted, ref } from "vue";
-import { moderationApi, type Warning } from "@/entities/moderation";
+import { computed, reactive, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useModal } from "vue-final-modal";
+import {
+  moderationApi,
+  WarningCard,
+  RecordSkeleton,
+  type Warning,
+} from "@/entities/moderation";
+import { ChangeWarningPointsDialog } from "@/features/moderation-actions";
+import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
+import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
+import { CaptionAction } from "@/shared/ui/CaptionLine";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { FilterSearchInput } from "@/shared/ui/Filters";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { formatDateFull } from "@/shared/lib/utils/datetime";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { UserLink } from "@/entities/user";
+import { parsePageNumber } from "@/shared/lib/filters";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 import { useRoleGate } from "./lib/useRoleGate";
-import { warningTypeLabel } from "./lib/labels";
-import { notifyFailure } from "@/shared/lib/errors";
 
-const toast = useToast();
-const { hasAccess, deniedText } = useRoleGate("Moderator");
+// A moderation list draws a page of its own size, the way the neighbouring
+// ban and newcomer lists do: the reader's page-size preference belongs to the
+// open lists of the site, and the open warning log is one of them.
+const PAGE_SIZE = 20;
+
+const route = useRoute();
+const router = useRouter();
+const { hasAccess, deniedText, user } = useRoleGate("Moderator");
 
 const warnings = ref<Warning[]>([]);
-const loading = ref(false);
-const loadError = ref<string | null>(null);
+const paging = ref<PagingModel | null>(null);
 
-async function fetch() {
-  loading.value = true;
-  const { data, error } = await moderationApi.getAllWarnings();
-  loading.value = false;
-  if (error) {
-    loadError.value = "Не удалось загрузить предупреждения";
-    return;
-  }
-  loadError.value = null;
-  // Newest first (doc: "в обратном хронологическом порядке")
-  warnings.value = (data?.resources ?? []).sort(
-    (a, b) =>
-      new Date(b.createdUtc).getTime() - new Date(a.createdUtc).getTime(),
+// A page number and a name both come from the address and both change under the
+// reader, so two answers can be on the wire at once; the guard drops the one the
+// reader has already left instead of letting whichever lands last decide what
+// the list shows.
+const {
+  loading,
+  error: loadError,
+  run,
+} = useGuardedRequest({ message: "Не удалось загрузить предупреждения" });
+
+const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
+
+/** The one filter the list takes; an unknown name is an empty page, not an error. */
+const username = computed(() => {
+  const value = route.query.username;
+  const name = Array.isArray(value) ? value[0] : value;
+  return name ? String(name) : undefined;
+});
+
+// The field shows what the address says, so a link handed over opens with the
+// name already in it and the back button puts the previous name back.
+const usernameInput = ref(username.value ?? "");
+watch(username, (name) => (usernameInput.value = name ?? ""));
+
+function fetch() {
+  return run(
+    () =>
+      moderationApi.getAllWarnings({
+        username: username.value,
+        skip: (pageNumber.value - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+      }),
+    (data) => {
+      warnings.value = data?.resources ?? [];
+      paging.value = data?.paging ?? null;
+    },
   );
 }
 
-onMounted(fetch);
+watch([pageNumber, username], fetch, { immediate: true });
 
-// --- Remove warning (Moderator+) ---
-const removeTarget = ref<Warning | null>(null);
-const removing = ref(false);
+/**
+ * The name goes to the address, and the page number stays behind: it counted
+ * pages of the list the moderator is leaving, and carrying it over would open
+ * the new list at a page it may not have. An emptied field drops the filter.
+ *
+ * The field takes the trimmed name here rather than waiting for the address to
+ * hand it back: the same name again, padded, leaves the address exactly where
+ * it already is, and a navigation to the address already open is no navigation
+ * at all, so nothing downstream of it runs.
+ */
+function applyFilter() {
+  const query = { ...route.query };
+  delete query.number;
+  const name = usernameInput.value.trim();
+  if (name) query.username = name;
+  else delete query.username;
+  usernameInput.value = name;
+  router.push({ name: "moderation-warnings", query });
+}
 
-async function confirmRemove() {
-  if (!removeTarget.value || removing.value) return;
-  removing.value = true;
-  const { error } = await moderationApi.removeWarning(removeTarget.value.id);
-  removing.value = false;
-  if (error) {
-    notifyFailure(error, "Не удалось удалить предупреждение");
-    return;
-  }
-  toast.success("Предупреждение удалено");
-  removeTarget.value = null;
-  await fetch();
+/**
+ * Emptied by the cross of the field or by hand, the field drops the filter at
+ * once: a list narrowed to a name under a field that names nobody would say
+ * two different things.
+ */
+function onInput(value: string) {
+  usernameInput.value = value;
+  if (!value.trim() && username.value) applyFilter();
+}
+
+// --- Change the points of a warning (the server says on which rows) ---
+const changeTarget = ref<Warning | null>(null);
+
+const { open: openChangeDialog, close: closeChangeDialog } = useModal({
+  component: ChangeWarningPointsDialog,
+  attrs: reactive({
+    warningId: computed(() => changeTarget.value?.id ?? ""),
+    currentPoints: computed(() => changeTarget.value?.points ?? 0),
+    onSuccess: async () => {
+      closeChangeDialog();
+      changeTarget.value = null;
+      // The page the moderator is on, not the first one: the row stays in the
+      // log whatever its points become, so the page it is on is still the page
+      // to re-read.
+      await fetch();
+    },
+    onCancel: () => {
+      closeChangeDialog();
+      changeTarget.value = null;
+    },
+  }),
+});
+
+function changePoints(warning: Warning) {
+  changeTarget.value = warning;
+  openChangeDialog();
+}
+
+// --- Take the picture out of a record of a profile ---
+/** The record the question is about; null while nothing is asked. */
+const pictureTarget = ref<Warning | null>(null);
+
+/** A record with a picture to take out, and not the moderator's own. */
+function offersPictureRemoval(warning: Warning): boolean {
+  return (
+    !!warning.profile?.picture &&
+    !!warning.user &&
+    warning.user.id !== user.value?.id
+  );
+}
+
+/**
+ * The window runs the request and prints a refusal in itself, so the request
+ * carries the flags that keep the corner quiet. The page the moderator is on is
+ * read again after the server agrees: the record comes back without the
+ * picture, its status and "О себе" in place.
+ */
+async function removePicture() {
+  const target = pictureTarget.value;
+  if (!target) return;
+  const result = await moderationApi.removeWarningProfilePicture(target.id, {
+    ownsRefusal: true,
+    ownsRateLimit: true,
+  });
+  if (!result.error) void fetch();
+  return result;
 }
 
 const isEmpty = computed(() => !loading.value && warnings.value.length === 0);
+
+/** A page past the end of a log that is not empty: a stale link, or a filter. */
+const isPastEnd = computed(
+  () => isEmpty.value && (paging.value?.total ?? 0) > 0,
+);
+
+/** The address of the first page: this one without the page number. */
+const firstPageQuery = computed(() => {
+  const query = { ...route.query };
+  delete query.number;
+  return query;
+});
 </script>
 
 <template>
@@ -77,180 +220,93 @@ const isEmpty = computed(() => !loading.value && warnings.value.length === 0);
 
     <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
-    <ErrorState v-else-if="loadError" :message="loadError" :retry="fetch" />
+    <template v-else>
+      <form class="search-line" @submit.prevent="applyFilter">
+        <FilterSearchInput
+          :model-value="usernameInput"
+          placeholder="Точное имя пользователя"
+          @update:model-value="onInput"
+        />
+        <Button type="submit" variant="primary">Найти</Button>
+      </form>
 
-    <!-- Skeleton: geometric twin of the warning card (header + reason + meta) -->
-    <div
-      v-else-if="loading && !warnings.length"
-      class="warning-list"
-      aria-hidden="true"
-    >
-      <div v-for="i in 5" :key="i" class="warning-card">
-        <div class="skeleton-line skeleton-header"></div>
-        <div class="skeleton-line skeleton-reason"></div>
-        <div class="skeleton-line skeleton-meta"></div>
-      </div>
-    </div>
+      <ErrorState v-if="loadError" :message="loadError" :retry="fetch" />
 
-    <SecondaryText v-else-if="isEmpty">Предупреждений пока нет</SecondaryText>
+      <RecordSkeleton v-else-if="loading && !warnings.length" :count="5" />
 
-    <div v-else class="warning-list">
-      <div
-        v-for="warning in warnings"
-        :key="warning.id"
-        class="warning-card"
-        :class="{ 'is-inactive': !warning.isActive }"
-      >
-        <div class="warning-header">
-          <UserLink v-if="warning.user" :user="warning.user" />
-          <span class="warning-type">{{
-            warningTypeLabel(warning.points)
-          }}</span>
-          <span v-if="!warning.isActive" class="warning-state">Неактивно</span>
-        </div>
-
-        <p class="warning-reason">{{ warning.reason }}</p>
-
-        <!-- Evidence. The warning names content its author may edit or delete
-             afterwards, so what the moderator saw is kept on the warning itself
-             (server-side snapshot). The link beside it leads to the object as it
-             stands now; when the two are known to differ, the mark below says
-             so. Shown verbatim, tags and all: this is the source that was
-             written, not a rendering of it. -->
-        <div v-if="warning.entitySnapshot" class="warning-evidence">
-          <SecondaryText>Текст на момент выдачи</SecondaryText>
-          <p class="warning-evidence_text">{{ warning.entitySnapshot }}</p>
-          <p
-            v-if="warning.entityEditedAfterWarning"
-            class="warning-evidence_edited"
+      <div v-else-if="isPastEnd" class="warnings-empty">
+        <SecondaryText>
+          На этой странице предупреждений нет.
+          <router-link
+            :to="{ name: 'moderation-warnings', query: firstPageQuery }"
+            >Вернуться на первую страницу</router-link
           >
-            Объект изменен после выдачи предупреждения
-          </p>
-        </div>
-
-        <p v-if="warning.entityUrl" class="warning-object">
-          <router-link :to="warning.entityUrl">Перейти к объекту</router-link>
-        </p>
-
-        <div class="warning-meta">
-          <template v-if="warning.moderator">
-            от
-            <router-link
-              :to="{
-                name: 'profile',
-                params: { username: warning.moderator.username },
-              }"
-            >
-              {{ warning.moderator.username }}</router-link
-            >,
-          </template>
-          {{ formatDateFull(warning.createdUtc) }}
-          <button
-            v-if="warning.isActive"
-            type="button"
-            class="remove-button"
-            @click="removeTarget = warning"
-          >
-            Удалить
-          </button>
-        </div>
+        </SecondaryText>
       </div>
-    </div>
+
+      <SecondaryText v-else-if="isEmpty">{{
+        username
+          ? "Предупреждений по заданным фильтрам не найдено"
+          : "Предупреждений пока нет"
+      }}</SecondaryText>
+
+      <template v-else>
+        <div class="warning-list">
+          <WarningCard
+            v-for="warning in warnings"
+            :key="warning.id"
+            :warning="warning"
+          >
+            <template #record-controls>
+              <CaptionAction
+                v-if="offersPictureRemoval(warning)"
+                @click="pictureTarget = warning"
+                >Удалить картинку</CaptionAction
+              >
+            </template>
+            <template #controls>
+              <CaptionAction
+                v-if="warning.canChangePoints"
+                @click="changePoints(warning)"
+                >Изменить баллы</CaptionAction
+              >
+            </template>
+          </WarningCard>
+        </div>
+
+        <Paging
+          v-if="paging"
+          :paging="paging"
+          :to="{ name: 'moderation-warnings' }"
+          use-query
+        />
+      </template>
+    </template>
 
     <ConfirmDialog
-      :show="removeTarget !== null"
-      title="Удаление предупреждения"
-      :message="`Удалить предупреждение пользователя ${removeTarget?.user?.username ?? ''}? Баллы будут пересчитаны.`"
+      :show="pictureTarget !== null"
+      title="Удалить картинку?"
+      message="Картинка пропадет из записи в обоих логах, вернуть ее будет нельзя"
       confirm-label="Удалить"
-      danger
-      :loading="removing"
-      @update:show="(v) => !v && (removeTarget = null)"
-      @confirm="confirmRemove"
+      failure="Не удалось удалить картинку"
+      :action="removePicture"
+      @update:show="(shown) => !shown && (pictureTarget = null)"
     />
   </div>
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
-@use "@/assets/styles/Skeleton" as *
+// The search line of the moderation lists: the field takes the width the
+// button leaves, both $control-height, one line at every width.
+.search-line
+  display: flex
+  align-items: center
+  gap: $small
+  margin-bottom: $medium
 
 .warning-list
   display: flex
   flex-direction: column
   gap: $medium
-
-.warning-card
-  +card()
-
-  &.is-inactive
-    opacity: 0.6
-
-.warning-header
-  display: flex
-  align-items: baseline
-  flex-wrap: wrap
-  gap: $small
-  margin-bottom: $small
-
-.warning-type
-  color: $text-muted
-  font-size: $secondary-font-size
-
-.warning-state
-  margin-left: auto
-  color: $text-muted
-  font-size: $secondary-font-size
-
-.warning-reason
-  margin: 0 0 $small
-  overflow-wrap: anywhere
-
-.warning-evidence
-  margin: 0 0 $small
-  padding: $small
-  border-left: 2px solid $border
-  background-color: $overlay-subtle
-
-.warning-evidence_text
-  // The snapshot is source text: its own line breaks are part of the evidence.
-  margin: $minor 0 0
-  white-space: pre-wrap
-  overflow-wrap: anywhere
-
-.warning-evidence_edited
-  margin: $minor 0 0
-  color: $accent-red
-  font-size: $secondary-font-size
-
-.warning-object
-  margin: 0 0 $small
-
-.warning-meta
-  display: flex
-  align-items: baseline
-  gap: $small
-  color: $text-muted
-  font-size: $secondary-font-size
-
-.remove-button
-  margin-left: auto
-  +inline-link-button
-
-// --- Skeleton lines (match the three content lines of a card) ---
-.skeleton-line
-  height: 1em
-  margin-bottom: $small
-  +skeleton-shimmer
-
-  &:last-child
-    margin-bottom: 0
-
-.skeleton-header
-  width: 60%
-
-.skeleton-reason
-  width: 90%
-
-.skeleton-meta
-  width: 40%
+  margin-bottom: $medium
 </style>

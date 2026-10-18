@@ -9,6 +9,10 @@ import type {
   UserRef,
 } from "@/shared/api/models/common";
 import type { Id, Served } from "@/shared/api/models";
+import type {
+  AttributeSpecification,
+  GameAttributeSchema,
+} from "@/shared/api/models/game/attributeSchemas";
 import { ModuleStatus } from "@/shared/api/models/common";
 
 // === Game Status & Roles ===
@@ -69,7 +73,10 @@ export type Tag = {
   /** Numeric tag ID for filtering */
   id: number;
   title: string;
-  /** Tag description (may contain [tipimg:] markup for inline image tooltips) */
+  /**
+   * Tag description as the server renders it: the markup of the hint surface,
+   * whose [tip] words open a small tooltip of their own (TooltipContent).
+   */
   description?: string;
   groupTitle: string;
   /** Tag group description */
@@ -89,10 +96,14 @@ export type Tag = {
 
 // === Game Settings ===
 
+/**
+ * Who may write in the discussion of a game; everybody may read it. DM2's
+ * "Доступно всем без ограничений" and "Доступно посторонним только для
+ * чтения" (the people without a role in the game read and do not write).
+ */
 export enum CommentariesAccessMode {
   Public = "Public",
   Readonly = "Readonly",
-  Private = "Private",
 }
 
 export interface GamePrivacySettings {
@@ -129,7 +140,8 @@ export type GameRef = {
   status: GameStatus;
   closedReason?: ClosedReason;
   activatedUtc?: string;
-  master: Served<UserRef>;
+  /** Null when the master's account was removed: the game stays, unsigned. */
+  master: Served<UserRef | null>;
   assistants: Served<UserRef[]>;
   /** User participation flags */
   participation: Served<GameParticipation[]>;
@@ -188,7 +200,7 @@ export type CharacterStatusTransition =
   | "Exile"
   | "Leave"
   | "Resurrect"
-  | "Return";
+  | "Readmit";
 
 /**
  * Character of the player targeted by the playerUsername search filter
@@ -205,6 +217,24 @@ export interface PlayerCharacterInfo {
   isPlayerLeft: boolean;
   /** Player was exiled by the master (meaningful when status = Retired) */
   isPlayerExiled: boolean;
+}
+
+/**
+ * What the viewer may do in a game (mirrors GameViewer). The server asks each
+ * flag with the code that refuses the write it stands for, so a page that
+ * offers by it offers only what the server takes.
+ */
+export interface GameViewer {
+  /**
+   * May write a new comment in the game's discussion: the mode with the
+   * viewer's roles, the blacklist and the ban at once. False for a guest.
+   */
+  canComment: boolean;
+  /**
+   * May review the game: past the probation, with a post of theirs in it and
+   * no review of theirs there yet. False for a guest.
+   */
+  canReview: boolean;
 }
 
 // === Game (full, for lists and tables) ===
@@ -240,9 +270,11 @@ export interface Game extends GameRef {
   /** Tag IDs only (for lists - use cached /games/tags for descriptions) */
   tagIds: number[];
   privacySettings: GamePrivacySettings;
-  schema: AttributeSchema | null;
-  /** Attribute schema identifier */
-  schemaId?: string;
+  /**
+   * The character sheet of the game. Part of the game itself, so the details
+   * answer always carries one; a list projection carries none.
+   */
+  schema?: GameAttributeSchema;
 
   /** Unique players (authors of active characters) - for game details page */
   players?: Served<UserRef[]>;
@@ -253,6 +285,21 @@ export interface Game extends GameRef {
    * only on the game details response.
    */
   readers?: Served<UserRef[]>;
+
+  /**
+   * The viewer is on the blacklist of this game: they may not comment in its
+   * discussion or apply to it, nor edit their own comment or application;
+   * everything else is open to them as to anyone. False for a guest. Game
+   * details only. The comment form goes by `viewer.canComment`, which says
+   * the blacklist together with every other reason.
+   */
+  viewerBlacklisted?: Served<boolean>;
+
+  /**
+   * What the viewer may do in this game, answered by the code that refuses
+   * the request. Game details only.
+   */
+  viewer?: Served<GameViewer>;
 
   /** Total posts across all rooms ("Постов всего"). Game details only. */
   totalPostsCount?: Served<number>;
@@ -315,12 +362,18 @@ export interface CreateGameInput {
   setting?: string;
   /** Game description (raw BBCode source) */
   info: string;
-  /** Create the game as a draft (not visible to others) */
+  /**
+   * Create the game in the making ("Оформляется"), out of sight of everyone
+   * without a role in it; false creates it started ("Оформлен").
+   */
   draft?: boolean;
   /** Game tag short identifiers, the ones /games/tags serves */
   tags?: number[];
-  /** Attribute schema identifier */
-  schemaId?: string;
+  /**
+   * The character sheet the game starts with, saved together with the game. An
+   * empty set is allowed and means characters with no attributes.
+   */
+  attributeSpecifications?: AttributeSpecification[];
   /** Assistant username */
   assistantUsername?: string;
   privacySettings?: CreateGamePrivacySettingsInput;
@@ -394,55 +447,28 @@ export interface GameUser {
 
 // === Attribute Schemas ===
 
-/**
- * Schema access type
- * @see src/DM.Domain.Core/Enums/SchemaType.cs
- */
-export enum AttributeSchemaType {
-  Public = "Public",
-  Private = "Private",
-}
+// The sheet shapes on the wire live in shared/api/models (FSD: shared must not
+// import entities), because the template catalogue reads the same ones; the
+// entity re-exports them as its public model surface.
+export {
+  AttributeSpecificationType,
+  type AttributeValueSpecification,
+  type AttributeSpecification,
+  type GameAttributeSchema,
+  type ReplaceGameAttributeSchemaRequest,
+} from "@/shared/api/models/game/attributeSchemas";
 
 /**
- * Specification constraints type
- * @see src/DM.Domain.Core/Enums/AttributeSpecificationType.cs
+ * What the schema editor holds while the composer works on it.
+ *
+ * Not a wire shape: a draft has no identifier, because the game it will belong
+ * to may not exist yet, and the specifications inside it carry identifiers the
+ * browser made up that the server hands out again on save. The title belongs to
+ * a template and to nothing else, because a sheet owned by a game is named by
+ * that game, so the hosts that edit a game's sheet leave the field out.
  */
-export enum AttributeSpecificationType {
-  Text = "Text",
-  Number = "Number",
-  TextList = "TextList",
-  NumberList = "NumberList",
-  TextNumberList = "TextNumberList",
-  BbCode = "BbCode",
-}
-
-export interface AttributeValueSpecification {
-  value: string;
-  modifier: number | null;
-}
-
-export interface AttributeSpecification {
-  id: string;
+export interface AttributeSchemaDraft {
   title: string;
-  required: boolean;
-  type: AttributeSpecificationType;
-  /** Order index within the schema */
-  order: number;
-  /** Show on game main page as descriptor (at most one per schema) */
-  isDescriptor: boolean;
-  /** Hide from other players (only GM and owner can see) */
-  isHidden: boolean;
-  /** Maximal length - only for Text/Number/BbCode types */
-  maxLength?: number | null;
-  /** Possible values - only for TextList/NumberList/TextNumberList types */
-  values?: AttributeValueSpecification[] | null;
-}
-
-export interface AttributeSchema {
-  id: string | null;
-  title: string;
-  author: UserRef | null;
-  type: AttributeSchemaType;
   specifications: AttributeSpecification[];
 }
 
@@ -596,15 +622,16 @@ export interface RoomAccess {
  * An expectation that some character's player writes the next post in a room
  * (DM.Web.API.Features.Game.Rooms.PostPendency). It stays in the payload once
  * answered, with fulfilledUtc set, so every reader has to filter for itself.
- * characterName is declared non-optional: the read path always carries it,
- * and the DTO is nullable only because the same shape is a create body.
+ * characterName is declared non-optional: the read path always carries it.
+ * The create body is PostPendencyInput, the character alone.
  */
 export interface PostPendency {
   id: string;
   roomId: string;
   characterId: string;
   characterName: string;
-  createdBy?: UserRef;
+  /** Null when the account that set the expectation was removed. */
+  createdBy?: UserRef | null;
   waitingFor?: UserRef | null;
   createdUtc: string;
   fulfilledUtc?: string | null;
@@ -625,7 +652,6 @@ export interface RoomSettings {
 export type Room = {
   id: Served<RoomId>;
   roomNumber: Served<number>;
-  previousRoomId?: string;
   title: string;
   access?: RoomAccessType;
   type?: RoomType;
@@ -645,6 +671,18 @@ export type Room = {
   accesses?: RoomAccess[];
   pendencies?: PostPendency[];
   unreadPostsCount: number;
+  /**
+   * Messages in the room, removed ones left out: the posts of a room of posts,
+   * the messages of a room of chat. Zero on a room the viewer may not open.
+   */
+  totalPostsCount?: number;
+  /**
+   * The characters let in to write in a room the viewer may not open, a dead
+   * or departed one included, in the order they joined the game; the menu
+   * writes the room with them, "[Лес] - Густав, Эодор". Empty on a room the
+   * viewer may open: its accesses say it.
+   */
+  characterNames?: string[];
   settings?: RoomSettings;
   /**
    * Parent game reference for this room. Post-listing endpoints
@@ -692,7 +730,8 @@ export type PostBbText = string;
 export interface PostEditInfo {
   id: string;
   modifiedUtc: string;
-  editor?: UserRef;
+  /** Null when the editor's account was removed. */
+  editor?: UserRef | null;
 }
 
 export type PostId = Id<string>;
@@ -700,7 +739,8 @@ export type Post = {
   id: Served<PostId>;
   room?: Room;
   character?: Character;
-  author?: UserRef;
+  /** Null when the author's account was removed: the post stays, unsigned. */
+  author?: UserRef | null;
   /** Author's game role: DungeonMaster, Assistant, or null for player posts */
   authorGameRole?: "DungeonMaster" | "Assistant";
   createdUtc: string;
@@ -713,7 +753,38 @@ export type Post = {
   reviewCount?: number;
   /** Files attached to the post, oldest first. */
   attachments?: PostAttachment[];
+  /**
+   * Place of the post in its room, in the order the room is written in. The
+   * same under any filter and sort of the room, so a filtered page still says
+   * where each post stands. The room's own lists and single-post reads carry
+   * it; the rated feed does not.
+   */
+  number?: number;
+  /**
+   * The game the post was written in. A review of one post closes the reviews
+   * of the game's other posts to the same reviewer for three days, and a page
+   * holding posts of several games keeps that apart by this.
+   */
+  gameId?: Served<string>;
+  /**
+   * What the viewer may do with this post, answered by the code that refuses
+   * the request. Every answer that carries posts carries it, the lists too.
+   */
+  viewer?: Served<PostViewer>;
 };
+
+/**
+ * What the viewer may do with a post (mirrors PostViewer). The server asks the
+ * flag with the code that refuses the write it stands for.
+ */
+export interface PostViewer {
+  /**
+   * May review the post: not their own, not reviewed by them already, and no
+   * review of theirs in the same game during the last three days. False for a
+   * guest. The probation is not in it: a newbie is offered "=".
+   */
+  canReview: boolean;
+}
 
 /**
  * A file attached to a post.
@@ -753,8 +824,10 @@ export interface PostReview {
   id: string;
   postId: string;
   gameId: string;
-  author: UserRef;
-  postAuthor: UserRef;
+  /** Null when the reviewer's account was removed. */
+  author: UserRef | null;
+  /** Null when the account that wrote the post was removed. */
+  postAuthor: UserRef | null;
   text: string;
   sign: ReviewSign;
   createdUtc: string;
@@ -777,6 +850,45 @@ export interface FirstUnreadPostResult {
   totalUnreadCount: number;
   /** Whether there are unread posts (or any posts for anonymous users) */
   hasUnread: boolean;
+}
+
+/**
+ * Where a room opens when its address names no page: the first unread post,
+ * or the last post when nothing is unread (the first one for a guest).
+ */
+export interface FirstUnreadRoomPostResult {
+  /** Absent for a room without posts */
+  postId?: string;
+  /** Number of that post in the room; 0 for a room without posts */
+  postNumber: number;
+  /** Page holding that post at `pageSize` */
+  page: number;
+  pageSize: number;
+  totalUnreadCount: number;
+  hasUnread: boolean;
+}
+
+/**
+ * What a reader asks of one room's list besides the page: the pulse filters
+ * under the pulse names, plus the characters. A field left out filters nothing.
+ */
+export interface RoomPostsFilter {
+  search?: string;
+  /** created (the order the room is written in) is the server's default */
+  sortBy?: "created" | "rating" | "reviewcount" | "lastreview";
+  sortOrder?: "asc" | "desc";
+  authorUsernames?: string[];
+  characterIds?: string[];
+  /** Alone: only posts without a character; with characterIds: those too */
+  withoutCharacter?: boolean;
+  minRating?: number;
+  maxRating?: number;
+  /** true: only posts with reviews; false: only posts without */
+  hasReviews?: boolean;
+  /** ISO 8601 */
+  createdFromUtc?: string;
+  /** ISO 8601 */
+  createdToUtc?: string;
 }
 
 /**

@@ -8,6 +8,7 @@ import type {
   TwoFactorConfirmedAction,
   RecoveryCodes,
   RegisterCredentials,
+  ActivationRequest,
   ChangeEmailRequest,
   PendingInfo,
   UsernameAvailability,
@@ -26,6 +27,46 @@ import type {
   SecurityLogType,
 } from "@/shared/api/models/account";
 import { Api, X_DM_ACCOUNT_TOKEN } from "@/shared/api";
+
+/**
+ * The mark of a request sent from a guest form.
+ *
+ * Each of them takes the rate limit over from the response interceptor: they go
+ * out of a screen the reader presses again — the way in, above all — and the
+ * form answers the refusal where it answers everything else, in its own strip,
+ * with the wait running down on its button. The interceptor's toast on top of
+ * that is one refusal said twice, and it is the half that fades while the
+ * button is still shut.
+ *
+ * The mark fits an endpoint pressed from one screen, and only that. Recovery
+ * is pressed from four - three that answer for themselves and one that shows
+ * nothing at all - so it takes the flags from whoever presses it instead. See
+ * `recover` and `RefusalFlags` below.
+ */
+const GUEST_FORM = { ownsRateLimit: true, ownsRefusal: true } as const;
+
+/**
+ * The refusal a caller takes over because its own screen carries it.
+ *
+ * Set by the call site and not by the method, because one endpoint is read from
+ * screens that answer for it and from screens that show nothing: the block that
+ * draws a failed read as a card in place of itself is the carrier there, while
+ * the same read on a profile page is thrown away unlooked at. A flag fixed
+ * inside the method decides for both and takes the voice away from the second
+ * one - nobody then says anything at all.
+ *
+ * The methods below pass it through untouched; every call that leaves it out is
+ * unchanged, because the client then sees nothing and the interceptor speaks as
+ * it always did. Declared here rather than imported for the same reason
+ * `gameApi` declares its own copy: `shared/api` keeps the type to itself, and
+ * the client reads the two fields off the request by name.
+ */
+type RefusalFlags = {
+  /** The screen shows a 403 and a 5xx itself. */
+  ownsRefusal?: boolean;
+  /** The screen shows a 429 itself, the wait included. */
+  ownsRateLimit?: boolean;
+};
 
 /**
  * A code on its way to the server, with every space taken out of it.
@@ -51,7 +92,7 @@ export default new (class AccountApi {
    * Returns 201 on success with no body.
    */
   public register(credentials: RegisterCredentials) {
-    return Api.post<void>("account/register", credentials);
+    return Api.post<void>("account/register", credentials, GUEST_FORM);
   }
 
   /**
@@ -68,15 +109,7 @@ export default new (class AccountApi {
    * Complete activation with username selection (Step 2)
    * Creates user account and logs in automatically
    */
-  public activate(
-    token: string,
-    // retryEmail, spelled the way ActivationRequest binds it. It used to be
-    // sent as expectedEmail: no JsonPropertyName stands between them and the
-    // serializer is camelCase, so the value arrived null on every request and
-    // the idempotent-retry branch it feeds answered 410 to a repeat of an
-    // activation that had already succeeded.
-    request: { username: string; retryEmail?: string },
-  ) {
+  public activate(token: string, request: ActivationRequest) {
     return Api.post<Envelope<User>>("account/activation", request, {
       headers: { [X_DM_ACCOUNT_TOKEN]: token },
     });
@@ -97,10 +130,19 @@ export default new (class AccountApi {
   /**
    * Unified account recovery (password reset or activation resend)
    * Detects what action is needed based on email status
+   *
+   * @param options Set by the three screens that answer a failed press
+   * themselves - the recovery card, the sign-in form and the registration form
+   * all print the refusal in their own strip and count the wait down on their
+   * own button. The fourth screen that presses this, the activation page,
+   * shows nothing of its own and leaves the failure to the interceptor. While
+   * the flags stood here they silenced the interceptor for that press too, and
+   * its own `notifyFailure` is silent for the same statuses by the same rule -
+   * so a 403, a 429 or a 5xx on "отправить еще раз" was announced by nobody.
    */
-  public recover(email: string) {
+  public recover(email: string, options?: RefusalFlags) {
     const request: RecoveryRequest = { email };
-    return Api.post<RecoveryResponse>("account/recovery", request);
+    return Api.post<RecoveryResponse>("account/recovery", request, options);
   }
 
   /**
@@ -109,7 +151,11 @@ export default new (class AccountApi {
    */
   public checkEmail(email: string) {
     // Body, for the same reason as checkUsername above.
-    return Api.post<EmailAvailability>("account/check-email", { email });
+    return Api.post<EmailAvailability>(
+      "account/check-email",
+      { email },
+      GUEST_FORM,
+    );
   }
 
   /**
@@ -122,6 +168,7 @@ export default new (class AccountApi {
    */
   public signIn(credentials: LoginCredentials) {
     return Api.post<LoginResponse>("account/login", credentials, {
+      ...GUEST_FORM,
       ownsRefusal: true,
     });
   }
@@ -143,7 +190,7 @@ export default new (class AccountApi {
     return Api.post<Envelope<LoginResponse>>(
       "account/login/two-factor",
       { code: withoutSpaces(request.code) },
-      { ownsRefusal: true },
+      { ...GUEST_FORM, ownsRefusal: true },
     );
   }
 
@@ -233,9 +280,19 @@ export default new (class AccountApi {
   /**
    * Get current user's username change request (if exists)
    * Returns 204 No Content if no request exists
+   *
+   * @param options Set by the account block, where a failed read is a card in
+   * place of the state and the gate that shuts the form under it. The profile
+   * page reads the same request and shows nothing about a failure, so it sets
+   * nothing and the interceptor speaks for it.
    */
-  public getUsernameChangeRequest() {
-    return Api.get<UsernameChangeRequest | null>("account/username-change");
+  public getUsernameChangeRequest(options?: RefusalFlags) {
+    return Api.get<UsernameChangeRequest | null>(
+      "account/username-change",
+      undefined,
+      undefined,
+      options,
+    );
   }
 
   /**
@@ -330,9 +387,20 @@ export default new (class AccountApi {
 
   // ========== Two-factor authentication ==========
 
-  /** State of the viewer's own second factor. */
-  public getTwoFactorStatus() {
-    return Api.get<Envelope<TwoFactorStatus>>("account/two-factor");
+  /**
+   * State of the viewer's own second factor.
+   *
+   * @param options Set by the account block, which draws a failed read as a
+   * card in place of the whole block - the way in to switching the factor on
+   * goes with it - and needs no plate over that card.
+   */
+  public getTwoFactorStatus(options?: RefusalFlags) {
+    return Api.get<Envelope<TwoFactorStatus>>(
+      "account/two-factor",
+      undefined,
+      undefined,
+      options,
+    );
   }
 
   /**
@@ -380,9 +448,14 @@ export default new (class AccountApi {
    *
    * Anonymous: the person who needs it cannot sign in. The server answers the
    * same for every address, so there is one result screen for every case.
+   *
+   * @param options Set by the card that sends it, which prints every refusal of
+   * the press in its own strip and counts the wait down on its button. The
+   * flags used to be fixed here, which is the service deciding for a screen it
+   * cannot see.
    */
-  public requestTwoFactorRemoval(email: string) {
-    return Api.post<void>("account/two-factor/removal", { email });
+  public requestTwoFactorRemoval(email: string, options?: RefusalFlags) {
+    return Api.post<void>("account/two-factor/removal", { email }, options);
   }
 
   /**
@@ -391,10 +464,14 @@ export default new (class AccountApi {
    * Ends every session of the account and starts the waiting period. There is
    * no "check this token" call to ask first, so a dead link is learnt from the
    * answer to this one.
+   *
+   * @param options Set by the page behind the link, which keeps the refusal in
+   * the card it puts up in place of the press.
    */
-  public scheduleTwoFactorRemoval(token: string) {
+  public scheduleTwoFactorRemoval(token: string, options?: RefusalFlags) {
     return Api.post<void>("account/two-factor/removal/confirm", undefined, {
       headers: { [X_DM_ACCOUNT_TOKEN]: token },
+      ...options,
     });
   }
 
@@ -412,7 +489,11 @@ export default new (class AccountApi {
    * rights, only a way in by password for its owner and the end of every
    * session it had.
    */
-  public clearTwoFactorFor(username: string) {
-    return Api.delete(`account/two-factor/users/${username}`);
+  public clearTwoFactorFor(username: string, options?: RefusalFlags) {
+    return Api.delete(
+      `account/two-factor/users/${username}`,
+      undefined,
+      options,
+    );
   }
 })();

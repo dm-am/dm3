@@ -19,10 +19,10 @@ namespace DM.Domain.Account.Tests.Features.TwoFactor;
 /// The one place a presented second factor is judged.
 /// </summary>
 /// <remarks>
-/// Covers the two replay guards, which are the substance of the feature:
-/// INV-6, a time step is good for one use across every session and every
-/// challenge of the account, and INV-5, a recovery code is spent exactly once
-/// because spending it is a conditional update over one row.
+/// Covers the two replay guards, which are the substance of the feature: a
+/// time step is good for one use across every session and every challenge of
+/// the account, and a recovery code is spent exactly once because spending it
+/// is a conditional update over one row.
 /// </remarks>
 public class TwoFactorVerifierShould : UnitTestBase
 {
@@ -93,7 +93,7 @@ public class TwoFactorVerifierShould : UnitTestBase
     }
 
     /// <summary>
-    /// INV-6: the same code twice is refused the second time.
+    /// The same code twice is refused the second time.
     /// </summary>
     /// <remarks>
     /// The refusal is the storage answering "the recorded step is not smaller
@@ -114,7 +114,7 @@ public class TwoFactorVerifierShould : UnitTestBase
     }
 
     /// <summary>
-    /// AC-16, the code half: two requests carrying one code give one success.
+    /// Two requests carrying one code give one success.
     /// </summary>
     [Fact]
     public async Task LetOnlyOneOfTwoSimultaneousCodesWin()
@@ -176,7 +176,7 @@ public class TwoFactorVerifierShould : UnitTestBase
     }
 
     /// <summary>
-    /// INV-5 and AC-15: a code already spent is not in the set and is refused.
+    /// A code already spent is not in the set and is refused.
     /// </summary>
     [Fact]
     public async Task RefuseARecoveryCodeThatIsNoLongerUnspent()
@@ -189,7 +189,7 @@ public class TwoFactorVerifierShould : UnitTestBase
     }
 
     /// <summary>
-    /// AC-16, the recovery half: the conditional update decides, not the read.
+    /// For a recovery code the conditional update decides, not the read.
     /// </summary>
     [Fact]
     public async Task RefuseARecoveryCodeThatAnotherRequestSpentFirst()

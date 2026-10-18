@@ -1,140 +1,117 @@
-﻿<template>
+<template>
   <section class="section">
     <h2 class="section-title">Черный список</h2>
 
     <div class="blacklist-content">
-      <!-- Settings -->
       <div class="settings-group">
-        <h3 class="settings-title">Настройки</h3>
+        <p :id="captionId" class="settings-caption">Что делать с внесенными</p>
         <div v-if="settingsLoading" class="loading-state">Загрузка...</div>
-        <div v-else class="settings-list">
-          <label class="setting-item">
+        <div
+          v-else
+          class="settings-list"
+          role="group"
+          :aria-labelledby="captionId"
+        >
+          <label
+            v-for="option in OPTIONS"
+            :key="option.key"
+            class="setting-item"
+          >
             <input
+              v-model="settings[option.key]"
               type="checkbox"
-              v-model="settings.hideComments"
+              :aria-busy="settingsSaving || undefined"
+              @click="holdWhileSaving"
               @change="saveSettings"
-              :disabled="settingsSaving"
             />
-            <span>Скрывать комментарии</span>
-          </label>
-          <label class="setting-item">
-            <input
-              type="checkbox"
-              v-model="settings.hideMessages"
-              @change="saveSettings"
-              :disabled="settingsSaving"
-            />
-            <span>Скрывать сообщения в чате</span>
-          </label>
-          <label class="setting-item">
-            <input
-              type="checkbox"
-              v-model="settings.hideGames"
-              @change="saveSettings"
-              :disabled="settingsSaving"
-            />
-            <span>Скрывать игры</span>
-          </label>
-          <label class="setting-item">
-            <input
-              type="checkbox"
-              v-model="settings.hideBlogs"
-              @change="saveSettings"
-              :disabled="settingsSaving"
-            />
-            <span>Скрывать блоги</span>
-          </label>
-          <label class="setting-item">
-            <input
-              type="checkbox"
-              v-model="settings.blockDirectMessages"
-              @change="saveSettings"
-              :disabled="settingsSaving"
-            />
-            <span>Блокировать личные сообщения</span>
-          </label>
-          <label class="setting-item">
-            <input
-              type="checkbox"
-              v-model="settings.autoPopulateContentBlacklist"
-              @change="saveSettings"
-              :disabled="settingsSaving"
-            />
-            <span>Автозаполнять ЧС игр и блогов</span>
+            <span>{{ option.label }}</span>
           </label>
         </div>
+        <ActionResult :result="settingsResult" class="blacklist-refusal" />
       </div>
 
-      <!-- Blocked users list -->
-      <div class="blocked-group">
-        <h3 class="settings-title">Заблокированные</h3>
-        <div v-if="listLoading" class="loading-state">Загрузка...</div>
-        <EmptyState
-          v-else-if="blockedUsers.length === 0"
-          title="Нет заблокированных пользователей"
+      <!-- The list: its caption, the table of the site (BlacklistEditor) with
+           the field a name is put on with as its last line, and the rest of a
+           long list under it. -->
+      <div class="list-group">
+        <p class="settings-caption">В черном списке</p>
+        <BlacklistEditor
+          :rows="blockedUsers"
+          :loading="listLoading"
+          dated
+          :error="listError"
+          :add="add"
+          :remove="unblock"
         />
-        <div v-else class="blocked-list">
-          <div
-            v-for="entry in blockedUsers"
-            :key="entry.id"
-            class="blocked-item"
-          >
-            <div class="blocked-info">
-              <RouterLink
-                :to="`/users/${entry.username}`"
-                class="blocked-username"
-              >
-                {{ entry.username }}
-              </RouterLink>
-              <span class="blocked-date">{{
-                formatDate(entry.createdUtc)
-              }}</span>
-            </div>
-            <button
-              class="unblock-btn"
-              :disabled="unblockingUsername === entry.username"
-              @click="pendingUnblock = entry.username"
-            >
-              {{
-                unblockingUsername === entry.username ? "..." : "Разблокировать"
-              }}
-            </button>
-          </div>
-        </div>
 
-        <button class="add-btn" @click="openBlockModal">+ Заблокировать</button>
+        <!-- The list comes a page at a time; the rest is asked for here,
+             under the rows it continues. -->
+        <Button
+          v-if="hasMore"
+          type="button"
+          class="more-btn"
+          :loading="loadingMore"
+          @click="loadMore"
+        >
+          Показать еще
+        </Button>
+        <ActionResult :text="moreRefusal" class="blacklist-refusal" />
       </div>
     </div>
-
-    <ConfirmDialog
-      :show="pendingUnblock !== null"
-      title="Разблокировка пользователя"
-      :message="`Разблокировать ${pendingUnblock ?? ''}?`"
-      confirm-label="Разблокировать"
-      :loading="unblockingUsername !== null"
-      @update:show="(v) => !v && (pendingUnblock = null)"
-      @confirm="confirmUnblock"
-    />
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from "vue";
-import { RouterLink } from "vue-router";
-import { useModal } from "vue-final-modal";
+/**
+ * The account's own blacklist: the settings of what is done with the people on
+ * it, and under them the list. Two groups, each under a caption of its own,
+ * "Что делать с внесенными" and "В черном списке", as the section read before
+ * the wave of 5 October.
+ *
+ * The list is the table the game and the blog draw (BlacklistEditor), with
+ * the day each name went on in a column of its own ("Внесен"): the bin at the
+ * end of a row, the field and "Добавить" as the last line of the table. What
+ * stays here is what only this list has: the settings, the day, and the
+ * paging of a list that can be long.
+ *
+ * The server hands the list back newest-first (UserBlacklistRepository orders
+ * by CreatedUtc descending), so a new entry is the first row. The bin asks
+ * nothing (ACC-241): the row leaves on the spot, and the field puts it back.
+ *
+ * A list that did not come is not an empty one: the line says so where the
+ * rows would stand, and the field stays; a name put on then reads the list
+ * again.
+ */
+import { ref, reactive, computed, onMounted } from "vue";
 import { blacklistApi } from "@/entities/user";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { EmptyState } from "@/shared/ui/EmptyState";
-import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { formatDate } from "@/shared/lib/utils/datetime";
-import { BlockUserDialog } from "@/features/block-user";
+import { BlacklistEditor } from "@/features/roster";
+import type { GeneralError } from "@/shared/api/models/common";
 import type {
   BlacklistEntry,
   BlacklistSettings,
 } from "@/shared/api/models/personal";
-import { notifyFailure } from "@/shared/lib/errors";
+import { refusalHere } from "@/shared/lib/errors";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { ActionResult } from "@/shared/ui/ActionResult";
+import Button from "@/shared/ui/Button/Button.vue";
 
-const toast = useToast();
+/**
+ * The settings, each said as what is done with the people on the list, so a
+ * box reads whole without a heading over it.
+ */
+const OPTIONS: { key: keyof BlacklistSettings; label: string }[] = [
+  { key: "hideComments", label: "Скрывать их комментарии" },
+  { key: "hideMessages", label: "Скрывать их сообщения в общем чате" },
+  { key: "hideGames", label: "Скрывать их игры" },
+  { key: "hideBlogs", label: "Скрывать их блоги" },
+  { key: "blockDirectMessages", label: "Не принимать от них личные сообщения" },
+  {
+    key: "autoPopulateContentBlacklist",
+    label: "Переносить список в мои новые игры и блоги",
+  },
+];
+
+const captionId = `blacklist-settings-${Math.random().toString(36).slice(2, 9)}`;
 
 // Settings state
 const settingsLoading = ref(true);
@@ -151,20 +128,23 @@ const settings = reactive<BlacklistSettings>({
 // Blocked users state
 const listLoading = ref(true);
 const blockedUsers = ref<BlacklistEntry[]>([]);
-const unblockingUsername = ref<string | null>(null);
+/** Why the list is not on screen: its first page did not come. */
+const listError = ref<string | null>(null);
 
-// Block modal
-const { open: openBlockModal, close: closeBlockModal } = useModal({
-  component: BlockUserDialog,
-  attrs: {
-    onSuccess: (entry: BlacklistEntry) => {
-      blockedUsers.value.unshift(entry);
-      closeBlockModal();
-      toast.success(`${entry.username} заблокирован`);
-    },
-    onCancel: () => closeBlockModal(),
-  },
-});
+/**
+ * One page of the list. The server answers in pages and says how many there
+ * are in all; the first page used to be the whole of what this section
+ * showed, so a list longer than it simply ended.
+ */
+const PAGE_SIZE = 50;
+
+/**
+ * How many names the list holds on the server, kept in step with the presses
+ * made here. Without a paging answer (an older server) it is the page itself,
+ * and nothing more is offered.
+ */
+const total = ref(0);
+const hasMore = computed(() => blockedUsers.value.length < total.value);
 
 onMounted(async () => {
   await Promise.all([loadSettings(), loadBlockedUsers()]);
@@ -180,13 +160,33 @@ async function loadSettings() {
   }
 }
 
+// A setting stays drawn as it is while its save is in flight. Disabled, a
+// ticked box would show a tick on a control that cannot be ticked, and the
+// site's disabled state says "not on offer", which a setting being saved is
+// not. What the disabled attribute also did is kept: a press during the save
+// is refused before it toggles anything, so it never becomes a second request
+// racing the first.
+function holdWhileSaving(event: Event) {
+  if (settingsSaving.value) event.preventDefault();
+}
+
+/**
+ * A refused setting, under the list of settings. The boxes are read back from
+ * the server, so the line says why the one just ticked went back.
+ */
+const settingsResult = useActionResult();
+
 async function saveSettings() {
   settingsSaving.value = true;
+  settingsResult.clear();
   const { error } = await blacklistApi.updateSettings({ ...settings });
   settingsSaving.value = false;
 
   if (error) {
-    notifyFailure(error, "Не удалось сохранить настройки");
+    settingsResult.refuse(
+      error,
+      "Не удалось сохранить настройки черного списка",
+    );
     // Reload to restore correct state
     await loadSettings();
   }
@@ -194,60 +194,119 @@ async function saveSettings() {
 
 async function loadBlockedUsers() {
   listLoading.value = true;
-  const { data, error } = await blacklistApi.getBlacklist();
+  const { data, error } = await blacklistApi.getBlacklist(0, PAGE_SIZE);
   listLoading.value = false;
 
-  if (!error && data) {
+  if (error) {
+    listError.value = "Не удалось загрузить черный список";
+    return;
+  }
+  listError.value = null;
+  if (data) {
     blockedUsers.value = data.resources;
+    total.value = data.paging?.total ?? data.resources.length;
   }
 }
 
-// Unblock is ConfirmDialog-gated: `pendingUnblock` holds the username the
-// dialog is asking about.
-const pendingUnblock = ref<string | null>(null);
+// --- Putting a name on ---
+// Sent from the field, which waits for the answer and says a refusal under
+// itself. The new entry is the table's first row, where the server puts it;
+// the server now holds one more name, which the next page is counted from.
+// A name already on the list comes back as its old entry, which is not put on
+// screen twice. Where the list did not come, it is read again instead: there
+// is no list on screen to put the entry at the head of.
+async function add(username: string): Promise<GeneralError | null> {
+  const { data, error } = await blacklistApi.blockUser({ username });
+  if (error) return error;
+  if (listError.value) {
+    await loadBlockedUsers();
+    return null;
+  }
+  if (!data) return null;
+  const known = blockedUsers.value.some((entry) => entry.id === data.id);
+  blockedUsers.value = [
+    data,
+    ...blockedUsers.value.filter((entry) => entry.id !== data.id),
+  ];
+  if (!known) total.value += 1;
+  return null;
+}
 
-async function confirmUnblock() {
-  const username = pendingUnblock.value;
-  if (!username || unblockingUsername.value) return;
+// --- The next page ---
+// Asked from where the rows on screen end. A name added here went to the head
+// of the list on the server as it did on screen, and a name taken off left
+// both, so the count of rows on screen is the offset the server means; a row
+// that turns up twice all the same (a change made in another tab) is dropped.
+const loadingMore = ref(false);
+const moreRefusal = ref<string | null>(null);
 
-  unblockingUsername.value = username;
-  const { error } = await blacklistApi.unblockUser(username);
-  unblockingUsername.value = null;
+async function loadMore() {
+  if (loadingMore.value) return;
+  loadingMore.value = true;
+  moreRefusal.value = null;
+  const { data, error } = await blacklistApi.getBlacklist(
+    blockedUsers.value.length,
+    PAGE_SIZE,
+  );
+  loadingMore.value = false;
 
   if (error) {
-    notifyFailure(error, "Не удалось разблокировать пользователя");
-  } else {
-    pendingUnblock.value = null;
-    blockedUsers.value = blockedUsers.value.filter(
-      (u) => u.username !== username,
+    moreRefusal.value = refusalHere(
+      error,
+      "Не удалось загрузить черный список",
     );
-    toast.success(`${username} разблокирован`);
+    return;
   }
+  if (!data) return;
+  const onScreen = new Set(blockedUsers.value.map((entry) => entry.id));
+  blockedUsers.value.push(
+    ...data.resources.filter((entry) => !onScreen.has(entry.id)),
+  );
+  total.value = data.paging?.total ?? blockedUsers.value.length;
+}
+
+// --- Taking a name off ---
+// The bin asks nothing: the row leaves the list on the spot. The table shuts
+// the bin while its answer is on the wire and says a refusal under the row,
+// which then stays where it was.
+async function unblock(username: string): Promise<GeneralError | null> {
+  const { error } = await blacklistApi.unblockUser(username);
+  if (error) return error;
+  blockedUsers.value = blockedUsers.value.filter(
+    (entry) => entry.username !== username,
+  );
+  total.value = Math.max(0, total.value - 1);
+  return null;
 }
 </script>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
 @use "../AccountPage.styles" as *
+@use "@/assets/styles/Inputs" as *
 
+// The card of the section: the group of settings and the group of the list,
+// 16 apart.
 .blacklist-content
   padding: $medium
   background-color: $bg-element
-  border-radius: $border-radius
   display: flex
   flex-direction: column
-  gap: $large
+  gap: $medium
 
+// Inside a group its parts stand 8 apart: the caption and the boxes; the
+// caption, the table and "Показать еще".
 .settings-group,
-.blocked-group
+.list-group
   display: flex
   flex-direction: column
   gap: $small
 
-.settings-title
+// The caption of a group of fields: 14, bold, as the captions of the fields of
+// the site are.
+.settings-caption
   margin: 0
-  font-size: $font-size
-  font-weight: 600
+  font-size: $secondary-font-size
+  font-weight: 700
   color: $text
 
 .loading-state
@@ -258,77 +317,30 @@ async function confirmUnblock() {
   flex-direction: column
   gap: $small
 
+// The line of the words: the body's 1.3 at the size of the text.
+$setting-line: 1.3 * $font-size
+
+// A box and its words. The box stands by the first line, centred on it, and
+// words that wrap (three of the six on a phone of 360) go on under themselves
+// and not under the box, as the check lines of the guest forms stand
+// (AuthSurface.sass, .auth-checkline). Centred on the whole label, the box
+// hung between the two lines. On one line the place is the one centring gave.
 .setting-item
   display: flex
-  align-items: center
+  align-items: flex-start
   gap: $small
   cursor: pointer
   color: $text
+  line-height: $setting-line
 
-  &:has(input:disabled)
-    opacity: 0.6
-    cursor: default
+  input
+    margin-top: calc((#{$setting-line} - #{$checkbox-size}) / 2)
 
-.blocked-list
-  display: flex
-  flex-direction: column
-  gap: $small
-
-.blocked-item
-  display: flex
-  justify-content: space-between
-  align-items: center
-  padding: $small $medium
-  background-color: $bg
-  border-radius: $border-radius
-  border: 1px solid $border
-  gap: $medium
-
-  @media (max-width: $bp-tablet)
-    flex-direction: column
-    align-items: stretch
-
-.blocked-info
-  display: flex
-  align-items: center
-  gap: $small
-  flex: 1
-  min-width: 0
-
-.blocked-username
-  font-weight: 500
-  color: $link
-  text-decoration: none
-
-  &:hover
-    text-decoration: underline
-
-.blocked-date
-  font-size: $secondary-font-size
-  color: $text-muted
-
-.unblock-btn
-  background: none
-  border: 1px solid $border
-  color: $text-muted
-  padding: $tiny $small
-  border-radius: $border-radius
-  cursor: pointer
-  font-size: $secondary-font-size
-  flex-shrink: 0
-
-  &:hover:not(:disabled)
-    +tint($text-muted, 15%)
-
-  &:disabled
-    opacity: 0.5
-    cursor: default
-
-  @media (max-width: $bp-tablet)
-    align-self: flex-end
-    margin-top: $small
-
-.add-btn
+// From the left edge, under the rows it continues.
+.more-btn
   align-self: flex-start
-  +button
+
+// Spaced by the gap of the column it stands in.
+.blacklist-refusal
+  --action-result-margin: 0
 </style>

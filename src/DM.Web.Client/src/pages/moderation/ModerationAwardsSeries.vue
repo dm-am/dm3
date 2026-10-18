@@ -15,6 +15,8 @@ import type {
 } from "@/shared/api/models/achievements";
 import {
   achievementApi,
+  awardMetal,
+  metalStyle,
   useContestSeries,
   formatContestSeriesTitle,
 } from "@/entities/achievement";
@@ -23,8 +25,8 @@ import { UserAutocomplete } from "@/entities/user";
 import { GameIcon } from "@/shared/ui/Icon";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { UserLink } from "@/entities/user";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { describeFailure, notifyFailure } from "@/shared/lib/errors";
+import { Select, type SelectOption } from "@/shared/ui/Select";
+import { refusalHere } from "@/shared/lib/errors";
 import { useRoleGate } from "./lib/useRoleGate";
 import { sectionRole } from "./lib/sections";
 
@@ -32,7 +34,6 @@ import { sectionRole } from "./lib/sections";
 const { hasAccess, deniedText } = useRoleGate(sectionRole("moderation-awards"));
 const route = useRoute();
 const router = useRouter();
-const toast = useToast();
 const {
   adminSeries: series,
   awardTypes,
@@ -49,6 +50,15 @@ const load = () => Promise.all([loadPublic(), loadAdmin()]);
 const seriesId = computed(() => String(route.params.id));
 const current = computed<ContestSeries | null>(
   () => series.value?.find((s) => s.id === seriesId.value) ?? null,
+);
+
+// The award types a grant may carry, in the words the dropdown shows. The
+// public slice, so a hidden type is not offered.
+const awardTypeOptions = computed<SelectOption[]>(() =>
+  (awardTypes.value ?? []).map((t) => ({
+    value: t.id,
+    label: `${t.title} (${t.description})`,
+  })),
 );
 
 // --- Edit form ---
@@ -99,14 +109,19 @@ async function grant() {
       },
     );
     if (error) {
-      grantError.value = describeFailure(error, "Не удалось выдать награду");
+      // The strip under the form is the one place a rejected grant is
+      // answered - the moderator is looking at the fields it is about: the
+      // award is already on this user, the user does not exist, and a refused
+      // action, a rate limit or a dead server, whose plate the interceptor
+      // held is taken down. An expired session and a dead connection stay
+      // with the plate.
+      grantError.value = refusalHere(error, "Не удалось выдать награду");
       return;
     }
     grantForm.value.username = "";
     grantForm.value.awardTypeId = "";
     grantForm.value.workUrl = "";
     await loadGrants();
-    toast.success("Награда выдана");
   } finally {
     granting.value = false;
   }
@@ -121,41 +136,64 @@ async function grant() {
 const grants = ref<ContestSeriesAward[]>([]);
 const grantsLoading = ref(false);
 
+const GRANTS_FAILED = "Не удалось загрузить выданные награды";
+
+/**
+ * Why the list did not arrive, printed where the list would stand.
+ *
+ * A failed load is the state of the block and not a plate over it: there is
+ * no list underneath to go back to, and a plate in the corner over an empty
+ * block explains nothing (UI_STANDARDS, "Всплывающие сообщения"). The api
+ * method has no seam for `ownsRefusal`, so the block keeps quiet on the
+ * statuses the interceptor announces and prints the rest in the server's
+ * words. Cleared by the next read.
+ */
+const grantsRefusal = ref("");
+
+/**
+ * Whether the last read was refused. "Награды в этой серии еще не выдавались"
+ * is a claim about the series, and a refused read makes none: without this a
+ * dead server read as a series nobody was awarded in.
+ */
+const grantsFailed = ref(false);
+
 async function loadGrants() {
   if (!current.value) return;
   grantsLoading.value = true;
+  grantsRefusal.value = "";
+  grantsFailed.value = false;
   const { data, error } = await achievementApi.getContestSeriesAwards(
     current.value.id,
   );
   grantsLoading.value = false;
   if (error) {
-    notifyFailure(error, "Не удалось загрузить выданные награды");
+    // The rows of an earlier read are not this answer: after a grant they are
+    // short of the award just given, after a series switch they are another
+    // series' rows.
+    grants.value = [];
+    grantsFailed.value = true;
+    grantsRefusal.value = refusalHere(error, GRANTS_FAILED) ?? "";
     return;
   }
   grants.value = data?.resources ?? [];
 }
 
 const pendingRevoke = ref<ContestSeriesAward | null>(null);
-const revoking = ref(false);
 
+// The request of the confirmation. The window waits for it, prints a refusal in
+// itself and closes on success alone, so the interceptor keeps quiet about it.
 async function confirmRevoke() {
   const award = pendingRevoke.value;
-  if (!award || revoking.value) return;
-
-  revoking.value = true;
-  const { error } = await achievementApi.revokeUserAward(
+  if (!award) return;
+  const result = await achievementApi.revokeUserAward(
     award.user.username,
     award.id,
+    { ownsRefusal: true, ownsRateLimit: true },
   );
-  revoking.value = false;
-  if (error) {
-    notifyFailure(error, "Не удалось отозвать награду");
-    return;
+  if (!result.error) {
+    grants.value = grants.value.filter((a) => a.id !== award.id);
   }
-
-  pendingRevoke.value = null;
-  grants.value = grants.value.filter((a) => a.id !== award.id);
-  toast.success("Награда отозвана");
+  return result;
 }
 
 // The grants follow the resolved series, so switching series from the list
@@ -169,6 +207,8 @@ onMounted(async () => {
 </script>
 
 <template>
+  <page-title>Серия конкурсов</page-title>
+
   <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
   <section v-else class="series-detail">
@@ -207,7 +247,12 @@ onMounted(async () => {
             Активна (видна в dropdown при выдаче)
           </label>
         </div>
-        <Button type="button" :loading="editSaving" @click="saveEdit">
+        <Button
+          type="button"
+          variant="primary"
+          :loading="editSaving"
+          @click="saveEdit"
+        >
           Сохранить
         </Button>
       </section>
@@ -225,12 +270,12 @@ onMounted(async () => {
         </div>
         <div class="form-row">
           <label for="grant-award-type">Тип награды</label>
-          <select id="grant-award-type" v-model="grantForm.awardTypeId">
-            <option value="" disabled>Не выбрано</option>
-            <option v-for="t in awardTypes ?? []" :key="t.id" :value="t.id">
-              {{ t.title }} ({{ t.description }})
-            </option>
-          </select>
+          <Select
+            id="grant-award-type"
+            v-model="grantForm.awardTypeId"
+            :options="awardTypeOptions"
+            placeholder="Не выбрано"
+          />
         </div>
         <div class="form-row">
           <label for="grant-work-url">Топик с работой (опционально)</label>
@@ -244,6 +289,7 @@ onMounted(async () => {
         <p v-if="grantError" class="form-error">{{ grantError }}</p>
         <Button
           type="button"
+          variant="primary"
           :loading="granting"
           :disabled="!grantForm.username || !grantForm.awardTypeId"
           @click="grant"
@@ -256,12 +302,21 @@ onMounted(async () => {
       <section class="block">
         <h3>Выданные в этой серии</h3>
         <SecondaryText v-if="grantsLoading">Загрузка...</SecondaryText>
-        <SecondaryText v-else-if="grants.length === 0">
+        <!-- Why the list did not arrive, in its place. A plate in the corner
+             used to say this over an empty block. -->
+        <p v-else-if="grantsRefusal" class="form-error" role="alert">
+          {{ grantsRefusal }}
+        </p>
+        <SecondaryText v-else-if="grants.length === 0 && !grantsFailed">
           Награды в этой серии еще не выдавались
         </SecondaryText>
-        <ul v-else class="grants-list">
+        <ul v-else-if="grants.length > 0" class="grants-list">
           <li v-for="a in grants" :key="a.id" class="grant-row">
-            <GameIcon :name="a.type.iconName" class="grant-icon" />
+            <GameIcon
+              :name="a.type.iconName"
+              class="grant-icon"
+              :style="metalStyle(awardMetal(a.type.tier))"
+            />
             <span class="grant-title">{{ a.type.title }}</span>
             <UserLink :user="a.user" />
             <span class="grant-date">{{ formatDate(a.awardedUtc) }}</span>
@@ -279,18 +334,19 @@ onMounted(async () => {
 
     <ConfirmDialog
       :show="pendingRevoke !== null"
-      title="Отзыв награды"
-      :message="`Отозвать награду &quot;${pendingRevoke?.type.title ?? ''}&quot; у ${pendingRevoke?.user.username ?? ''}?`"
+      title="Отозвать награду?"
+      :message="`Награда &quot;${pendingRevoke?.type.title ?? ''}&quot; пропадет из профиля &quot;${pendingRevoke?.user.username ?? ''}&quot;`"
       confirm-label="Отозвать"
-      danger
-      :loading="revoking"
+      failure="Не удалось отозвать награду"
+      :action="confirmRevoke"
       @update:show="(v) => !v && (pendingRevoke = null)"
-      @confirm="confirmRevoke"
     />
   </section>
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 .series-detail
   display: flex
   flex-direction: column
@@ -313,7 +369,7 @@ onMounted(async () => {
 .form-row
   display: flex
   flex-direction: column
-  gap: $tiny
+  gap: $minor
   margin-bottom: $small
 
   &.inline
@@ -321,33 +377,19 @@ onMounted(async () => {
     align-items: center
     gap: $small
 
+  // A caption of a field of the page: +field-caption, as FormField draws it.
   label
-    font-size: $secondary-font-size
+    +field-caption
+
+  // The words of a checkbox beside its box are not a caption: regular, as
+  // they stood.
+  &.inline label
     color: $text-muted
+    font-weight: 400
 
-  input[type="url"],
-  select
-    padding: $small
-    border: 1px solid $border
-    border-radius: $border-radius
-    background: $bg-element
-    color: $text
-    font: inherit
-
-    &:focus:not(:focus-visible)
-      outline: none
-      border-color: $link
-
+// The way back to the list: a button that is a link of the site.
 .text-button
-  background: none
-  border: none
-  color: $link
-  cursor: pointer
-  font: inherit
-  padding: 0
-
-  &:hover
-    text-decoration: underline
+  +inline-link-button
 
 .form-error
   color: $accent-red
@@ -369,11 +411,12 @@ onMounted(async () => {
   gap: $small
   padding: $small
   border: 1px solid $border
-  border-radius: $border-radius
 
+  // The metal of the award, as the profile draws it (entities/achievement
+  // tierMetal); a tier without one stays neutral.
   .grant-icon
     font-size: 20px
-    color: $text-meta
+    color: var(--tier-metal, $text-muted)
 
   .grant-date
     font-variant-numeric: tabular-nums

@@ -101,8 +101,16 @@ internal class GameInvitationService : IGameInvitationService
             case TokenType.GamePlayerInvitation:
                 // Player invitation acceptance - just mark token as used
                 // Character creation is a separate step
-                await _repository.RemoveInvitation(tokenId, ct);
-                await _producer.SendAsync(EventType.PlayerInvitationAccepted, tokenId);
+                //
+                // The announcement belongs to the acceptance that happened. The
+                // link is spent by a conditional statement, so of two acceptances
+                // meeting on one link only one spends anything, and announcing
+                // from the other tells the game a seat was taken twice.
+                if (await _repository.RemoveInvitation(tokenId, ct) == 1)
+                {
+                    await _producer.SendAsync(EventType.PlayerInvitationAccepted, tokenId);
+                }
+
                 break;
 
             case TokenType.GameReaderInvitation:
@@ -111,8 +119,11 @@ internal class GameInvitationService : IGameInvitationService
                 // the same link again. The other order would spend the invitation and
                 // leave nothing for the second attempt to do.
                 await _subscriptionService.SubscribeAsync(gameId, ct);
-                await _repository.RemoveInvitation(tokenId, ct);
-                await _producer.SendAsync(EventType.ReaderInvitationAccepted, tokenId);
+                if (await _repository.RemoveInvitation(tokenId, ct) == 1)
+                {
+                    await _producer.SendAsync(EventType.ReaderInvitationAccepted, tokenId);
+                }
+
                 break;
 
             case TokenType.GameAssistantInvitation:
@@ -124,8 +135,15 @@ internal class GameInvitationService : IGameInvitationService
                     UserId = currentUserId,
                     JoinedUtc = _dateTimeProvider.Now
                 };
-                await _repository.AcceptAssistantInvitation(addEntity, tokenId, ct);
-                await _producer.SendAsync(EventType.AssignmentRequestAccepted, tokenId);
+                // The announcement belongs to the acceptance that happened. Two
+                // accepts of one link both leave the person an assistant, and the
+                // second one spent nothing: repeating the event there tells the
+                // game twice that a seat was taken once.
+                if (await _repository.AcceptAssistantInvitation(addEntity, tokenId, ct))
+                {
+                    await _producer.SendAsync(EventType.AssignmentRequestAccepted, tokenId);
+                }
+
                 break;
 
             default:
@@ -147,7 +165,11 @@ internal class GameInvitationService : IGameInvitationService
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.InvitationNotForYou);
         }
 
-        await _repository.RemoveInvitation(tokenId, ct);
+        // The announcement belongs to the rejection that happened, the same as on
+        // the accepting side: the link is spent by a conditional statement, so of
+        // two clicks meeting on it only one spends anything, and announcing from
+        // the other tells the master the invitation was turned down twice.
+        var rejected = await _repository.RemoveInvitation(tokenId, ct) == 1;
 
         var eventType = token.TokenType switch
         {
@@ -157,7 +179,7 @@ internal class GameInvitationService : IGameInvitationService
             _ => EventType.Unknown
         };
 
-        if (eventType != EventType.Unknown)
+        if (rejected && eventType != EventType.Unknown)
         {
             await _producer.SendAsync(eventType, tokenId);
         }
@@ -216,7 +238,7 @@ internal class GameInvitationService : IGameInvitationService
         _intentionManager.ThrowIfForbidden(GameIntention.RemoveUser, game);
 
         // Cannot remove master
-        if (game.Master.UserId == userId)
+        if (game.Master?.UserId == userId)
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Нельзя удалить мастера игры");
         }
@@ -252,7 +274,7 @@ internal class GameInvitationService : IGameInvitationService
         _intentionManager.ThrowIfForbidden(intention, game);
 
         var user = await _userLookupService.GetAsync(username);
-        await ValidateInvitation(game, user.UserId, ct);
+        await ValidateInvitation(user.UserId, ct);
 
         var entity = new CreateGameInvitationEntity
         {
@@ -284,20 +306,22 @@ internal class GameInvitationService : IGameInvitationService
         return game;
     }
 
-    private async Task ValidateInvitation(GameDto game, Guid userId, CancellationToken ct = default)
+    private async Task ValidateInvitation(Guid userId, CancellationToken ct = default)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        // Check content blacklist
-        if (game.IsBlacklisted(userId))
+        // The game's own blacklist is not asked: inviting somebody the game
+        // listed is the lead's own decision. Entering the list withdraws the
+        // invitations already sent (GameBlacklistService), not the right to send
+        // a new one.
+        //
+        // The invitee's personal blacklist: an invitation reaches its addressee
+        // signed with the inviter's name, so it is not created for somebody who
+        // blocked the inviter. The inviter's own list is not asked - it restricts
+        // the people on it, not its owner (RefusalMessage.CannotInviteThisUser).
+        if (await _userBlacklistChecker.IsBlockedAsync(userId, currentUserId, ct))
         {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotInviteBlacklistedUser);
-        }
-
-        // Check personal blacklist - cannot invite someone you've blocked
-        if (await _userBlacklistChecker.IsBlockedAsync(currentUserId, userId, ct))
-        {
-            throw new HttpException(HttpStatusCode.UnprocessableEntity, RefusalMessage.CannotInviteBlockedUser);
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotInviteThisUser);
         }
     }
 

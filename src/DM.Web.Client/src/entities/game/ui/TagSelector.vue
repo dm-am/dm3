@@ -163,13 +163,12 @@ onMounted(loadTags);
           </h4>
         </Tooltip>
         <div class="category-tags">
-          <Tooltip v-for="tag in group.tags" :key="tag.id">
+          <Tooltip v-for="tag in group.tags" :key="tag.id" show-on-tap>
             <template #content>
               <TooltipContent
+                :html="isBlocked(group, tag.id) ? null : tag.description"
                 :text="
-                  isBlocked(group, tag.id)
-                    ? blockedHint(group)
-                    : tag.description || tag.title
+                  isBlocked(group, tag.id) ? blockedHint(group) : tag.title
                 "
               />
             </template>
@@ -180,6 +179,7 @@ onMounted(loadTags);
                 selected: isSelected(tag.id),
                 blocked: isBlocked(group, tag.id),
               }"
+              :aria-pressed="isSelected(tag.id)"
               :disabled="isBlocked(group, tag.id)"
               @click="toggleTag(group, tag.id)"
             >
@@ -197,6 +197,9 @@ onMounted(loadTags);
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Filters" as filters
+
 .tag-selector
   min-height: $grid-step * 10
 
@@ -221,35 +224,43 @@ onMounted(loadTags);
   flex-wrap: wrap
   gap: $small
 
+// A tag wears the bubble of an applied filter (.bubble of _Filters.sass), the
+// way the same tags stand under the filter bar of /games: its fill, frame,
+// corners and size, and its hover, the site's wash over the fill with the
+// frame left alone. The height is the bubble's own, so a tag to choose and a
+// chosen value stand as high. The spec holds the two to each other.
 .tag-button
-  padding: $tiny $small
-  // Relative accent-strength base (not a solid color) so the chip reads
-  // on any background — one shade deeper than the surface it sits on
-  background-color: $control-bg-hover-overlay
+  box-sizing: border-box
+  min-height: filters.$bubble-height
+  padding: 0 $small
+  line-height: filters.$bubble-height - 2px
+  background-color: $bg-element
   border: 1px solid $border
   border-radius: $border-radius
   color: $text
   font-size: $secondary-font-size
   cursor: pointer
 
-  &:hover
-    background-image: linear-gradient($hover-overlay, $hover-overlay)
-    border-color: $border-focus
+  // Under a pointer that hovers only: a touch screen keeps the hover on the
+  // tag last pressed, and a tag just taken off would stand washed. A chosen
+  // tag does not answer, it already stands pressed.
+  @media (hover: hover)
+    &:hover:not(:disabled):not(.selected)
+      background-image: linear-gradient($hover-overlay, $hover-overlay)
 
+  // A chosen tag is a pressed button: the fill of the active segment of a
+  // SegmentedControl, the site's pressed look, in the tag's own weight, with
+  // the press wash over it. The wash keeps it out of the hover's reach: the
+  // hover over the bubble's fill comes within a few points of the bare
+  // segment fill, and a tag taken off under the pointer would read as chosen.
+  // It carries no cross, since a second press takes it off.
   &.selected
-    background-color: $link
-    border-color: $link
-    color: $text-on-fill
+    background-color: $bg-element-accent
+    background-image: linear-gradient($active-overlay, $active-overlay)
 
-  // The group is full: the tag stays readable and stops answering. Dimming is
-  // the whole signal, so it must not also look hoverable.
-  &.blocked
-    color: $text-muted
-    cursor: not-allowed
-
-    &:hover
-      background-image: none
-      border-color: $border
+  // The group is full: the tag stops answering, in the one disabled state of
+  // the site, half its opacity under the hatch.
+  +disabled-hatch
 
 .selected-count
   margin-top: $small

@@ -9,11 +9,10 @@ namespace DM.Domain.Core.Tests;
 /// to act on.
 /// </summary>
 /// <remarks>
-/// Only the game post declares [private]. Everywhere else the tag is not markup
-/// at all: nothing removes it, nothing hides what it wraps, and the line the
-/// author wrote for one reader is published to everyone with the tag still
-/// around it. The predicate lives beside the tag's shape rather than beside the
-/// tag catalogue, because the catalogue is infrastructure and a validator may
+/// Only the game post declares [private]. Everywhere else the page erases such
+/// a block for every reader, the author included, and the line the author
+/// wrote for one reader reaches nobody without a word said. The predicate lives
+/// beside the tag's shape rather than beside the tag catalogue, because the catalogue is infrastructure and a validator may
 /// not reach into it — a validator knows its own surface by being the validator
 /// of that surface.
 ///
@@ -36,6 +35,10 @@ public class PrivateMarkupRefusalShould
     [InlineData("[private=\"Чак]СЕКРЕТ")]
     // Written after a verbatim block nobody closed, which is not an example.
     [InlineData("[noparse][private=\"Чак\"]СЕКРЕТ[/private]")]
+    // [code] changes the font and shows nothing as an example: what it holds
+    // is read as markup, and hides on the game post alone.
+    [InlineData("[code][private=\"Чак\"]СЕКРЕТ[/private][/code]")]
+    [InlineData("[code][/private][/code]")]
     public void FindHidingMarkupWhereverTheParserWouldReadIt(string source)
     {
         PrivateBlockMarkup.ContainsPrivateMarkup(source).Should().BeTrue();
@@ -50,7 +53,8 @@ public class PrivateMarkupRefusalShould
     [InlineData("privatebank и [privateer] тоже")]
     // A closed verbatim block is a written instruction to show this literally.
     [InlineData("[noparse][private=Чак]пример[/noparse]")]
-    [InlineData("[code][/private][/code]")]
+    [InlineData("[noparse][/private][/noparse]")]
+    [InlineData("[code][noparse][private=\"Чак\"]пример[/private][/noparse][/code]")]
     public void PassTextThatHidesNothing(string? source)
     {
         PrivateBlockMarkup.ContainsPrivateMarkup(source).Should().BeFalse();
@@ -68,8 +72,34 @@ public class PrivateMarkupRefusalShould
 
         refusal.Should().Contain("[private=\"Чак\"]");
         refusal.Should().Contain("символ 4");
-        refusal.Should().Contain("игровом посте");
+        refusal.Should().StartWith("Скрытый текст работает только в игровом тексте поста");
         refusal.Should().Contain("[noparse]");
+    }
+
+    /// <summary>
+    /// The refusal names where the tag works and promises nothing about who
+    /// would read the block. It used to say every reader would see it, and a
+    /// text that never met the refusal has the block erased for every reader
+    /// instead (BBCODE_RENDERING.md, "Грамматика разметки").
+    /// </summary>
+    [Fact]
+    public void NotTellTheAuthorThatEveryReaderWouldSeeTheBlock()
+    {
+        var refusal = PrivateBlockMarkup.DescribeSurfaceRefusal("до [private=\"Чак\"]СЕКРЕТ[/private] после");
+
+        refusal.Should().NotContain("увидят");
+        refusal.Should().NotContain("читател");
+    }
+
+    /// <summary>
+    /// With nothing to point at, the refusal is the reason alone, one sentence
+    /// and so without a period.
+    /// </summary>
+    [Fact]
+    public void GiveTheReasonAloneWhenThereIsNothingToPointAt()
+    {
+        PrivateBlockMarkup.DescribeSurfaceRefusal("без разметки")
+            .Should().Be("Скрытый текст работает только в игровом тексте поста");
     }
 
     /// <summary>
@@ -114,14 +144,16 @@ public class PrivateMarkupRefusalShould
     }
 
     /// <summary>
-    /// The verbatim block the author left open is named, because closing it is
-    /// the fix and there are two names it could have.
+    /// The [noparse] the author left open is named, because closing it is the
+    /// fix. A [code] left open is no forgotten example, and the block after it
+    /// is accepted.
     /// </summary>
     [Theory]
-    [InlineData("[noparse][private=\"Чак\"]СЕКРЕТ[/private]", "[/noparse]")]
-    [InlineData("[code][private=\"Чак\"]СЕКРЕТ[/private]", "[/code]")]
-    public void NameTheVerbatimBlockThatWasLeftOpen(string source, string closing)
+    [InlineData("[noparse][private=\"Чак\"]СЕКРЕТ[/private]")]
+    [InlineData("[NoParse] и [/private]")]
+    public void NameTheVerbatimBlockThatWasLeftOpen(string source)
     {
-        PrivateBlockMarkup.DescribeBalanceRefusal(source).Should().Contain(closing);
+        PrivateBlockMarkup.DescribeBalanceRefusal(source)
+            .Should().Contain("после незакрытого [noparse]").And.Contain("[/noparse]");
     }
 }

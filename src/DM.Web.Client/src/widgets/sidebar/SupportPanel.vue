@@ -93,10 +93,7 @@ void fetch();
   align-items: center
   gap: $minor
   font-size: $secondary-font-size
-  color: $text-muted
-
-  &:hover
-    color: $link-hover
+  +muted-link
 
 .admin-edit-icon
   width: 14px

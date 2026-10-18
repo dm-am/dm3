@@ -25,7 +25,7 @@ const adapter: NotepadAdapter = {
   list: () => blogApi.getNotepad(blogId.value),
   create: (input) => blogApi.createNote(blogId.value, input),
   update: (id, input) => blogApi.updateNote(blogId.value, id, input),
-  remove: (id) => blogApi.deleteNote(blogId.value, id),
+  remove: (id, options) => blogApi.deleteNote(blogId.value, id, options),
 };
 </script>
 
@@ -39,9 +39,9 @@ const adapter: NotepadAdapter = {
     :viewer-id="user?.id ?? null"
     :can-delete-others="isOwner"
     title="Заметки блога"
-    denied-text="Заметки доступны только мастеру блога и ассистентам"
-    empty-text="Заметок пока нет"
-    empty-hint="Создайте первую запись для общих заметок мастера блога и ассистентов."
+    denied-text="Заметки доступны только автору блога и ассистентам"
+    empty-text="Нет записей в заметках блога"
+    empty-hint="Создайте первую запись для общих заметок автора блога и ассистентов"
     load-error-text="Не удалось загрузить заметки"
   />
 </template>

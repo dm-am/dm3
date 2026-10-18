@@ -5,7 +5,11 @@ using System.Threading.Tasks;
 using DM.Domain.Community.Features.Statistics;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
+using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
+using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
+using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
 
@@ -67,9 +71,12 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         var publicationsToday = await _dbContext.Publications.CountAsync(p =>
             !p.IsRemoved && p.CreatedUtc >= todayStartUtc, ct);
 
-        // Weekly best post (highest total rating from post reviews)
+        // Weekly best post (highest total rating from post reviews), among the
+        // posts a guest can read: the block names the post, its game and author.
+        var publicPosts = PublicPosts();
         var weeklyBest = await _dbContext.PostReviews
             .Where(r => !r.IsRemoved && r.CreatedUtc >= weekAgo)
+            .Where(r => publicPosts.Any(p => p.PostId == r.PostId))
             .GroupBy(r => new { r.PostId, r.GameId })
             .Select(g => new
             {
@@ -155,9 +162,16 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             })
             .ToListAsync(ct);
 
+        // The boards of games and blogs name them and link to them, so they rank
+        // only the modules a guest can open: a hidden game or blog is not on a
+        // public page under any heading.
+        var publicGames = PublicGames();
+        var publicBlogs = PublicBlogs();
+
         // Top games by rating (sum of post review ratings)
         var topGamesByRating = await _dbContext.PostReviews
             .Where(r => !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate)
+            .Where(r => publicGames.Any(g => g.GameId == r.GameId))
             .GroupBy(r => r.GameId)
             .Select(g => new { GameId = g.Key, Score = g.Sum(r => (int)r.SignValue) })
             .Where(x => x.Score > 0)
@@ -175,6 +189,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         // Top games by posts
         var topGamesByPosts = await _dbContext.Posts
             .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+            .Where(p => publicGames.Any(g => g.GameId == p.Room.GameId))
             .GroupBy(p => p.Room.GameId)
             .Select(g => new { GameId = g.Key, Score = g.Count() })
             .Where(x => x.Score > 0)
@@ -232,6 +247,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         // or non-publication likes are excluded and there is no cartesian product.
         var topBlogsByRating = await _dbContext.Publications
             .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+            .Where(p => publicBlogs.Any(b => b.BlogId == p.BlogId))
             .Join(_dbContext.Likes.Where(l => !l.IsRemoved && l.EntityType == LikeEntityType.Publication),
                 p => p.PublicationId,
                 l => l.EntityId,
@@ -253,6 +269,7 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         // Top blogs by publications count (blog analog of TopGamesByPosts).
         var topBlogsByPosts = await _dbContext.Publications
             .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+            .Where(p => publicBlogs.Any(b => b.BlogId == p.BlogId))
             .GroupBy(p => p.BlogId)
             .Select(g => new { BlogId = g.Key, Score = g.Count() })
             .Where(x => x.Score > 0)
@@ -308,4 +325,29 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             TopBlogAuthorsByVolume = topBlogAuthorsByVolume
         };
     }
+
+    /// <summary>
+    /// The games a guest can open, by the filter every read of a game applies to a
+    /// reader holding no role (an empty reader id matches no role arm).
+    /// </summary>
+    private IQueryable<DbGame> PublicGames() =>
+        _dbContext.Games.Where(GameAccessibilityFilters.GameAvailable(Guid.Empty));
+
+    /// <summary>
+    /// The posts a guest can read: the open rooms of the games a guest can open.
+    /// </summary>
+    private IQueryable<DbPost> PublicPosts() =>
+        _dbContext.Rooms
+            .Where(GameAccessibilityFilters.RoomAvailable(Guid.Empty))
+            .SelectMany(room => room.Posts);
+
+    /// <summary>
+    /// The blogs a guest can open: the rule the blog list applies, approved and
+    /// not a private draft.
+    /// </summary>
+    private IQueryable<DbBlog> PublicBlogs() =>
+        _dbContext.Blogs.Where(b =>
+            !b.IsRemoved &&
+            b.PremoderationStatus == PremoderationStatus.Approved &&
+            (b.Status != ModuleStatus.Draft || b.DraftVisibility == DraftVisibility.Public));
 }

@@ -16,7 +16,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.Account;
 /// The mailed way back in, for somebody who has lost the device and the codes.
 /// </summary>
 /// <remarks>
-/// INV-13. The letter does not take the factor off. Following the link schedules
+/// The letter does not take the factor off. Following the link schedules
 /// the removal a week out, ends every session and hands back a way to call it
 /// off; the other way to call it off is simply to sign in with the factor. So
 /// whoever holds both the mailbox and the password still gets the account - after
@@ -83,7 +83,7 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// INV-13: the link schedules, it does not perform, and it ends the sessions.
+    /// The link schedules, it does not perform, and it ends the sessions.
     /// </summary>
     [Fact]
     public async Task ScheduleTheRemovalAndEndEverySession()
@@ -133,7 +133,7 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// AC-23: a successful sign-in with the factor calls the removal off.
+    /// A successful sign-in with the factor calls the removal off.
     /// </summary>
     /// <remarks>
     /// This is the path the real owner has: if the device is still in his hand,

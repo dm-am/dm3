@@ -1,34 +1,32 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { useBoardsStore, forumApi } from "@/entities/forum";
-import { useAuthStore, UserLink } from "@/entities/user";
+import { RemovedAccountLink, useAuthStore, UserLink } from "@/entities/user";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { UnreadLine } from "@/shared/ui/UnreadLine";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
+import type { GeneralError } from "@/shared/api/models/common";
 
 const store = useBoardsStore();
 const { boards, boardsLoading, boardsError } = storeToRefs(store);
 const { user } = storeToRefs(useAuthStore());
 
-const markingAllAsRead = ref(false);
-const markAllError = ref(false);
-
-// Columns for boards table. The table uses layout "auto" so the nowrap
+// Columns for boards table. The table lays out "auto" (DataTable), so the
 // "Последняя активность" cells (longest username + "DD.MM.YYYY в HH:mm")
-// take exactly the room they need on one line at any viewport, and the
-// width-less "Описание" absorbs the remaining space — descriptions render
-// on a single line wherever the viewport allows.
+// take the room they need on one line where the column has it (1920), and
+// the width-less "Описание" absorbs the remaining space — descriptions render
+// on a single line wherever the viewport allows. In a narrower column the
+// name and the date take a line each.
 const columns: Column[] = [
   { key: "title", label: "Раздел", width: "18%", align: "left" },
   {
     key: "description",
     label: "Описание",
     align: "left",
-    hideOnMobile: true,
   },
   { key: "topics", label: "Топики", width: "8%", align: "center" },
   { key: "comments", label: "Комментарии", width: "11%", align: "center" },
@@ -36,7 +34,6 @@ const columns: Column[] = [
     key: "lastActivity",
     label: "Последняя активность",
     align: "center",
-    hideOnMobile: true,
   },
 ];
 
@@ -98,25 +95,34 @@ function lastTopicLink(board: BoardRow) {
   };
 }
 
-async function markAllAsRead() {
-  if (!boards.value) return;
+/**
+ * The unread comments of the whole forum, for the line under the heading. A
+ * guest has none: the server answers a guest with the totals in these fields,
+ * since there is nothing a guest could have read.
+ */
+const unreadComments = computed(() =>
+  user.value
+    ? (boards.value ?? []).reduce(
+        (sum, board) => sum + (board.unreadCommentsCount || 0),
+        0,
+      )
+    : 0,
+);
 
-  markingAllAsRead.value = true;
-  markAllError.value = false;
-  try {
-    const { error } = await forumApi.markForumAsRead();
-    if (error) {
-      markAllError.value = true;
-      return;
-    }
-    // Update local state (cast needed for Served<number> type)
-    boards.value.forEach((board) => {
-      (board as { unreadCommentsCount: number }).unreadCommentsCount = 0;
-      (board as { unreadTopicsCount: number }).unreadTopicsCount = 0;
-    });
-  } finally {
-    markingAllAsRead.value = false;
+/**
+ * "Отметить прочитанными" of the line: the whole forum marked read, and the
+ * refusal handed back to the line to say, or null once done.
+ */
+async function markAllAsRead(): Promise<GeneralError | null> {
+  const { error } = await forumApi.markForumAsRead();
+  if (error) return error;
+  // Update local state (cast needed for Served<number> type). The line goes
+  // with the count, and the sidebar's counters read the same boards.
+  for (const board of boards.value ?? []) {
+    (board as { unreadCommentsCount: number }).unreadCommentsCount = 0;
+    (board as { unreadTopicsCount: number }).unreadTopicsCount = 0;
   }
+  return null;
 }
 
 function retryFetchBoards() {
@@ -130,19 +136,15 @@ onMounted(() => store.fetchBoards());
   <!-- The h1 "Форум" comes from the persistent ForumPage shell. The boards
        table below is the index's own navigation, so this page goes straight
        to the table — no board strip (it would duplicate the table, and the
-       shell hides it on the index) and no lead text. -->
-  <div v-if="user && boards" class="forum-actions">
-    <Button
-      :loading="markingAllAsRead"
-      :disabled="!boards.some((b) => b.unreadCommentsCount)"
-      @click="markAllAsRead"
-    >
-      Отметить все как прочитанное
-    </Button>
-  </div>
-  <SecondaryText v-if="markAllError" class="mark-all-error" role="alert">
-    Не удалось отметить топики прочитанными
-  </SecondaryText>
+       shell hides it on the index) and no lead text. The line of the unread
+       stands under the heading only while there is something to mark: the
+       button it replaces stood shaded over a forum read to the end. -->
+  <UnreadLine
+    :count="unreadComments"
+    :mark="markAllAsRead"
+    failure="Не удалось отметить топики прочитанными"
+    done="Все топики прочитаны"
+  />
 
   <!-- Error state: a failed load must not be presented as an empty list. -->
   <ErrorState
@@ -157,7 +159,6 @@ onMounted(() => store.fetchBoards());
     :data="boardsData"
     :loading="boardsLoading"
     empty-text="Разделов пока нет"
-    table-layout="auto"
   >
     <template #cell-title="{ row }">
       <router-link
@@ -193,12 +194,14 @@ onMounted(() => store.fetchBoards());
 
     <template #cell-lastActivity="{ row }">
       <!-- Last activity is a comment -->
-      <template v-if="getLastActivityType(row) === 'comment'">
+      <template
+        v-if="getLastActivityType(row) === 'comment' && row.lastComment"
+      >
         <UserLink
           v-if="row.lastComment.author"
           :user="row.lastComment.author"
           hide-badge
-        /><span v-else class="muted">удаленный пользователь</span>,
+        /><RemovedAccountLink v-else />,
         <Tooltip
           :text="`Комментарий в &quot;${row.lastComment.topicTitle}&quot;`"
           ><router-link :to="lastCommentLink(row)!" class="last-activity-link"
@@ -206,12 +209,14 @@ onMounted(() => store.fetchBoards());
         ></Tooltip>
       </template>
       <!-- Last activity is a new topic -->
-      <template v-else-if="getLastActivityType(row) === 'topic'">
+      <template
+        v-else-if="getLastActivityType(row) === 'topic' && row.lastTopic"
+      >
         <UserLink
           v-if="row.lastTopic.author"
           :user="row.lastTopic.author"
           hide-badge
-        /><span v-else class="muted">удаленный пользователь</span>,
+        /><RemovedAccountLink v-else />,
         <Tooltip :text="`Новый топик &quot;${row.lastTopic.title}&quot;`"
           ><router-link :to="lastTopicLink(row)!" class="last-activity-link"
             ><human-date :date="row.lastTopic.createdUtc" /></router-link
@@ -222,21 +227,3 @@ onMounted(() => store.fetchBoards());
     </template>
   </DataTable>
 </template>
-
-<style scoped lang="sass">
-.forum-actions
-  margin-bottom: $medium
-  display: flex
-  justify-content: flex-end
-
-.mark-all-error
-  display: block
-  text-align: right
-  margin-bottom: $medium
-  color: $accent-red
-
-// The name + date pair never wraps — with the auto table layout the
-// column takes exactly the width this content needs
-:deep(.col-lastActivity)
-  white-space: nowrap
-</style>

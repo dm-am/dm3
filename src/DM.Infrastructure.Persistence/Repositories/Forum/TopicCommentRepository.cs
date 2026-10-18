@@ -39,7 +39,7 @@ internal class TopicCommentRepository : ITopicCommentRepository
 
     /// <inheritdoc />
     public Task<Comment?> Get(Guid commentId) =>
-        CommentQueries.Single(_dbContext, commentId, "DM.TopicComments.Get");
+        CommentQueries.Single(_dbContext, commentId, CommentQueries.TopicIds(_dbContext), "DM.TopicComments.Get");
 
     /// <inheritdoc />
     public async Task<FirstUnreadComment?> FindFirstUnread(Guid topicId, DateTimeOffset lastReadUtc,
@@ -100,6 +100,38 @@ internal class TopicCommentRepository : ITopicCommentRepository
         };
     }
 
+    /// <summary>
+    /// The topic's half of the last-comment move.
+    /// </summary>
+    /// <remarks>
+    /// What the statement says and why it says it that way is stated once, on
+    /// <see cref="CommentWrites.Create{TOwner}" />, and the other three discussions
+    /// carry the same statement over their own table. Only the table is spelled out
+    /// here: EF refuses raw SQL whose text is not a compile-time constant.
+    /// </remarks>
+    private const string MoveLastCommentForwardSql =
+        """
+        UPDATE "Topics" SET "LastCommentId" = {1}
+        WHERE "TopicId" = {0}
+          AND NOT EXISTS (
+              SELECT 1 FROM "Comments" c
+              WHERE c."CommentId" = "Topics"."LastCommentId"
+                AND (c."CreatedUtc", c."CommentId") > ({2}, {1}))
+        """;
+
+    /// <summary>
+    /// The topic row, held for the rest of the transaction.
+    /// </summary>
+    /// <remarks>
+    /// The other three take their owner row through the statement that moves the
+    /// discussion's comment count; a topic keeps no count, so it is taken by name.
+    /// Taken as the first statement, before anything the pointer is decided on is
+    /// read: a statement that waited on the row still answers from the snapshot it
+    /// started with.
+    /// </remarks>
+    private const string LockTopicSql =
+        """SELECT "TopicId" FROM "Topics" WHERE "TopicId" = {0} FOR UPDATE""";
+
     /// <inheritdoc />
     public async Task<Comment> Create(CreateTopicCommentEntity createComment)
     {
@@ -116,16 +148,28 @@ internal class TopicCommentRepository : ITopicCommentRepository
             IsRemoved = false
         };
 
-        _dbContext.Comments.Add(dbComment);
-
-        // Update topic comment count and last comment ID
-        var topic = await _dbContext.Topics.FindAsync(createComment.TopicId);
-        if (topic != null)
+        // The pointer used to be assigned on the tracked topic row, unconditionally:
+        // CreatedUtc is stamped before the write reaches the topic, so the comment
+        // that commits last is not necessarily the newest one, and a reply that
+        // waited on a lock or a retry sent the discussion's last activity backwards.
+        // The forum list orders topics by that pointer.
+        //
+        // Both writes or neither, and through the strategy, for the reason stated on
+        // RetryableWrite: the comment and the pointer are one unit.
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            topic.LastCommentId = commentId;
-        }
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-        await _dbContext.SaveChangesAsync();
+            await _dbContext.Database.ExecuteSqlRawAsync(LockTopicSql, [createComment.TopicId]);
+
+            _dbContext.Comments.Add(dbComment);
+            await _dbContext.SaveChangesAsync();
+
+            await _dbContext.Database.ExecuteSqlRawAsync(
+                MoveLastCommentForwardSql, [createComment.TopicId, commentId, now]);
+
+            await transaction.CommitAsync();
+        });
 
         return await _dbContext.Comments
             .TagWith("DM.TopicComments.Created")
@@ -140,57 +184,66 @@ internal class TopicCommentRepository : ITopicCommentRepository
             updateComment.EditorUserId, updateComment.LastUpdateUtc, "DM.TopicComments.Updated");
 
     /// <inheritdoc />
-    public async Task<TopicCommentToDelete?> GetForDelete(Guid commentId)
-    {
-        var comment = await _dbContext.Comments
-            .TagWith("DM.TopicComments.GetForDelete")
-            .Where(c => !c.IsRemoved && c.CommentId == commentId)
-            .ProjectToTopicCommentToDelete()
-            .FirstOrDefaultAsync();
-
-        if (comment == null) return null;
-
-        // Get topic info: comment count and last comment id
-        var topicInfo = await _dbContext.Topics
-            .Where(t => t.TopicId == comment.EntityId)
-            .Select(t => new { t.LastCommentId })
-            .FirstOrDefaultAsync();
-
-        if (topicInfo != null)
-        {
-            comment.IsLastComment = topicInfo.LastCommentId == commentId;
-        }
-
-        return comment;
-    }
+    public Task<TopicCommentToDelete?> GetForDelete(Guid commentId) =>
+        CommentQueries.One(_dbContext, commentId, CommentQueries.TopicIds(_dbContext))
+        .TagWith("DM.TopicComments.GetForDelete")
+        .ProjectToTopicCommentToDelete()
+        .FirstOrDefaultAsync<TopicCommentToDelete?>();
 
     /// <inheritdoc />
-    public Task<Guid?> GetNewestCommentIdExcept(Guid topicId, Guid exceptCommentId) =>
-        CommentQueries.NewestExcept(
-            _dbContext, topicId, exceptCommentId, "DM.TopicComments.NewestCommentIdExcept");
-
-    /// <inheritdoc />
-    public async Task Delete(DeleteTopicCommentEntity deleteComment)
+    public async Task<bool> Delete(DeleteTopicCommentEntity deleteComment)
     {
-        var dbComment = await _dbContext.Comments.FindAsync(deleteComment.CommentId);
-        if (dbComment != null)
-        {
-            SoftDelete.Mark(dbComment, deleteComment.DeletedByUserId, deleteComment.DeletedUtc);
-        }
+        var removed = false;
 
-        // The pointer moves only when the row it points at is the one going away.
-        // The service computes NewLastCommentId for the last comment and leaves it
-        // null for every other, so assigning it unconditionally erased the pointer
-        // whenever somebody deleted a comment from the middle of a discussion — and
-        // the topic list reads the topic's activity through that pointer, so the
-        // topic dropped to the bottom of the activity order until the next comment.
-        var topic = await _dbContext.Topics.FindAsync(deleteComment.TopicId);
-        if (topic != null &&
-            (deleteComment.NewLastCommentId.HasValue || topic.LastCommentId == deleteComment.CommentId))
+        // Both writes or neither, and through the strategy, for the reason stated on
+        // RetryableWrite. What the answer is for is stated on the interface.
+        await RetryableWrite.Run(_dbContext, async () =>
         {
-            topic.LastCommentId = deleteComment.NewLastCommentId;
-        }
+            // A replay runs the whole block again, so the answer of the attempt that
+            // rolled back must not survive into it.
+            removed = false;
 
-        await _dbContext.SaveChangesAsync();
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+            await _dbContext.Database.ExecuteSqlRawAsync(LockTopicSql, [deleteComment.TopicId]);
+
+            // One statement reads and writes the comment row: a second removal of the
+            // same comment arriving together with this one waits on the row lock and
+            // then re-tests the predicate against the committed state, so exactly one
+            // of the two matches.
+            var marked = await _dbContext.Comments
+                .Where(c => c.CommentId == deleteComment.CommentId && !c.IsRemoved)
+                .ExecuteUpdateAsync(c => c
+                    .SetProperty(x => x.IsRemoved, true)
+                    .SetProperty(x => x.DeletedByUserId, (Guid?)deleteComment.DeletedByUserId)
+                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)deleteComment.DeletedUtc));
+
+            removed = marked == 1;
+            if (removed)
+            {
+                // The successor is chosen here, inside the transaction and after the
+                // mark, rather than handed in by a caller that read it a statement
+                // earlier: a comment written in between would otherwise be passed over
+                // and the pointer would go back to a comment older than the
+                // discussion's newest.
+                var successor = await CommentQueries.NewestExcept(
+                    _dbContext, deleteComment.TopicId, deleteComment.CommentId,
+                    "DM.TopicComments.NewestCommentIdExcept");
+
+                // The pointer moves only when the row it names is the one going away.
+                // Written unconditionally, it erased the pointer whenever somebody
+                // deleted a comment from the middle of a discussion - and the topic
+                // list reads a topic's activity through that pointer, so the topic
+                // dropped to the bottom of the activity order until the next comment.
+                await _dbContext.Topics
+                    .Where(t => t.TopicId == deleteComment.TopicId &&
+                                t.LastCommentId == deleteComment.CommentId)
+                    .ExecuteUpdateAsync(t => t.SetProperty(x => x.LastCommentId, successor));
+            }
+
+            await transaction.CommitAsync();
+        });
+
+        return removed;
     }
 }

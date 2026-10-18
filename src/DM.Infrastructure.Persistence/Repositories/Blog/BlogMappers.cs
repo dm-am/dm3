@@ -44,12 +44,13 @@ internal static class BlogMappers
     private static readonly Func<DbRubric, Rubric> CompiledRubric = RubricProjection.Compile();
 
     /// <summary>
-    /// EF projection to the domain blog. Subscriber facts, blacklist and the
-    /// per-viewer unread counters are populated by the repository/service
-    /// after the query.
+    /// EF projection to the domain blog. Subscriber facts and the per-viewer
+    /// unread counters are populated by the repository/service after the query;
+    /// the blacklist travels with the blog, as a game's does. Keeps the blogs of
+    /// removed owners, signed by nobody (<see cref="RemovedAuthors"/>).
     /// </summary>
     public static IQueryable<BlogDto> ProjectToBlog(this IQueryable<DbBlog> query) =>
-        query.Select(ExpressionSplicer.Expand<Func<DbBlog, BlogDto>>(b => new BlogDto
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<DbBlog, BlogDto>>(b => new BlogDto
         {
             Id = b.BlogId,
             PublicId = b.PublicId,
@@ -62,7 +63,6 @@ internal static class BlogMappers
             ClosedUtc = b.ClosedUtc,
             ClosedReason = b.ClosedReason,
             DraftVisibility = b.DraftVisibility,
-            CommentsEnabled = b.CommentsEnabled,
             PublicationCount = b.PublicationCount,
             CommentCount = b.CommentCount,
             // The blog discussion plus every published publication's thread.
@@ -73,7 +73,11 @@ internal static class BlogMappers
             Author = GeneralUserProjections.Projection.Splice(b.Author),
             Mentor = GeneralUserProjections.Projection.Splice(b.Mentor),
             Rubrics = b.Rubrics.Select(r => RubricProjection.Splice(r)).ToList(),
+            // Spelled out: the blog read lifts the account filter to keep the
+            // blogs of removed owners (RemovedAuthors), and a removed assistant
+            // is named nowhere.
             Assistants = b.Assistants
+                .Where(a => !a.User.IsRemoved)
                 .Select(a => new BlogAssistantInfo
                 {
                     UserId = a.UserId,
@@ -88,6 +92,9 @@ internal static class BlogMappers
                 .Where(t => t.Type == TokenType.BlogAssistantInvitation
                     || t.Type == TokenType.BlogReaderInvitation)
                 .Select(t => t.UserId)
+                .ToList(),
+            BlacklistedUserIds = b.Blacklist
+                .Select(entry => entry.BlockedUserId)
                 .ToList()
         }));
 
@@ -104,10 +111,11 @@ internal static class BlogMappers
     /// <summary>
     /// EF projection to the domain publication. The blog title travels via
     /// the navigation - a SQL join - so the profile "best publication" can
-    /// name the blog without a second query.
+    /// name the blog without a second query. Keeps the publications of removed
+    /// accounts, signed by nobody (<see cref="RemovedAuthors"/>).
     /// </summary>
     public static IQueryable<Publication> ProjectToPublication(this IQueryable<DbPublication> query) =>
-        query.Select(ExpressionSplicer.Expand<Func<DbPublication, Publication>>(p => new Publication
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<DbPublication, Publication>>(p => new Publication
         {
             Id = p.PublicationId,
             BlogId = p.BlogId,
@@ -119,7 +127,6 @@ internal static class BlogMappers
             ModifiedUtc = p.ModifiedUtc,
             IsPublished = p.IsPublished,
             PublishedUtc = p.PublishedUtc,
-            CommentsEnabled = p.CommentsEnabled,
             ViewCount = p.ViewCount,
             CommentCount = p.CommentCount,
             LastCommentId = p.LastCommentId,
@@ -135,7 +142,7 @@ internal static class BlogMappers
     /// </summary>
     public static IQueryable<BlogCommentToDelete> ProjectToBlogCommentToDelete(
         this IQueryable<DbComment> query) =>
-        query.Select(ExpressionSplicer.Expand(
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(
             CommentProjections.WithCommentFields<BlogCommentToDelete>(c => new BlogCommentToDelete())));
 
     /// <summary>
@@ -144,6 +151,6 @@ internal static class BlogMappers
     /// </summary>
     public static IQueryable<PublicationCommentToDelete> ProjectToPublicationCommentToDelete(
         this IQueryable<DbComment> query) =>
-        query.Select(ExpressionSplicer.Expand(
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(
             CommentProjections.WithCommentFields<PublicationCommentToDelete>(c => new PublicationCommentToDelete())));
 }

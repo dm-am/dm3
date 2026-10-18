@@ -25,13 +25,13 @@ internal class PostReviewIntentionResolver :
     public bool IsAllowed(IAuthorizationSubject user, PostReviewIntention intention, PostReview target) => intention switch
     {
         // Edit is allowed for the author
-        PostReviewIntention.Edit => user.UserId == target.Author.UserId,
+        PostReviewIntention.Edit => user.UserId == target.Author?.UserId,
 
         // Deleting somebody's stated opinion is a step above deleting a comment,
         // and AUTHORIZATION.md puts it there with profile moderation: the author
         // themselves, or a senior moderator.
         PostReviewIntention.Delete =>
-            user.UserId == target.Author.UserId || user.Role >= UserRole.SeniorModerator,
+            user.UserId == target.Author?.UserId || user.Role >= UserRole.SeniorModerator,
 
         _ => false
     };

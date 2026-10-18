@@ -4,6 +4,7 @@ using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Characters;
+using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
 using FluentValidation.TestHelper;
@@ -25,6 +26,9 @@ public class CreateCharacterValidatorShould : UnitTestBase
         // validator never saw.
         characterRepository = Mock<ICharacterRepository>();
         attributeValueValidator = Mock<IAttributeValueValidator>();
+        // Every game carries a sheet, so every request reaches the read of one;
+        // the tests that care about its content re-stub it.
+        characterRepository.GetGameSchema(Arg.Any<Guid>()).Returns(new GameAttributeSchema());
         validator = new CreateCharacterValidator(characterRepository, attributeValueValidator);
     }
 
@@ -32,7 +36,7 @@ public class CreateCharacterValidatorShould : UnitTestBase
     public async Task PassForValidInput()
     {
         characterRepository
-            .GameRequiresAttributes(Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(false);
+            .GetGameSchema(Arg.Any<Guid>()).Returns(new GameAttributeSchema());
 
         var input = new CreateCharacter
         {
@@ -89,7 +93,7 @@ public class CreateCharacterValidatorShould : UnitTestBase
     public async Task PassWithMaxLengthValues()
     {
         characterRepository
-            .GameRequiresAttributes(Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(false);
+            .GetGameSchema(Arg.Any<Guid>()).Returns(new GameAttributeSchema());
 
         var input = new CreateCharacter
         {
@@ -112,11 +116,8 @@ public class CreateCharacterValidatorShould : UnitTestBase
     {
         var specificationId = Guid.NewGuid();
         characterRepository
-            .GameRequiresAttributes(Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(true);
-        characterRepository
-            .GetGameSchema(Arg.Any<Guid>()).Returns(new AttributeSchema
+            .GetGameSchema(Arg.Any<Guid>()).Returns(new GameAttributeSchema
             {
-                Id = Guid.NewGuid(),
                 Specifications =
                 [
                     new AttributeSpecification
@@ -145,16 +146,16 @@ public class CreateCharacterValidatorShould : UnitTestBase
     }
 
     /// <summary>
-    /// A game without a schema skips every schema-driven rule, so this is the
-    /// path on which the repeated identifier reached storage as two rows and
-    /// left the character uneditable.
+    /// A game whose sheet holds no specification answers every schema-driven
+    /// rule with nothing, so this is the path on which the repeated identifier
+    /// reached storage as two rows and left the character uneditable.
     /// </summary>
     [Fact]
-    public async Task FailWhenOneSpecificationIsSubmittedTwiceToASchemalessGame()
+    public async Task FailWhenOneSpecificationIsSubmittedTwiceToAGameWithAnEmptySheet()
     {
         var specificationId = Guid.NewGuid();
         characterRepository
-            .GameRequiresAttributes(Arg.Any<Guid>(), Arg.Any<System.Threading.CancellationToken>()).Returns(false);
+            .GetGameSchema(Arg.Any<Guid>()).Returns(new GameAttributeSchema());
 
         var input = new CreateCharacter
         {

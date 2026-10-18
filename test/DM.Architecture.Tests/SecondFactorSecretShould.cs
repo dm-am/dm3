@@ -11,7 +11,7 @@ namespace DM.Architecture.Tests;
 /// The secret of a second factor does not leave the perimeter.
 /// </summary>
 /// <remarks>
-/// INV-15. A QR code is an encoding of the otpauth URI, and that URI contains the
+/// A QR code is an encoding of the otpauth URI, and that URI contains the
 /// shared secret in full: handing it to a public chart service to be drawn hands
 /// the second factor of every account that sets one up to whoever runs that
 /// service and to whoever reads its logs. The image looks the same either way,

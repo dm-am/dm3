@@ -10,7 +10,10 @@ import {
   optionsHint,
 } from "../model";
 import type { ActivityFilter, RoleFilter, ExperienceFilter } from "../model";
-import { formatDateRangeForDisplay } from "@/shared/lib/filters";
+import {
+  formatDateRangeForDisplay,
+  formatNumberRangeForDisplay,
+} from "@/shared/lib/filters";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import {
@@ -242,14 +245,12 @@ const hasRatingFilter = computed(
     filterState.value.ratingMin !== null ||
     filterState.value.ratingMax !== null,
 );
-const ratingLabel = computed(() => {
-  const { ratingMin, ratingMax } = filterState.value;
-  if (ratingMin !== null && ratingMax !== null)
-    return `${ratingMin} — ${ratingMax}`;
-  if (ratingMin !== null) return `от ${ratingMin}`;
-  if (ratingMax !== null) return `до ${ratingMax}`;
-  return "";
-});
+const ratingLabel = computed(() =>
+  formatNumberRangeForDisplay(
+    filterState.value.ratingMin,
+    filterState.value.ratingMax,
+  ),
+);
 
 // Games hosting bubble
 const hasGamesHostingFilter = computed(
@@ -257,14 +258,12 @@ const hasGamesHostingFilter = computed(
     filterState.value.gamesHostingMin !== null ||
     filterState.value.gamesHostingMax !== null,
 );
-const gamesHostingLabel = computed(() => {
-  const { gamesHostingMin, gamesHostingMax } = filterState.value;
-  if (gamesHostingMin !== null && gamesHostingMax !== null)
-    return `${gamesHostingMin} — ${gamesHostingMax}`;
-  if (gamesHostingMin !== null) return `от ${gamesHostingMin}`;
-  if (gamesHostingMax !== null) return `до ${gamesHostingMax}`;
-  return "";
-});
+const gamesHostingLabel = computed(() =>
+  formatNumberRangeForDisplay(
+    filterState.value.gamesHostingMin,
+    filterState.value.gamesHostingMax,
+  ),
+);
 
 // Games playing bubble
 const hasGamesPlayingFilter = computed(
@@ -272,14 +271,12 @@ const hasGamesPlayingFilter = computed(
     filterState.value.gamesPlayingMin !== null ||
     filterState.value.gamesPlayingMax !== null,
 );
-const gamesPlayingLabel = computed(() => {
-  const { gamesPlayingMin, gamesPlayingMax } = filterState.value;
-  if (gamesPlayingMin !== null && gamesPlayingMax !== null)
-    return `${gamesPlayingMin} — ${gamesPlayingMax}`;
-  if (gamesPlayingMin !== null) return `от ${gamesPlayingMin}`;
-  if (gamesPlayingMax !== null) return `до ${gamesPlayingMax}`;
-  return "";
-});
+const gamesPlayingLabel = computed(() =>
+  formatNumberRangeForDisplay(
+    filterState.value.gamesPlayingMin,
+    filterState.value.gamesPlayingMax,
+  ),
+);
 
 // Blogs hosting bubble
 const hasBlogsFilter = computed(
@@ -287,14 +284,12 @@ const hasBlogsFilter = computed(
     filterState.value.blogsHostingMin !== null ||
     filterState.value.blogsHostingMax !== null,
 );
-const blogsLabel = computed(() => {
-  const { blogsHostingMin, blogsHostingMax } = filterState.value;
-  if (blogsHostingMin !== null && blogsHostingMax !== null)
-    return `${blogsHostingMin} — ${blogsHostingMax}`;
-  if (blogsHostingMin !== null) return `от ${blogsHostingMin}`;
-  if (blogsHostingMax !== null) return `до ${blogsHostingMax}`;
-  return "";
-});
+const blogsLabel = computed(() =>
+  formatNumberRangeForDisplay(
+    filterState.value.blogsHostingMin,
+    filterState.value.blogsHostingMax,
+  ),
+);
 
 // Registration date bubble
 const hasRegisteredFilter = computed(

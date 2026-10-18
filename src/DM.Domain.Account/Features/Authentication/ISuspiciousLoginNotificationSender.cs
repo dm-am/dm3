@@ -11,8 +11,8 @@ public interface ISuspiciousLoginNotificationSender
     /// Send suspicious login notification to user's email
     /// </summary>
     /// <param name="email">User's email address</param>
-    /// <param name="username">Username</param>
     /// <param name="ipAddress">IP address of the login</param>
     /// <param name="userAgent">User agent string</param>
-    Task SendAsync(string email, string username, string? ipAddress, string? userAgent);
+    /// <param name="timeZoneId">Zone the account keeps time in, null for UTC</param>
+    Task SendAsync(string email, string? ipAddress, string? userAgent, string? timeZoneId);
 }

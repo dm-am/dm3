@@ -33,6 +33,10 @@ test.afterAll(async () => {
 });
 
 test.describe("Profile Notes API", () => {
+  // One note, one pair of users: run in parallel, the test that clears it
+  // took the note from under the one that reads it, which then saw no note.
+  test.describe.configure({ mode: "serial" });
+
   test("upserts a note about another user", async () => {
     expect(subjectUsername, "seed must contain a second user").not.toBeNull();
 

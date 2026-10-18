@@ -23,8 +23,7 @@ public class CreateBlogValidatorShould : UnitTestBase
         {
             Title = "My Blog",
             Description = "Blog description",
-            DraftVisibility = DraftVisibility.Public,
-            CommentsEnabled = true
+            DraftVisibility = DraftVisibility.Public
         };
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();

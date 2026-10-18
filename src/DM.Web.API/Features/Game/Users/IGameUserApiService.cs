@@ -57,8 +57,8 @@ public interface IGameUserApiService
     /// </summary>
     Task Unsubscribe(Guid gameId);
 
-    // Note: RemoveReader is not provided - readers can only unsubscribe themselves
-    // Use blacklist to prevent problematic users from accessing content
+    // Note: RemoveReader is not provided - readers can only unsubscribe themselves.
+    // The blacklist does not remove one either: it closes writing, not reading.
 
     #endregion
 }

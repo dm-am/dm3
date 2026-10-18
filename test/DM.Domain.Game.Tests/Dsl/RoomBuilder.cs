@@ -37,14 +37,22 @@ public class RoomBuilder
         return this;
     }
 
+    public RoomBuilder WithAccessType(RoomAccessType accessType)
+    {
+        room.AccessType = accessType;
+        return this;
+    }
+
     /// <summary>
-    /// Grants a character the right to be posted as in this room.
+    /// Grants a character the right to be posted as in this room. The character
+    /// is in play unless the case says otherwise.
     /// </summary>
     public RoomBuilder WithCharacterAccess(
         Guid characterId,
         Guid authorId,
         bool isNpc = false,
-        RoomAccessPolicy policy = RoomAccessPolicy.Full)
+        RoomAccessPolicy policy = RoomAccessPolicy.Full,
+        CharacterStatus status = CharacterStatus.Active)
     {
         accesses.Add(new RoomAccess
         {
@@ -56,6 +64,7 @@ public class RoomBuilder
             {
                 Id = characterId,
                 IsNpc = isNpc,
+                Status = status,
                 Author = new GeneralUser { UserId = authorId }
             },
             User = new GeneralUser { UserId = authorId }

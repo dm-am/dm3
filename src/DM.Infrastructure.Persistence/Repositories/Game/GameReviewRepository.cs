@@ -4,10 +4,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.GameReviews;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbGameReview = DM.Infrastructure.Persistence.Entities.Game.GameReview;
@@ -18,10 +20,12 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 internal class GameReviewRepository : IGameReviewRepository
 {
     private readonly DmDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
-    public GameReviewRepository(DmDbContext dbContext)
+    public GameReviewRepository(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     // ═══ READ ═══
@@ -59,11 +63,11 @@ internal class GameReviewRepository : IGameReviewRepository
         .FirstOrDefaultAsync();
 
     /// <inheritdoc />
-    public Task<int> CountAllAsync(GameReviewFilter? filter = null)
+    public Task<int> CountAllAsync(Guid viewerId, GameReviewFilter? filter = null)
     {
-        var query = _dbContext.GameReviews
+        var query = InGamesOpenTo(viewerId, _dbContext.GameReviews
             .TagWith("DM.GameReview.CountAll")
-            .Where(r => !r.IsRemoved);
+            .Where(r => !r.IsRemoved));
 
         query = ApplyFilter(query, filter);
 
@@ -71,11 +75,11 @@ internal class GameReviewRepository : IGameReviewRepository
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GameReview>> GetAllAsync(PagingData paging, GameReviewFilter? filter = null)
+    public async Task<IEnumerable<GameReview>> GetAllAsync(Guid viewerId, PagingData paging, GameReviewFilter? filter = null)
     {
-        var query = _dbContext.GameReviews
+        var query = InGamesOpenTo(viewerId, _dbContext.GameReviews
             .TagWith("DM.GameReview.GetAll")
-            .Where(r => !r.IsRemoved);
+            .Where(r => !r.IsRemoved));
 
         query = ApplyFilter(query, filter);
 
@@ -139,8 +143,14 @@ internal class GameReviewRepository : IGameReviewRepository
 
         if (entity.Text != null)
             dbReview.Text = entity.Text;
-        if (entity.IsRemoved.HasValue)
-            dbReview.IsRemoved = entity.IsRemoved.Value;
+        if (entity.IsRemoved == true && !dbReview.IsRemoved)
+            // Through the one call that writes the flag and the audit together, as
+            // the post review removal does. Only while the row is still live: a
+            // second removal behind the first would record its own hand and clock
+            // over the removal that actually happened.
+            SoftDelete.Mark(dbReview, entity.DeletedByUserId, entity.DeletedUtc ?? _dateTimeProvider.Now);
+        else if (entity.IsRemoved == false)
+            dbReview.IsRemoved = false;
         if (entity.ModifiedUtc.HasValue)
             dbReview.ModifiedUtc = entity.ModifiedUtc.Value;
         if (entity.ModifiedByUserId.HasValue)
@@ -148,7 +158,11 @@ internal class GameReviewRepository : IGameReviewRepository
 
         await _dbContext.SaveChangesAsync();
 
+        // IgnoreQueryFilters, because one of the updates this method serves is the
+        // removal: the global filter drops soft-deleted rows, so the read-back threw
+        // "Sequence contains no elements" and every delete answered 500.
         return await _dbContext.GameReviews
+            .IgnoreQueryFilters()
             .TagWith("DM.GameReview.Updated")
             .Where(r => r.GameReviewId == entity.ReviewId)
             .ProjectToGameReview()
@@ -183,6 +197,16 @@ internal class GameReviewRepository : IGameReviewRepository
 
     // ═══ PRIVATE ═══
 
+    /// <summary>
+    /// The reviews whose game the reader may open, by the same filter every read
+    /// of a game applies, so a game hidden from the reader names nothing here.
+    /// </summary>
+    private IQueryable<DbGameReview> InGamesOpenTo(Guid viewerId, IQueryable<DbGameReview> query)
+    {
+        var games = _dbContext.Games.Where(GameAccessibilityFilters.GameAvailable(viewerId));
+        return query.Where(r => games.Any(g => g.GameId == r.GameId));
+    }
+
     private IQueryable<DbGameReview> ApplyFilter(IQueryable<DbGameReview> query, GameReviewFilter? filter)
     {
         if (filter == null)
@@ -206,10 +230,12 @@ internal class GameReviewRepository : IGameReviewRepository
             // once — three SQL conditions joined by OR, the shape the
             // endorsement list already uses. This is "find where X is
             // mentioned", not three separate search buckets.
+            // The list lifts the account filter to keep the reviews of removed
+            // accounts (RemovedAuthors), so a removed name is not searchable.
             var pattern = LikePatterns.Contains(filter.Search.Trim());
             query = query.Where(r =>
                 EF.Functions.ILike(r.Text, pattern) ||
-                EF.Functions.ILike(r.Author.Username, pattern) ||
+                (!r.Author.IsRemoved && EF.Functions.ILike(r.Author.Username, pattern)) ||
                 EF.Functions.ILike(r.Game.Title, pattern));
         }
 
@@ -239,8 +265,10 @@ internal class GameReviewRepository : IGameReviewRepository
             {
                 (true, true) => query.OrderByDescending(r => r.Game.Title),
                 (true, false) => query.OrderBy(r => r.Game.Title),
-                (false, true) => query.OrderByDescending(r => r.Author.Username),
-                (false, false) => query.OrderBy(r => r.Author.Username),
+                // A removed author sorts as an empty name: the order must not
+                // place him by the name the removal took away.
+                (false, true) => query.OrderByDescending(r => r.Author.IsRemoved ? "" : r.Author.Username),
+                (false, false) => query.OrderBy(r => r.Author.IsRemoved ? "" : r.Author.Username),
             };
             return desc
                 ? ordered.ThenByDescending(r => r.CreatedUtc).ThenByDescending(r => r.GameReviewId)

@@ -17,6 +17,9 @@
 // (rooms, discussion, characters); reviews have no unread counter on the
 // wire, so those rows show the totals it does send.
 //
+// "Обсуждение" is a row for everybody who sees the game: the discussion is
+// read by all of them, empty or not, whoever may write in it.
+//
 // Role gates (never a single blanket "moderator" gate):
 //   "Управление игрой" — the header shows for Master/Assistant/Mentor.
 //     "Настройки" is Master/Assistant/Mentor and "Заметки игры" narrower
@@ -43,7 +46,7 @@ import {
 } from "@/entities/game";
 import { GameStatusButtons, GameJoinActions } from "@/features/game-actions";
 import { useAuthStore } from "@/entities/user";
-import { UserRole } from "@/shared/api/models/common";
+import { UserRole, type GeneralError } from "@/shared/api/models/common";
 import { useExpandableSection } from "@/shared/lib/composables/useExpandableSection";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarCounter from "./SidebarCounter.vue";
@@ -52,7 +55,6 @@ import SidebarSkeleton from "./SidebarSkeleton.vue";
 import GameRoomLink from "./GameRoomLink.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{ gameId: string }>();
 
@@ -67,10 +69,24 @@ const {
   activeRooms,
   archivedRooms,
   characters,
-  isMaster,
-  isAssistant,
-  canManage,
+  isMaster: servedMaster,
+  isAssistant: servedAssistant,
+  canManage: servedManage,
 } = storeToRefs(store);
+
+const { user } = storeToRefs(useAuthStore());
+
+// The roles in the game are the server's answer for whoever held the session
+// when the game was fetched, and the menu must not outlive that session. A 401
+// on any request ends it at once: the auth store drops the viewer and the
+// header turns to "Вход". The game shell refetches the game for the guest, but
+// that is a round trip away and may not land at all, and until it does every
+// row below was still offered to a guest: "Управление игрой", "Настройки", the
+// status buttons. So the menu asks who is signed in before it reads the roles.
+const signedIn = computed(() => !!user.value);
+const isMaster = computed(() => signedIn.value && servedMaster.value);
+const isAssistant = computed(() => signedIn.value && servedAssistant.value);
+const canManage = computed(() => signedIn.value && servedManage.value);
 
 // Master/assistant may run the game itself: NPCs and the status transitions.
 // The game mentor ("Наставник" — helper to a novice master) is not one of them.
@@ -100,7 +116,6 @@ const canEditSettings = computed(() => canManage.value);
 // the API answered 403 to.
 const canUseNotepad = computed(() => isMaster.value || isAssistant.value);
 
-const { user } = storeToRefs(useAuthStore());
 const router = useRouter();
 
 // Routes use the game's public id (URL_STRUCTURE). Fall back to the raw
@@ -150,7 +165,7 @@ const firstNpcId = computed(() => npcs.value[0]?.id ?? null);
 // --- Actions with the game ---
 // Any authenticated user except the master may act on the game (subscribe,
 // apply to join). The master manages via the sections above instead.
-const canActOnGame = computed(() => !!user.value && !isMaster.value);
+const canActOnGame = computed(() => signedIn.value && !isMaster.value);
 
 // --- Moderation (global roles) ---
 
@@ -184,15 +199,21 @@ const showModeration = computed(
     isGlobalAdmin.value,
 );
 
-// Confirmed moderation actions share a single dialog.
+// Confirmed moderation actions share a single dialog, and the request is the
+// dialog's action: it waits shut for the answer, prints a refusal in itself
+// and closes on success alone.
 interface ModAction {
   title: string;
   message: string;
   confirmLabel: string;
-  danger?: boolean;
-  run: () => Promise<void>;
+  /** What the window says when the server named nothing. */
+  failure: string;
+  run: () => Promise<{ error: GeneralError | null }>;
 }
 const pendingMod = ref<ModAction | null>(null);
+
+/** The window prints the refusal, so the interceptor keeps quiet about it. */
+const DIALOG_OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
 
 // The three premoderation moves, each with the wording of its own dialog. One
 // table, because the row, the question and the request have to name the same
@@ -202,18 +223,18 @@ const PREMOD_PROMPTS: Record<
   { title: string; message: string; confirmLabel: string }
 > = {
   [GamePremoderationTransition.SetApproved]: {
-    title: "Одобрение игры",
-    message: "Одобрить игру? Она станет видна всем.",
+    title: "Одобрить игру?",
+    message: "Игра станет видна всем",
     confirmLabel: "Одобрить",
   },
   [GamePremoderationTransition.SetAwaitingEdits]: {
-    title: "Возврат на доработку",
-    message: "Вернуть игру автору на доработку?",
+    title: "Вернуть игру на доработку?",
+    message: "Автор сможет доработать игру и отправить ее на проверку заново",
     confirmLabel: "Вернуть",
   },
   [GamePremoderationTransition.SubmitForApproval]: {
-    title: "Отправка на проверку",
-    message: "Отправить игру на проверку наставнику?",
+    title: "Отправить игру на проверку?",
+    message: "Игра уйдет наставнику на проверку",
     confirmLabel: "Отправить",
   },
 };
@@ -221,44 +242,40 @@ const PREMOD_PROMPTS: Record<
 function askPremod(t: GamePremoderationTransition) {
   pendingMod.value = {
     ...PREMOD_PROMPTS[t],
-    run: async () => {
-      const error = await store.changePremoderation(t);
-      if (error) notifyFailure(error, "Не удалось изменить премодерацию");
-    },
+    failure: "Не удалось изменить премодерацию",
+    run: async () => ({
+      error: await store.changePremoderation(t, DIALOG_OWNS_REFUSAL),
+    }),
   };
 }
 
 function askDelete() {
   pendingMod.value = {
-    title: "Удаление игры",
-    message: "Удалить эту игру? Действие необратимо.",
-    confirmLabel: "Удалить игру",
-    danger: true,
+    title: "Удалить игру?",
+    message: "Игра будет удалена без возможности восстановления",
+    confirmLabel: "Удалить",
+    failure: "Не удалось удалить игру",
     run: async () => {
-      const error = await store.deleteGame();
-      if (error) notifyFailure(error, "Не удалось удалить игру");
-      else router.push({ name: "games" });
+      const error = await store.deleteGame(DIALOG_OWNS_REFUSAL);
+      if (!error) router.push({ name: "games" });
+      return { error };
     },
   };
 }
 
 function askResetRecruitment() {
   pendingMod.value = {
-    title: "Сброс даты набора",
-    message: "Сбросить дату начала набора?",
+    title: "Сбросить дату набора?",
+    message: "Дата начала набора очистится",
     confirmLabel: "Сбросить",
-    run: async () => {
-      const error = await store.resetRecruitment();
-      if (error) notifyFailure(error, "Не удалось сбросить дату набора");
-    },
+    failure: "Не удалось сбросить дату набора",
+    run: async () => ({
+      error: await store.resetRecruitment(DIALOG_OWNS_REFUSAL),
+    }),
   };
 }
 
-async function confirmMod() {
-  const action = pendingMod.value;
-  pendingMod.value = null;
-  if (action) await action.run();
-}
+const runMod = () => pendingMod.value?.run();
 </script>
 
 <template>
@@ -455,7 +472,7 @@ async function confirmMod() {
         </template>
         <li v-if="isGlobalSeniorModerator" class="link">
           <span class="muted" aria-hidden="true">- </span>
-          <button type="button" class="strip-action danger" @click="askDelete">
+          <button type="button" class="strip-action" @click="askDelete">
             Удалить игру
           </button>
         </li>
@@ -480,14 +497,16 @@ async function confirmMod() {
       :title="pendingMod?.title ?? ''"
       :message="pendingMod?.message ?? ''"
       :confirm-label="pendingMod?.confirmLabel"
-      :danger="pendingMod?.danger"
-      @confirm="confirmMod"
-      @cancel="pendingMod = null"
+      :failure="pendingMod?.failure"
+      :action="runMod"
+      @update:show="(open: boolean) => !open && (pendingMod = null)"
     />
   </SidebarBlock>
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 // Rooms nest under their group row: the indent is the nesting, which is why
 // the room rows carry no "- " prefix of their own.
 //
@@ -496,27 +515,27 @@ async function confirmMod() {
 // it. Measured in the browser at the sidebar's own size, "- " renders 8.3 to
 // 8.8 pixels wide, which $small is; the previous $medium set the whole list
 // two dashes deep and left the locks hanging past the column.
+//
+// The indent is the first line's alone: a row that wraps, a long title or
+// the writers of a closed room, goes on under the start of the menu line, as
+// the old site wraps "[Военно-полевой госпиталь] - Никита, Север".
 .room-list
   list-style: none
   margin: 0
-  padding: 0 0 0 $small
+  padding: 0
+
+  > li
+    text-indent: $small
 
 // "(показать)/(скрыть)" spoiler toggle for archived rooms — an inline link
 // beside the group row (normal weight, so nothing in the row reads bold).
 // The gap before it is the row's own non-breaking space, not a margin: the
 // row has to copy with that space in it.
 .archived-toggle
-  padding: 0
-  border: none
-  background: none
-  font: inherit
-  font-weight: normal
-  color: $link
-  cursor: pointer
+  +inline-link-button
 
-  &:hover
-    color: $link-hover
-    text-decoration: underline
+  &
+    font-weight: normal
 
 .link
   display: block
@@ -527,19 +546,9 @@ async function confirmMod() {
 .error
   color: $accent-red
 
-// Strip actions mimic a plain sidebar link but trigger a store mutation.
+// Strip actions are words of the menu like the links around them, and they
+// trigger a store mutation. Deleting is not coloured: it asks first, and the
+// question carries the weight of the act.
 .strip-action
-  padding: 0
-  border: none
-  background: none
-  font: inherit
-  color: $link
-  cursor: pointer
-
-  &:hover
-    color: $link-hover
-    text-decoration: underline
-
-  &.danger
-    color: $accent-red
+  +inline-link-button
 </style>

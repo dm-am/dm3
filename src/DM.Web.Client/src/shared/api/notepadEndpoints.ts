@@ -7,6 +7,13 @@ import type {
 } from "./models/notepads";
 
 /**
+ * What a caller may say about who shows a refused delete: the confirmation
+ * that asks before it prints the refusal in itself, and the interceptor then
+ * keeps quiet. Read off the client rather than spelled again.
+ */
+type RemoveOptions = Parameters<typeof Api.delete>[2];
+
+/**
  * The five notepads of the site, which are one notepad five times.
  *
  * The server serves all of them from one DTO and one controller shape — a list
@@ -37,6 +44,7 @@ export function notepadEndpoints(base: string) {
       Api.post<Envelope<NotepadEntry>>(base, input),
     update: (entryId: string, input: UpdateNotepadEntryRequest) =>
       Api.patch<Envelope<NotepadEntry>>(entry(entryId), input),
-    remove: (entryId: string) => Api.delete(entry(entryId)),
+    remove: (entryId: string, options?: RemoveOptions) =>
+      Api.delete(entry(entryId), undefined, options),
   };
 }

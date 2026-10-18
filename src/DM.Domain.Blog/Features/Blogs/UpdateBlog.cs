@@ -27,9 +27,4 @@ public class UpdateBlog
     /// Draft visibility (null = not changed)
     /// </summary>
     public DraftVisibility? DraftVisibility { get; set; }
-
-    /// <summary>
-    /// Whether comments are enabled (null = not changed)
-    /// </summary>
-    public bool? CommentsEnabled { get; set; }
 }

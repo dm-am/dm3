@@ -101,6 +101,8 @@
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.Grafana.Loki" Version="9.0.1" />
     <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.11" />
+    <!-- Transitive via MimeKit, pinned above its advisory (GHSA-846f-f764-76mx): MimeKit still asks for 10.0.0. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.3" />
     <PackageVersion Include="Swashbuckle.AspNetCore.Swagger" Version="10.2.3" />
     <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />

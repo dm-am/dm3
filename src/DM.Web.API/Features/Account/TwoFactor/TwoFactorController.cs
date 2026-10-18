@@ -203,7 +203,6 @@ public class TwoFactorController : ControllerBase
     /// </summary>
     /// <param name="token">Token from the mailed link, in the X-Dm-Account-Token header</param>
     /// <response code="204">Removal scheduled, sessions ended, second letter sent</response>
-    /// <response code="403">The mailed path is closed for this account's rank</response>
     /// <response code="404">Token missing, malformed, invalid or expired</response>
     /// <response code="409">The factor is not on</response>
     /// <response code="429">Too many requests</response>
@@ -211,7 +210,6 @@ public class TwoFactorController : ControllerBase
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Auth)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]

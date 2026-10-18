@@ -42,12 +42,15 @@ public class ModBlockSanitizerShould
         ModBlockSanitizer.SanitizeForAuthor(Authored, role).Should().Be(Authored);
 
     /// <summary>
-    /// Both spellings the parser accepts, in both cases: the attribute form is
-    /// the one a hand-written pattern usually misses.
+    /// More than the parser reads as the tag, on purpose: every casing, and every
+    /// spelling with an attribute or a parameter, the kind a hand-written pattern
+    /// usually misses.
     /// </summary>
     [Theory]
     [InlineData("[MOD]громко[/MOD]", "громко")]
     [InlineData("[mod=Гоблин]с автором[/mod]", "с автором")]
+    [InlineData("[mod=\"Гоблин\"]с автором[/mod=\"x\"]", "с автором")]
+    [InlineData("[mod text=\"x\"]с параметром[/mod]", "с параметром")]
     [InlineData("[mod]первый[/mod] и [mod]второй[/mod]", "первый и второй")]
     public void UnwrapEveryFormOfTheMarker(string raw, string expected) =>
         ModBlockSanitizer.SanitizeForAuthor(raw, UserRole.RegularUser).Should().Be(expected);
@@ -62,6 +65,64 @@ public class ModBlockSanitizerShould
     [InlineData("[b]жирный[/b] без пометок")]
     public void LeaveEveryOtherTagAlone(string raw) =>
         ModBlockSanitizer.SanitizeForAuthor(raw, UserRole.RegularUser).Should().Be(raw);
+
+    /// <summary>
+    /// A marker taken out joins the text on either side of it, and the join is
+    /// not allowed to be a marker.
+    /// </summary>
+    /// <remarks>
+    /// One pass over the text used to be all there was, so [[mod]mod] lost its
+    /// inner marker and kept the outer one, and a user below Moderator stored a
+    /// moderator's block by typing the tag inside itself.
+    /// </remarks>
+    [Theory]
+    [InlineData("[[mod]mod]FAKE[/[mod]mod]", "FAKE")]
+    [InlineData("[[[mod]mod]mod]FAKE[/[/mod]mod]", "FAKE")]
+    [InlineData("[[MOD]Mod]FAKE[/[/mod]MOD]", "FAKE")]
+    [InlineData("[mo[mod]d]FAKE[/m[/mod]od]", "FAKE")]
+    [InlineData("[[mod]mod=\"x\"]FAKE[[mod]/mod]", "FAKE")]
+    [InlineData("[b][[mod]mod][/b]", "[b][/b]")]
+    public void UnwrapAMarkerThatTheRemovalOfAnotherWouldJoin(string raw, string expected) =>
+        ModBlockSanitizer.SanitizeForAuthor(raw, UserRole.RegularUser).Should().Be(expected);
+
+    /// <summary>
+    /// The property itself, over every join of a handful of pieces: whatever an
+    /// author below Moderator typed, no marker of the tag is left in what is
+    /// stored, in any casing.
+    /// </summary>
+    [Fact]
+    public void LeaveNoMarkerInAnyJoinOfThePieces()
+    {
+        string[] pieces = ["[", "]", "/", "mod", "MoD", "=", " ", "x", "[mod]", "[/mod]"];
+        var marker = new System.Text.RegularExpressions.Regex(
+            @"\[/?mod(?:[=\s][^\[\]]*)?\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        var survivors = new System.Collections.Generic.List<string>();
+        foreach (var raw in Joins(pieces, 5))
+        {
+            var sanitized = ModBlockSanitizer.SanitizeForAuthor(raw, UserRole.RegularUser);
+            if (marker.IsMatch(sanitized)) survivors.Add($"{raw} -> {sanitized}");
+        }
+
+        survivors.Should().BeEmpty();
+    }
+
+    private static System.Collections.Generic.IEnumerable<string> Joins(string[] pieces, int length)
+    {
+        if (length == 0)
+        {
+            yield return string.Empty;
+            yield break;
+        }
+
+        foreach (var head in pieces)
+        {
+            foreach (var tail in Joins(pieces, length - 1))
+            {
+                yield return head + tail;
+            }
+        }
+    }
 
     [Fact]
     public void ReturnEmptyInputUnchanged() =>

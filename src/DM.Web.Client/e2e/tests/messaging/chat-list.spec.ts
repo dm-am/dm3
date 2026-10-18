@@ -3,7 +3,8 @@ import { test, expect } from "../../fixtures/auth";
 /**
  * ".messenger-page" and ".chat-user" are in no template: the list is
  * `.messenger-list` with `.chats-list` inside it, and a preview names its
- * interlocutor in `.username`. The second test also hid its only assertion
+ * interlocutor in `.name`, the number of unread after it as the header writes
+ * its own, "SolohinLex (2)". The second test also hid its only assertion
  * behind `isVisible()`, so an empty messenger reported green.
  */
 test.describe("Chat List", () => {
@@ -21,7 +22,7 @@ test.describe("Chat List", () => {
     // The seed writes conversations for the primary account.
     const chatItem = authenticatedPage.locator(".chat-preview").first();
     await expect(chatItem).toBeVisible({ timeout: 10000 });
-    await expect(chatItem.locator(".username")).toBeVisible();
+    await expect(chatItem.locator(".name")).toBeVisible();
     await expect(chatItem.locator(".message-preview")).toBeVisible();
   });
 });

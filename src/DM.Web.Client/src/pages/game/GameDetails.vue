@@ -11,7 +11,12 @@ import {
   GameStatusBadge,
   type Character,
 } from "@/entities/game";
-import { UserLink, UserRating, useUserDisplay } from "@/entities/user";
+import {
+  RemovedAccountLink,
+  UserLink,
+  UserRating,
+  useUserDisplay,
+} from "@/entities/user";
 import { ContentText } from "@/shared/ui/Content";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
@@ -90,7 +95,9 @@ function characterLink(c: Character) {
   };
 }
 
-// Character status colour — "В игре" green, everything else muted (old site).
+// Character status: "В игре" in the colour of the text, everything else muted.
+// It was green as on the old site, and green says something good (owner, 12
+// October 2026), while a character in the game is the plain state of one.
 function statusClass(c: Character): string {
   return c.status === "Active" ? "status-active" : "status-retired";
 }
@@ -101,9 +108,9 @@ function statusClass(c: Character): string {
 // number of pixels, and no single percentage covers both a 1600 and a 1920
 // viewport. At 12% the date wrapped onto a second line at either width, and
 // the wrap grew every roster row. So "Последний пост" and "Присутствие" are
-// nowrap and width-less (they take exactly their content), "Игрок" and "Имя
-// персонажа" are width-less too and absorb the rest, and the remaining columns
-// keep their proportions as hints.
+// width-less (they take their content, on one line where the column has the
+// room), "Игрок" and "Имя персонажа" are width-less too and absorb the rest,
+// and the remaining columns keep their proportions as hints.
 const playerColumns = computed<Column[]>(() => [
   { key: "player", label: "Игрок", align: "center" },
   {
@@ -111,13 +118,11 @@ const playerColumns = computed<Column[]>(() => [
     label: "Рейтинг",
     align: "center",
     width: "11%",
-    hideOnMobile: true,
   },
   {
     key: "presence",
     label: "Присутствие",
     align: "center",
-    hideOnMobile: true,
   },
   { key: "character", label: "Имя персонажа", align: "center" },
   {
@@ -131,7 +136,6 @@ const playerColumns = computed<Column[]>(() => [
     key: "lastpost",
     label: "Последний пост",
     align: "center",
-    hideOnMobile: true,
   },
   { key: "status", label: "Статус", align: "center", width: "11%" },
 ]);
@@ -148,7 +152,6 @@ const npcColumns = computed<Column[]>(() => [
     key: "lastpost",
     label: "Последний пост",
     align: "center",
-    hideOnMobile: true,
   },
   { key: "status", label: "Статус", align: "center", width: "18%" },
 ]);
@@ -188,7 +191,10 @@ const npcColumns = computed<Column[]>(() => [
         </tr>
         <tr>
           <th>Мастер</th>
-          <td><UserLink :user="game.master" hide-badge /></td>
+          <td>
+            <UserLink v-if="game.master" :user="game.master" hide-badge />
+            <RemovedAccountLink v-else />
+          </td>
         </tr>
         <tr>
           <th>{{ assistants.length > 1 ? "Ассистенты" : "Ассистент" }}</th>
@@ -272,7 +278,6 @@ const npcColumns = computed<Column[]>(() => [
         :data="playerCharacters"
         :show-row-numbers="true"
         empty-text="Персонажей пока нет"
-        table-layout="auto"
       >
         <template #cell-player="{ row }">
           <UserLink v-if="row.author" :user="row.author" hide-badge />
@@ -320,7 +325,6 @@ const npcColumns = computed<Column[]>(() => [
         :data="npcCharacters"
         :show-row-numbers="true"
         empty-text="Персонажей мастера пока нет"
-        table-layout="auto"
       >
         <template #cell-character="{ row }">
           <router-link
@@ -378,8 +382,11 @@ const npcColumns = computed<Column[]>(() => [
 .offline
   color: $text-muted
 
+// Two words that are one state: never "В" alone at the end of a line, which a
+// narrow "Статус" column of a phone made of it. The column takes the width of
+// the two (the roster tables lay their columns out by content).
 .status-active
-  color: $accent-green
+  white-space: nowrap
 
 .status-retired
   color: $text-muted
@@ -387,12 +394,4 @@ const npcColumns = computed<Column[]>(() => [
 // Retired characters read as muted in the roster (dead / left / exiled).
 .retired
   color: $text-muted
-
-// The two content-sized roster columns. With the auto table layout each takes
-// exactly the width its content needs on one line: the date of the last post,
-// and "Присутствие", where the widest thing in the column is the header itself
-// and not the "online"/"offline" value under it.
-:deep(.col-lastpost),
-:deep(.col-presence)
-  white-space: nowrap
 </style>

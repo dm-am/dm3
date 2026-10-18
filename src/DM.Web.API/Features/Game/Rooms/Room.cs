@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Game.Games;
 
@@ -25,11 +24,6 @@ public class Room
     /// Game reference (for navigation)
     /// </summary>
     public GameRef? Game { get; set; }
-
-    /// <summary>
-    /// Previous room identifier
-    /// </summary>
-    public Optional<Guid>? PreviousRoomId { get; set; }
 
     /// <summary>
     /// Room title. Always set on read; nullable so an omitted value on a
@@ -76,6 +70,20 @@ public class Room
     /// Number of unread posts
     /// </summary>
     public int UnreadPostsCount { get; set; }
+
+    /// <summary>
+    /// Number of messages in the room: the posts of a room of posts, the
+    /// messages of a room of chat. Zero on a room the reader may not open.
+    /// </summary>
+    public int TotalPostsCount { get; set; }
+
+    /// <summary>
+    /// Names of the characters let in to write in a room the reader may not
+    /// open, a dead or departed one included, in the order they joined the
+    /// game; the menu writes the room with them. Empty on every room the
+    /// reader may open, whose accesses say it.
+    /// </summary>
+    public IEnumerable<string> CharacterNames { get; set; } = [];
 
     /// <summary>
     /// Room settings. Always set on read; nullable so an omitted block on a

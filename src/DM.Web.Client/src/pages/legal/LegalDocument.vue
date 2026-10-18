@@ -43,6 +43,8 @@ defineProps<{
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Inputs" as *
+
 // The page title (h1) keeps the accent heading color; only the in-document
 // section headings (h2/h3, e.g. "1. Общие положения") use the plain body
 // color — they read better in flat black for long-form legal text.
@@ -93,12 +95,10 @@ defineProps<{
       margin: 0
       font-weight: inherit
 
+  // A bold link of the site: 700, the one bold of its face.
   :deep(a)
-    color: $link
-    font-weight: 600
-    &:hover
-      color: $link-hover
-      text-decoration: underline
+    font-weight: 700
+    +link-tone($link)
 
 .revision-date
   color: $text-muted

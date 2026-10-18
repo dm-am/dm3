@@ -3,10 +3,15 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { mount } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import StatBoard from "./StatBoard.vue";
 import type { LeaderboardEntry } from "@/shared/api/models/community";
+import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
+
+const SFC = join(dirname(fileURLToPath(import.meta.url)), "StatBoard.vue");
 
 const entry = (over: Partial<LeaderboardEntry> = {}): LeaderboardEntry => ({
   rank: 1,
@@ -95,5 +100,30 @@ describe("StatBoard", () => {
       entries: [entry({ name: "SolohinLex", publicId: "aaaaa" })],
     });
     expect(wrapper.find(".stat-board-list li").classes()).not.toContain("own");
+  });
+});
+
+/**
+ * A board is as wide as the column of its grid and never wider (UI_STANDARDS,
+ * "Страница не шире окна"). jsdom lays nothing out, so what is read is the
+ * rule that makes it so.
+ */
+describe("StatBoard width", () => {
+  const rules = ruleMap(componentCss(SFC));
+
+  it("takes the width of its column, whatever its names", () => {
+    // A grid item is as wide as its longest word unless told otherwise, and a
+    // board three of which stood that wide ran 206 into the right column.
+    expect(rules.get(".stat-board")?.["min-width"]).toBe("0");
+  });
+
+  it("breaks a name only where it is longer than a whole line", () => {
+    // break-word, as a login breaks in running text (UserLink); anywhere
+    // would also shrink the board's measure and break names that fit.
+    expect(rules.get(".stat-board")?.["overflow-wrap"]).toBe("break-word");
+  });
+
+  it("keeps a score in one piece", () => {
+    expect(rules.get(".score")?.["white-space"]).toBe("nowrap");
   });
 });

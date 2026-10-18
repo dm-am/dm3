@@ -5,6 +5,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Caching;
 using DM.Domain.Core.Dto;
@@ -14,7 +15,7 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
-using DM.Domain.Game.Features.AttributeSchemas;
+using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using GameDto = DM.Domain.Game.Features.Games.Game;
@@ -22,6 +23,7 @@ using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Testing.Dsl;
 using DM.Testing;
+using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
@@ -35,7 +37,7 @@ namespace DM.Domain.Game.Tests.Features.Games;
 public class GameServiceShould : UnitTestBase
 {
     private readonly IIntentionManager _intentionManager;
-    private readonly IGameCreationDataResolver _dataResolver;
+    private readonly IGameTagResolver _tagResolver;
     private readonly IGameRepository _repository;
     private IUnreadCountersRepository _unreadCountersRepository = null!;
     private readonly IEventProducer _producer;
@@ -60,12 +62,13 @@ public class GameServiceShould : UnitTestBase
         var creationValidator = Mock<IGameCreationValidator>();
         creationValidator.ValidateAndAuthorize(Arg.Any<CreateGame>()).Returns(Task.CompletedTask);
 
-        _dataResolver = Mock<IGameCreationDataResolver>();
-        _dataResolver.ResolveTagIds(Arg.Any<IEnumerable<int>?>()).Returns(Array.Empty<Guid>());
+        _tagResolver = Mock<IGameTagResolver>();
+        _tagResolver.ResolveTagIds(Arg.Any<IEnumerable<int>?>()).Returns(Array.Empty<Guid>());
 
         _intentionManager = Mock<IIntentionManager>();
 
-        var schemaService = Mock<IAttributeSchemaService>();
+        var gameSchemaRepository = Mock<IGameAttributeSchemaRepository>();
+        gameSchemaRepository.Get(Arg.Any<Guid>()).Returns(new GameAttributeSchema());
 
         _repository = Mock<IGameRepository>();
 
@@ -117,21 +120,23 @@ public class GameServiceShould : UnitTestBase
             gamesQueryValidator,
             updateGameValidator,
             creationValidator,
-            _dataResolver,
+            _tagResolver,
             _intentionManager,
-            schemaService,
+            gameSchemaRepository,
             _repository,
             userRepository,
             invitationService,
             _identityProvider,
             gameBlacklistRepository,
+            Mock<IUserBlacklistChecker>(),
             unreadCountersRepository,
             subscriptionService,
             _dateTimeProvider,
             _guidFactory,
             _producer,
             _cache,
-            logger);
+            logger,
+            new TagNamesAsTyped());
     }
 
     /// <summary>
@@ -307,7 +312,7 @@ public class GameServiceShould : UnitTestBase
         var game = new GameDetails { Id = gameId, Recruitment = new GameRecruitment() };
         _repository.GetGameDetails(gameId, _currentUserId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(game);
         _repository.Update(Arg.Any<UpdateGameEntity>(), Arg.Any<CancellationToken>()).Returns(game);
-        _dataResolver.ResolveTagIds(Arg.Is<IEnumerable<int>?>(ids => ids != null && ids.SequenceEqual(new[] { 3, 7 })))
+        _tagResolver.ResolveTagIds(Arg.Is<IEnumerable<int>?>(ids => ids != null && ids.SequenceEqual(new[] { 3, 7 })))
             .Returns(new[] { fantasy, slowPaced });
 
         await _service.UpdateAsync(new UpdateGame { GameId = gameId, Tags = new[] { 3, 7 } });

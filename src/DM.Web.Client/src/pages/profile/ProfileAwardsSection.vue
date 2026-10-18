@@ -29,7 +29,11 @@ import { GameIcon } from "@/shared/ui/Icon";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { formatContestSeriesTitle } from "@/entities/achievement";
+import {
+  awardMetal,
+  formatContestSeriesTitle,
+  metalStyle,
+} from "@/entities/achievement";
 import { toExternalHref, toInternalPath } from "@/shared/lib/utils/internalUrl";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
@@ -76,18 +80,6 @@ watch(
   () => props.username,
   (next) => fetchAwards(next),
 );
-
-// Tier maps to a visual class. 1/2/3 are the contest metals (gold/silver/
-// bronze); 5 is "diamond" — reserved for a unique, place-less honor (the
-// "Почетный гоблин"), so it never reads as a contest placement.
-function tierClass(tier: number | null): string {
-  if (tier === 1) return "tier-gold";
-  if (tier === 2) return "tier-silver";
-  if (tier === 3) return "tier-bronze";
-  if (tier === 4) return "tier-steel";
-  if (tier === 5) return "tier-diamond";
-  return "tier-base";
-}
 
 /**
  * Place award: contest_first/second/third. Its title is the place label
@@ -178,7 +170,9 @@ const hasAwards = computed(() => awards.value.length > 0);
     <BlockTitle>Награды</BlockTitle>
     <div class="awards-grid">
       <Tooltip v-for="a in awards" :key="a.id" focusable>
-        <div class="award" :class="tierClass(a.type.tier)">
+        <!-- The tier picks one of the four metals (1/2/3 the contest places,
+             5 the place-less honour in platinum); icon and badge read it. -->
+        <div class="award" :style="metalStyle(awardMetal(a.type.tier))">
           <div class="award-icon-wrap">
             <GameIcon :name="awardIcon(a)" class="award-icon" />
             <span
@@ -283,9 +277,6 @@ const hasAwards = computed(() => awards.value.length > 0);
   gap: $medium
   align-items: start
 
-  @media (max-width: $bp-mobile)
-    grid-template-columns: repeat(3, minmax(0, 1fr))
-
 .award
   display: flex
   flex-direction: column
@@ -294,8 +285,11 @@ const hasAwards = computed(() => awards.value.length > 0);
   cursor: help
   color: $text
 
+  // The metal of the tier, handed down by the tile as --tier-metal (see
+  // entities/achievement tierMetal); a tier without one stays neutral.
   .award-icon
     font-size: 72px
+    color: var(--tier-metal, $text-muted)
 
 // Icon wrapper — the relative anchor for the corner badges, so they
 // attach to the icon's bottom corners rather than to the tile.
@@ -309,9 +303,10 @@ const hasAwards = computed(() => awards.value.length > 0);
 // corner of the icon: capitalized contest kind + series number. Renders
 // only for awards linked to a contest series (the series YEAR shows in
 // the popover context line, not on the tile). Width hugs the content (no
-// fixed min-width — labels vary in length); geometry/font/border match
-// the achievements' degree pill. Tier background color comes from the
-// tier classes below (see .tier-gold etc).
+// fixed min-width — labels vary in length); geometry, font, fill and ink
+// match the achievements' degree pill: filled with the tier metal under
+// light lettering, and a border in the page colour that lifts it off the icon
+// it overlaps.
 .award-series
   position: absolute
   right: -4px
@@ -327,15 +322,12 @@ const hasAwards = computed(() => awards.value.length > 0);
   letter-spacing: 0.3px
   line-height: 1
   white-space: nowrap
-  color: $heading
-  background-color: var(--tier-badge-bg)
-  // One ring, not two. The border in the page colour is what lifts the badge
-  // off the icon it overlaps; a second hairline in the metal was added on top
-  // of it and drew outside the border, so the badge read as a dark pill with a
-  // white gap and a stray metal ring around it.
+  color: var(--tier-badge-text)
+  background-color: var(--tier-metal, $text-muted)
   border: 2px solid $bg-page
   border-radius: $minor
   font-variant-numeric: tabular-nums
+  text-shadow: 0 0 1px var(--tier-badge-halo)
 
 // Caption, centered under the icon. A reserved 2-line min-height keeps the
 // common 1- and 2-line titles all the same height (no ragged bottoms); a
@@ -355,40 +347,6 @@ const hasAwards = computed(() => awards.value.length > 0);
   line-height: 1.2
   overflow-wrap: break-word
   min-height: 2.4em
-
-// Tier metal colors — shared tokens (see ThemeVariables.css), also
-// consumed by ModerationAwardTypes.vue for the same catalog dedup. The metal
-// goes on the glyph of both the icon and the series badge; the badge's fill is
-// the one dark token, so the tier colour reads on the letters instead of on
-// 16px of pill behind black text.
-.tier-gold
-  .award-icon,
-  .award-series
-    color: var(--award-gold)
-.tier-silver
-  .award-icon,
-  .award-series
-    color: var(--award-silver)
-.tier-bronze
-  .award-icon,
-  .award-series
-    color: var(--award-bronze)
-.tier-steel
-  .award-icon,
-  .award-series
-    color: $text-meta
-.tier-base
-  .award-icon,
-  .award-series
-    color: $heading
-// Diamond — a unique, place-less honor (currently only "Почетный гоблин").
-// Rendered in the achievement platinum (the tier-IV colour from the
-// achievements grid), so the honour reads as a distinct, premium mark rather
-// than a contest metal. Colour: --award-diamond → --achievement-platinum (SSOT).
-.tier-diamond
-  .award-icon,
-  .award-series
-    color: var(--award-diamond)
 
 // --- Rich popover ---
 .award-popover

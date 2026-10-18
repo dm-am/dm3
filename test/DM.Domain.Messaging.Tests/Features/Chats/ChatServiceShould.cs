@@ -35,6 +35,8 @@ public class ChatServiceShould : UnitTestBase
     private readonly IChatFactory _factory;
     private readonly ChatService _service;
     private readonly Guid _currentUserId = Guid.NewGuid();
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly DateTimeOffset _now = new(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
 
     public ChatServiceShould()
     {
@@ -78,6 +80,9 @@ public class ChatServiceShould : UnitTestBase
         var identity = Identity.Success(user, session, settings, "token");
         _identityProvider.Current.Returns(identity);
 
+        _dateTimeProvider = Mock<IDateTimeProvider>();
+        _dateTimeProvider.Now.Returns(_now);
+
         _userBlacklistChecker = Mock<IUserBlacklistChecker>();
         _userBlacklistChecker
             .GetOwnersBlockingIfFlagEnabledAsync(
@@ -93,7 +98,8 @@ public class ChatServiceShould : UnitTestBase
             _intentionManager,
             guidFactory,
             _identityProvider,
-            _userBlacklistChecker);
+            _userBlacklistChecker,
+            _dateTimeProvider);
     }
 
     [Fact]
@@ -156,7 +162,7 @@ public class ChatServiceShould : UnitTestBase
         var chat = new Chat { Id = chatId, Participants = Array.Empty<GeneralUser>() };
         var updateChat = new UpdateChat { ChatId = chatId, RemoveParticipants = new[] { removed } };
         _repository.GetForUpdate(chatId).Returns(chat);
-        _repository.Update(Arg.Any<UpdateChatEntity>()).Returns(chat);
+        _repository.Update(Arg.Any<UpdateChatEntity>(), Arg.Any<Guid>()).Returns(chat);
 
         await _service.UpdateAsync(updateChat);
 
@@ -217,6 +223,24 @@ public class ChatServiceShould : UnitTestBase
         await _unreadCountersRepository.Received(1).FlushAsync(_currentUserId, UnreadEntryType.Message, roomId);
     }
 
+    /// <summary>
+    /// The header badge asks for one number and gets it from the markers, not
+    /// from a page of conversations: the reader is their own parent, so every
+    /// chat of theirs is in scope whether or not it fits on the first page.
+    /// </summary>
+    [Fact]
+    public async Task CountUnreadMessagesOfEveryConversationUnderTheReaderAsParent()
+    {
+        _unreadCountersRepository
+            .SelectTotalUnreadByParentsAsync(_currentUserId, UnreadEntryType.Message, _currentUserId)
+            .Returns(new Dictionary<Guid, int> { [_currentUserId] = 17 });
+
+        var count = await _service.CountUnreadAsync();
+
+        count.Should().Be(17);
+        await _repository.DidNotReceive().Get(Arg.Any<Guid>(), Arg.Any<PagingData>());
+    }
+
     [Fact]
     public async Task AuthorizeUpdateChatAction()
     {
@@ -224,7 +248,7 @@ public class ChatServiceShould : UnitTestBase
         var updateChat = new UpdateChat { ChatId = chatId, Title = "Updated Title" };
         var chat = new Chat { Id = chatId, Participants = Array.Empty<GeneralUser>() };
         _repository.GetForUpdate(chatId).Returns(chat);
-        _repository.Update(Arg.Any<UpdateChatEntity>()).Returns(chat);
+        _repository.Update(Arg.Any<UpdateChatEntity>(), Arg.Any<Guid>()).Returns(chat);
 
         await _service.UpdateAsync(updateChat);
 
@@ -304,7 +328,7 @@ public class ChatServiceShould : UnitTestBase
         var blocker = Guid.NewGuid();
         var chat = new Chat { Id = chatId, Type = ChatType.Group, Participants = Array.Empty<GeneralUser>() };
         _repository.GetForUpdate(chatId).Returns(chat);
-        _repository.Update(Arg.Any<UpdateChatEntity>()).Returns(chat);
+        _repository.Update(Arg.Any<UpdateChatEntity>(), Arg.Any<Guid>()).Returns(chat);
         _userBlacklistChecker
             .GetOwnersBlockingIfFlagEnabledAsync(
                 _currentUserId, Arg.Any<IReadOnlyCollection<Guid>>(),
@@ -315,6 +339,117 @@ public class ChatServiceShould : UnitTestBase
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().Update(Arg.Any<UpdateChatEntity>());
+        await _repository.DidNotReceive().Update(Arg.Any<UpdateChatEntity>(), Arg.Any<Guid>());
+    }
+
+    // ═══ LEAVE AND CLEAR HISTORY ═══
+
+    private Chat ChatOfTheCaller(Guid chatId, ChatType type)
+    {
+        var chat = new Chat
+        {
+            Id = chatId,
+            Type = type,
+            Participants = new[] { new GeneralUser { UserId = _currentUserId }, new GeneralUser { UserId = Guid.NewGuid() } }
+        };
+        _repository.Get(chatId, _currentUserId).Returns(chat);
+        return chat;
+    }
+
+    /// <summary>
+    /// A participant who leaves a group stops being counted for it, the way one
+    /// removed by somebody else does.
+    /// </summary>
+    [Fact]
+    public async Task LeaveAGroupAndForgetTheUnreadMarkerOfTheLeaver()
+    {
+        var chatId = Guid.NewGuid();
+        var chat = ChatOfTheCaller(chatId, ChatType.Group);
+
+        await _service.LeaveAsync(chatId);
+
+        _intentionManager.Received(1).ThrowIfForbidden(ChatIntention.LeaveChat, chat);
+        await _repository.Received(1).Leave(chatId, _currentUserId, _now);
+        await _unreadCountersRepository.Received(1).DeleteAsync(chatId, UnreadEntryType.Message,
+            Arg.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { _currentUserId })));
+    }
+
+    /// <summary>
+    /// The history is cleared for the caller alone, at this moment, and what was
+    /// unread for him is read.
+    /// </summary>
+    [Fact]
+    public async Task ClearTheHistoryForTheCallerAndReadWhatWasUnread()
+    {
+        var chatId = Guid.NewGuid();
+        var chat = ChatOfTheCaller(chatId, ChatType.Direct);
+
+        await _service.ClearHistoryAsync(chatId);
+
+        _intentionManager.Received(1).ThrowIfForbidden(ChatIntention.ClearHistory, chat);
+        await _repository.Received(1).ClearHistory(chatId, _currentUserId, _now);
+        await _unreadCountersRepository.Received(1).FlushAsync(_currentUserId, UnreadEntryType.Message, chatId);
+    }
+
+    /// <summary>
+    /// A conversation of other people is not found for the caller, here as on
+    /// every read of it, and nothing is written.
+    /// </summary>
+    [Fact]
+    public async Task RefuseToLeaveOrClearAConversationTheCallerIsNotIn()
+    {
+        var chatId = Guid.NewGuid();
+        _repository.Get(chatId, _currentUserId).Returns((Chat?)null);
+
+        var leave = async () => await _service.LeaveAsync(chatId);
+        var clear = async () => await _service.ClearHistoryAsync(chatId);
+
+        await leave.Should().ThrowAsync<HttpException>().Where(e => e.StatusCode == HttpStatusCode.NotFound);
+        await clear.Should().ThrowAsync<HttpException>().Where(e => e.StatusCode == HttpStatusCode.NotFound);
+        await _repository.DidNotReceive().Leave(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
+        await _repository.DidNotReceive().ClearHistory(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
+        await _unreadCountersRepository.DidNotReceive().DeleteAsync(
+            Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<IEnumerable<Guid>>());
+        await _unreadCountersRepository.DidNotReceive().FlushAsync(
+            Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<Guid>());
+    }
+
+    /// <summary>
+    /// What the intention refuses is refused before anything is written: a direct
+    /// chat is not left, the global chat is not cleared.
+    /// </summary>
+    [Fact]
+    public async Task WriteNothingTheIntentionRefuses()
+    {
+        var chatId = Guid.NewGuid();
+        var chat = ChatOfTheCaller(chatId, ChatType.Direct);
+        _intentionManager
+            .When(m => m.ThrowIfForbidden(Arg.Any<ChatIntention>(), chat))
+            .Do(_ => throw new HttpException(HttpStatusCode.Forbidden, "refused"));
+
+        var leave = async () => await _service.LeaveAsync(chatId);
+        var clear = async () => await _service.ClearHistoryAsync(chatId);
+
+        await leave.Should().ThrowAsync<HttpException>().Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+        await clear.Should().ThrowAsync<HttpException>().Where(e => e.StatusCode == HttpStatusCode.Forbidden);
+        await _repository.DidNotReceive().Leave(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
+        await _repository.DidNotReceive().ClearHistory(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
+    }
+
+    /// <summary>
+    /// The chat that comes back from an update is the one its author reads: what
+    /// he cleared for himself does not come back with it.
+    /// </summary>
+    [Fact]
+    public async Task ReadTheUpdatedChatBackForItsAuthor()
+    {
+        var chatId = Guid.NewGuid();
+        var chat = new Chat { Id = chatId, Type = ChatType.Group, Participants = Array.Empty<GeneralUser>() };
+        _repository.GetForUpdate(chatId).Returns(chat);
+        _repository.Update(Arg.Any<UpdateChatEntity>(), Arg.Any<Guid>()).Returns(chat);
+
+        await _service.UpdateAsync(new UpdateChat { ChatId = chatId, Title = "Новое название" });
+
+        await _repository.Received(1).Update(Arg.Any<UpdateChatEntity>(), _currentUserId);
     }
 }

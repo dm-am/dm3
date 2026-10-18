@@ -3,6 +3,9 @@
  * AchievementTierDialog — create or edit an achievement tier (code /
  * title / threshold / tier). Dialog twin of the former hand-rolled
  * modal in ModerationAchievements.vue. Code is only editable on create.
+ *
+ * The window runs the request (Dialog `action`): it waits for the answer,
+ * prints a refusal in itself and closes on success alone.
  */
 import { ref, computed } from "vue";
 import { achievementApi } from "@/entities/achievement";
@@ -31,9 +34,6 @@ const title = ref(props.tier?.title ?? "");
 const threshold = ref(props.tier?.threshold ?? 0);
 const tierNumber = ref(props.tier?.tier ?? props.defaultTier);
 
-const saving = ref(false);
-const error = ref<string | null>(null);
-
 const canSubmit = computed(
   () =>
     title.value.trim().length > 0 &&
@@ -41,52 +41,47 @@ const canSubmit = computed(
     (props.tier !== null || code.value.trim().length > 0),
 );
 
-async function submit() {
-  if (!canSubmit.value || saving.value) return;
-  saving.value = true;
-  error.value = null;
-  try {
-    if (props.tier) {
-      await achievementApi.updateAchievementType(props.tier.id, {
-        title: title.value,
-        threshold: threshold.value,
-        tier: tierNumber.value,
-      });
-    } else {
-      await achievementApi.createAchievementType({
-        code: code.value,
-        title: title.value,
-        threshold: threshold.value,
-        tier: tierNumber.value,
-        achievementCategoryId: props.categoryId,
-      });
-    }
-    emit("success");
-  } catch {
-    error.value = "Не удалось сохранить тир";
-  } finally {
-    saving.value = false;
-  }
+async function send() {
+  const flags = { ownsRefusal: true, ownsRateLimit: true };
+  const result = props.tier
+    ? await achievementApi.updateAchievementType(
+        props.tier.id,
+        {
+          title: title.value,
+          threshold: threshold.value,
+          tier: tierNumber.value,
+        },
+        flags,
+      )
+    : await achievementApi.createAchievementType(
+        {
+          code: code.value,
+          title: title.value,
+          threshold: threshold.value,
+          tier: tierNumber.value,
+          achievementCategoryId: props.categoryId,
+        },
+        flags,
+      );
+  if (!result.error) emit("success");
+  return result;
 }
 </script>
 
 <template>
-  <Dialog narrow>
+  <Dialog
+    :action="send"
+    failure="Не удалось сохранить тир"
+    @close="emit('cancel')"
+  >
     <DialogTitle>{{ tier ? `Тир: ${tier.code}` : "Новый тир" }}</DialogTitle>
 
-    <Form
-      :valid="canSubmit"
-      :loading="saving"
-      action="Сохранить"
-      cancel="Отмена"
-      @submit="submit"
-      @cancel="emit('cancel')"
-    >
+    <Form :valid="canSubmit" action="Сохранить" cancel="Отмена">
       <FormField
         v-if="!tier"
         label="Code (стабильный, например POSTS_100)"
         name="tier-code"
-        :errors="error ? [error] : []"
+        field="code"
       >
         <input
           id="tier-code"
@@ -97,11 +92,7 @@ async function submit() {
         />
       </FormField>
 
-      <FormField
-        label="Название"
-        name="tier-title"
-        :errors="tier && error ? [error] : []"
-      >
+      <FormField label="Название" name="tier-title" field="title">
         <input
           id="tier-title"
           v-model="title"
@@ -111,7 +102,7 @@ async function submit() {
         />
       </FormField>
 
-      <FormField label="Порог" name="tier-threshold">
+      <FormField label="Порог" name="tier-threshold" field="threshold">
         <input
           id="tier-threshold"
           v-model.number="threshold"
@@ -121,7 +112,7 @@ async function submit() {
         />
       </FormField>
 
-      <FormField label="Tier (1-4)" name="tier-number">
+      <FormField label="Tier (1-4)" name="tier-number" field="tier">
         <input
           id="tier-number"
           v-model.number="tierNumber"

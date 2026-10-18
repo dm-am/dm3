@@ -83,7 +83,8 @@ public class WebAuthenticationServiceShould : UnitTestBase
     {
         var handedOver = new TaskCompletionSource();
         sender
-            .SendAsync(Email, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>()).Returns(handedOver.Task);
+            .SendAsync(Email, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>())
+            .Returns(handedOver.Task);
 
         var login = service.Authenticate(Credentials(), Context());
 
@@ -94,14 +95,15 @@ public class WebAuthenticationServiceShould : UnitTestBase
         handedOver.SetResult();
         await login;
 
-        await sender.Received(1).SendAsync(Email, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
+        await sender.Received(1).SendAsync(
+            Email, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>());
     }
 
     [Fact]
     public async Task KeepTheLoginWhenTheBrokerRefusesTheLetter()
     {
         sender
-            .SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
+            .SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>())
             .ThrowsAsync(new BrokerUnreachableException(new Exception("connection refused")));
 
         var identity = await service.Awaiting(s => s.Authenticate(Credentials(), Context()))
@@ -119,7 +121,7 @@ public class WebAuthenticationServiceShould : UnitTestBase
     public async Task CountTheLetterItSwallowed()
     {
         sender
-            .SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>())
+            .SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>())
             .ThrowsAsync(new BrokerUnreachableException(new Exception("connection refused")));
 
         var events = new List<string?>();
@@ -177,8 +179,8 @@ public class WebAuthenticationServiceShould : UnitTestBase
 
         await service.Authenticate(Credentials(), Context());
 
-        await sender.DidNotReceive().SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
-            Arg.Any<string>());
+        await sender.DidNotReceive().SendAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>());
         await audit.DidNotReceive().LogAsync(Arg.Any<Guid>(), Arg.Any<SecurityEventType>(), Arg.Any<string>(),
             Arg.Any<string>(), Arg.Any<string>());
         await events.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());

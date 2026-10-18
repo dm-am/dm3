@@ -29,7 +29,8 @@ export type ChatType = "Direct" | "Group" | "Global";
 export type MessageEdit = {
   id: string;
   modifiedUtc: string;
-  editor: User;
+  /** Null when the editor's account was removed. */
+  editor: User | null;
 };
 
 /**
@@ -41,11 +42,24 @@ export type Message = {
   id: Served<MessageId>;
   createdUtc: Served<string>;
   modifiedUtc: Served<string | null>;
-  author: Served<User>;
+  /** Null when the author's account was removed: the message stays, unsigned. */
+  author: Served<User | null>;
   text: string;
   isRemoved: boolean;
   deletedBy: User | null;
   deletedUtc: string | null;
   likes: User[];
   edits: MessageEdit[];
+};
+
+/**
+ * The reader's own total of unread messages, over every conversation they are
+ * in. GET v1/chats/unread answers it inside an Envelope.
+ *
+ * The name is what pairs the mirror with the published schema
+ * DM.Web.API.Features.Messaging.Chats.ChatUnreadCount in contract.spec.ts, so
+ * it follows the DTO and not whatever the screen showing it is called.
+ */
+export type ChatUnreadCount = {
+  count: number;
 };

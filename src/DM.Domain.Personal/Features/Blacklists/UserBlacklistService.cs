@@ -108,36 +108,4 @@ internal class UserBlacklistService : IUserBlacklistService
         }
     }
 
-    /// <inheritdoc />
-    public async Task<bool> IsBlocked(string username, CancellationToken ct = default)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        var blockedUserId = await _userRepository.FindUserIdAsync(username);
-
-        if (blockedUserId == null)
-        {
-            return false;
-        }
-
-        return await _repository.IsBlockedAsync(userId, blockedUserId.Value, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<BlockStatus> GetBlockStatus(Guid targetUserId, CancellationToken ct = default)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-
-        var youBlockedThem = await _repository.IsBlockedAsync(userId, targetUserId, ct);
-        var theyBlockedYou = await _repository.IsBlockedAsync(targetUserId, userId, ct);
-
-        // Don't reveal if they blocked you - privacy protection
-        // Show generic message instead of "TheyBlockedYou"
-        return (youBlockedThem, theyBlockedYou) switch
-        {
-            (true, _) => new BlockStatus { CanCommunicate = false, Reason = "YouBlockedThem" },
-            (false, true) => new BlockStatus { CanCommunicate = false, Reason = "CannotCommunicate" },
-            _ => new BlockStatus { CanCommunicate = true, Reason = null }
-        };
-    }
-
 }

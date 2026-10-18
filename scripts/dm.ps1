@@ -1,10 +1,10 @@
 # DM3 Management Script (Windows PowerShell)
-# Usage: .\scripts\dm.ps1 <command>
-# Commands: start, stop, reset, seed, status, logs
+# Usage: powershell -File .\scripts\dm.ps1 <command>
+# Commands: start, stop, reset, seed, e2e, status, logs
 
 param(
     [Parameter(Position=0)]
-    [ValidateSet('start', 'stop', 'reset', 'seed', 'status', 'logs', 'help')]
+    [ValidateSet('start', 'stop', 'reset', 'seed', 'e2e', 'status', 'logs', 'help')]
     [string]$Command = 'help',
 
     [Parameter(Position=1)]
@@ -183,24 +183,26 @@ function Show-Help {
     Write-Host @"
 DM3 Management Script
 
-Usage: .\scripts\dm.ps1 <command> [service]
+Usage: powershell -File .\scripts\dm.ps1 <command> [service]
 
 Commands:
   start     Start all Docker services (infrastructure + API)
   stop      Stop all Docker services
   reset     Stop, clear databases, and restart
   seed      Run seed scripts (requires running API)
+  e2e       Recreate the API the way the e2e suite needs it: rate limiting off
   status    Show status of all services, docker and host processes alike
   logs      Show logs (optionally for specific service)
   help      Show this help
 
 Examples:
-  .\scripts\dm.ps1 start          # Start everything
-  .\scripts\dm.ps1 stop           # Stop everything
-  .\scripts\dm.ps1 reset          # Fresh start with clean DB
-  .\scripts\dm.ps1 seed           # Populate test data
-  .\scripts\dm.ps1 logs dm-api    # Show API logs
-  .\scripts\dm.ps1 status         # Check what's running
+  powershell -File .\scripts\dm.ps1 start          # Start everything
+  powershell -File .\scripts\dm.ps1 stop           # Stop everything
+  powershell -File .\scripts\dm.ps1 reset          # Fresh start with clean DB
+  powershell -File .\scripts\dm.ps1 seed           # Populate test data
+  powershell -File .\scripts\dm.ps1 e2e            # Stand for the e2e suite and the pre-push hook
+  powershell -File .\scripts\dm.ps1 logs dm-api    # Show API logs
+  powershell -File .\scripts\dm.ps1 status         # Check what's running
 
 Environment:
   Docker Compose: $DockerDir\docker-compose.yml
@@ -438,7 +440,7 @@ function Start-Services {
         }
 
         if (-not (Wait-ServicesHealthy -Label "Infrastructure" -Services $infraServices -TimeoutSeconds 120)) {
-            Write-Host "    Logs: .\scripts\dm.ps1 logs" -ForegroundColor DarkGray
+            Write-Host "    Logs: powershell -File .\scripts\dm.ps1 logs" -ForegroundColor DarkGray
             exit 1
         }
 
@@ -471,7 +473,7 @@ function Start-Services {
         }
 
         if (-not (Wait-ServicesHealthy -Label "Applications" -Services $appServices -TimeoutSeconds 90)) {
-            Write-Host "    Logs: .\scripts\dm.ps1 logs" -ForegroundColor DarkGray
+            Write-Host "    Logs: powershell -File .\scripts\dm.ps1 logs" -ForegroundColor DarkGray
             exit 1
         }
 
@@ -488,9 +490,12 @@ function Start-Services {
         Write-Host "  Jaeger     http://localhost:16686" -ForegroundColor DarkGray
         Write-Host ""
         Write-Host "  Test data: " -ForegroundColor DarkGray -NoNewline
-        Write-Host ".\scripts\dm.ps1 seed"
+        Write-Host "powershell -File .\scripts\dm.ps1 seed"
         Write-Host "  Frontend:  " -ForegroundColor DarkGray -NoNewline
-        Write-Host "cd `"$ProjectRoot\src\DM.Web.Client`" && npm run dev"
+        # --prefix instead of "cd ... && npm run dev": Windows PowerShell, the
+        # shell this script runs under, rejects && as a statement separator, and
+        # npm starts the script in the package directory either way.
+        Write-Host "npm --prefix `"$ProjectRoot\src\DM.Web.Client`" run dev"
         Write-Host ""
     } finally {
         Pop-Location
@@ -616,7 +621,7 @@ function Invoke-Seed {
     # anonymous. /_health is what the container healthcheck and CI already ask.
     $curlResult = curl.exe -s -o NUL -w "%{http_code}" "http://localhost:5000/_health" 2>$null
     if ($curlResult -ne "200") {
-        Write-Host "  API not available. Run first: .\scripts\dm.ps1 start" -ForegroundColor Red
+        Write-Host "  API not available. Run first: powershell -File .\scripts\dm.ps1 start" -ForegroundColor Red
         Write-Host ""
         exit 1
     }
@@ -660,6 +665,63 @@ function Invoke-Seed {
     Write-Host ""
 }
 
+# The API the way the end-to-end suite meets it in CI: this tree's build, with
+# rate limiting off. One page load is a dozen and more API requests against a
+# budget of a hundred per address per minute, so under the limits the suite
+# fails on 429s that read exactly like stale selectors. CI switches them off
+# with a compose overlay written in the e2e job of .github/workflows/dotnet.yml;
+# this writes the same switch into a temporary file rather than into docker/,
+# because the files there are the set that gets deployed and a switch that must
+# never reach a server does not belong among them.
+#
+# The preview origin the CI overlay also lets in needs nothing here: the local
+# stack runs Development, and the API admits both development ports there.
+#
+# Only the API is recreated. The next "start" recreates it without the overlay,
+# which is how the limits come back. scripts/check-e2e-stand.sh reads the same
+# variable off the running container before the pre-push hook runs the suite.
+function Start-EndToEndStand {
+    Write-Host ""
+    Write-Host "DM3 E2E" -ForegroundColor Cyan
+    Write-Host ""
+
+    # The commit the image is built on, written into the container for
+    # scripts/check-e2e-stand.sh: nothing rebuilds the API after this, and a
+    # server change committed later would be pushed without the suite ever
+    # meeting it.
+    $sourceCommit = & git -C $ProjectRoot rev-parse HEAD 2>$null
+    if (-not $sourceCommit) { $sourceCommit = "unknown" }
+
+    $overlay = Join-Path ([System.IO.Path]::GetTempPath()) "dm3-e2e-overlay.yml"
+    Set-Content -Path $overlay -Encoding ASCII -Value @(
+        "services:",
+        "  dmapi:",
+        "    environment:",
+        "      DM_RateLimiting__Enabled: `"false`"",
+        "      E2E_SOURCE_COMMIT: `"$sourceCommit`""
+    )
+
+    Push-Location $DockerDir
+    try {
+        $arguments = "compose -f docker-compose.yml -f `"$overlay`" up -d --build --no-deps --wait dmapi"
+        if (-not (Invoke-WithAnimation -Label "API for e2e" -Command $script:DockerPath -Arguments $arguments)) {
+            Write-Host "    Logs: powershell -File .\scripts\dm.ps1 logs dm-api" -ForegroundColor DarkGray
+            exit 1
+        }
+    } finally {
+        Pop-Location
+        Remove-Item -Path $overlay -ErrorAction SilentlyContinue
+    }
+
+    Write-Host ""
+    Write-Host "Ready!" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  Rate limiting is off until the next start." -ForegroundColor DarkGray
+    Write-Host "  Suite:     " -ForegroundColor DarkGray -NoNewline
+    Write-Host "npm --prefix `"$ProjectRoot\src\DM.Web.Client`" run test:e2e:fast"
+    Write-Host ""
+}
+
 # Everything the stack runs outside docker. The status screen knew only about
 # containers, so a second dev server on the next port up, or a pile of build
 # nodes holding a gigabyte, were invisible on the one screen that exists to say
@@ -686,16 +748,23 @@ function Show-HostProcesses {
         $command = $process.CommandLine
         if (-not $command) { continue }
 
+        # Each kind is known by the script it runs. A bare 'vite' matched every
+        # vitest worker and the type check of tsconfig.vitest.json as well, and one
+        # test run came out as a dozen dev servers and the warning that two were
+        # up. A build runs the same vite.js as a server and is told apart by its
+        # command: it holds no port and is gone in a minute, so it is not listed.
         $kind = $null
-        if ($command -match 'vite') { $kind = 'vite dev server' }
+        if ($command -match '[\\/]vitest[\\/]') { $kind = 'vitest' }
+        elseif ($command -match '[\\/]vite[\\/]bin[\\/]vite\.js"?\s+build\b') { $kind = 'vite build' }
+        elseif ($command -match '[\\/]vite[\\/]bin[\\/]vite\.js') { $kind = 'vite dev server' }
         elseif ($command -match 'MSBuild\.dll') { $kind = 'msbuild node' }
         elseif ($command -match 'VBCSCompiler|Roslyn') { $kind = 'roslyn server' }
         elseif ($command -match 'testhost') { $kind = 'test host' }
-        if (-not $kind) { continue }
+        if (-not $kind -or $kind -eq 'vite build') { continue }
 
         # Someone else's node is not this project's business: the walk is over the
         # whole machine, so the repository path is what tells them apart.
-        if ($kind -eq 'vite dev server' -and $command -notmatch 'dm3') { continue }
+        if (($kind -eq 'vite dev server' -or $kind -eq 'vitest') -and $command -notmatch 'dm3') { continue }
 
         $ports = if ($listeners.ContainsKey([int]$process.ProcessId)) {
             ($listeners[[int]$process.ProcessId] | Sort-Object) -join ', '
@@ -738,6 +807,12 @@ function Show-HostProcesses {
         Write-Host "    [!] two dev servers are up: the tab shows whichever port it points at" -ForegroundColor Yellow
     }
 
+    # A test run is a parent and its workers, gone when the run ends: one line.
+    $testRuns = @($rows | Where-Object { $_.Kind -eq 'vitest' })
+    if ($testRuns.Count -gt 0) {
+        Write-Host ("    [~] vitest, {0} process(es) - a client test run" -f $testRuns.Count) -ForegroundColor DarkGray
+    }
+
     $builders = @($rows | Where-Object { $_.Kind -eq 'msbuild node' -or $_.Kind -eq 'roslyn server' })
     if ($builders.Count -gt 0) {
         $megabytes = 0
@@ -760,7 +835,7 @@ function Show-Status {
 
     if (-not $containers) {
         Write-Host "  No containers running." -ForegroundColor Yellow
-        Write-Host "  Run: .\scripts\dm.ps1 start" -ForegroundColor DarkGray
+        Write-Host "  Run: powershell -File .\scripts\dm.ps1 start" -ForegroundColor DarkGray
         Write-Host ""
         Show-HostProcesses
         return
@@ -852,6 +927,7 @@ switch ($Command) {
     'stop'   { Stop-Services }
     'reset'  { Reset-Services }
     'seed'   { Invoke-Seed }
+    'e2e'    { Start-EndToEndStand }
     'status' { Show-Status }
     'logs'   { Show-Logs }
     'help'   { Show-Help }

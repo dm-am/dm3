@@ -21,7 +21,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// and all rooms of a game shared one address - the seed, which writes its
 /// numbers by hand, was the only place the feature looked like it worked.
 /// The number is allocated as MAX+1, which two creates read alike unless
-/// creation is serialized per game.
+/// creation is serialized per game. So is the place of a new room in the list
+/// of the game, its OrderNumber.
 /// </summary>
 public class RoomNumberAllocationShould : IntegrationTestBase
 {
@@ -70,6 +71,37 @@ public class RoomNumberAllocationShould : IntegrationTestBase
             // The game came with its own first room, so the numbers handed out
             // here start at two.
             rooms.Select(r => r.RoomNumber).Should().BeEquivalentTo(Enumerable.Range(2, Parallelism));
+        }
+        finally
+        {
+            await DropGame(gameId, masterId);
+        }
+    }
+
+    /// <summary>
+    /// Every new room takes the place after the last one. Two rooms that read
+    /// the last place alike share one, and the list then shows them in an
+    /// order no move of the master made.
+    /// </summary>
+    [Fact]
+    public async Task PlaceConcurrentRoomsOfOneGameOneAfterAnother()
+    {
+        var (gameId, masterId) = await CreateGame();
+        try
+        {
+            await Task.WhenAll(Enumerable
+                .Range(0, Parallelism)
+                .Select(i => CreateRoom(gameId, i)));
+
+            using var scope = DatabaseFixture.Factory.Services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+            var places = await dbContext.Rooms
+                .Where(r => r.GameId == gameId)
+                .Select(r => r.OrderNumber)
+                .ToArrayAsync();
+
+            // The room the game came with holds the first place.
+            places.Should().BeEquivalentTo(Enumerable.Range(1, Parallelism + 1).Select(p => (double)p));
         }
         finally
         {
@@ -146,7 +178,6 @@ public class RoomNumberAllocationShould : IntegrationTestBase
             Title = $"Concurrent room {index}",
             Type = RoomType.Default,
             AccessType = RoomAccessType.Open,
-            OrderNumber = index + 2,
         });
     }
 
@@ -191,7 +222,6 @@ public class RoomNumberAllocationShould : IntegrationTestBase
                 Title = "Игровая",
                 Type = RoomType.Default,
                 AccessType = RoomAccessType.Open,
-                OrderNumber = 1,
             });
 
         return (gameId, masterId);
@@ -201,8 +231,6 @@ public class RoomNumberAllocationShould : IntegrationTestBase
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        // The rooms of a game point at each other, so they go in one statement:
-        // PostgreSQL checks the self reference once the whole DELETE is done.
         await dbContext.Database.ExecuteSqlRawAsync(
             """DELETE FROM "Rooms" WHERE "GameId" = {0}""", gameId);
         await dbContext.Database.ExecuteSqlRawAsync(

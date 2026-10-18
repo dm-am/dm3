@@ -48,6 +48,8 @@ public class AvailabilityController : ControllerBase
     /// - IsAvailable: true - Email can be used for registration
     /// - IsAvailable: false, Reason: Taken - Email is used by active user
     /// - IsAvailable: false, Reason: PendingActivation - Email has pending registration
+    ///
+    /// An address held by a removed account answers Taken, like a live one (SECURITY.md).
     /// </remarks>
     /// <param name="request">Email to check</param>
     /// <response code="200">Availability status</response>
@@ -62,7 +64,7 @@ public class AvailabilityController : ControllerBase
     {
         var result = await _availabilityApiService.CheckEmailAvailability(request.Email);
 
-        if (result.Reason is EmailUnavailableReason.Taken or EmailUnavailableReason.PendingActivation)
+        if (result.Reason is not null)
         {
             _logger.IdentifierDisclosed(HttpContext, "check-email", result.Reason.ToString()!);
         }
@@ -94,7 +96,7 @@ public class AvailabilityController : ControllerBase
     {
         var result = await _availabilityApiService.CheckUsernameAvailability(request.Username);
 
-        if (result.Reason is UsernameUnavailableReason.Taken or UsernameUnavailableReason.Reserved)
+        if (result.Reason is UsernameUnavailableReason.Taken)
         {
             _logger.IdentifierDisclosed(HttpContext, "check-username", result.Reason.ToString()!);
         }

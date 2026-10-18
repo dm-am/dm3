@@ -103,31 +103,6 @@ public class GlobalChatController : ControllerBase
         Ok(await _apiService.GetGlobalChatMessageAsync(id));
 
     /// <summary>
-    /// Get quotation source of a global chat message
-    /// </summary>
-    /// <remarks>
-    /// Returns the BBCode a reader's composer is filled with when they quote the
-    /// line, wrapped in a quotation attributed to its author. Open to whoever the
-    /// global chat is open to, which is everyone, for the same reason reading one
-    /// line of it is: the quotation is composed from that very read.
-    ///
-    /// The quotation of a private message stays on `/v1/messages/{id}/quote`,
-    /// which reads it as a participant of its chat. That read has no answer for a
-    /// line of the global chat, and this route is its neighbour rather than a
-    /// move of it.
-    /// </remarks>
-    /// <param name="id">Message identifier</param>
-    /// <response code="200">Returns the quotation source</response>
-    /// <response code="400">Message text could not be parsed</response>
-    /// <response code="404">Message not found in the global chat</response>
-    [HttpGet("messages/{id:guid}/quote", Name = nameof(GetGlobalChatMessageQuote))]
-    [ProducesResponseType(typeof(Envelope<QuoteSource>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetGlobalChatMessageQuote(Guid id) =>
-        Ok(await _apiService.GetGlobalChatMessageQuoteAsync(id));
-
-    /// <summary>
     /// Edit a global chat message
     /// </summary>
     /// <remarks>

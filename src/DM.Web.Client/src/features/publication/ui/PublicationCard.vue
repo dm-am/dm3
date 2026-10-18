@@ -21,11 +21,14 @@
  * passes the id from its own URL so the readable public id survives, and
  * everyone else falls back to the guid the publication carries.
  *
- * The moderator warn action is not wired.
+ * The moderator warn action is not wired. "Редактировать" is a link to the
+ * edit page, handed in by the page that renders the card: the card does not
+ * know who may edit, the feed does (the blog it manages).
  *
  * Liking is owned HERE rather than by the consumers, which is where it
- * differs from TopicView and CommentItem: those emit up because a store
- * owns the list they sit in. A publication has no such owner — the blog
+ * differs from TopicView and CommentItem: TopicView emits up and CommentItem
+ * calls a function its list hands in, because a store owns the list they sit
+ * in. A publication has no such owner — the blog
  * feed reads the blog-details store, the profile spotlight keeps a single
  * publication in a local ref — so emitting up would mean writing the same
  * request twice. The likers list is therefore a local copy of the prop,
@@ -33,13 +36,15 @@
  * writes into its parent's data.
  */
 import { computed, ref, watch } from "vue";
+import type { RouteLocationRaw } from "vue-router";
 import { storeToRefs } from "pinia";
 import { blogApi } from "@/entities/blog";
 import type { Publication } from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
 import type { User } from "@/shared/api/models/common";
 import { unwrapResource } from "@/shared/api";
-import { notifyFailure } from "@/shared/lib/errors";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { ActionResult } from "@/shared/ui/ActionResult";
 import { TopicCard } from "@/features/topic/@x/publication";
 
 const props = withDefaults(
@@ -61,11 +66,14 @@ const props = withDefaults(
      * falls back to the guid the publication carries: both open the blog.
      */
     blogId?: string;
+    /** The edit page of the publication, for a viewer who may edit it. */
+    editTo?: RouteLocationRaw | null;
   }>(),
   {
     truncatable: false,
     standalone: false,
     blogId: undefined,
+    editTo: null,
   },
 );
 
@@ -114,13 +122,18 @@ const canLike = computed(
 // and a second click would race the first into a duplicate like.
 const busy = ref(false);
 
+// A refused like changes nothing on the heart, so a line under the card says
+// it, where the press was (the topic of the forum says it the same way).
+const likeResult = useActionResult();
+
 async function toggleLike() {
   if (busy.value || !canLike.value) return;
   busy.value = true;
+  likeResult.clear();
   if (isLikedByMe.value) {
     const { error } = await blogApi.unlikePublication(props.publication.id);
     if (error) {
-      notifyFailure(error, "Не удалось убрать лайк");
+      likeResult.refuse(error, "Не удалось убрать лайк");
     } else {
       const me = currentUser.value?.username;
       likes.value = likes.value.filter((u) => u.username !== me);
@@ -129,7 +142,7 @@ async function toggleLike() {
     const { data, error } = await blogApi.likePublication(props.publication.id);
     const liker = unwrapResource<User>(data);
     if (error) {
-      notifyFailure(error, "Не удалось поставить лайк");
+      likeResult.refuse(error, "Не удалось поставить лайк");
     } else if (liker) {
       likes.value = [...likes.value, liker];
     }
@@ -153,7 +166,9 @@ async function toggleLike() {
     :likes="likes"
     :can-like="canLike"
     :is-liked-by-me="isLikedByMe"
+    :edit-to="editTo"
     :truncatable="truncatable"
     @toggle-like="toggleLike"
   />
+  <ActionResult :result="likeResult" />
 </template>

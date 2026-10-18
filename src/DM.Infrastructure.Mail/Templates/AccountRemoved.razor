@@ -1,0 +1,21 @@
+@*
+    Письмо о свершившемся удалении.
+
+    Удаляет модерация, и отменить это из ящика нельзя. Дорога назад одна,
+    обращение в поддержку: аккаунт возвращает тоже модерация, а входа у
+    удаленного аккаунта нет, поэтому кнопка ведет на форму обращения.
+*@
+<EmailLayout Title="Аккаунт удален">
+    <p style="@EmailConstants.ParagraphStyles">
+        Если аккаунт был удален по ошибке, то вы можете обратиться в поддержку
+    </p>
+    <ActionButton Url="@Model.SupportUrl">Написать в поддержку</ActionButton>
+</EmailLayout>
+
+@code {
+
+    /// <summary>Данные письма</summary>
+    [Parameter]
+    public AccountRemovedViewModel Model { get; set; } = null!;
+
+}

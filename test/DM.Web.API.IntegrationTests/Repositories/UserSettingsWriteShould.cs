@@ -21,7 +21,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// enough to lose the theme. The channel write is one INSERT ... ON CONFLICT
 /// now, whose update arm names only its own column, and the race of two
 /// creators is settled by the server. A partial row is unrepresentable — every
-/// paging column is NOT NULL (INV-9) — which is what buried the null-Paging
+/// paging column is NOT NULL — which is what buried the null-Paging
 /// repair branches. All of that exists only against a live Postgres, hence the
 /// container.
 /// </remarks>
@@ -113,8 +113,8 @@ public class UserSettingsWriteShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// INV-9 as the schema states it: the paging columns refuse NULL, so the
-    /// state that used to answer 500 on every request cannot be written at all.
+    /// The paging columns refuse NULL, so the state that used to answer 500 on
+    /// every request cannot be written at all.
     /// </summary>
     [Fact]
     public async Task RefuseAPartialRow()

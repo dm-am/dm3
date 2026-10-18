@@ -37,10 +37,15 @@ internal class CharacterIntentionResolver :
                                                         target.Status == CharacterStatus.Declined,
             CharacterIntention.Decline when gameOwned => target.Status == CharacterStatus.UnderReview,
             CharacterIntention.Kill when gameOwned => target.Status == CharacterStatus.Active,
-            CharacterIntention.Resurrect when gameOwned => target.Status == CharacterStatus.Retired && target.IsDead,
+            // Each way back undoes one move of the lead and nothing else. A character
+            // its player took out of the game comes back by neither, even when the
+            // lead had also marked it dead or exiled: leaving is final.
+            CharacterIntention.Resurrect when gameOwned => target.Status == CharacterStatus.Retired &&
+                                                           target.IsDead && !target.IsPlayerLeft,
+            CharacterIntention.Readmit when gameOwned => target.Status == CharacterStatus.Retired &&
+                                                         target.IsPlayerExiled && !target.IsPlayerLeft,
             CharacterIntention.Exile when gameOwned => target.Status == CharacterStatus.Active,
             CharacterIntention.Leave when characterOwned => target.Status == CharacterStatus.Active,
-            CharacterIntention.Return when characterOwned => target.Status == CharacterStatus.Retired && target.IsPlayerLeft,
             _ => false
         };
     }

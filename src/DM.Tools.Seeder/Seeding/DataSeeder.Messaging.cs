@@ -308,8 +308,14 @@ internal sealed partial class DataSeeder
 
         // Events are created by a SeniorModerator (matches the Create intention)
         var organizer = users.FirstOrDefault(u => u.Role == UserRole.SeniorModerator) ?? users[0];
-        // Invited participants for closed events (regular test accounts)
-        var invitees = users.Where(u => u.Role == UserRole.RegularUser).Take(2).ToList();
+        // Invited participants for closed events (regular test accounts). The
+        // organiser is excluded: with no SeniorModerator in the set the line above
+        // falls back to the first user, and one person on one event's list twice is
+        // a unique violation that fails the whole seed.
+        var invitees = users
+            .Where(u => u.Role == UserRole.RegularUser && u.UserId != organizer.UserId)
+            .Take(2)
+            .ToList();
 
         // Desired state after every reseed: ONE OPEN Live event running right
         // now (exercises the in-frame live banner without locking the chat

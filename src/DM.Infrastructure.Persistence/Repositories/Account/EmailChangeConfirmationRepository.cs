@@ -32,13 +32,19 @@ internal class EmailChangeConfirmationRepository : IEmailChangeConfirmationRepos
     }
 
     /// <inheritdoc />
-    public async Task MarkTokenUsed(Guid tokenId)
+    public Task MarkTokenUsed(Guid secret)
     {
-        var token = await _dbContext.Tokens.FindAsync(tokenId);
-        if (token != null)
-        {
-            token.IsRemoved = true;
-            await _dbContext.SaveChangesAsync();
-        }
+        // By the hash, because that is the only half of the link the table holds.
+        // Searched by row identifier this matched nothing whatever was handed in -
+        // the letter carries the secret, and the identifier is a second value the
+        // caller never sees - so the write ran over an empty set and the link the
+        // confirmation had just spent stayed live.
+        //
+        // No age in the predicate: a link is spent whenever it is redeemed, and
+        // whether it was still within its window is the lookup's question.
+        var hash = ConfirmationSecret.Hash(secret);
+        return _dbContext.Tokens
+            .Where(t => t.SecretHash == hash && t.Type == TokenType.EmailChange && !t.IsRemoved)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true));
     }
 }

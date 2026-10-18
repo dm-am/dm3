@@ -25,8 +25,7 @@ public class CreatePublicationValidatorShould : UnitTestBase
             Title = "My Publication",
             Content = "Publication content",
             Preview = "Short preview",
-            PublishImmediately = true,
-            CommentsEnabled = true
+            PublishImmediately = true
         };
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();

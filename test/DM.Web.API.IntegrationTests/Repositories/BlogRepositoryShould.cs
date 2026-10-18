@@ -43,7 +43,6 @@ public class BlogRepositoryShould : IntegrationTestBase
             OwnerId = authorId,
             Title = "Blog for the serial number check",
             DraftVisibility = DraftVisibility.Public,
-            CommentsEnabled = true,
             CreatedUtc = DateTimeOffset.UtcNow,
         });
 
@@ -77,7 +76,6 @@ public class BlogRepositoryShould : IntegrationTestBase
             OwnerId = authorId,
             Title = "Blog for the rubric order check",
             DraftVisibility = DraftVisibility.Public,
-            CommentsEnabled = true,
             CreatedUtc = DateTimeOffset.UtcNow,
         });
 
@@ -128,7 +126,6 @@ public class BlogRepositoryShould : IntegrationTestBase
             OwnerId = authorId,
             Title = "Blog with an invited reader",
             DraftVisibility = DraftVisibility.Private,
-            CommentsEnabled = true,
             CreatedUtc = DateTimeOffset.UtcNow,
         });
 

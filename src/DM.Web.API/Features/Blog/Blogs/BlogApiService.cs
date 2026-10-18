@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Blog.Features.Comments;
+using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -11,6 +13,9 @@ using DM.Web.API.Shared.Dto;
 using ApiPublication = DM.Web.API.Features.Blog.Publications.Publication;
 using ApiCreatePublicationRequest = DM.Web.API.Features.Blog.Publications.CreatePublicationRequest;
 using ApiUpdatePublicationRequest = DM.Web.API.Features.Blog.Publications.UpdatePublicationRequest;
+using ApiPublicationViewer = DM.Web.API.Features.Blog.Publications.PublicationViewer;
+using DomainBlog = DM.Domain.Blog.Features.Blogs.Blog;
+using DomainPublication = DM.Domain.Blog.Features.Publications.Publication;
 
 namespace DM.Web.API.Features.Blog.Blogs;
 
@@ -20,6 +25,8 @@ internal class BlogApiService : IBlogApiService
     private readonly IBlogService _blogService;
     private readonly IPublicationService _publicationService;
     private readonly ISubscriptionService _subscriptionService;
+    private readonly IBlogCommentService _blogCommentService;
+    private readonly IPublicationCommentService _publicationCommentService;
     private readonly BlogMapper _mapper;
 
     /// <inheritdoc />
@@ -27,11 +34,15 @@ internal class BlogApiService : IBlogApiService
         IBlogService blogService,
         IPublicationService publicationService,
         ISubscriptionService subscriptionService,
+        IBlogCommentService blogCommentService,
+        IPublicationCommentService publicationCommentService,
         BlogMapper mapper)
     {
         _blogService = blogService;
         _publicationService = publicationService;
         _subscriptionService = subscriptionService;
+        _blogCommentService = blogCommentService;
+        _publicationCommentService = publicationCommentService;
         _mapper = mapper;
     }
 
@@ -88,21 +99,21 @@ internal class BlogApiService : IBlogApiService
     public async Task<Envelope<Blog>> Get(Guid id)
     {
         var blog = await _blogService.GetAsync(id);
-        return new Envelope<Blog>(_mapper.ToBlog(blog));
+        return new Envelope<Blog>(BlogForViewer(blog));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Blog>> GetByPublicId(string publicId)
     {
         var blog = await _blogService.GetByPublicIdAsync(publicId);
-        return new Envelope<Blog>(_mapper.ToBlog(blog));
+        return new Envelope<Blog>(BlogForViewer(blog));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Blog>> GetByOwnerLogin(string login)
     {
         var blog = await _blogService.GetByOwnerUsernameAsync(login);
-        return new Envelope<Blog>(_mapper.ToBlog(blog));
+        return new Envelope<Blog>(BlogForViewer(blog));
     }
 
     /// <inheritdoc />
@@ -116,7 +127,7 @@ internal class BlogApiService : IBlogApiService
     {
         var createBlog = _mapper.ToCreateBlog(request);
         var blog = await _blogService.Create(createBlog);
-        return new Envelope<Blog>(_mapper.ToBlog(blog));
+        return new Envelope<Blog>(BlogForViewer(blog));
     }
 
     /// <inheritdoc />
@@ -125,7 +136,7 @@ internal class BlogApiService : IBlogApiService
         var updateBlog = _mapper.ToUpdateBlog(request);
         updateBlog.BlogId = id;
         var blog = await _blogService.Update(updateBlog);
-        return new Envelope<Blog>(_mapper.ToBlog(blog));
+        return new Envelope<Blog>(BlogForViewer(blog));
     }
 
     /// <inheritdoc />
@@ -135,14 +146,14 @@ internal class BlogApiService : IBlogApiService
     public async Task<Envelope<Blog>> ChangePremoderation(string id, BlogPremoderationChangeRequest request)
     {
         var updatedBlog = await _blogService.ChangePremoderationAsync(id, request.Transition);
-        return new Envelope<Blog>(_mapper.ToBlog(updatedBlog));
+        return new Envelope<Blog>(BlogForViewer(updatedBlog));
     }
 
     /// <inheritdoc />
     public async Task<Envelope<Blog>> ChangeStatus(string id, BlogStatusChangeRequest request)
     {
         var updatedBlog = await _blogService.ChangeStatusAsync(id, request.Transition);
-        return new Envelope<Blog>(_mapper.ToBlog(updatedBlog));
+        return new Envelope<Blog>(BlogForViewer(updatedBlog));
     }
 
     /// <inheritdoc />
@@ -183,7 +194,7 @@ internal class BlogApiService : IBlogApiService
     public async Task<Envelope<ApiPublication>> GetPublication(Guid publicationId)
     {
         var publication = await _publicationService.GetPublication(publicationId);
-        return new Envelope<ApiPublication>(_mapper.ToPublication(publication));
+        return new Envelope<ApiPublication>(await PublicationForViewer(publication));
     }
 
     /// <inheritdoc />
@@ -191,7 +202,7 @@ internal class BlogApiService : IBlogApiService
     {
         var publication = await _publicationService.GetBestUserPublication(username);
         return new Envelope<ApiPublication?>(
-            publication == null ? null : _mapper.ToPublication(publication));
+            publication == null ? null : await PublicationForViewer(publication));
     }
 
     /// <inheritdoc />
@@ -200,7 +211,7 @@ internal class BlogApiService : IBlogApiService
         var createPublication = _mapper.ToCreatePublication(request);
         createPublication.BlogId = blogId;
         var publication = await _publicationService.CreatePublication(createPublication);
-        return new Envelope<ApiPublication>(_mapper.ToPublication(publication));
+        return new Envelope<ApiPublication>(await PublicationForViewer(publication));
     }
 
     /// <inheritdoc />
@@ -209,9 +220,42 @@ internal class BlogApiService : IBlogApiService
         var updatePublication = _mapper.ToUpdatePublication(request);
         updatePublication.PublicationId = publicationId;
         var publication = await _publicationService.UpdatePublication(updatePublication);
-        return new Envelope<ApiPublication>(_mapper.ToPublication(publication));
+        return new Envelope<ApiPublication>(await PublicationForViewer(publication));
     }
 
     /// <inheritdoc />
     public Task DeletePublication(Guid publicationId) => _publicationService.DeletePublication(publicationId);
+
+    /// <summary>
+    /// One blog as the viewer gets it: the blog, and what he may do in it. A
+    /// list leaves the second half out, so the reads of one blog and the writes
+    /// that return one come through here.
+    /// </summary>
+    /// <remarks>
+    /// Not on the list: the list-shaped reads fill the viewer's subscription
+    /// and the single read does not (BlogIntentionResolver), so the same blog
+    /// could answer two ways, and only the single read is the one a comment is
+    /// refused by.
+    /// </remarks>
+    private Blog BlogForViewer(DomainBlog blog)
+    {
+        var result = _mapper.ToBlog(blog);
+        result.Viewer = new BlogViewer { CanComment = _blogCommentService.MayCreate(blog) };
+        return result;
+    }
+
+    /// <summary>
+    /// One publication as the viewer gets it: the publication, and what he may
+    /// do under it. Asking it reads the blog, which a feed of publications
+    /// would do once a row, so the feed leaves it out.
+    /// </summary>
+    private async Task<ApiPublication> PublicationForViewer(DomainPublication publication)
+    {
+        var result = _mapper.ToPublication(publication);
+        result.Viewer = new ApiPublicationViewer
+        {
+            CanComment = await _publicationCommentService.MayCreateAsync(publication)
+        };
+        return result;
+    }
 }

@@ -6,9 +6,14 @@
  */
 import { onMounted, ref, reactive, type Ref } from "vue";
 import { useModal } from "vue-final-modal";
-import { achievementApi, useContestSeries } from "@/entities/achievement";
+import {
+  achievementApi,
+  awardMetal,
+  metalStyle,
+  useContestSeries,
+} from "@/entities/achievement";
 import type { AwardType } from "@/shared/api/models/achievements";
-import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
+import { SecondaryText } from "@/shared/ui/Layout";
 import { GameIcon } from "@/shared/ui/Icon";
 import AwardTypeEditDialog from "./dialogs/AwardTypeEditDialog.vue";
 import { useRoleGate } from "./lib/useRoleGate";
@@ -53,14 +58,14 @@ async function toggleActive(t: AwardType) {
 </script>
 
 <template>
+  <page-title>Каталог типов наград</page-title>
+
   <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
 
   <section v-else class="award-types-admin">
-    <BlockTitle>Каталог типов наград</BlockTitle>
     <SecondaryText>
-      Timeless каталог: 6 типов, переиспользуются между всеми сериями конкурсов.
-      Деактивация скрывает тип из dropdown при выдаче, исторические награды
-      сохраняются.
+      Типы наград общие для всех серий конкурсов. Скрытый тип не предлагается
+      при выдаче награды, а уже выданные награды этого типа остаются.
     </SecondaryText>
 
     <ul class="types-list">
@@ -73,17 +78,17 @@ async function toggleActive(t: AwardType) {
         <GameIcon
           :name="t.iconName"
           class="type-icon"
-          :class="`tier-${t.tier ?? 0}`"
+          :style="metalStyle(awardMetal(t.tier))"
         />
         <div class="type-info">
           <div class="type-title">
             {{ t.title }}
-            <span v-if="t.tier" class="type-tier">tier {{ t.tier }}</span>
+            <span v-if="t.tier" class="type-tier">тир {{ t.tier }}</span>
           </div>
           <div class="type-meta">
             <code>{{ t.code }}</code
             >, <code>{{ t.iconName }}</code
-            >, sort {{ t.sortOrder }}
+            >, <span class="type-order">порядок {{ t.sortOrder }}</span>
           </div>
           <p class="type-desc">{{ t.description }}</p>
         </div>
@@ -124,27 +129,29 @@ async function toggleActive(t: AwardType) {
   padding: $medium
   background: $bg-element
   border: 1px solid $border
-  border-radius: $border-radius
 
   &.is-inactive
     opacity: 0.55
 
+// The codes break where the words do, at the comma, and inside a code only
+// where a column is narrower than one of them.
+.type-info
+  overflow-wrap: anywhere
+
+// The metal the profile draws this award in (see entities/achievement
+// tierMetal); a tier without one stays neutral, as it does there.
 .type-icon
   font-size: 40px
-  color: $heading
-
-  &.tier-1
-    color: var(--award-gold)
-  &.tier-2
-    color: var(--award-silver)
-  &.tier-3
-    color: var(--award-bronze)
-  &.tier-5
-    color: var(--award-diamond)
+  color: var(--tier-metal, $text-muted)
 
 .type-title
   font-weight: 500
   margin-bottom: $tiny
+
+// A number stays with its word: "тир 1", "порядок 3".
+.type-tier,
+.type-order
+  white-space: nowrap
 
 .type-tier
   font-size: $tertiary-font-size

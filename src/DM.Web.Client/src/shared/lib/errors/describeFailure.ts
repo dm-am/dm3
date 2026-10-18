@@ -1,5 +1,5 @@
 import type { BadRequestError, GeneralError } from "@/shared/api/models/common";
-import { readValidationCode } from "./validationErrors";
+import { readFieldErrors, type FieldLabels } from "./validationErrors";
 
 /**
  * The best sentence available for a failed request.
@@ -17,23 +17,21 @@ import { readValidationCode } from "./validationErrors";
  * wrong current password and a new password that broke the policy produced the
  * same sentence — and those call for opposite corrections. The server had said
  * which was which the whole time.
+ *
+ * @param labels The screen's labels of the fields the request sent, by the
+ * name the server gives them, so a refused field is named in the sentence
+ * ("Система: не заполнено") and not left for the reader to find
  */
 export function describeFailure(
   error: GeneralError | BadRequestError,
   fallback: string,
+  labels?: FieldLabels,
 ): string {
   const fields = (error as BadRequestError).errors;
 
   if (fields) {
-    const readable = Object.values(fields)
-      .map((codes) => codes?.[0])
-      .filter((code): code is string => !!code)
-      .map(readValidationCode);
-
-    // Deduplicated: two fields failing the same rule is one thing to fix, and
-    // repeating the sentence reads like two separate problems.
-    const unique = [...new Set(readable)];
-    if (unique.length) return unique.join(". ");
+    const readable = readFieldErrors(fields, labels);
+    if (readable) return readable;
   }
 
   if (error.title) return error.title;

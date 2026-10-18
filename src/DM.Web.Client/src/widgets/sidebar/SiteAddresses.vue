@@ -18,12 +18,14 @@
 
          No words about state anywhere visible, and no mark of "the one you
          are on": the numbers say it. The words exist only where a pointer or
-         a screen reader asks — the scale's title, and a visually-hidden
-         status span closing the row. The scale and the visible ms cell are
+         a screen reader asks — the site's Tooltip on the scale (the browser's
+         own title bubble is not the site's, and it never showed for a touch
+         or a keyboard), and a visually-hidden status span closing the row. The scale and the visible ms cell are
          aria-hidden (the hidden span reads the same fact once); the link
-         alone names the row. The dash of the ms cell is drawn from the first
-         render in the same reserved track, so nothing jumps when the
-         measurement lands.
+         alone names the row. The ms cell is drawn from the first render in
+         the same reserved track - "..." while the measurement is out, "нет"
+         when the address does not answer - so nothing jumps when the number
+         lands.
 
          The decorative "- " of the neighbouring blocks is gone: these rows
          are cells of a board now, not lines of a list. The mark sits BESIDE
@@ -34,7 +36,14 @@
          selection, so a row still copies as "<имя>" with at most the ms
          figure the visitor selected on purpose. -->
     <li class="site-addresses">
-      <template v-for="address in addresses" :key="address.host">
+      <!-- A CSS table (display: table / table-cell), not a grid and not table
+           markup: the board is rows of one kind of thing with columns that must
+           line up, and a table is what copies as such - one line per address,
+           cells apart - where grid items copy as a line each and a converter to
+           markdown glues a whole grid into one bullet. The same idiom the staff
+           table and the expandable lists use, for the same reason. Spans, so a
+           reader hears each link and the status sentence after it, not a table. -->
+      <div v-for="address in addresses" :key="address.host" class="address-row">
         <span class="address-cell"
           ><span
             v-if="'icon' in address.mark"
@@ -48,30 +57,32 @@
             class="address-link"
             :href="`https://${address.host}${route.fullPath}`"
             >{{ address.name }}</a
+          ><span
+            v-if="statusText(address.host) !== null"
+            class="visually-hidden address-status"
+            >{{ statusText(address.host) }}</span
           ></span
         >
-        <span
-          class="signal"
-          :class="{ down: pingOf(address.host).status === 'down' }"
-          :title="statusText(address.host) ?? undefined"
-          aria-hidden="true"
-        >
-          <span
-            v-for="bar in 4"
-            :key="bar"
-            class="bar"
-            :class="{ filled: bar <= filledBars(address.host) }"
-          ></span>
+        <span class="signal-cell">
+          <Tooltip :text="scaleTitle(address.host) ?? undefined" focusable>
+            <span
+              class="signal"
+              :class="{ down: pingOf(address.host).status === 'down' }"
+              aria-hidden="true"
+            >
+              <span
+                v-for="bar in 4"
+                :key="bar"
+                class="bar"
+                :class="{ filled: bar <= filledBars(address.host) }"
+              ></span>
+            </span>
+          </Tooltip>
         </span>
         <span class="latency" aria-hidden="true">{{
           latencyText(address.host)
         }}</span>
-        <span
-          v-if="statusText(address.host) !== null"
-          class="visually-hidden address-status"
-          >{{ statusText(address.host) }}</span
-        >
-      </template>
+      </div>
     </li>
   </SidebarBlock>
 </template>
@@ -80,6 +91,7 @@
 import { useRoute } from "vue-router";
 import SidebarBlock from "./SidebarBlock.vue";
 import { SvgIcon } from "@/shared/ui/Icon";
+import Tooltip from "@/shared/ui/Tooltip/Tooltip.vue";
 import { SITE_ADDRESSES } from "@/shared/config/site";
 import {
   useAddressPing,
@@ -111,54 +123,86 @@ function filledBars(host: string): number {
   return 4 - SIGNAL_STEPS_MS.filter((step) => latency > step).length;
 }
 
-function latencyText(host: string): string {
-  const ping = pingOf(host);
-  return ping.status === "up" && ping.latencyMs !== null
-    ? `${ping.latencyMs} мс`
-    : "-";
+// Whole tens, not units: consecutive measurements of one network differ by
+// a few milliseconds, and a figure that changes on every look reads as an
+// event when nothing happened. Tens keep the one job the figure has — telling
+// the two addresses apart when their scales agree.
+function shownMs(latencyMs: number): number {
+  return Math.round(latencyMs / 10) * 10;
 }
 
-// One sentence serves both askers: the pointer hovering the scale (title)
-// and the screen reader closing the row (the visually-hidden span). Null
-// while the first measurement is still in flight — there is nothing honest
-// to claim yet.
+// Three answers to "how many milliseconds": the figure, "..." while the
+// first round trip is still out (the cell is not empty and not a verdict -
+// the measurement is in progress), and "нет" for an address that does not
+// answer (owner's word, 2026-09-07). A dash used to stand in for both, and a
+// dash reads as "no data" for the one and as nothing at all for the other.
+function latencyText(host: string): string {
+  const ping = pingOf(host);
+  if (ping.status === "up" && ping.latencyMs !== null) {
+    return `${shownMs(ping.latencyMs)} мс`;
+  }
+  return ping.status === "down" ? "нет" : "...";
+}
+
+// Two sentences for two askers, because they ask different things. The
+// pointer, finger or focus on the scale asks what the bars are: a speed, and
+// measured from THIS network - the one fact the row cannot say in numbers,
+// and the one a reader would otherwise mistake for server health. The figure
+// is not repeated: it stands right beside the scale. The screen reader,
+// closing the row, asks for the whole state in words, figure included - the
+// ms cell is hidden from it. Both are null while the first measurement is
+// still in flight: there is nothing honest to claim yet, and the tooltip
+// stays away for an empty text.
+function scaleTitle(host: string): string | null {
+  const ping = pingOf(host);
+  if (ping.status === "up" && ping.latencyMs !== null) {
+    return "Скорость ответа из вашей сети";
+  }
+  return ping.status === "down" ? "Не отвечает из вашей сети" : null;
+}
+
 function statusText(host: string): string | null {
   const ping = pingOf(host);
   if (ping.status === "up" && ping.latencyMs !== null) {
-    return `отвечает из вашей сети, ${ping.latencyMs} мс`;
+    return `Отвечает из вашей сети, ${shownMs(ping.latencyMs)} мс`;
   }
-  return ping.status === "down" ? "не отвечает из вашей сети" : null;
+  return ping.status === "down" ? "Не отвечает из вашей сети" : null;
 }
 </script>
 
 <style scoped lang="sass">
-// ONE grid for the block, not a grid per row: the mark, name, signal and ms
-// columns must land on the same x in every row, and only shared tracks
-// guarantee that. The 56px ms track is reserved from the first render so the
-// dash and the number occupy the same place; the trailing 1fr is the air on
-// the right. Every in-flow cell names its column, or auto-placement would
-// fill that air with the next row's mark.
+// One CSS table for the block: the mark-and-name, signal and ms columns land
+// on the same x in every row because a table's columns are shared by nature.
+// No border-spacing - it would pad the table's own edge too - the gaps are
+// cell padding: 14px between columns, $small between rows (a full step above
+// the plain link blocks, the owner's "чуть воздуха": these rows carry a chart
+// and digits, and at $minor they read as one clump). The ms column reserves
+// its width so the "...", the "нет" and the number occupy the same place.
+// Step B2 of the owner's iteration protocol (W3.9): bare rows, no card.
 .site-addresses
-  display: grid
-  grid-template-columns: 24px max-content max-content max-content 1fr
-  column-gap: 14px
-  // $minor, half a step above the plain link blocks: these rows carry a
-  // chart and digits, and at $tiny they read as one clump (variant D).
-  row-gap: $minor
-  // center, not baseline: a row mixes glyph mark, text, bar chart and digits,
+  display: table
+  border-collapse: collapse
+
+.address-row
+  display: table-row
+
+.address-row > *
+  display: table-cell
+  // middle, not baseline: a row mixes glyph mark, text, bar chart and digits,
   // and centering is the only rhythm all four share. The board looked ragged
   // on the owner's screen with everything standing on the text baseline.
-  align-items: center
-  // Step B2 of the owner's iteration protocol (W3.9): bare rows, no card.
-  // B1's box was rejected for the sidebar - its frame carried more weight
-  // than a status block deserves next to the plain link modules.
+  vertical-align: middle
 
-// The link spans the mark and name tracks as ONE grid item: the mark belongs
-// to the link (its colour, its click target), a display: contents anchor
-// would lose its focus outline, and inline flow inside keeps the row copying
-// as "<имя>" in one line, never "mark \n name".
+.address-row > * + *
+  padding-left: 14px
+
+.address-row + .address-row > *
+  padding-top: $small
+
+// The mark stays inside the link's cell, before the name: it belongs to the
+// link (its click target), and inline flow keeps the cell copying as "<имя>".
 .address-cell
-  grid-column: 1 / 3
+  white-space: nowrap
 
 // The mark's slot is the width of its track, and its margin repeats the
 // grid's own column gap, so the name starts exactly where the name track
@@ -212,8 +256,22 @@ function statusText(host: string): string | null {
 // container with no text synthesizes its baseline from the box bottom, so
 // the bars stand on the text baseline like letters. Mute for both the
 // clipboard and the reader — the status span carries the same fact in words.
+// The scale's cell has no text, so no line strut: its content is exactly the
+// comb, and the cell's middle then puts the comb's centre on the row's centre.
+.signal-cell
+  line-height: 0
+
+// The tooltip's trigger holds the scale inside the cell. It belongs to the
+// child component and its root is a fragment, so the parent's scope never
+// reaches it, hence :deep. Inline-flex, not flex: a block-level box inside a
+// cell copies as a line break, and the ms figure then lands on its own line
+// under the name (name, tab, line break, figure); an inline-level box copies as
+// nothing, and the row stays one line.
+.signal-cell :deep(.tooltip-trigger)
+  display: inline-flex
+  vertical-align: top
+
 .signal
-  grid-column: 3
   display: flex
   align-items: flex-end
   gap: 2px
@@ -252,7 +310,7 @@ function statusText(host: string): string | null {
   opacity: $muted-opacity
 
 .latency
-  grid-column: 4
+  width: 56px
   text-align: center
   font-variant-numeric: tabular-nums
   color: $text-muted

@@ -4,7 +4,12 @@
 
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import SortButton from "./SortButton.vue";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 // Mock SvgIcon
 const SvgIconStub = {
@@ -223,6 +228,112 @@ describe("SortButton", () => {
       expect(wrapper.emitted("update:sortOrder")).toBeTruthy();
       expect(wrapper.emitted("update:sortOrder")![0]).toEqual(["asc"]);
       expect(wrapper.emitted("sort-select")).toBeUndefined();
+    });
+  });
+});
+
+// Two sorts on one page. A click counts as past a menu when it lands outside
+// every sort of the page, not outside its own, so a click on the other sort's
+// button leaves the first menu standing. This pins what the page does today.
+describe("SortButton: two on one page", () => {
+  const mountPair = () =>
+    mount(
+      {
+        components: { SortButton },
+        template: `
+          <div>
+            <SortButton class="first" :options="options" sort-by="created" sort-order="desc" />
+            <SortButton class="second" :options="options" sort-by="name" sort-order="asc" />
+            <p class="past">Текст</p>
+          </div>`,
+        data: () => ({
+          options: [
+            { value: "created", label: "Дата" },
+            { value: "name", label: "Название" },
+          ],
+        }),
+      },
+      { attachTo: document.body, global: { stubs: { SvgIcon: SvgIconStub } } },
+    );
+
+  const menuOf = (wrapper: ReturnType<typeof mountPair>, which: string) =>
+    wrapper.find(`.${which} .sort-dropdown`).exists();
+
+  it("opens each menu by its own button", async () => {
+    const wrapper = mountPair();
+
+    await wrapper.get(".second .sort-btn").trigger("click");
+
+    expect(menuOf(wrapper, "first")).toBe(false);
+    expect(menuOf(wrapper, "second")).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("leaves the first menu open when the other sort's button is pressed", async () => {
+    const wrapper = mountPair();
+
+    await wrapper.get(".first .sort-btn").trigger("click");
+    await wrapper.get(".second .sort-btn").trigger("click");
+
+    expect(menuOf(wrapper, "first")).toBe(true);
+    expect(menuOf(wrapper, "second")).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("closes both on a click past them", async () => {
+    const wrapper = mountPair();
+    await wrapper.get(".first .sort-btn").trigger("click");
+    await wrapper.get(".second .sort-btn").trigger("click");
+
+    await wrapper.get(".past").trigger("click");
+
+    expect(menuOf(wrapper, "first")).toBe(false);
+    expect(menuOf(wrapper, "second")).toBe(false);
+    wrapper.unmount();
+  });
+});
+
+// The sort's panel is the site's one menu (_Menu.sass). Moving it onto the
+// shared mixins changed nothing of its look.
+describe("SortButton: the menu of the site", () => {
+  const sort = ruleMap(componentCss(resolve(HERE, "SortButton.vue")));
+
+  it("is the panel it was: the ground, the frame and the 8 above and below", () => {
+    expect(sort.get(".sort-dropdown")).toEqual({
+      position: "absolute",
+      top: "calc(100% + 2px)",
+      right: "0",
+      "z-index": "100",
+      "min-width": "260px",
+      padding: "8px 0",
+      "background-color": "var(--bg-element)",
+      border: "1px solid var(--border)",
+      "border-radius": "8px",
+      "box-shadow": "0 4px 12px var(--shadow-color)",
+    });
+  });
+
+  it("draws its lines, its hint and its rule as the menu of the site", () => {
+    const line = sort.get(".sort-option") ?? {};
+    expect(line).toMatchObject({
+      padding: "8px 16px",
+      "font-size": "14px",
+      color: "var(--text)",
+      transition: "background-color 0.1s ease",
+    });
+    expect(sort.get(".sort-option:hover:not(.selected)")).toEqual({
+      "background-color": "var(--hover-overlay)",
+    });
+    expect(sort.get(".sort-option.selected")).toEqual({
+      "background-color": "var(--selected-overlay)",
+    });
+    expect(sort.get(".sort-option-hint")).toEqual({
+      "font-size": "12px",
+      color: "var(--text-muted)",
+    });
+    expect(sort.get(".sort-divider")).toMatchObject({
+      height: "1px",
+      "background-color": "var(--border)",
     });
   });
 });

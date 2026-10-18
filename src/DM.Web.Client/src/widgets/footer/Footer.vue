@@ -59,9 +59,10 @@
 
 <script setup lang="ts">
 import { SITE_FOUNDED_YEAR } from "@/shared/config/site";
+import { siteTime } from "@/shared/lib/utils/datetime";
 
 // Static value - year doesn't change during session
-const currentYear = new Date().getFullYear();
+const currentYear = siteTime().year();
 
 // Easter egg: rickroll disguised as profile link
 // Only on plain left-click; Ctrl/Shift/Meta+click opens real profile in new tab
@@ -94,6 +95,8 @@ function rickroll(event: MouseEvent) {
   justify-content: center
   align-self: stretch
 
+$footer-strip: url('@/assets/images/decorations/footer-decoration.png')
+
 .footer
   display: flex
   align-items: stretch
@@ -104,6 +107,15 @@ function rickroll(event: MouseEvent) {
   flex-shrink: 0
   overflow: hidden
 
+  // The paper strip covers the footer from its torn edge down to the bottom,
+  // whatever height the footer takes, and the edge is the one of a desktop
+  // at every width. Two layers of one picture: on top the picture at the
+  // footer's desktop height, torn edge and all; under it the same picture as
+  // tall as the footer, of which only the flat paper below the first layer
+  // shows. One layer at the footer's height drew the edge larger than on a
+  // desktop in a footer taller than its picture (a larger text of the
+  // browser); one layer of 150 left the last lines on the bare page under a
+  // hard edge.
   &:before
     content: ''
     position: absolute
@@ -111,8 +123,10 @@ function rickroll(event: MouseEvent) {
     left: 0
     right: 0
     bottom: 0
-    background: url('@/assets/images/decorations/footer-decoration.png') left bottom repeat-x
-    background-size: auto $footer-height
+    background-image: $footer-strip, $footer-strip
+    background-position: left top
+    background-repeat: repeat-x
+    background-size: auto $footer-height, auto 100%
     filter: $filter-invert
 
 .credits
@@ -146,23 +160,15 @@ function rickroll(event: MouseEvent) {
 .legal > div:not(:last-child)
   margin-bottom: $small
 
+// Without the sidebars the columns have nothing to line up with, so each is as
+// wide as its text: the credits on the page's left gutter, the legal links
+// against its right one, and never closer to each other than one gutter.
 @media (max-width: $bp-shell)
   .footer
-    flex-direction: column
-    align-items: stretch
-    min-height: auto
-    // Decoration strip is tuned for a wide single row; relax the fixed
-    // height so stacked columns aren't clipped by it
-    overflow: visible
-    &:before
-      height: $footer-height
+    column-gap: $big
 
   .credits,
   .legal
     width: auto
-    padding: $medium $big
-    align-self: auto
-
-  .legal
-    padding-top: 0
+    flex-shrink: 1
 </style>

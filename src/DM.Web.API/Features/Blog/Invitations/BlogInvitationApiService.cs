@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Blog.Features.Invitations;
 using DM.Web.API.Shared.Dto;
 using DomainBlogInvitation = DM.Domain.Blog.Features.Invitations.BlogInvitation;
@@ -66,7 +67,7 @@ internal class BlogInvitationApiService : IBlogInvitationApiService
         BlogTitle = invitation.BlogTitle,
         InvitedUser = new UserRef { Id = invitation.InvitedUser.UserId, Username = invitation.InvitedUser.Username, LastActivityUtc = invitation.InvitedUser.LastActivityUtc },
         InviterUsername = invitation.InvitedBy.Username,
-        Type = invitation.TargetRole.ToString(),
+        Type = invitation.TargetRole.ToApiString(),
         CreatedUtc = invitation.CreatedUtc,
         ExpiresUtc = invitation.ExpiresUtc
     };

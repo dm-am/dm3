@@ -41,9 +41,4 @@ public class UpdatePublication
     /// Whether the publication is published (null = not changed)
     /// </summary>
     public bool? IsPublished { get; set; }
-
-    /// <summary>
-    /// Whether comments are enabled (null = not changed)
-    /// </summary>
-    public bool? CommentsEnabled { get; set; }
 }

@@ -14,8 +14,17 @@ import {
   type RenderAudience,
 } from "./audience";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { describeFailure } from "@/shared/lib/errors";
+import {
+  ACCESS_DENIED,
+  announceGeneral,
+  announceWorded,
+  describeFailure,
+  describeRateLimit,
+  GENERAL_REASONS,
+  SERVER_ERROR,
+} from "@/shared/lib/errors";
 import { otherSiteAddresses } from "@/shared/config/site";
+import { addressAnswers } from "@/shared/lib/composables/useAddressPing";
 
 type QueryParams = Record<
   string,
@@ -38,19 +47,91 @@ type RequestOptions = {
    * which button was pressed, not why the server said no. Signing in is the
    * exception. There the refusal is the whole answer to the submit — the
    * account is banned, removed, or locked out after too many attempts — it
-   * belongs under the field with the rest of the answer, and the generic
-   * "Недостаточно прав для этого действия" replaced a reason with a sentence
-   * that names nothing.
+   * belongs under the field with the rest of the answer, and the general
+   * plate ("...: недостаточно прав") replaced a reason with a sentence that
+   * names nothing.
    */
   ownsRefusal?: boolean;
+
+  /**
+   * The caller shows the rate limit itself, so the interceptor says nothing
+   * about a 429 on this request.
+   *
+   * A flag of its own rather than a wider reading of `ownsRefusal`: that one is
+   * set on requests that have no opinion at all about a rate limit, and
+   * stretching it over 429 would take their toast away without anyone asking
+   * for it. What earns this flag is a form the reader presses again — the way
+   * in, above all — where the answer belongs in the form's own strip, with the
+   * wait running down on the button, and a toast beside that is the same
+   * refusal said twice.
+   */
+  ownsRateLimit?: boolean;
+
+  /**
+   * The request asks whether there is a session at all, so a 401 is an answer
+   * ("nobody") and not a session that ran out: the interceptor neither says
+   * "Сессия истекла" nor hands the event to the app.
+   *
+   * The one caller is the start of the page with no viewer stored in the
+   * browser: the cookie may still hold a session the page knows nothing about,
+   * and every guest who asks gets the 401 that says so. Read as an expiry, that
+   * answer put a warning in front of every guest on every visit.
+   */
+  probesSession?: boolean;
 };
 
 /** An axios config with this client's own options riding along on it. */
 type TaggedRequest = AxiosRequestConfig & RequestOptions;
 
+/**
+ * The flags a call site sets, in the shape axios carries to the interceptor.
+ *
+ * Every method takes them, not only post: a page that shows a failed load in
+ * its own strip is exactly the case the flag exists for, and until now only a
+ * press could claim it. The result was the same sentence in two places at
+ * once - once in the strip, once in a plate over it.
+ */
+const tagged = (options?: RequestOptions): TaggedRequest => ({
+  ownsRefusal: options?.ownsRefusal,
+  ownsRateLimit: options?.ownsRateLimit,
+  probesSession: options?.probesSession,
+});
+
 /** Whether the request that failed said it would show the refusal itself. */
 function ownsRefusal(request?: AxiosRequestConfig): boolean {
   return Boolean((request as TaggedRequest | undefined)?.ownsRefusal);
+}
+
+/** Whether the request that failed said it would show the rate limit itself. */
+function ownsRateLimit(request?: AxiosRequestConfig): boolean {
+  return Boolean((request as TaggedRequest | undefined)?.ownsRateLimit);
+}
+
+/** Whether the request that failed was asking if there is a session at all. */
+function probesSession(request?: AxiosRequestConfig): boolean {
+  return Boolean((request as TaggedRequest | undefined)?.probesSession);
+}
+
+/**
+ * Whole seconds off the Retry-After header, or undefined when the server named
+ * no usable number.
+ *
+ * The API writes the value as a count of seconds (RateLimitingExtensions,
+ * OnRejected) and the edge exposes the header by name, so the HTTP-date form of
+ * the header never arrives here and nothing else has to be parsed. Anything
+ * else — a missing header, a header the CORS policy hid, a zero — reads as
+ * "the server did not say", and the sentence without a number is what stands.
+ */
+function retryAfterSeconds(response: AxiosResponse): number | undefined {
+  const header = response.headers?.["retry-after"];
+  if (header === undefined || header === null || header === "") {
+    return undefined;
+  }
+
+  const seconds = Number(header);
+  return Number.isFinite(seconds) && seconds > 0
+    ? Math.ceil(seconds)
+    : undefined;
 }
 
 /**
@@ -127,26 +208,132 @@ export function apiUrl(path: string): string {
  * `error.title || "не удалось ..."`, and the page knows what it was doing
  * better than a generic sentence here would.
  */
+/**
+ * What a reader is told when a request came back with nothing at all.
+ *
+ * It names the site: "Этот адрес не отвечает" said which of two things was
+ * silent only to someone who already knew the site has two addresses.
+ */
+const UNREACHABLE = "Сайт не отвечает по этому адресу";
+
+/** One probe at a time: a dead network fails every request in flight. */
+let probingOtherAddress = false;
+
+/**
+ * Says that the request never arrived, and offers the other address only when
+ * that one is proven to answer.
+ *
+ * Nothing came back, and from here two different worlds look identical: the
+ * server is down, or the road to this address is closed for this reader. Only
+ * the second one the other address can fix, and offering it in the first case
+ * sends somebody to a door that is just as shut. So the sentence goes up at
+ * once - waiting on a probe would leave a failed press silent for seconds -
+ * and the offer is added to it a moment later, if and only if the other
+ * address answered. A reader who has already dismissed the first sentence is
+ * left alone.
+ */
+function announceUnreachable(): void {
+  const { error: showError, dismiss, toasts } = useToast();
+  showError(UNREACHABLE);
+
+  const [other] = otherSiteAddresses();
+  if (!other || probingOtherAddress) return;
+
+  probingOtherAddress = true;
+  void addressAnswers(other.host)
+    .then((answers) => {
+      if (!answers) return;
+      const standing = toasts.value.find((t) => t.message === UNREACHABLE);
+      if (!standing) return;
+      dismiss(standing.id);
+      showError(`${UNREACHABLE}, попробуйте [${other.name}]`, 0, () =>
+        window.location.assign(
+          `${window.location.protocol}//${other.host}${window.location.pathname}${window.location.search}${window.location.hash}`,
+        ),
+      );
+    })
+    .finally(() => {
+      probingOtherAddress = false;
+    });
+}
+
+/**
+ * The problem document of a failed request, made once.
+ *
+ * The interceptor reads it to decide what to say, and send() hands it to the
+ * caller. They must be the same object: a general refusal waits for the caller
+ * to name it (generalPlate.ts), and it is found again by this object.
+ */
+const problems = new WeakMap<object, GeneralError>();
+
+function problemOf(error: { response: AxiosResponse }): GeneralError {
+  let problem = problems.get(error);
+  if (!problem) {
+    problem = asProblem(error.response);
+    problems.set(error, problem);
+  }
+  return problem;
+}
+
 function asProblem(response: AxiosResponse): GeneralError {
   const body = response.data;
 
-  if (body && typeof body === "object") {
-    return body as GeneralError;
-  }
+  const problem: GeneralError =
+    body && typeof body === "object"
+      ? (body as GeneralError)
+      : {
+          type: "",
+          title: "",
+          status: response.status,
+          traceId: "",
+        };
 
-  return {
-    type: "",
-    title: "",
-    status: response.status,
-    traceId: "",
-  };
+  // The wait a rate limit carries is in a header, and the caller is handed the
+  // document alone. Copied in only when the server named one, so a caller can
+  // tell "wait this long" from "the server did not say" by the field being
+  // there at all.
+  const seconds = retryAfterSeconds(response);
+  return seconds === undefined
+    ? problem
+    : { ...problem, retryAfterSeconds: seconds };
+}
+
+/** How long a request may wait for its answer before axios gives up on it. */
+const REQUEST_TIMEOUT_MS = 30000;
+
+/**
+ * When the last 401 of an ended session came back, or null before any did.
+ *
+ * One expiry is one event, however many requests it answers. A page asks for
+ * ten things at once and the session dies under all of them together; each
+ * 401 used to end the session again and raise "Сессия истекла" again. The
+ * plate keeps one copy of its text while it stands, but a 401 that came back
+ * after it faded or was closed raised it anew, and the app's handler ran once
+ * per request.
+ *
+ * So the 401s of one expiry are one run: each comes within the request timeout
+ * of the one before. A request in flight when the session died is answered or
+ * given up within that time, so none of them says it a second time, and a dead
+ * cookie that keeps being refused keeps the run going instead of raising the
+ * plate every time it faded. A 401 after a quiet longer than that is a session
+ * that ended anew, and it is said again.
+ */
+let lastExpiryAt: number | null = null;
+
+/** Whether this 401 starts an expiry, rather than repeating the current one. */
+function startsExpiry(): boolean {
+  const now = Date.now();
+  const starts =
+    lastExpiryAt === null || now - lastExpiryAt >= REQUEST_TIMEOUT_MS;
+  lastExpiryAt = now;
+  return starts;
 }
 
 const configuration: AxiosRequestConfig = {
   baseURL: `${apiHost}/v1`,
   headers: defaultHeaders,
   responseType: "json",
-  timeout: 30000,
+  timeout: REQUEST_TIMEOUT_MS,
   withCredentials: true, // Required for HttpOnly cookie authentication
   paramsSerializer: {
     // ASP.NET Core expects: key=val1&key=val2 (no brackets/indices)
@@ -166,10 +353,19 @@ const configuration: AxiosRequestConfig = {
  * number the page had loaded with. So the retries never stop and the delay is
  * capped instead.
  */
-const hubRetryPolicy: IRetryPolicy = {
+export const hubRetryPolicy: IRetryPolicy = {
   nextRetryDelayInMilliseconds: (context) =>
     Math.min(30000, 1000 * 2 ** context.previousRetryCount),
 };
+
+/**
+ * How often a live list re-reads its tail while the socket is not delivering
+ * pushes and the tab is visible. One number for every such list (the global
+ * chat today), declared beside the reconnect policy because both answer the
+ * same question: how long a reader may look at a stale screen. Thirty seconds
+ * is the global chat's own figure, kept as it was.
+ */
+export const LIVE_TAIL_POLL_INTERVAL_MS = 30000;
 
 class Api {
   private axios: AxiosInstance;
@@ -186,46 +382,71 @@ class Api {
         // copy. Clearing that copy from here left the store still holding the
         // user, so the header, the sidebar blocks and every action button kept
         // rendering as signed in while the route guard bounced the same viewer.
-        if (error.response?.status === 401) {
+        // Said and handled once per expiry (startsExpiry above).
+        if (
+          error.response?.status === 401 &&
+          !probesSession(error.config) &&
+          startsExpiry()
+        ) {
           const { warning } = useToast();
-          warning("Сессия истекла. Войдите снова.");
+          warning("Сессия истекла, войдите снова");
           onSessionExpired?.();
         }
 
         // Handle 403 Forbidden — say which refusal it was.
         // The API names the reason: 68 throw sites answer 403 with a sentence
         // of their own ("Вы в черном списке этого блога", "Аккаунт
-        // заблокирован"), and an authorization refusal is answered with one
-        // constant title, so the title is always safe to relay as it stands.
-        // Showing the general sentence over all of them left a blacklisted
-        // reader in front of a working comment box with nothing to learn from:
-        // the text comes back, the toast says the rights are missing, and the
-        // reason it will never be accepted was on the wire and thrown away.
-        // The fallback is for a 403 the error middleware never saw — the
-        // framework answers those with no body at all.
+        // заблокирован"), and those are relayed as they stand. Showing the
+        // general sentence over all of them left a blacklisted reader in front
+        // of a working comment box with nothing to learn from: the text comes
+        // back, the toast says the rights are missing, and the reason it will
+        // never be accepted was on the wire and thrown away.
+        //
+        // What is left names no reason: the one constant title of an
+        // authorization refusal, and a 403 the error middleware never saw,
+        // which the framework answers with no body at all. That plate says
+        // only "недостаточно прав", so the call's own phrase goes at its head.
+        //
+        // Either plate is held for a moment (generalPlate.ts): a page that
+        // writes the refusal at the place of the press takes it down, and one
+        // refusal is not said a second time in the corner.
         if (error.response?.status === 403 && !ownsRefusal(error.config)) {
-          const { error: showError } = useToast();
-          const refusal = asProblem(error.response);
-          showError(
-            describeFailure(refusal, "Недостаточно прав для этого действия"),
+          const refusal = problemOf(error);
+          const said = describeFailure(refusal, "");
+          if (!said || said === ACCESS_DENIED)
+            announceGeneral(refusal, GENERAL_REASONS.forbidden);
+          else announceWorded(refusal, () => useToast().error(said));
+        }
+
+        // Handle 429 Too Many Requests.
+        // A toast is the wrong carrier wherever the reader is about to press
+        // the same button again: it fades after eight seconds, the form under
+        // it does not change, and the second press earns the same refusal. So a
+        // request may take the limit over — the guest forms do — and then the
+        // sentence stands in the form with the seconds running down, and this
+        // says nothing. The wording is shared with them, so there is one
+        // sentence and not two. A page that writes the wait at the place of
+        // the press takes the held plate down the same way.
+        if (error.response?.status === 429 && !ownsRateLimit(error.config)) {
+          const seconds = retryAfterSeconds(error.response);
+          announceWorded(problemOf(error), () =>
+            useToast().warning(describeRateLimit(seconds)),
           );
         }
 
-        // Handle 429 Too Many Requests
-        if (error.response?.status === 429) {
-          const { warning } = useToast();
-          const retryAfter = error.response.headers?.["retry-after"];
-          warning(
-            retryAfter
-              ? `Слишком много запросов. Повторите через ${retryAfter} сек.`
-              : "Слишком много запросов. Повторите позже.",
-          );
-        }
-
-        // Handle 500+ Server Errors
-        if (error.response?.status >= 500) {
-          const { error: showError } = useToast();
-          showError("Ошибка сервера. Попробуйте позже.");
+        // Handle 500+ Server Errors.
+        // The API titles every one of them SERVER_ERROR, and an edge that
+        // refuses a request answers with no document at all. Neither says
+        // which press it answers, so the plate is the general one with the
+        // call's phrase at its head: "Не удалось сохранить пост: ошибка
+        // сервера". A 5xx that did name something else is relayed as it
+        // stands, the way the 403 above relays its own.
+        if (error.response?.status >= 500 && !ownsRefusal(error.config)) {
+          const failure = problemOf(error);
+          const said = describeFailure(failure, "");
+          if (!said || said === SERVER_ERROR)
+            announceGeneral(failure, GENERAL_REASONS.server);
+          else announceWorded(failure, () => useToast().error(said));
         }
 
         // Nothing came back at all. Two codes mean that: axios answers a dead
@@ -234,22 +455,13 @@ class Api {
         // that is blocked times out rather than refusing, so the visitor who
         // needed this sentence most was the one who never saw it.
         //
-        // The sentence names the other address of the site: a route that
-        // stopped answering is exactly when the other one is worth typing.
-        // Plain text and no link, because the toast prints its message as a
-        // string (useToast, ToastContainer) and the address has to survive
-        // being read off a screen anyway.
+        // What is said about it, and when the other address is worth naming,
+        // is decided in announceUnreachable above.
         if (
           !error.response &&
           (error.code === "ERR_NETWORK" || error.code === "ECONNABORTED")
         ) {
-          const { error: showError } = useToast();
-          const [other] = otherSiteAddresses();
-          showError(
-            other
-              ? `Нет соединения с сервером. Другой адрес сайта: ${other.host}`
-              : "Нет соединения с сервером",
-          );
+          announceUnreachable();
         }
 
         return Promise.reject(error);
@@ -261,7 +473,10 @@ class Api {
     url: string,
     params?: QueryParams,
     audience: RenderAudience = RENDER_AUDIENCE.Display,
-    options?: { skipAuth?: boolean; headers?: Record<string, string> },
+    options?: RequestOptions & {
+      skipAuth?: boolean;
+      headers?: Record<string, string>;
+    },
   ): Promise<ApiResult<T>> {
     // A token-gated endpoint reads its credential from a header. A URL is written
     // verbatim into the proxy access log and into the trace; a header is written
@@ -271,19 +486,27 @@ class Api {
       ...options?.headers,
     };
 
+    // Carried on the request config, which is where the response interceptor
+    // finds it again: a page that draws the refusal in its own strip says so
+    // here, and the interceptor keeps quiet instead of putting the same
+    // sentence in a second place.
+    const request: TaggedRequest = {
+      params,
+      headers,
+      ownsRefusal: options?.ownsRefusal,
+      ownsRateLimit: options?.ownsRateLimit,
+      probesSession: options?.probesSession,
+    };
+
     // For public endpoints, explicitly remove credentials
     // This prevents activity tracking from background polling
     if (options?.skipAuth) {
       return this.send(() =>
-        this.axios.get(url, {
-          params,
-          headers,
-          withCredentials: false,
-        }),
+        this.axios.get(url, { ...request, withCredentials: false }),
       );
     }
 
-    return this.send(() => this.axios.get(url, { params, headers }));
+    return this.send(() => this.axios.get(url, request));
   }
 
   public post<T>(
@@ -293,6 +516,7 @@ class Api {
   ): Promise<ApiResult<T>> {
     const request: TaggedRequest = {
       ownsRefusal: options?.ownsRefusal,
+      ownsRateLimit: options?.ownsRateLimit,
       headers: options?.headers,
     };
     return this.send(() => this.axios.post(url, body, request));
@@ -331,16 +555,33 @@ class Api {
     return result;
   }
 
-  public put<T>(url: string, body?: RequestBody): Promise<ApiResult<T>> {
-    return this.send(() => this.axios.put(url, body));
+  public put<T>(
+    url: string,
+    body?: RequestBody,
+    options?: RequestOptions,
+  ): Promise<ApiResult<T>> {
+    return this.send(() => this.axios.put(url, body, tagged(options)));
   }
 
-  public patch<T>(url: string, body?: RequestBody): Promise<ApiResult<T>> {
-    return this.send(() => this.axios.patch(url, body));
+  public patch<T>(
+    url: string,
+    body?: RequestBody,
+    options?: RequestOptions,
+  ): Promise<ApiResult<T>> {
+    return this.send(() => this.axios.patch(url, body, tagged(options)));
   }
 
-  public delete(url: string): Promise<ApiResult<void>> {
-    return this.send(() => this.axios.delete(url));
+  public delete(
+    url: string,
+    body?: RequestBody,
+    options?: RequestOptions,
+  ): Promise<ApiResult<void>> {
+    return this.send(() =>
+      this.axios.delete(url, {
+        ...tagged(options),
+        ...(body ? { data: body } : {}),
+      }),
+    );
   }
 
   private async send<T>(
@@ -354,7 +595,10 @@ class Api {
       };
     } catch (err: unknown) {
       if (err instanceof AxiosError && err.response) {
-        return { data: null, error: asProblem(err.response) };
+        return {
+          data: null,
+          error: problemOf(err as { response: AxiosResponse }),
+        };
       }
       // No response at all: the request never reached the API, or the browser
       // cut it. The title is left empty on purpose — call sites read

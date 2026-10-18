@@ -7,7 +7,7 @@
  * trigger, the backend enforces it again ([RequireRole(SeniorModerator)]).
  *
  * Doc contract:
- * - Ban type ("Тип бана", access policy): "Демократический" / "Полный" —
+ * - Ban scope ("Охват бана", access policy): "Демократический" / "Полный" —
  *   SEPARATE from the duration. Sent as `accessPolicy`; the backend
  *   (BanService.CreateBan) persists DemocraticBan/FullBan on the ban and the
  *   effective user AccessPolicy aggregates it. Any other value is coerced to
@@ -17,6 +17,11 @@
  *   because the backend validator requires a duration for non-voluntary
  *   bans and the domain itself stores permanent bans as now + 100 years.
  * - Reason ("Причина"): required, max 2000 (mirrors CreateBanValidator).
+ *
+ * The window runs the request itself (Dialog's `action`): it waits shut, the
+ * editor included, prints a refusal over its buttons or under the field the
+ * server named (409 is the user already banned), and closes on success alone.
+ * A typed reason is asked about before it is dropped.
  */
 import { ref, computed } from "vue";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
@@ -25,15 +30,11 @@ import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import { useToast } from "@/shared/lib/composables/useToast";
-import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
-import type { BadRequestError } from "@/shared/api/models/common";
 import moderationActionsApi, {
   PERMANENT_BAN_HOURS,
   type BanAccessPolicy,
   type BanResult,
 } from "../api";
-import { notifyFailure } from "@/shared/lib/errors";
 
 const props = defineProps<{
   /** Target user (violator) username. */
@@ -45,9 +46,7 @@ const emit = defineEmits<{
   (e: "cancel"): void;
 }>();
 
-const toast = useToast();
-
-// --- Ban type ("Тип бана", access policy) ---
+// --- Ban scope ("Охват бана", access policy) ---
 const policyOptions: { value: BanAccessPolicy; label: string }[] = [
   { value: "DemocraticBan", label: "Демократический" },
   { value: "FullBan", label: "Полный" },
@@ -75,8 +74,6 @@ const durationOptions = [
 const duration = ref(String(24));
 
 const comment = ref("");
-const sending = ref(false);
-const fieldErrors = ref<Record<string, string[]>>({});
 
 const isPermanent = computed(() => duration.value === PERMANENT);
 const durationHours = computed(() =>
@@ -92,44 +89,35 @@ const canSubmit = computed(
     durationHours.value > 0,
 );
 
-async function submit() {
-  if (!canSubmit.value || sending.value) return;
-
-  sending.value = true;
-  fieldErrors.value = {};
-
-  const { data, error } = await moderationActionsApi.createBan({
-    username: props.username,
-    durationHours: durationHours.value,
-    comment: comment.value.trim(),
-    accessPolicy: policy.value,
-  });
-
-  sending.value = false;
-
-  if (error) {
-    fieldErrors.value = parseApiErrors(error as BadRequestError);
-    if (!Object.keys(fieldErrors.value).length) {
-      // 409 = user is already banned; other errors get the generic text.
-      notifyFailure(error, "Не удалось оформить бан");
-    }
-    return;
-  }
-
-  toast.success("Бан применен");
-  emit("success", data?.resource ?? null);
-}
-
-function commentErrors(): string[] {
-  const server = getFieldError(fieldErrors.value, "comment");
-  if (server) return [server];
-  if (commentTooLong.value) return ["Слишком длинное значение"];
-  return [];
+/**
+ * The window's action. A form that breaks the rules above never gets here:
+ * the main button is shut by `canSubmit`, and a shut button submits nothing.
+ */
+async function send() {
+  const result = await moderationActionsApi.createBan(
+    {
+      username: props.username,
+      durationHours: durationHours.value,
+      comment: comment.value.trim(),
+      accessPolicy: policy.value,
+    },
+    { ownsRefusal: true, ownsRateLimit: true },
+  );
+  if (!result.error) emit("success", result.data?.resource ?? null);
+  return result;
 }
 </script>
 
 <template>
-  <Dialog>
+  <Dialog
+    v-slot="{ busy }"
+    editor
+    :action="send"
+    failure="Не удалось выдать бан"
+    :dirty="comment.trim().length > 0"
+    discard-text="Набранная причина пропадет"
+    @close="emit('cancel')"
+  >
     <DialogTitle>Создание бана</DialogTitle>
 
     <!-- Violator context (prefilled from the profile page) -->
@@ -140,15 +128,8 @@ function commentErrors(): string[] {
       }}</router-link>
     </div>
 
-    <Form
-      :valid="canSubmit"
-      :loading="sending"
-      action="Оформить бан"
-      cancel="Отмена"
-      @submit="submit"
-      @cancel="emit('cancel')"
-    >
-      <FormField label="Тип бана" name="ban-policy">
+    <Form :valid="canSubmit" action="Выдать бан" cancel="Отмена">
+      <FormField label="Охват бана" name="ban-policy" field="accessPolicy">
         <Select
           id="ban-policy"
           :model-value="policy"
@@ -157,7 +138,7 @@ function commentErrors(): string[] {
         />
       </FormField>
 
-      <FormField label="Срок" name="ban-duration">
+      <FormField label="Срок" name="ban-duration" field="durationHours">
         <Select
           id="ban-duration"
           :model-value="duration"
@@ -169,13 +150,14 @@ function commentErrors(): string[] {
       <FormField
         label="Причина бана"
         name="ban-comment"
-        :errors="commentErrors()"
+        field="comment"
+        :errors="commentTooLong ? ['Слишком длинное значение'] : []"
       >
         <BBCodeEditor
           v-model="comment"
           context="common"
           placeholder="Опишите причину бана..."
-          :disabled="sending"
+          :disabled="busy"
           :min-height="100"
           :max-height="300"
           :is-moderator="true"
@@ -186,6 +168,7 @@ function commentErrors(): string[] {
 </template>
 
 <style scoped lang="sass">
+// One field step down to the first field, as between two fields.
 .ban-context
-  margin-bottom: $small
+  margin-bottom: $medium
 </style>

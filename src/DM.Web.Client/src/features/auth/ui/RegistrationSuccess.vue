@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import Dialog from "@/shared/ui/Layout/Dialog.vue";
-import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
-import Button from "@/shared/ui/Button/Button.vue";
+// The card that ends the registration: the letter is out, and there is nothing
+// left to do here. The cross closes it; a button that only repeats the cross
+// took the place of a main action this card does not have.
+import { AuthDialog } from "@/shared/ui/Layout";
 
 defineProps<{
   email: string;
@@ -13,29 +14,14 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <Dialog auto>
-    <div>
-      <dialog-title>Проверьте почту</dialog-title>
+  <AuthDialog compact center @close="emit('confirm')">
+    <h2 class="auth-title">Проверьте почту</h2>
 
-      <p class="main-text">
-        Мы отправили письмо на <strong>{{ email }}</strong> со ссылкой для
-        активации.
-      </p>
+    <p class="auth-text">
+      Мы отправили письмо со ссылкой для активации на
+      <strong>{{ email }}</strong>
+    </p>
 
-      <p class="expiry-note">Ссылка действительна 48 часов</p>
-
-      <Button type="button" @click="emit('confirm')"> Закрыть </Button>
-    </div>
-  </Dialog>
+    <p class="auth-note">Ссылка действительна 48 часов</p>
+  </AuthDialog>
 </template>
-
-<style scoped lang="sass">
-.main-text
-  margin: 0 0 $small
-  line-height: 1.5
-
-.expiry-note
-  margin: 0 0 $medium
-  color: $text-muted
-  font-size: $secondary-font-size
-</style>

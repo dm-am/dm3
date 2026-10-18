@@ -10,6 +10,7 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  openImageGates,
   toChatVirtualRows,
   type MessageOrSeparator,
   type VirtualRowGeometry,
@@ -80,5 +81,50 @@ describe("toChatVirtualRows", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0].index).toBe(0);
+  });
+});
+
+/**
+ * An image of the global chat: behind the server's spoiler in the compact
+ * layout, in plain view in the full one. The spoiler an author wrote is theirs
+ * and stays as it is.
+ */
+describe("openImageGates", () => {
+  const image =
+    '<img src="https://example.com/a.png" alt="" class="bb-image" data-bb-tag="img" />';
+  const gated =
+    '<a href="#" class="spoiler-head" data-bb-gate="image" data-swaptext="Скрыть содержимое">Показать содержимое</a>' +
+    `<div class="spoiler" data-bb-gate="image">${image}</div>`;
+
+  it("shows the image where it stands", () => {
+    const template = document.createElement("template");
+    template.innerHTML = openImageGates(`раз<br />${gated}<br />два`);
+    const content = template.content;
+    expect(content.querySelector(".spoiler-head")).toBeNull();
+    expect(content.querySelector(".spoiler")).toBeNull();
+    expect(content.querySelector("img")?.getAttribute("src")).toBe(
+      "https://example.com/a.png",
+    );
+    expect(content.textContent).toBe("раздва");
+  });
+
+  it("leaves a spoiler the author wrote as it is", () => {
+    const authored =
+      '<a href="#" class="spoiler-head">Показать содержимое</a>' +
+      `<div class="spoiler">текст ${gated}</div>`;
+    const template = document.createElement("template");
+    template.innerHTML = openImageGates(authored);
+    const heads = template.content.querySelectorAll(".spoiler-head");
+    expect(heads).toHaveLength(1);
+    expect(heads[0].hasAttribute("data-bb-gate")).toBe(false);
+    expect(
+      template.content.querySelector(".spoiler > img")?.getAttribute("src"),
+    ).toBe("https://example.com/a.png");
+  });
+
+  it("leaves a message without a gated image untouched", () => {
+    const html =
+      '<a href="#" class="spoiler-head">x</a><div class="spoiler">y</div>';
+    expect(openImageGates(html)).toBe(html);
   });
 });

@@ -15,6 +15,9 @@ import type { CommentsQuery } from "@/shared/api/commentsQuery";
 import { unwrapResource } from "@/shared/api/envelope";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
+/** Who shows a refused request: the two flags the api client reads by name. */
+type RefusalFlags = { ownsRefusal?: boolean; ownsRateLimit?: boolean };
+
 /**
  * The endpoints one discussion runs against, plus the reader's username for
  * the local unlike patch. Each details store binds its own API module here —
@@ -30,7 +33,11 @@ export interface CommentSectionApi {
     id: string,
     comment: { text: string },
   ): Promise<ApiResult<Envelope<Comment>>>;
-  deleteComment(id: string): Promise<ApiResult<void>>;
+  /**
+   * `options` is the confirmation's: it prints a refused delete in itself, so
+   * the interceptor has to keep quiet about it.
+   */
+  deleteComment(id: string, options?: RefusalFlags): Promise<ApiResult<void>>;
   likeComment(id: string): Promise<ApiResult<Envelope<User>>>;
   unlikeComment(id: string): Promise<ApiResult<void>>;
   currentUsername(): string | null | undefined;
@@ -96,8 +103,8 @@ export function createCommentSection(api: CommentSectionApi) {
     return { error };
   }
 
-  async function deleteComment(id: string) {
-    const { error } = await api.deleteComment(id);
+  async function deleteComment(id: string, options?: RefusalFlags) {
+    const { error } = await api.deleteComment(id, options);
     if (!error) {
       const index = comments.value.findIndex((c) => c.id === id);
       if (index !== -1) {
@@ -107,8 +114,10 @@ export function createCommentSection(api: CommentSectionApi) {
     return { error };
   }
 
+  // The like answers go back up as well: a refused like leaves the heart as it
+  // was, and only the item that was pressed can say so.
   async function likeComment(id: string) {
-    const { data } = await api.likeComment(id);
+    const { data, error } = await api.likeComment(id);
     const liker = unwrapResource<User>(data);
     if (liker) {
       const index = comments.value.findIndex((c) => c.id === id);
@@ -120,13 +129,14 @@ export function createCommentSection(api: CommentSectionApi) {
         };
       }
     }
+    return { error };
   }
 
   async function unlikeComment(id: string) {
     const { error } = await api.unlikeComment(id);
-    if (error) return;
+    if (error) return { error };
     const index = comments.value.findIndex((c) => c.id === id);
-    if (index === -1) return;
+    if (index === -1) return { error };
     const comment = comments.value[index];
     const username = api.currentUsername();
     if (comment.likes && username) {
@@ -137,6 +147,7 @@ export function createCommentSection(api: CommentSectionApi) {
         ) as Comment["likes"],
       };
     }
+    return { error };
   }
 
   return {

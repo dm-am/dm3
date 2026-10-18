@@ -1,17 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
-using DM.Domain.Game.Features.Blacklists;
 
 namespace DM.Domain.Game.Features.Subscriptions;
 
@@ -23,53 +20,34 @@ internal class GameSubscriptionService : IGameSubscriptionService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly GameSubscriptionGuard _guard;
 
     public GameSubscriptionService(
         ISubscriptionRepository repository,
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider,
-        GameSubscriptionGuard guard)
+        IDateTimeProvider dateTimeProvider)
     {
         _repository = repository;
         _userLookupService = userLookupService;
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _guard = guard;
     }
 
     /// <inheritdoc />
-    public async Task<Subscription> SubscribeAsync(Guid gameId, CancellationToken ct = default)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-
-        // The rule itself lives in GameSubscriptionGuard, where the generic
-        // endpoint can reach it too. Here it is asked and answered by refusing.
-        var refusal = await _guard.Refusal(gameId, userId, ct);
-        if (refusal is not null)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, refusal);
-        }
-
-        return await SubscribeInternal(gameId, userId, ct);
-    }
+    /// <remarks>
+    /// Nobody is refused, the game's blacklist included. The list closes the
+    /// discussion and the application; a subscription delivers what its holder
+    /// may read anyway, and the role of reader it gives opens neither of the two -
+    /// both ask the list itself (GameRoleExtensions.IsBlacklisted).
+    /// </remarks>
+    public Task<Subscription> SubscribeAsync(Guid gameId, CancellationToken ct = default) =>
+        SubscribeInternal(gameId, _identityProvider.Current.User.UserId, ct);
 
     /// <inheritdoc />
-    public async Task SubscribeUserAsync(Guid gameId, Guid userId, CancellationToken ct = default)
-    {
-        // Same rule, different answer to a violation: the subscriber is not the
-        // caller, so refusing would fail the caller's own action instead of the
-        // join. A blacklisted user is simply left off the roster.
-        if (await _guard.Refusal(gameId, userId, ct) is not null)
-        {
-            return;
-        }
-
+    public async Task SubscribeUserAsync(Guid gameId, Guid userId, CancellationToken ct = default) =>
         await SubscribeInternal(gameId, userId, ct);
-    }
 
     private async Task<Subscription> SubscribeInternal(Guid gameId, Guid userId, CancellationToken ct)
     {

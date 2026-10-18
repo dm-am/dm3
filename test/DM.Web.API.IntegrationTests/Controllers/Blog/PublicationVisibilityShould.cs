@@ -299,7 +299,6 @@ public class PublicationVisibilityShould : IntegrationTestBase
             Status = status,
             PremoderationStatus = premoderationStatus,
             DraftVisibility = draftVisibility,
-            CommentsEnabled = true,
             CreatedUtc = DateTimeOffset.UtcNow
         };
         dbContext.Blogs.Add(blog);
@@ -322,7 +321,6 @@ public class PublicationVisibilityShould : IntegrationTestBase
             Title = "Publication visibility entry",
             Content = "Seeded by PublicationVisibilityShould",
             Preview = "Seeded",
-            CommentsEnabled = true,
             IsPublished = true,
             PublishedUtc = now,
             CreatedUtc = now,

@@ -14,29 +14,14 @@ public interface ICharacterRepository
     #region Validation
 
     /// <summary>
-    /// Check if game requires attributes
+    /// Get the character sheet of a game
     /// </summary>
-    Task<bool> GameRequiresAttributes(Guid gameId, CancellationToken cancellationToken = default);
+    Task<GameAttributeSchema> GetGameSchema(Guid gameId);
 
     /// <summary>
-    /// Check if the game this character belongs to requires attributes
+    /// Get the character sheet of the game a character belongs to
     /// </summary>
-    /// <remarks>
-    /// The same question as <see cref="GameRequiresAttributes"/>, asked by the
-    /// only identifier an update carries. Without it the update had to load the
-    /// schema in order to find out whether there was one.
-    /// </remarks>
-    Task<bool> CharacterRequiresAttributes(Guid characterId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Get game's attribute schema
-    /// </summary>
-    Task<AttributeSchema> GetGameSchema(Guid gameId);
-
-    /// <summary>
-    /// Get character's attribute schema
-    /// </summary>
-    Task<AttributeSchema> GetCharacterSchema(Guid characterId);
+    Task<GameAttributeSchema> GetCharacterSchema(Guid characterId);
 
     #endregion
 

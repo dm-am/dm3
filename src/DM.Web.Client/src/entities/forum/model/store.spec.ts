@@ -114,7 +114,7 @@ vi.mock("@/shared/stores/auth", async () => {
   };
 });
 
-import { useBoardsStore } from "./store";
+import { BOARD_PAGE_OWNS_REFUSAL, useBoardsStore } from "./store";
 import { requestNotSent } from "@/shared/lib/errors";
 
 const createMockUser = (id: string, username: string): User =>
@@ -158,6 +158,7 @@ const createMockTopic = (
     isAttached: false,
     attachOrder: asServed(null),
     isClosed: false,
+    closedByAuthor: asServed(false),
     lastActivityUtc: asServed("2024-01-01T00:00:00Z"),
     lastComment: asServed(null),
     commentsCount: asServed(5),
@@ -309,6 +310,72 @@ describe("useBoardsStore", () => {
     });
   });
 
+  /**
+   * Who answers for a board that would not open.
+   *
+   * The page of a board stands the error page of the status in place of the
+   * board, a 429 and a 5xx included, so the read it opens the board with takes
+   * the refusal over: with the interceptor's plate on top, a guest refused
+   * with a 429 read the same refusal twice, in two wordings. The other reads
+   * of a board show nothing about a failure, so the interceptor stays their
+   * voice: the board read again after a sign-in (TopicsList), and the board of
+   * a topic (trySelectTopic).
+   */
+  describe("board refusals", () => {
+    const answered = () =>
+      mockGetBoard.mockResolvedValue({
+        data: { resource: createMockBoard("board-1", "General") },
+        error: null,
+      });
+
+    it("takes the refusal over on the read that opens a board for its page", async () => {
+      answered();
+      const store = useBoardsStore();
+
+      await store.trySelectBoardByAlias("general", BOARD_PAGE_OWNS_REFUSAL);
+
+      expect(BOARD_PAGE_OWNS_REFUSAL).toEqual({
+        ownsRefusal: true,
+        ownsRateLimit: true,
+      });
+      expect(mockGetBoard.mock.calls).toEqual([
+        ["general", { ownsRefusal: true, ownsRateLimit: true }],
+      ]);
+    });
+
+    it("hands the page the status of a refused read", async () => {
+      mockGetBoard.mockResolvedValue({
+        data: null,
+        error: { status: 429, title: "Too Many Requests" },
+      });
+      const store = useBoardsStore();
+
+      expect(
+        await store.trySelectBoardByAlias("general", BOARD_PAGE_OWNS_REFUSAL),
+      ).toEqual({ ok: false, status: 429 });
+    });
+
+    it("leaves the refusal to the interceptor when the board is read again", async () => {
+      answered();
+      const store = useBoardsStore();
+
+      await store.trySelectBoardByAlias("general");
+
+      expect(mockGetBoard).toHaveBeenCalledTimes(1);
+      expect(mockGetBoard.mock.calls[0]?.[0]).toBe("general");
+      expect(mockGetBoard.mock.calls[0]?.[1]).toBeUndefined();
+    });
+
+    it("leaves the refusal to the interceptor for the board of a topic", async () => {
+      answered();
+      const store = useBoardsStore();
+
+      await store.trySelectBoard("board-1" as BoardId);
+
+      expect(mockGetBoard.mock.calls).toEqual([["board-1"]]);
+    });
+  });
+
   // ============================================================================
   // SEARCH TOPICS
   // ============================================================================
@@ -386,6 +453,182 @@ describe("useBoardsStore", () => {
       // Should be called once with unified query
       expect(mockGetTopics).toHaveBeenCalledTimes(1);
       expect(store.attachedTopics).toBeNull();
+    });
+  });
+
+  // ============================================================================
+  // WHO ANSWERS FOR A FAILED LISTING
+  // ============================================================================
+
+  /**
+   * A board that would not load said so twice.
+   *
+   * TopicsList stands a strip where the rows would be, and the response
+   * interceptor put its plate over it: on a 403, a 429 and a 5xx the reader got
+   * one failure in two boxes. The strip is the box in the place he is looking,
+   * so the reads that fill it take the refusal over — and then they owe him the
+   * whole sentence, the seconds of a wait included, which a bare flag had no
+   * way to carry.
+   *
+   * The reads that refresh the pinned block after a pin or a reorder stay out
+   * of this: they show nothing at all about a failure, so the interceptor is
+   * their only voice.
+   */
+  describe("searchTopics refusals", () => {
+    /** What a read that carries its own refusal hands the client. */
+    const OWNED = { ownsRefusal: true, ownsRateLimit: true };
+
+    /** The options the client got for each read, in call order. */
+    const flagsPerCall = () => mockGetTopics.mock.calls.map((call) => call[2]);
+
+    /** A store with a board already chosen, ready to read its listing. */
+    const storeOnBoard = () => {
+      const store = useBoardsStore();
+      store.selectedBoard = createMockBoard("board-1", "Board");
+      return store;
+    };
+
+    it("takes the refusal over on both reads of an unfiltered listing", async () => {
+      mockGetTopics.mockResolvedValue({
+        data: { resources: [] },
+        error: null,
+      });
+      const store = storeOnBoard();
+
+      await store.searchTopics({ number: 1 });
+
+      expect(flagsPerCall()).toEqual([OWNED, OWNED]);
+    });
+
+    it("takes the refusal over on the single read of a filtered listing", async () => {
+      mockGetTopics.mockResolvedValue({
+        data: { resources: [], paging: { current: 1, pages: 1, total: 0 } },
+        error: null,
+      });
+      const store = storeOnBoard();
+
+      await store.searchTopics({ search: "правила", number: 1 });
+
+      expect(flagsPerCall()).toEqual([OWNED]);
+    });
+
+    it("leaves the refusal to the interceptor when the pinned block refreshes", async () => {
+      const store = storeOnBoard();
+      store.attachedTopics = [] as any;
+      store.topics = {
+        resources: [createMockTopic("topic-1", "Topic", "board-1")],
+        paging: null,
+      } as any;
+
+      mockUpdateTopic.mockResolvedValue({ data: null, error: null });
+      mockReorderPinnedTopics.mockResolvedValue({ data: null, error: null });
+      mockGetTopics.mockResolvedValue({
+        data: { resources: [] },
+        error: null,
+      });
+
+      await store.togglePinTopic("topic-1");
+      await store.reorderPinnedTopics(["topic-1"]);
+
+      // Two refreshes after the pin, one after the reorder, and none of them
+      // prints a word about a failure — the flag would leave the reader with
+      // nothing at all.
+      expect(flagsPerCall()).toEqual([undefined, undefined, undefined]);
+    });
+
+    it("prints what the server said about the refused listing", async () => {
+      mockGetTopics.mockResolvedValue({
+        data: null,
+        error: {
+          type: "",
+          title: "Раздел закрыт для чтения",
+          status: 403,
+          traceId: "trace",
+        },
+      });
+      const store = storeOnBoard();
+
+      await store.searchTopics({ number: 1 });
+
+      expect(store.topicsError).toBe("Раздел закрыт для чтения");
+    });
+
+    it("counts out the wait a rate limit asked for, in place of its title", async () => {
+      mockGetTopics.mockResolvedValue({
+        data: null,
+        error: {
+          type: "",
+          title: "Слишком много запросов",
+          status: 429,
+          traceId: "trace",
+          retryAfterSeconds: 30,
+        },
+      });
+      const store = storeOnBoard();
+
+      await store.searchTopics({ number: 1 });
+
+      // The title names the refusal without the number, and the number is the
+      // part a reader acts on.
+      expect(store.topicsError).toBe(
+        "Слишком много попыток, попробуйте через 30 секунд",
+      );
+    });
+
+    it("falls back to the listing sentence when the answer named nothing", async () => {
+      mockGetTopics.mockResolvedValue({
+        data: null,
+        error: { type: "", title: "", status: 500, traceId: "trace" },
+      });
+      const store = storeOnBoard();
+
+      await store.searchTopics({ number: 1 });
+
+      expect(store.topicsError).toBe("Не удалось загрузить топики");
+    });
+
+    it("names the refusal of the read that fills the rows", async () => {
+      mockGetTopics.mockImplementation((_alias, query) =>
+        Promise.resolve({
+          data: null,
+          error: {
+            type: "",
+            title: query?.isAttached
+              ? "Закрепленные не читаются"
+              : "Топики не читаются",
+            status: 500,
+            traceId: "trace",
+          },
+        }),
+      );
+      const store = storeOnBoard();
+
+      await store.searchTopics({ number: 1 });
+
+      // Both reads failed; the strip stands where the rows would be, so it is
+      // the rows' refusal it is about.
+      expect(store.topicsError).toBe("Топики не читаются");
+    });
+
+    it("clears the sentence once the listing loads", async () => {
+      mockGetTopics.mockResolvedValue({
+        data: null,
+        error: { type: "", title: "", status: 500, traceId: "trace" },
+      });
+      const store = storeOnBoard();
+
+      await store.searchTopics({ number: 1 });
+      expect(store.topicsError).toBe("Не удалось загрузить топики");
+
+      mockGetTopics.mockResolvedValue({
+        data: { resources: [] },
+        error: null,
+      });
+      await store.searchTopics({ number: 1 });
+
+      // A failed read is not cached, so this asks again — and a sentence left
+      // standing over the rows it got would be the older lie of the two.
+      expect(store.topicsError).toBeNull();
     });
   });
 
@@ -657,6 +900,23 @@ describe("useBoardsStore", () => {
 
       expect(store.comments?.resources[0].likes).toContainEqual(like);
     });
+
+    // The item that was pressed says the refusal, so it has to get it.
+    it("hands a refused like back and adds nobody", async () => {
+      const refusal = { type: "", title: "Вы уже поставили лайк", status: 409 };
+      mockPostCommentLike.mockResolvedValue({ data: null, error: refusal });
+
+      const store = useBoardsStore();
+      store.comments = {
+        resources: [createMockComment("comment-1", "Comment")],
+        paging: null,
+      } as any;
+
+      const { error } = await store.likeComment("comment-1");
+
+      expect(error).toBe(refusal);
+      expect(store.comments?.resources[0].likes ?? []).toHaveLength(0);
+    });
   });
 
   describe("unlikeComment", () => {
@@ -675,6 +935,29 @@ describe("useBoardsStore", () => {
       await store.unlikeComment("comment-1");
 
       expect(store.comments?.resources[0].likes).toHaveLength(0);
+    });
+
+    it("hands a refused unlike back and keeps the like", async () => {
+      const like = { id: "like-1", username: "testuser" };
+      const refusal = {
+        type: "",
+        title: "Вы еще не ставили лайк",
+        status: 409,
+      };
+      mockDeleteCommentLike.mockResolvedValue({ error: refusal });
+
+      const store = useBoardsStore();
+      store.comments = {
+        resources: [
+          { ...createMockComment("comment-1", "Comment"), likes: [like] },
+        ],
+        paging: null,
+      } as any;
+
+      const { error } = await store.unlikeComment("comment-1");
+
+      expect(error).toBe(refusal);
+      expect(store.comments?.resources[0].likes).toEqual([like]);
     });
   });
 
@@ -806,6 +1089,220 @@ describe("useBoardsStore", () => {
       expect(result.error).toBeUndefined();
       expect(store.topics?.resources).toHaveLength(1);
       expect(store.attachedTopics).toEqual([]);
+      // The interceptor said the failure, and the strip over the rows says
+      // nothing on top of it.
+      expect(store.topicsError).toBeNull();
+    });
+
+    /** A board listing read by the page, as TopicsList reads it. */
+    const listed = async (
+      query: Parameters<ReturnType<typeof useBoardsStore>["searchTopics"]>[0],
+    ) => {
+      const store = useBoardsStore();
+      store.selectedBoard = createMockBoard("board-1", "Board");
+      await store.searchTopics(query);
+      return store;
+    };
+
+    // Found on the stand: a search for "GURPS" left one row, a pin put every
+    // topic of the board back into the table, and the search still stood in
+    // its field.
+    it("reads the filtered listing again with its filters after a pin", async () => {
+      const gurps = createMockTopic("topic-1", "GURPS", "board-1");
+      mockGetTopics.mockResolvedValue({
+        data: {
+          resources: [gurps],
+          paging: { current: 1, pages: 1, total: 1 },
+        },
+        error: null,
+      });
+      const store = await listed({ search: "GURPS", number: 1 });
+      mockGetTopics.mockClear();
+
+      const pinned = { ...gurps, isAttached: true };
+      mockUpdateTopic.mockResolvedValue({ data: null, error: null });
+      mockGetTopics.mockResolvedValue({
+        data: {
+          resources: [pinned],
+          paging: { current: 1, pages: 1, total: 1 },
+        },
+        error: null,
+      });
+      const result = await store.togglePinTopic("topic-1");
+
+      expect(result.data).toBe(true);
+      expect(mockGetTopics).toHaveBeenCalledTimes(1);
+      expect(mockGetTopics).toHaveBeenCalledWith(
+        "board",
+        { search: "GURPS", number: 1, size: 20 },
+        undefined,
+      );
+      expect(store.topics?.resources).toEqual([pinned]);
+      expect(store.attachedTopics).toBeNull();
+    });
+
+    it("reads the page on screen again after a pin, not the first one", async () => {
+      mockGetTopics.mockResolvedValue({
+        data: {
+          resources: [createMockTopic("topic-1", "Topic", "board-1")],
+          paging: { current: 2, pages: 2, total: 21 },
+        },
+        error: null,
+      });
+      const store = await listed({ number: 2 });
+      mockGetTopics.mockClear();
+      mockUpdateTopic.mockResolvedValue({ data: null, error: null });
+
+      await store.togglePinTopic("topic-1");
+
+      expect(mockGetTopics.mock.calls.map((call) => call[1])).toEqual([
+        { isAttached: true },
+        { number: 2, size: 20, isAttached: false },
+      ]);
+    });
+
+    // A fresh listing in the cache is handed out without a request for half a
+    // minute: a board left and opened again showed the pins as they were.
+    it("forgets the cached listings after a pin", async () => {
+      mockGetTopics.mockResolvedValue({
+        data: {
+          resources: [createMockTopic("topic-1", "Topic", "board-1")],
+          paging: { current: 1, pages: 2, total: 21 },
+        },
+        error: null,
+      });
+      const store = await listed({ number: 2 });
+      await store.searchTopics({ number: 1 });
+      mockUpdateTopic.mockResolvedValue({ data: null, error: null });
+      await store.togglePinTopic("topic-1");
+      mockGetTopics.mockClear();
+
+      await store.searchTopics({ number: 2 });
+
+      expect(mockGetTopics).toHaveBeenCalledTimes(2);
+    });
+
+    it("forgets the cached listings after a reorder", async () => {
+      mockGetTopics.mockResolvedValue({
+        data: { resources: [createMockTopic("topic-1", "Topic", "board-1")] },
+        error: null,
+      });
+      const store = await listed({ number: 1 });
+      mockReorderPinnedTopics.mockResolvedValue({ data: null, error: null });
+      await store.reorderPinnedTopics(["topic-1"]);
+      mockGetTopics.mockClear();
+
+      await store.searchTopics({ number: 1 });
+
+      expect(mockGetTopics).toHaveBeenCalledTimes(2);
+    });
+
+    it("stands the pinned block in the saved order when the refresh after a reorder fails", async () => {
+      const store = useBoardsStore();
+      store.selectedBoard = createMockBoard("board-1", "Board");
+      const first = createMockTopic("topic-1", "First", "board-1");
+      const second = createMockTopic("topic-2", "Second", "board-1");
+      store.attachedTopics = [first, second] as any;
+
+      mockReorderPinnedTopics.mockResolvedValue({ data: null, error: null });
+      mockGetTopics.mockResolvedValue({
+        data: null,
+        error: { type: "", title: "", status: 500, traceId: "trace" },
+      });
+
+      const result = await store.reorderPinnedTopics(["topic-2", "topic-1"]);
+
+      // The server keeps the new order; the block in the old one would say it
+      // does not.
+      expect(result.error).toBeUndefined();
+      expect(store.attachedTopics?.map((topic) => topic.id)).toEqual([
+        "topic-2",
+        "topic-1",
+      ]);
+    });
+  });
+
+  // ============================================================================
+  // UPDATE TOPIC (edit form: text, title and the closed state together)
+  // ============================================================================
+
+  describe("updateTopicContent", () => {
+    it("closes the topic in the same request as the text and shows the answer", async () => {
+      const store = useBoardsStore();
+      const open = createMockTopic("topic-1", "Topic", "board-1");
+      store.selectedTopic = open;
+      const closed = { ...open, title: "Renamed", isClosed: true };
+      mockUpdateTopic.mockResolvedValue({
+        data: { resource: closed },
+        error: null,
+      });
+
+      const result = await store.updateTopicContent("topic-1", {
+        title: "Renamed",
+        description: "Text",
+        isClosed: true,
+      });
+
+      expect(mockUpdateTopic).toHaveBeenCalledTimes(1);
+      expect(mockUpdateTopic).toHaveBeenCalledWith("topic-1", {
+        title: "Renamed",
+        description: "Text",
+        isClosed: true,
+      });
+      expect(result.error).toBeUndefined();
+      expect(store.selectedTopic?.isClosed).toBe(true);
+    });
+
+    // The pin of the edit form rides in the same request, and the board
+    // listing, which shows the title, the lock and the pin, is read anew the
+    // next time it is opened.
+    it("pins the topic in the same request and forgets the cached listings", async () => {
+      mockGetTopics.mockResolvedValue({
+        data: { resources: [createMockTopic("topic-1", "Topic", "board-1")] },
+        error: null,
+      });
+      const store = useBoardsStore();
+      store.selectedBoard = createMockBoard("board-1", "Board");
+      await store.searchTopics({ number: 1 });
+      const open = createMockTopic("topic-1", "Topic", "board-1");
+      store.selectedTopic = open;
+      mockUpdateTopic.mockResolvedValue({
+        data: { resource: { ...open, isAttached: true } },
+        error: null,
+      });
+
+      await store.updateTopicContent("topic-1", {
+        title: "Topic",
+        description: "Text",
+        isAttached: true,
+      });
+      mockGetTopics.mockClear();
+      await store.searchTopics({ number: 1 });
+
+      expect(mockUpdateTopic).toHaveBeenCalledWith("topic-1", {
+        title: "Topic",
+        description: "Text",
+        isAttached: true,
+      });
+      expect(store.selectedTopic?.isAttached).toBe(true);
+      expect(mockGetTopics).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps the topic as it was when the server refuses the save", async () => {
+      const store = useBoardsStore();
+      const open = createMockTopic("topic-1", "Topic", "board-1");
+      store.selectedTopic = open;
+      const refusal = { type: "", title: "", status: 403, traceId: "t" };
+      mockUpdateTopic.mockResolvedValue({ data: null, error: refusal });
+
+      const result = await store.updateTopicContent("topic-1", {
+        title: "Renamed",
+        description: "Text",
+        isClosed: true,
+      });
+
+      expect(result.error).toBe(refusal);
+      expect(store.selectedTopic).toEqual(open);
     });
   });
 });

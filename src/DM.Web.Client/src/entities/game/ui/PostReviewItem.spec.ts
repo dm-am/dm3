@@ -6,7 +6,10 @@
  * The rating line is one line of human text, and what the reader selects is
  * what has to reach the clipboard: "+1 от Тест Елки, 26.07.2026 в 16:00, #1".
  * It used to copy as "...в 16:00#1" — the gap before the number was drawn by
- * `margin-left` on the button, and a margin renders but does not copy.
+ * `margin-left` on the button, and a margin renders but does not copy. The
+ * number stands in the line after the date, a comma and a space before it, as
+ * it did before the room wave of 24.09 moved it to the right corner of the row
+ * (the owner, 05.10: "У оценок постов что ты сделал с #1? Почему он справа?").
  *
  * The assertion is on the raw textContent, deliberately not on a normalized
  * form. Whitespace that comes from template indentation instead of from the
@@ -21,14 +24,19 @@
  * a check the server makes, and a button the server would refuse is a promise
  * the page cannot keep.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { enableAutoUnmount, mount, flushPromises } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import PostReviewItem from "./PostReviewItem.vue";
 import type { PostReview } from "../model/types";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 vi.mock("../api/gameApi", () => ({
   default: {
@@ -114,9 +122,43 @@ const mountItem = (
   });
 };
 
+/** A part of the delete question, which stands in <body> and not in the card. */
+const inQuestion = (selector: string) => {
+  const found = document.body.querySelector<HTMLElement>(
+    `.dialog-container ${selector}`,
+  );
+  if (!found) throw new Error(`${selector} is not in the question`);
+  return found;
+};
+
 /** The captions of the controls the card is currently offering. */
 const actions = (wrapper: ReturnType<typeof mountItem>) =>
-  wrapper.findAll(".review-actions .action-btn").map((b) => b.text());
+  wrapper.findAll(".review-meta .caption-action").map((b) => b.text());
+
+/** The control of the caption line with this caption. */
+const action = (wrapper: ReturnType<typeof mountItem>, caption: string) => {
+  const found = wrapper
+    .findAll(".review-meta .caption-action")
+    .find((button) => button.text() === caption);
+  if (!found) throw new Error(`no "${caption}" on the card`);
+  return found;
+};
+
+/** The signs the edit form offers, as its segments read. */
+const signs = (wrapper: ReturnType<typeof mountItem>) =>
+  wrapper.findAll(".review-edit .segment").map((b) => b.text());
+
+/** The segment of the sign toggle that reads `label`. */
+const sign = (wrapper: ReturnType<typeof mountItem>, label: string) => {
+  const found = wrapper
+    .findAll(".review-edit .segment")
+    .find((button) => button.text() === label);
+  if (!found) throw new Error(`no "${label}" among the signs`);
+  return found;
+};
+
+// A question left open by one test would answer the next one's clicks.
+enableAutoUnmount(afterEach);
 
 beforeEach(() => {
   signIn(null);
@@ -127,9 +169,40 @@ beforeEach(() => {
 
 describe("PostReviewItem", () => {
   it("copies as one human line, with the comma and the space before the number", () => {
-    const line = mountItem().get(".review-meta").element.textContent;
+    const row = mountItem().get(".review-meta").element.textContent;
 
-    expect(line).toBe("+1 от Тест Елки, 26.07.2026 в 16:00, #1");
+    expect(row).toBe("+1 от Тест Елки, 26.07.2026 в\u00a016:00, #1");
+  });
+
+  it("keeps the number in the caption line, right after the date", () => {
+    const wrapper = mountItem();
+
+    expect(wrapper.find(".review-footer").exists()).toBe(false);
+    const anchor = wrapper.get(".review-meta .review-anchor");
+    expect(anchor.text()).toBe("#1");
+  });
+
+  // A "go to the post" affordance is a link and looks like one everywhere,
+  // the number of a review among them (UI_STANDARDS, "Переход к посту
+  // выглядит ссылкой везде"), as it did in the line before 24.09.
+  it("draws the number as a link of the site", () => {
+    const rules = ruleMap(componentCss(resolve(HERE, "PostReviewItem.vue")));
+
+    expect(rules.get(".review-anchor")).toMatchObject({
+      color: "var(--link)",
+    });
+    expect(rules.get(".review-anchor:hover")).toMatchObject({
+      color: "var(--link-hover)",
+    });
+  });
+
+  // The owner, 27.09: the reviews of a post stand a clear step apart.
+  it("keeps 16 px between one review and the next", () => {
+    const rules = ruleMap(componentCss(resolve(HERE, "PostReviewItem.vue")));
+
+    expect(rules.get(".review-item + .review-item")).toMatchObject({
+      "margin-top": "16px",
+    });
   });
 
   it("describes the anchor with the project tooltip instead of a native title", () => {
@@ -162,6 +235,20 @@ describe("PostReviewItem controls", () => {
 
     expect(actions(mountItem({ review: freshReview, editable: true }))).toEqual(
       ["Редактировать", "Удалить"],
+    );
+  });
+
+  it("draws the controls as words of the signature, after the date", () => {
+    signIn({ id: "u-author", username: "Тест Елки", role: "RegularUser" });
+
+    const line = mountItem({ review: freshReview, editable: true })
+      .get(".review-meta")
+      .text()
+      .replace(/\s+/g, " ");
+
+    // The bars start after the number, which follows the date.
+    expect(line).toMatch(
+      /^\+1 от Тест Елки, \d\d\.\d\d\.\d{4} в \d\d:\d\d, #1 \| Редактировать \| Удалить$/,
     );
   });
 
@@ -227,7 +314,7 @@ describe("PostReviewItem controls", () => {
     } as never);
     const wrapper = mountItem({ review: freshReview, editable: true });
 
-    await wrapper.get(".review-actions .action-btn").trigger("click");
+    await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
 
     expect(gameApi.getPostReviewForEdit).toHaveBeenCalledWith("p-1", "r-1");
@@ -236,7 +323,11 @@ describe("PostReviewItem controls", () => {
       "[b]Отличный[/b]",
     );
 
-    await wrapper.get('[aria-label="Отрицательная оценка"]').trigger("click");
+    // The sign the review had is the one pressed when the form opens.
+    expect(signs(wrapper)).toEqual(["+", "=", "−"]);
+    expect(sign(wrapper, "+").attributes("aria-pressed")).toBe("true");
+
+    await sign(wrapper, "−").trigger("click");
     await wrapper.get(".submit-btn").trigger("click");
     await flushPromises();
 
@@ -257,21 +348,49 @@ describe("PostReviewItem controls", () => {
     } as never);
     const wrapper = mountItem({ review: freshReview, editable: true });
 
-    await wrapper.get(".review-actions .delete-btn").trigger("click");
+    await action(wrapper, "Удалить").trigger("click");
 
     // Nothing is gone yet: the dialog is the question, not the answer.
     expect(gameApi.deletePostReview).not.toHaveBeenCalled();
     const dialog = wrapper.findComponent(ConfirmDialog);
     expect(dialog.props("show")).toBe(true);
 
-    dialog.vm.$emit("confirm");
+    inQuestion(".dialog-btn-submit").click();
     await flushPromises();
 
-    expect(gameApi.deletePostReview).toHaveBeenCalledWith("p-1", "r-1");
+    expect(gameApi.deletePostReview).toHaveBeenCalledWith("p-1", "r-1", {
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
     // The sign travels with the event: the widget that owns the post subtracts
     // it from the rating instead of refetching the page to find out.
     expect(wrapper.emitted("deleted")).toEqual([[{ id: "r-1", sign: 1 }]]);
     expect(wrapper.text()).toContain("Оценка удалена");
+    expect(dialog.props("show")).toBe(false);
+  });
+
+  /**
+   * A refused delete stays in the question, over its buttons: the review is
+   * still on the post, and the window that asked is where the reader looks.
+   */
+  it("says a refused delete in the question and keeps the review", async () => {
+    signIn({ id: "u-senior", username: "Старший", role: "SeniorModerator" });
+    vi.mocked(gameApi.deletePostReview).mockResolvedValue({
+      data: null,
+      error: { type: "", title: "", status: 404, traceId: "t" },
+    } as never);
+    const wrapper = mountItem({ review: freshReview, editable: true });
+
+    await action(wrapper, "Удалить").trigger("click");
+    inQuestion(".dialog-btn-submit").click();
+    await flushPromises();
+
+    expect(inQuestion(".dialog-refusal").textContent?.trim()).toBe(
+      "Не удалось удалить оценку",
+    );
+    expect(wrapper.findComponent(ConfirmDialog).props("show")).toBe(true);
+    expect(wrapper.emitted("deleted")).toBeUndefined();
+    expect(wrapper.text()).not.toContain("Оценка удалена");
   });
 
   it("hides the signed choices from a newbie, as the create form does", async () => {
@@ -287,17 +406,9 @@ describe("PostReviewItem controls", () => {
     } as never);
     const wrapper = mountItem({ review: freshReview, editable: true });
 
-    await wrapper.get(".review-actions .action-btn").trigger("click");
+    await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
 
-    expect(wrapper.find('[aria-label="Положительная оценка"]').exists()).toBe(
-      false,
-    );
-    expect(wrapper.find('[aria-label="Отрицательная оценка"]').exists()).toBe(
-      false,
-    );
-    expect(wrapper.find('[aria-label="Нейтральная оценка"]').exists()).toBe(
-      true,
-    );
+    expect(signs(wrapper)).toEqual(["="]);
   });
 });
