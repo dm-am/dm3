@@ -91,7 +91,7 @@ public class DocumentReferencesShould
     /// </summary>
     [Fact]
     public void LeaveACallThatNamesADocumentAlone() =>
-        CitationsIn("probe.ts", "readFileSync(SURFACES, \"utf8\")", ["SURFACES"])
+        CitationsIn("probe.ts", "readFileSync(UI_STANDARDS, \"utf8\")", ["UI_STANDARDS"])
             .Should().BeEmpty();
 
     /// <summary>
@@ -154,7 +154,7 @@ public class DocumentReferencesShould
                              entry.Link.Target.EndsWith(".md", StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
-        anchored.Should().HaveCountGreaterThan(30, "the documents jump to each other's headings some seventy times");
+        anchored.Should().HaveCountGreaterThan(20, "the documents jump to each other's headings some thirty times");
 
         var anchorsByFile = new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase);
         anchored

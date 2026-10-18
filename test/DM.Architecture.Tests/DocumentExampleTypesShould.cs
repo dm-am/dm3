@@ -46,18 +46,7 @@ public class DocumentExampleTypesShould
     /// <param name="Type">The name the example declares.</param>
     private sealed record Recorded(string File, string Type);
 
-    private static readonly Recorded[] Register =
-    [
-        new("docs/conventions/DATA_STORAGE.md", "IRemovable"),
-        new("docs/conventions/PATTERNS.md", "Game"),
-        new("docs/conventions/PATTERNS.md", "GameDetails"),
-        new("docs/conventions/PATTERNS.md", "GameRepository"),
-        new("docs/conventions/PATTERNS.md", "IGameRepository"),
-        new("docs/conventions/PATTERNS.md", "IGameService"),
-        new("docs/conventions/PATTERNS.md", "User"),
-        new("docs/conventions/PATTERNS.md", "UserProfile"),
-        new("docs/guides/TESTING.md", "TopicServiceShould"),
-    ];
+    private static readonly Recorded[] Register = [];
 
     [Fact]
     public void DeclareNoTypeTheCodeAlreadyHas()

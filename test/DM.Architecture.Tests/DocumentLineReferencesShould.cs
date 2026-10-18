@@ -13,11 +13,11 @@ namespace DM.Architecture.Tests;
 /// <remarks>
 /// A line number is true on the day it is written and false after the first edit
 /// above it, and nothing tells the reader which day that was: the reference still
-/// reads as precise. DIALOGS.md showed what that costs. Of eight references of the
-/// form file:line checked against the tree, five pointed at the wrong lines. A name
-/// keeps pointing where it pointed, and DocumentReferencesShould and
-/// DocumentedPathsShould can hold a name to the tree, which no rule can do for a
-/// number.
+/// reads as precise. A design document showed what that costs. Of eight
+/// references of the form file:line checked against the tree, five pointed at the
+/// wrong lines. A name keeps pointing where it pointed, and DocumentReferencesShould
+/// and DocumentedPathsShould can hold a name to the tree, which no rule can do for
+/// a number.
 ///
 /// Two spellings are counted: a file with its extension followed by a line or a
 /// range (BBCodeEditor.vue:1340-1348, Dialog.vue#L37), and the short one that
@@ -45,10 +45,7 @@ public class DocumentLineReferencesShould
     /// <param name="Count">How many references the document holds.</param>
     private sealed record Recorded(string File, int Count);
 
-    private static readonly Recorded[] Register =
-    [
-        new("docs/plans/DIALOGS.md", 245),
-    ];
+    private static readonly Recorded[] Register = [];
 
     [Fact]
     public void HoldEveryLineReferenceAtItsRecordedCount()

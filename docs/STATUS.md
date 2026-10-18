@@ -2,7 +2,7 @@
 
 # Состояние сайта
 
-Маршрутов 96, с кадром 50, ручек 403, без клиента 49, страниц без входа 8, документов 32, с отдельным тестом 10.
+Маршрутов 96, с кадром 50, ручек 403, без клиента 49, страниц без входа 8, документов 26, с отдельным тестом 9.
 
 Как считается:
 
@@ -271,34 +271,28 @@
 | Документ | Открывают по пути | Только в реестре |
 |---|---|---|
 | `README.md` | DeploymentConfigurationShould, DocumentReachabilityShould | DocumentPunctuationShould |
-| `docs/PROGRESS.md` | отдельного теста нет | DocumentPunctuationShould |
 | `docs/STACK.md` | StackDocumentShould | - |
 | `docs/STACK_DM2.md` | отдельного теста нет | - |
 | `docs/STATUS.md` | StatusDocumentShould | - |
-| `docs/SURFACES.md` | отдельного теста нет | DocumentPunctuationShould, DocumentSizeShould, DocumentSnapshotsShould |
-| `docs/architecture/AUTHENTICATION.md` | отдельного теста нет | DocumentPunctuationShould |
-| `docs/architecture/AUTHORIZATION.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/architecture/AUTHENTICATION.md` | отдельного теста нет | - |
+| `docs/architecture/AUTHORIZATION.md` | отдельного теста нет | - |
 | `docs/architecture/BBCODE_RENDERING.md` | отдельного теста нет | DocumentPunctuationShould, DocumentSizeShould |
-| `docs/architecture/SYSTEM.md` | отдельного теста нет | DocumentPunctuationShould |
-| `docs/architecture/UPLOADS.md` | отдельного теста нет | DocumentPunctuationShould |
-| `docs/conventions/API_DESIGN.md` | RateLimitPipelineShould | DocumentPunctuationShould |
-| `docs/conventions/CODE_STYLE.md` | отдельного теста нет | DocumentPunctuationShould, DocumentSnapshotsShould |
-| `docs/conventions/DATA_STORAGE.md` | отдельного теста нет | DocumentExampleTypesShould, DocumentPunctuationShould |
-| `docs/conventions/PATTERNS.md` | отдельного теста нет | DocumentExampleTypesShould, DocumentPunctuationShould |
-| `docs/conventions/PERFORMANCE.md` | отдельного теста нет | DocumentPunctuationShould |
-| `docs/conventions/PROCESS.md` | отдельного теста нет | AgentInstructionSizeShould, DocumentPunctuationShould |
-| `docs/conventions/SECURITY.md` | IdentifierDisclosureShould | DocumentPunctuationShould |
+| `docs/architecture/SYSTEM.md` | отдельного теста нет | - |
+| `docs/architecture/UPLOADS.md` | отдельного теста нет | - |
+| `docs/conventions/API_DESIGN.md` | RateLimitPipelineShould | - |
+| `docs/conventions/CODE_STYLE.md` | отдельного теста нет | - |
+| `docs/conventions/DATA_STORAGE.md` | отдельного теста нет | - |
+| `docs/conventions/PATTERNS.md` | отдельного теста нет | - |
+| `docs/conventions/PERFORMANCE.md` | отдельного теста нет | - |
+| `docs/conventions/PROCESS.md` | отдельного теста нет | AgentInstructionSizeShould |
+| `docs/conventions/SECURITY.md` | IdentifierDisclosureShould | - |
 | `docs/conventions/UI_STANDARDS.md` | отдельного теста нет | DocumentPunctuationShould, DocumentSizeShould, DocumentSnapshotsShould |
-| `docs/conventions/URL_STRUCTURE.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/conventions/URL_STRUCTURE.md` | отдельного теста нет | - |
 | `docs/conventions/USERNAME_POLICY.md` | отдельного теста нет | DocumentPunctuationShould |
-| `docs/guides/DEPLOYMENT.md` | DeploymentConfigurationShould, StorageConfigurationShould | DocumentPunctuationShould |
-| `docs/guides/LOCAL_SETUP.md` | отдельного теста нет | DocumentPunctuationShould, DocumentedCommandsShould |
-| `docs/guides/MONITORING.md` | DeploymentConfigurationShould, LogDeliveryVisibilityShould | DocumentPunctuationShould |
-| `docs/guides/POINT_OF_PRESENCE.md` | DeploymentConfigurationShould | DocumentPunctuationShould |
-| `docs/guides/TESTING.md` | DocumentedTestTiersShould | DocumentExampleTypesShould, DocumentPunctuationShould |
-| `docs/plans/DIALOGS.md` | отдельного теста нет | DocumentLineReferencesShould, DocumentPunctuationShould, DocumentReachabilityShould, DocumentSizeShould, DocumentSnapshotsShould |
-| `docs/plans/DM2_MIGRATION.md` | DocumentedTablesShould | DocumentPunctuationShould |
-| `docs/plans/ERROR_PAGES_AND_LORE.md` | отдельного теста нет | DocumentPunctuationShould |
-| `docs/plans/ROADMAP.md` | отдельного теста нет | DocumentPunctuationShould, DocumentSnapshotsShould |
-| `docs/references/CONFIGURATION.md` | отдельного теста нет | DocumentPunctuationShould |
+| `docs/guides/DEPLOYMENT.md` | DeploymentConfigurationShould, StorageConfigurationShould | - |
+| `docs/guides/LOCAL_SETUP.md` | отдельного теста нет | - |
+| `docs/guides/MONITORING.md` | DeploymentConfigurationShould, LogDeliveryVisibilityShould | - |
+| `docs/guides/POINT_OF_PRESENCE.md` | DeploymentConfigurationShould | - |
+| `docs/guides/TESTING.md` | DocumentedTestTiersShould | - |
+| `docs/references/CONFIGURATION.md` | отдельного теста нет | - |
 | `docs/references/GLOSSARY.md` | отдельного теста нет | DocumentPunctuationShould |

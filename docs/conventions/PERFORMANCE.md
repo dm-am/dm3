@@ -1,349 +1,81 @@
-# Performance Optimization Standards
+# Производительность
 
-Стандарты и принципы оптимизации производительности для DM3.
+Правила производительности клиента и сервера, которые не прочесть из кода. Не проверяется. Комментарии кода цитируют разделы "AsNoTracking" и "Avoid inline aggregations", их названия не меняются. Из этих цитат [DocumentReferencesShould](../../test/DM.Architecture.Tests/DocumentReferencesShould.cs) сверяет только одну.
 
-## Принципы
-
-### 1. Measure First (Сначала измерь)
-
-- **Не оптимизируй без метрик** — сначала профилируй, потом оптимизируй
-- **Устанавливай baseline** — фиксируй текущие показатели перед изменениями
-- **A/B тестирование** — сравнивай before/after с реальными данными
-
-### 2. User-Perceived Performance (Воспринимаемая производительность)
-
-- **Time to First Byte (TTFB)** < 200ms
-- **First Contentful Paint (FCP)** < 1.5s
-- **Time to Interactive (TTI)** < 3s
-- **Cumulative Layout Shift (CLS)** < 0.1
-
-### 3. Optimize the Critical Path (Критический путь)
-
-- Сначала оптимизируй то, что видит пользователь
-- Отложи загрузку того, что ниже viewport
-- Приоритизируй интерактивность над полнотой
-
----
+Сначала замер, потом правка. Оптимизация без замера до и после не принимается, общие приемы Vue и EF Core описаны в их руководствах ([Vue](https://vuejs.org/guide/best-practices/performance.html), [EF Core](https://learn.microsoft.com/en-us/ef/core/performance/)) и здесь не повторяются.
 
 ## Frontend
 
-### Fetching данных
+### Загрузка данных
 
-| Практика | Описание |
-|----------|----------|
-| **Дедупликация запросов** | Один endpoint — один запрос за сессию (до инвалидации) |
-| **Кэширование в store** | Данные с TTL, stale-while-revalidate pattern |
-| **Батчинг запросов** | Группировка нескольких запросов в один |
-| **Prefetch** | Предзагрузка данных для вероятных переходов |
-| **Debounce/Throttle** | Поиск: 300ms debounce, scroll: 100ms throttle |
+- Store держит ответы в кэше с возрастом и размером ([keyedCache.ts](../../src/DM.Web.Client/src/shared/lib/utils/keyedCache.ts)). Повторный заход на экран, пока запись в кэше свежа, нового запроса не шлет.
+- Перезагрузка идет по схеме stale-while-revalidate. Показанные данные остаются на экране, пока идет новый запрос, скелетон стоит только при первой загрузке, когда показать еще нечего.
+- Чанк страницы запрашивается, пока указатель стоит на ссылке или на ней фокус клавиатуры ([routePrefetch.ts](../../src/DM.Web.Client/src/app/providers/routePrefetch.ts)). Каждая страница маршрута подключается через `import()`.
+- Задержки поиска и обновления адреса записаны в [UI_STANDARDS.md](./UI_STANDARDS.md#dropdownfilter-standards), порог виртуальной прокрутки там же, в [Table UX Standards](./UI_STANDARDS.md#table-ux-standards).
 
-### Рендеринг Vue
+### Обогащение не держит первый показ
 
-| Практика | Описание |
-|----------|----------|
-| **v-once** | Для статического контента |
-| **v-memo** | Мемоизация тяжелых поддеревьев |
-| **Правильные key** | Уникальные ID, не индексы массива |
-| **shallowRef** | Для больших объектов без глубокой реактивности |
-| **computed vs methods** | Computed для кэшированных вычислений |
-| **Lazy components** | defineAsyncComponent для тяжелых компонентов |
-| **Singleton resources** | Переиспользование дорогих объектов (canvas, workers) |
+Если экран корректно рисуется по компактному ответу, а подробности (подсказка, дополнительная статистика) приходят отдельным запросом, флаг загрузки снимается после первого ответа, а второй запрос догоняет в фоне. Ждать оба запроса нельзя, это лишний круг до сервера на критическом пути. Если без второго ответа экран неверен, это не фоновый запрос, а последовательная зависимость, и ждать его нужно.
 
-### Списки
+### Дорогие объекты
 
-| Практика | Описание |
-|----------|----------|
-| **Виртуальный скролл** | Для списков > 50 элементов |
-| **Пагинация** | Серверная пагинация с разумным размером (20-50) |
-| **Skeleton** | Placeholder во время загрузки |
+Объект, который дорого создавать (canvas для замера текста, воркер, аудиоконтекст), создается один раз и переиспользуется между вызовами, а не создается на каждый вызов. Образец в [TooltipBubble.vue](../../src/DM.Web.Client/src/shared/ui/Tooltip/TooltipBubble.vue).
 
-### State Management
+### URL-Synced Filters: Action Queue Pattern
 
-| Практика | Описание |
-|----------|----------|
-| **Нормализация** | Плоская структура, ID-based references |
-| **Гранулярность** | Мелкие реактивные единицы вместо крупных объектов |
-| **Селекторы** | Computed для выборки из store |
-| **Инвалидация** | Явные правила когда данные устаревают |
+Фильтры, сортировка и пагинация живут в адресе. Наивная схема (прочитать `route.query`, поменять поле, заменить адрес) теряет правки: второе действие читает адрес, который первое из-за задержки еще не обновило. Поэтому состояние меняется только через очередь действий с редьюсером ([createFilterDispatcher.ts](../../src/DM.Web.Client/src/shared/lib/composables/createFilterDispatcher.ts)).
 
-### Bundle Size
+1. Адрес единственный источник истины, состояние фильтра вычисляется из `route.query`.
+2. Все изменения идут через `dispatch()`, редьюсер чистая функция и тестируется без роутера.
+3. Действие применяется к ожидающему состоянию, а не к адресу, иначе быстрая серия действий теряет предыдущие.
+4. Таймер, ожидающее состояние и флаг навигации создаются один раз на тип фильтра, на уровне модуля, а не на экземпляр компонента.
+5. Текущий маршрут читается в момент навигации (`router.currentRoute.value` внутри отложенного вызова), а не из замыкания.
+6. Навигация по имени маршрута, а не по пути. По пути компонент перемонтируется при смене query и мерцает.
+7. Редьюсер заканчивается проверкой исчерпанности (`const _exhaustive: never = action`), забытое действие ловит компилятор.
+8. Задержка обновления адреса в именованной константе, она собирает быстрые клики в одну навигацию.
+9. У композабла фильтра явный тип возврата.
 
-| Практика | Описание |
-|----------|----------|
-| **Tree shaking** | Именованные импорты, не default |
-| **Code splitting** | Route-based splitting через dynamic import() в router |
-| **Lazy modals** | vue-final-modal загружает компоненты только при открытии |
-
----
+Композабл фильтра сущности лежит в слое фич, общая инфраструктура в shared.
 
 ## Backend
 
 ### База данных (EF Core)
 
-| Практика | Описание |
-|----------|----------|
-| **AsNoTracking** | Нужен там, где запрос материализует сущность. Проекция в не-сущность (ProjectTo, анонимный тип, скаляр) не отслеживается и без него |
-| **Projection** | Select только нужные поля |
-| **Include стратегия** | Минимум Include, избегать глубокой вложенности |
-| **Split Queries** | AsSplitQuery для множественных коллекций |
-| **Индексы** | На все WHERE, ORDER BY, JOIN поля |
+| Практика | Правило |
+|----------|---------|
+| AsNoTracking | Нужен там, где запрос материализует сущность. Проекция в не-сущность (DTO, анонимный тип, скаляр) не отслеживается и без него, но на пути чтения `AsNoTracking` остается по умолчанию |
+| Проекция | Запрос выбирает только нужные поля, `Include` по минимуму и без глубокой вложенности |
+| Split Queries | `AsSplitQuery` там, где грузится несколько коллекций, иначе декартово произведение строк |
+| Один контекст на scope | `Task.WhenAll` над репозиториями одного scope запрещен, правило и тест (`DbContextScopeResolutionShould`) в [PATTERNS.md](./PATTERNS.md) |
 
-### N+1 Prevention
+### Агрегаты отдельным запросом (Avoid inline aggregations)
 
-```
-ПЛОХО:
-foreach (var game in games)
-    game.Tags = await GetTags(game.Id);
-
-ХОРОШО:
-var games = await context.Games
-    .Include(g => g.Tags)
-    .ToListAsync();
-```
-
-### Batch Population
-
-| Практика | Описание |
-|----------|----------|
-| **Avoid inline aggregations** | COUNT/SUM в ProjectTo генерируют N subqueries |
-| **Use .Ignore()** | Помечай проблемные поля, заполняй отдельным запросом |
-| **GROUP BY batch** | Один запрос с группировкой вместо N отдельных |
-| **Dictionary lookup** | O(1) заполнение в памяти после batch-загрузки |
-
-### Parallel Queries
-
-| Практика | Описание |
-|----------|----------|
-| **Task.WhenAll** | Независимые запросы параллельно, каждый со своим контекстом |
-| **Avoid for dependent** | Если B зависит от A — последовательно |
-| **Single DbContext** | На scope ровно один контекст. Два репозитория одного scope делят его, поэтому `Task.WhenAll` над ними запрещен: нужна параллельность, нужен отдельный scope на ветку. Инвариант закреплен тестом, см. [PATTERNS.md](./PATTERNS.md) |
+`COUNT` и `SUM` внутри проекции дают коррелированный подзапрос на каждую строку, а запрос в цикле по строкам дает N+1. Такое поле в проекции не задается (в проекции Mapperly оно помечено `[MapperIgnoreTarget]`, в рукописной его просто нет) и заполняется после основного запроса одним `GROUP BY` на всю страницу и раскладывается по строкам через словарь. Образец в [TopicRepository.cs](../../src/DM.Infrastructure.Persistence/Repositories/Forum/TopicRepository.cs).
 
 ### Кэширование
 
-| Уровень | Применение |
-|---------|------------|
-| **Response Compression** | Brotli/Gzip middleware (Fastest level для TTFB) |
-| **Response Cache** | `[ResponseCache(Duration=N)]` для статических справочников |
-| **Memory Cache** | Горячие данные (статистика, счетчики) |
-| **Query Cache** | EF Core second-level cache (опционально) |
+- Ответы сжимаются Brotli и Gzip на уровне `Fastest`, чтобы сжатие не задерживало первый байт ([Startup.cs](../../src/DM.Web.API/Startup.cs)).
+- HTTP-кэш `[ResponseCache(Duration = ...)]` только у ответа, одинакового для всех. Ответ с данными аккаунта (сессии, учетные данные, второй фактор) помечается `[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]`. Правило и довод в [API_DESIGN.md](./API_DESIGN.md#кеширование-ответов).
+- Серверный кэш это `ICache` поверх памяти процесса, сроки в [CachePolicy.cs](../../src/DM.Domain.Core/Caching/CachePolicy.cs). Общего кэша между экземплярами нет, у каждого свой прогрев и свой срок. Кэш не источник истины, любое значение в нем воспроизводимо из базы.
+- Файлы статики (скрипты, стили, картинки, шрифты) nginx отдает по расширению с `Cache-Control: public, immutable` на год ([nginx.conf](../../src/DM.Web.Client/nginx.conf)). Под это попадают и файлы без хеша в имени из `public`, такой файл при замене получает новое имя.
+- Рендер BBCode не кэшируется, условие, при котором кэш допустим, в [BBCODE_RENDERING.md](../architecture/BBCODE_RENDERING.md#кэширование).
 
-**Важно:** Response Caching НЕ подходит для user-specific данных (unread counts). Используй `Cache-Control: private, no-store` для таких endpoints.
+### Быстрый путь для горячих списков
 
-### Fast-path caching для hot read endpoints
+Список, который читается на каждой загрузке главной (новости, теги, статистика сайта, популярное), кэшируется в `ICache` на короткий срок.
 
-Endpoint, который читается на каждой загрузке home page (news, tags, site statistics, popular lists) — кандидат на сервисный кэш в `ICache` с коротким TTL. Правила:
+1. Кэшируется только простая форма запроса. Поиск, фильтр по дате или автору идут мимо кэша, а не плодят ключи.
+2. Уровень доступа зрителя входит в ключ, гость и привилегированный зритель одну запись не делят.
+3. Общий слепок не хранит личного. Непрочитанное и свои отметки заполняются поверх кэша в каждом запросе, а запись на одного зрителя включает его id в ключ и живет секунды.
+4. Редко меняющиеся данные живут по сроку, без явной инвалидации. Перебор всех ключей при правке обычно ошибка, короткий срок проще и предсказуемее.
+5. Быстрый путь пропускает шаги, которые компактному списку не нужны, например отдельный `COUNT` для пагинации, когда номеров страниц нет.
 
-1. **Кэшировать только cache-friendly shape запроса**. Если клиент передал search, фильтры по дате или автора — обойти кэш, не плодить ключи. Ключ шаблон: `{entity}:list:{scope}:{шаблон-параметров}:{accessPolicy}`.
-2. **Не кэшировать user-specific поля**. Кэш хранит "общедоступный" слепок; per-user данные (unread counts, own flags) заполняются поверх кэша в каждом запросе.
-3. **Полагаться на TTL, не на явную инвалидацию**, когда данные меняются редко и допустима задержка в минуту-две. Phone-book-scale enumeration инвалидации (все take × все accessPolicy) — обычно ошибка; короткий TTL проще и предсказуемее.
-4. **accessPolicy — часть ключа**: гости и привилегированные пользователи никогда не разделяют одну запись кэша (правильность).
-5. **Fast path должен пропускать дорогие шаги**, которые не нужны для compact read (например, отдельный `SELECT COUNT(*)` для paging metadata, когда клиент рендерит единственный список без номеров страниц).
+### Опрос сервера
 
-### Perceived-performance tuning для polling endpoints
+- Срок серверного кэша больше интервала опроса клиента, иначе половина запросов идет в базу впустую. Например, статистика сайта опрашивается раз в минуту, а кэшируется на две.
+- Интервал выводится из того, насколько свежими должны быть числа на экране, а не из удобства.
+- Скрытая вкладка не опрашивает, опрос останавливается по `visibilitychange`.
 
-Polling-эндпойнты (SiteStatistics, unread counters) — **средство, а не цель**. Правила:
+## Мониторинг
 
-- **Серверный TTL кэша должен превышать интервал polling клиента** — иначе половина запросов идет в БД впустую. Если клиент опрашивает раз в 60 секунд, кэшируй хотя бы на 90 секунд.
-- **Интервал polling выводится из UX-требования**, а не удобства. "Статистика сайта" — приблизительные числа, 60s достаточно; unread counter в чате — другое дело.
-- **Polling прерывается когда вкладка скрыта** (`document.visibilitychange` → `stopPolling`). Обязательная энергосберегающая практика.
-
-### Decoupling enrichment from critical path
-
-Если UI может отрендериться с compact payload, а extra info (tooltip, advanced stats) доступен через отдельный endpoint — enrichment НЕ должен блокировать first paint. Паттерн:
-
-```ts
-// ПЛОХО: критический путь ждет второй запрос
-bestOfWeek.value = (await fetchRatedPosts()).resources[0];
-bestOfWeekGame.value = await enrichGame(bestOfWeek.value); // +1 roundtrip
-loaded.value = true; // Only fires after both complete
-
-// ХОРОШО: compact виден сразу, enrichment догоняет в фоне
-bestOfWeek.value = (await fetchRatedPosts()).resources[0];
-loaded.value = true; // First paint unblocked
-void enrichGame(bestOfWeek.value).then(g => { bestOfWeekGame.value = g; });
-```
-
-Ключевое свойство: UI **корректно отрисовывается БЕЗ** enriched-поля, оно только дополняет tooltip/additional details. Если enrichment обязателен для корректности — это не fire-and-forget кейс, а serial dependency.
-
-### API Design
-
-| Практика | Описание |
-|----------|----------|
-| **Пагинация** | Cursor-based для бесконечного скролла, offset для страниц |
-| **Lightweight Projections** | `Ref` DTOs для списков (только необходимые поля, counts вместо arrays) |
-| **Compression** | Brotli/Gzip для всех JSON ответов (Startup.cs: AddResponseCompression) |
-| **Response Caching** | `[ResponseCache]` для статических справочников (tags, boards) |
-
-### Async Patterns
-
-| Практика | Описание |
-|----------|----------|
-| **ConfigureAwait(false)** | В библиотечном коде |
-| **ValueTask** | Для методов часто возвращающих синхронно |
-| **Parallel.ForEachAsync** | Для независимых операций |
-| **Channel** | Для producer-consumer сценариев |
-
----
-
-## Infrastructure
-
-### Database
-
-- **Connection pooling** — настроен корректный размер пула
-- **Query timeout** — разумные таймауты (30s default, 5s для UI)
-- **Read replicas** — для тяжелых read-only запросов (будущее)
-
-### Caching Layer
-
-Кэш процессный, distributed cache нет. Что из этого следует для кода:
-
-- **Кэш не источник истины** — любое кэшированное значение воспроизводимо из БД.
-- **Общего кэша между инстансами не предполагать** — у каждого инстанса свой прогрев и свой TTL.
-- Если distributed cache появится — инвалидация через pub/sub между инстансами. Планы по кэшированию — в [ROADMAP.md](../plans/ROADMAP.md).
-
-### CDN
-
-- **Static assets** — JS, CSS, images через CDN
-- **Cache headers** — immutable для versioned assets
-
----
-
-## Monitoring
-
-### Метрики
-
-| Метрика | Цель |
-|---------|------|
-| **P95 Response Time** | < 500ms |
-| **Error Rate** | < 0.1% |
-| **Throughput** | Requests per second baseline |
-| **Database Query Time** | P95 < 100ms |
-
-### Alerts
-
-- Response time P95 > 1s
-- Error rate > 1%
-- Memory usage > 80%
-- CPU usage > 70% sustained
-
----
-
-## Singleton Resources
-
-Паттерн для ресурсов, которые дорого создавать, но можно переиспользовать:
-
-```typescript
-// ПЛОХО: Canvas создается при каждом вызове
-function measureText(text: string, font: string): number {
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d")!;
-  ctx.font = font;
-  return ctx.measureText(text).width;
-}
-
-// ХОРОШО: Singleton canvas переиспользуется
-let measureCanvas: HTMLCanvasElement | null = null;
-let measureCtx: CanvasRenderingContext2D | null = null;
-
-function measureText(text: string, font: string): number {
-  if (!measureCanvas) {
-    measureCanvas = document.createElement("canvas");
-    measureCtx = measureCanvas.getContext("2d");
-  }
-  if (!measureCtx) return 0;
-  measureCtx.font = font;
-  return measureCtx.measureText(text).width;
-}
-```
-
-Применение:
-- Canvas для измерения текста (tooltips, layout)
-- Web Workers для фоновых вычислений
-- Audio/Video contexts
-
----
-
-## URL-Synced Filters: Action Queue Pattern
-
-Фильтры, сортировка и пагинация синхронизируются с URL. Наивная реализация — прочитать состояние из `route.query`, поменять одно поле, заменить URL — теряет обновления: второе действие читает URL, который первое еще не успело обновить из-за debounce, и правка первого исчезает. Поэтому состояние меняется только через очередь действий с редьюсером.
-
-Место в структуре: композабл фильтра на сущность — в слое фич, общая dispatch-инфраструктура — в shared-композаблах.
-
-### Ключевые правила
-
-1. **URL — единственный источник истины** (computed от route.query)
-2. **Все мутации через dispatch()** — единственная точка изменения состояния
-3. **Reducer — чистая функция** — тестируется без router
-4. **База для действия — pending-состояние, а не URL** — иначе быстрая серия действий теряет предыдущие
-5. **Dispatch-состояние живет вне композабла** — debounce-таймер, pending-состояние и флаг навигации создаются один раз на тип фильтра, а не на экземпляр компонента
-6. **Текущий route читать в момент навигации** (`router.currentRoute.value` внутри debounce-колбэка), а не из замыкания
-7. **Route NAME, не path** — на path компонент перемонтируется при изменении query
-8. **Exhaustiveness check в редьюсере** — забытый case ловится компилятором, а не в рантайме
-9. **Debounce URL-обновления** — 50ms, батчит быстрые клики в одну навигацию; значение в именованной константе
-10. **Явный return type композабла** — интерфейс, а не вывод типа
-
-### Симптомы нарушения паттерна
-
-| Симптом | Причина |
-|---------|---------|
-| Потеря фильтров при быстрых кликах | Читали URL вместо pending-состояния |
-| Бесконечная загрузка | Race condition между navigations |
-| Мерцание UI | Компонент remount из-за path вместо name |
-
----
-
-## Anti-patterns (Чего избегать)
-
-### Frontend
-
-- Inline arrow functions в templates (`@click="() => fn()"`)
-- Deep watchers на больших объектах
-- Синхронные вычисления в render
-- Index as key в v-for
-- Fetching в каждом mount без кэша
-- Создание DOM элементов в горячем пути (loop, scroll)
-- Множественные watchEffect в singleton composables
-
-### Backend
-
-- N+1 запросы
-- SELECT * вместо projection
-- Tracking entities при read-only
-- Синхронные блокирующие вызовы
-- Большие payload без пагинации
-
----
-
-## BBCode render caching
-
-Серверный рендеринг BBCode не кэшируется, и кэш поверх него — не та оптимизация,
-которую заводят по общим соображениям. Результат зависит от прав зрителя, а
-ключ, который причину видимости не различает, показывает чужой приватный текст:
-цена лишнего попадания несопоставима с ценой промаха. Контракт фильтрации и
-условие, при котором кэш допустим, — в
-[BBCODE_RENDERING.md](../architecture/BBCODE_RENDERING.md).
-
----
-
-## Checklist перед релизом
-
-- [ ] Профилирование ключевых страниц (Lighthouse)
-- [ ] Проверка bundle size (< 500KB initial)
-- [ ] Проверка API response times (< 200ms P50)
-- [ ] Проверка database query plans
-- [ ] Load testing (целевая нагрузка × 2)
-- [ ] Memory leak testing (long session)
-
----
-
-## CSS Transitions и тема
-
-Переключение темы — **мгновенное**: временный класс `.no-transitions` подавляет все CSS transitions на время смены темы, а forced reflow (`offsetHeight`) гарантирует снап значений за один кадр. Подробности — в [UI_STANDARDS.md](./UI_STANDARDS.md) → "Переключение темы". `transition: all` запрещен (performance overhead и непредсказуемость).
-
----
-
-## Ссылки
-
-- [Web Vitals](https://web.dev/vitals/)
-- [Vue Performance](https://vuejs.org/guide/best-practices/performance.html)
-- [EF Core Performance](https://learn.microsoft.com/en-us/ef/core/performance/)
+Пороги оповещений и их обоснование живут в правилах Prometheus, описание в [MONITORING.md](../guides/MONITORING.md#alerting).

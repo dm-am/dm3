@@ -185,7 +185,6 @@ public class SizeRatchetShould
         new("src/DM.Workers.NotificationDispatcher/Startup.cs", "ConfigureServices", 87),
         new("test/DM.Architecture.Tests/AgentToolingShould.cs", "RunEveryGateTheWorkflowRunsThatBelongsOnThisMachine", 89),
         new("test/DM.Architecture.Tests/DocumentedStatusCodesShould.cs", "MatchTheAttributesTheSchemaIsBuiltFrom", 85),
-        new("test/DM.Architecture.Tests/DocumentedTablesShould.cs", "AddUpTheRenamesTheMigrationPlanPromises", 99),
         new("test/DM.Architecture.Tests/QueryVocabularyShould.cs", "Published", 92),
         new("test/DM.Domain.Game.Tests/Features/Games/GameServiceShould.cs", "GameServiceShould", 89),
         new("test/DM.Domain.Game.Tests/Features/Games/GameStatusTransitionShould.cs", "GameStatusTransitionShould", 85),

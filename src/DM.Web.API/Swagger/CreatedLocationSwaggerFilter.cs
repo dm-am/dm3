@@ -17,9 +17,9 @@ namespace DM.Web.API.Swagger;
 /// A filter rather than an attribute per action, for the same reason as the
 /// media type next door: setting Location is what CreatedAtRoute does, so it is
 /// a property of every 201 in the host and not a thing each new action has to
-/// remember to describe. An operation that answers 201 without a Location is a
-/// defect of the action, not of the document — that is the case the API_DESIGN
-/// rule covers by saying such a response should not be a 201 at all.
+/// remember to describe. An operation that answers 201 without a Location is the
+/// case API_DESIGN allows for a created thing with no address of its own, and the
+/// document has to say so rather than promise a header for it.
 ///
 /// Eighteen actions are in exactly that case today: they answer through
 /// StatusCode(201, ...) and set no header. Declaring the header over them turned

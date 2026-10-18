@@ -40,10 +40,10 @@ public class AgentInstructionSizeShould
 
     private static readonly Recorded[] Register =
     [
-        new(".claude/CLAUDE.md", 8361),
-        new(".claude/agents/code-reviewer.md", 5414),
-        new(".claude/agents/debugger.md", 3147),
-        new(".claude/agents/frontend-developer.md", 3251),
+        new(".claude/CLAUDE.md", 4915),
+        new(".claude/agents/code-reviewer.md", 4022),
+        new(".claude/agents/debugger.md", 1996),
+        new(".claude/agents/frontend-developer.md", 2777),
         new(".claude/skills/architecture-review/SKILL.md", 4615),
         new(".claude/skills/architecture/SKILL.md", 5594),
         new(".claude/skills/codex-issue-coordinator/SKILL.md", 10280),
@@ -51,7 +51,7 @@ public class AgentInstructionSizeShould
         new(".claude/skills/html-doc/SKILL.md", 5151),
         new(".claude/skills/improve/SKILL.md", 1432),
         new(".claude/skills/plan/SKILL.md", 5097),
-        new(".claude/skills/refactor-in-bounds/SKILL.md", 13086),
+        new(".claude/skills/refactor-in-bounds/SKILL.md", 12901),
         new(".claude/skills/review/SKILL.md", 5953),
         new(".claude/skills/task-to-pr/SKILL.md", 4010),
         new(".claude/skills/test/SKILL.md", 2033),

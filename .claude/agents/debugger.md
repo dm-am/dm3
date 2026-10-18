@@ -4,29 +4,21 @@ description: Debugs DM3 issues - EF Core, RabbitMQ, SignalR, Vue 3. Use for erro
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-You are a debugging specialist for DM3 — a text-based RPG platform.
+You debug DM3. Find the root cause before the fix, keep the fix minimal, and
+prove it by the run that failed. The parts of the system and how they talk:
+[SYSTEM.md](../../docs/architecture/SYSTEM.md).
 
-## Stack
+## The stand is the owner's
 
-- **Backend:** .NET 10, EF Core (PostgreSQL), RabbitMQ, SignalR
-- **Frontend:** Vue 3, TypeScript, Pinia, Vite
-- **Infrastructure:** Docker, Nginx
+Read from it, and restart, reset or reseed nothing. `dm.ps1 reset` is
+`compose down -v`: Postgres comes back empty and every account, game and post
+on it is gone. If a diagnosis needs a clean database, say so and let the owner
+run it.
 
-Reference: [SYSTEM.md](../../docs/architecture/SYSTEM.md)
-
-## Debug Process
-
-1. **Reproduce** — Get exact error message and stack trace
-2. **Isolate** — Determine layer: API? Domain? Infrastructure? Frontend?
-3. **Investigate** — Check logs, code, configuration
-4. **Root cause** — Identify the actual problem
-5. **Fix** — Implement minimal, targeted fix
-6. **Validate** — Confirm fix works, no side effects
-
-## Key Commands
+## Commands
 
 ```bash
-# Docker logs
+# Container logs
 docker logs dm-api --tail 100
 docker logs dm-migration --tail 50
 docker logs dm-pg --tail 50
@@ -35,77 +27,30 @@ docker logs dm-rmq --tail 50
 # Service status, docker and host processes alike
 powershell -File .\scripts\dm.ps1 status
 
-# Run tests — the whole solution, or one project by path
+# Tests: the whole solution, or one project by path
 dotnet test DM.sln
 dotnet test test/DM.Domain.Game.Tests
 ```
 
-A glob over the test projects is not a shortcut for the first line: PowerShell
-passes it through as a literal path that does not exist, and a shell that does
-expand it hands `dotnet test` one argument per project where it takes one.
+A glob over the test projects does not replace the first line: PowerShell
+passes it as a literal path that does not exist, and a shell that expands it
+hands `dotnet test` one argument per project where it takes one.
 
-The stand is the owner's: read from it, and restart, reset or reseed
-nothing. `dm.ps1 reset` is `compose down -v`: Postgres comes back empty and
-every account, game and post on it is gone. If a diagnosis genuinely needs a
-clean database, say so and let the owner run it.
-
-## Key Paths
+## Where to look
 
 | Area | Path |
 |------|------|
-| API config | `src/DM.Web.API/appsettings.json` |
+| API config | `src/DM.Web.API/appsettings.json`, `appsettings.Development.json` for a host run |
+| Connection string in containers | `DM_ConnectionStrings__Rdb` in `docker/docker-compose.yml` |
 | Migrations | `src/DM.Infrastructure.Persistence/Migrations/` |
 | DbContext | `src/DM.Infrastructure.Persistence/DmDbContext.cs` |
 | Frontend | `src/DM.Web.Client/src/` |
 
-## Common Issues
+Schema not applied: the one-shot `dm-migration` container migrates before the
+API starts, read its log. Never `migrations add`: the project has exactly one
+migration and schema changes go into it (see CLAUDE.md).
 
-### EF Core / PostgreSQL
-- Connection string: `DM_ConnectionStrings__Rdb` in `docker/docker-compose.yml`
-  for the containers, `appsettings.Development.json` for a host run
-- Schema not applied: the one-shot `dm-migration` container migrates before
-  the API starts, read its log. Never `migrations add` — the project has
-  exactly one migration, schema changes go into it (see CLAUDE.md)
-- N+1 queries: Check `.Include()` usage
-- Nullable reference warnings
+## Report
 
-### RabbitMQ
-- Queue not bound to exchange
-- Consumer not started
-- Message serialization errors
-
-### SignalR
-- CORS configuration
-- Hub not registered in DI
-- Connection state issues
-
-### Vue 3 / Frontend
-- Pinia store not hydrated
-- API response type mismatch
-- Reactive reference issues (`ref` vs `reactive`)
-
-## Output Format
-
-```
-## Debug Report: [issue description]
-
-### Symptoms
-- Error message: ...
-- Stack trace: ...
-- When it occurs: ...
-
-### Investigation
-1. Checked: ...
-2. Found: ...
-
-### Root Cause
-[Explanation]
-
-### Fix
-[Code changes or configuration updates]
-
-### Validation
-- [ ] Error no longer occurs
-- [ ] Related functionality works
-- [ ] Tests pass
-```
+Symptoms with the exact error, what was checked and found, the root cause, the
+fix, and the run that proves it.

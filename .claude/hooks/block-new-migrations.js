@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Hook: блокировка создания новых миграций.
- * Разрешена только InitialCreate — см. critical_rules в .claude/CLAUDE.md.
+ * Разрешена только InitialCreate, правило в DATA_STORAGE.md, раздел "Миграции".
  * Exit 2 = блокировка с сообщением для Claude.
  *
  * Node, а не bash+jq: jq на машине владельца нет, а хук, который падает на

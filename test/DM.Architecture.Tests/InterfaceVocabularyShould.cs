@@ -131,14 +131,11 @@ public class InterfaceVocabularyShould
     /// "Занятные темы" -- a title the owner wrote, and award titles are his to
     /// write (a neighbouring one is called "Народное признание, например").
     /// Renaming it would also be a seed change, and the seed is the same row in
-    /// the migration and in both model snapshots. "Платиновые темы" is an item of
-    /// the old site's lore (ERROR_PAGES_AND_LORE.md), listed under the name its
-    /// community gave it.
+    /// the migration and in both model snapshots.
     /// </summary>
     private static readonly Regex[] ProperNames =
     [
-        new("Занятные темы", RegexOptions.Compiled),
-        new("Платиновые темы", RegexOptions.Compiled)
+        new("Занятные темы", RegexOptions.Compiled)
     ];
 
     /// <summary>

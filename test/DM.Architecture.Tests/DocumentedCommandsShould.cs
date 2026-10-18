@@ -77,7 +77,6 @@ public class DocumentedCommandsShould
     private static readonly Recorded[] Register =
     [
         new(".claude/skills/html-doc/SKILL.md", 4),
-        new("docs/guides/LOCAL_SETUP.md", 1),
     ];
 
     private static readonly Lazy<HashSet<string>> TreeFiles = new(() => RepositoryFiles.CommittableFiles()

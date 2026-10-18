@@ -25,7 +25,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// </summary>
 /// <remarks>
 /// Each of these is a read followed by a write, and under READ COMMITTED a read
-/// holds nothing (DATA_STORAGE.md, "Транзакция — не снимок"): the service reads an
+/// holds nothing (DATA_STORAGE.md, "Транзакция не снимок"): the service reads an
 /// open ticket, another moderator closes it, and the comment the service then
 /// writes is a comment in a closed ticket, or its closing is the second one of the
 /// same ticket. Only a live database can be asked what a

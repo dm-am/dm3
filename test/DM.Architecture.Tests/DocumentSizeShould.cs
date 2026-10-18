@@ -39,10 +39,8 @@ public class DocumentSizeShould
 
     private static readonly Recorded[] Register =
     [
-        new("docs/SURFACES.md", 104176),
-        new("docs/architecture/BBCODE_RENDERING.md", 123508),
-        new("docs/conventions/UI_STANDARDS.md", 194023),
-        new("docs/plans/DIALOGS.md", 347701),
+        new("docs/architecture/BBCODE_RENDERING.md", 123738),
+        new("docs/conventions/UI_STANDARDS.md", 195379),
     ];
 
     /// <summary>

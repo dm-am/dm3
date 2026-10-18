@@ -1,300 +1,120 @@
 # Установка и запуск DM3
 
+Как поднять DM3 на своей машине. То, что каждая команда отсюда существует, держит DocumentedCommandsShould, согласие трех файлов миграции после пересоздания держат MigrationShould и SnapshotAgreementShould, остальное не проверяется.
+
 ## Требования
 
-- **Docker Desktop** (с WSL2 на Windows)
-- **Node.js 20.19+** и **npm** (в CI — 24; нижнюю границу задают `engines` сборщика и линтера, а не наш выбор)
-- **Git**
-
----
+- Docker Desktop, на Windows с WSL2.
+- Git. На Windows из Git for Windows берется и bash: `dm.ps1` зовет им `docker/scripts/init-env.sh`.
+- Node.js и npm ровно тех версий, что в `engines` файла [package.json](../../src/DM.Web.Client/package.json) клиента. Версия точная, а не нижняя граница: lock-файл пишет npm, приехавшая с этой Node, и `npm ci` другой версии его отвергает. Ту же версию называют Dockerfile клиента и CI, равенство держит FrontendToolchainShould.
+- .NET SDK по [global.json](../../global.json) и глобальный инструмент `dotnet-ef`. Нужны только для запуска API из исходников и для миграций.
 
 ## Быстрый старт
 
 ```bash
 # Windows
-powershell -File .\scripts\dm.ps1 start                        # Запуск всех сервисов
-powershell -File .\scripts\dm.ps1 seed                         # Тестовые данные (после запуска API)
+powershell -File .\scripts\dm.ps1 start
+powershell -File .\scripts\dm.ps1 seed
 
 # Linux/Mac
 ./scripts/dm.sh start
 ./scripts/dm.sh seed
 
-# Frontend (отдельно)
+# Frontend, отдельно
 cd src/DM.Web.Client && npm install && npm run dev
 ```
 
-### Альтернатива (ручной запуск)
+`start` сам создает `docker/.env` скриптом `docker/scripts/init-env.sh local`. Копия `docker/.env.example` руками не годится: ключ шифрования в ней пуст, и compose останавливается на интерполяции до старта контейнеров.
 
-```bash
-bash docker/scripts/init-env.sh local         # Создать docker/.env и ключ шифрования
-cd docker
-docker compose up -d                          # Инфраструктура
+- Frontend: http://localhost:5173. Vite занимает строго этот порт и при занятом не стартует.
+- API и Swagger: http://localhost:5000
+- Mailpit с письмами активации: http://localhost:8025
+- Объектное хранилище (S3): http://localhost:9000, учетки в `docker/.env`. Веб-консоли у хранилища нет.
+- Остальные порты: в [docker-compose.yml](../../docker/docker-compose.yml) или `dm.ps1 status`. Grafana, Jaeger и Prometheus описаны в [MONITORING.md](./MONITORING.md).
 
-cd src/DM.Web.Client && npm install && npm run dev  # Frontend
-```
-
-- **Frontend:** http://localhost:5173
-- **API/Swagger:** http://localhost:5000
-- **Health:** http://localhost:5000/_health (liveness), http://localhost:5000/_ready (readiness)
-- **Объектное хранилище (S3):** http://localhost:9000, учетки из `docker/.env`. Бакет `dm-uploads`, учетки и анонимное чтение публичных префиксов задает `docker/storage-start.sh` при старте `seaweedfs`. Веб-консоли у хранилища нет
-- **imgproxy:** http://localhost:8080 (on-the-fly resize + AVIF/WebP negotiation)
-
----
-
-## Порты сервисов
-
-**Источник истины:** [`docker/docker-compose.yml`](../../docker/docker-compose.yml)
-
-| Сервис | Порт | Credentials |
-|--------|------|-------------|
-| Frontend (Vite) | 5173 | — |
-| API (Swagger) | 5000 | — |
-| Notification Consumer | 5002 | — |
-| Email Consumer | 5003 | — |
-| PostgreSQL | 5432 | из `docker/.env` |
-| RabbitMQ | 5672, 15672 | из `docker/.env` |
-| Объектное хранилище (S3) | 9000 | из `docker/.env` |
-| imgproxy | 8080 | HMAC key/salt из `docker/.env` |
-| Mailpit | 1025, 8025 | — |
-| Loki | 3100 | — |
-| Jaeger | 16686 | — |
-| Prometheus | 9090 | — |
-| Grafana | 3000 | из `docker/.env` |
-
-**Credentials:** Все пароли в `docker/.env`. Файл создает `docker/scripts/init-env.sh local`, его же зовут `dm.sh start` и `dm.ps1 start`. Копия `.env.example` руками оставляет крипто-ключ пустым, а compose объявляет его через `${...:?}` и останавливается на интерполяции до старта контейнеров.
-
-**Все порты:** `docker ps --format "table {{.Names}}\t{{.Ports}}"`
-
----
+Все пароли в `docker/.env`.
 
 ## Тестовые данные
 
-### Справочные данные (автоматически)
+Справочные данные (доски форума, теги игр и прочее из `HasData` в `DmDbContext`) приходят с миграцией: ее применяет разовый контейнер `migration` при подъеме стека.
 
-При подъеме стека разовый контейнер `migration` применяет миграции, которые создают:
-- **Доски форума** — все разделы
-- **Теги игр** — весь каталог тегов, разложенный по группам
+Тестовых пользователей и контент кладет `seed`. Сид это консольный инструмент, а не эндпоинт: он пишет прямо в Postgres и объектное хранилище, поэтому по сети недоступен. Скрипт запускает его разовым контейнером под compose-профилем `tools`, который обычный `docker compose up` не поднимает. API при этом должен работать: после сида скрипт перезапускает API, чтобы тот пересчитал стартовые проекции (популярность, лучший пост недели) уже по данным.
 
-Сколько их, смотреть в `HasData` модели, а не здесь: число в руководстве расходится
-с моделью молча, и расходилось.
+Пароль всех тестовых аккаунтов `Test123!`.
 
-### Тестовые пользователи
+| Роль | Логин |
+|------|-------|
+| Admin | `SolohinLex` |
+| SeniorModerator | `TestSeniorMod` |
+| Moderator | `TestModerator` |
+| Mentor | `TestMentor` |
+| RegularUser | `TestUser` |
 
-```bash
-powershell -File .\scripts\dm.ps1 seed   # Windows
-./scripts/dm.sh seed                     # Linux/Mac
-```
+Остальные аккаунты (граничные случаи имен по [USERNAME_POLICY.md](../conventions/USERNAME_POLICY.md), рейтинги, удаленный аккаунт, незавершенная регистрация `inactive@test.local`) перечислены с назначением в `src/DM.Tools.Seeder/Seeding/DataSeeder.Users.cs` и `src/DM.Tools.Seeder/Seeding/DataSeeder.RemovedAccount.cs`.
 
-**Требования:** API запущен (порт 5000).
-
-Сид это отдельный консольный инструмент, а не эндпоинт: он пишет напрямую в Postgres и объектное хранилище, поэтому по сети он недоступен вовсе. Скрипт запускает его разовым контейнером под compose-профилем `tools`, который не поднимается обычным `docker compose up`. API при этом должен быть запущен: скрипт проверяет `/_health` и после сида перезапускает API, чтобы он пересчитал стартовые проекции. Бакет для загрузок создает сам `seaweedfs` при старте, и сид ждет его здоровья.
-
-**Тестовые аккаунты (пароль: `Test123!`):**
-
-**Роли:**
-
-| Роль | Логин | Email |
-|------|-------|-------|
-| Admin | `SolohinLex` | admin@test.local |
-| SeniorModerator | `TestSeniorMod` | seniormod@test.local |
-| Moderator | `TestModerator` | mod@test.local |
-| Mentor | `TestMentor` | mentor@test.local |
-| RegularUser | `TestUser` | user@test.local |
-
-**Граничные случаи имен (см. [USERNAME_POLICY.md](../conventions/USERNAME_POLICY.md)):**
-
-| Логин | Особенность |
-|-------|-------------|
-| `Ян` | Min length (2), cyrillic |
-| `LongestLoginPossible` | Max length (20) |
-| `Player_One` | Underscore |
-| `Player-Two` | Hyphen |
-| `Player.Three` | Dot |
-| `Player Four` | Space |
-| `Игрок` | Cyrillic only |
-| `Игрок_Один` | Cyrillic + underscore |
-| `Тест Елки` | Cyrillic + space + Е |
-
-**Специальные состояния:**
-
-| Логин | Особенность |
-|-------|-------------|
-| `TestHonorary` | Обладатель награды "Почетный гоблин" |
-| `Ушедший Мастер` | Удаленный аккаунт (removed@test.local, войти нельзя). Его топик с комментарием, игра "Хроники старого маяка" с оцененным постом и персонаж "Смотритель Ион" в чужой игре подписаны "Аккаунт удален" и собраны в профиле `/users/Аккаунт удален` |
-
-**Pending Registrations (для тестирования активации):**
-
-| Email | Назначение |
-|-------|------------|
-| inactive@test.local | Тестирование flow "регистрация не завершена" |
-
-Статус новичка после сида есть не у всех: рейтинг пересчитывается в конце прогона по фактическому числу постов, и под порог попадают только самые тихие аккаунты. Сам порог и то, что он ограничивает, описаны в [AUTHORIZATION.md](../architecture/AUTHORIZATION.md).
-
-### Ручная регистрация
-
-1. http://localhost:5173 → Регистрация
-2. Mailpit: http://localhost:8025 (письмо активации)
-
----
+Статус новичка после сида есть не у всех: рейтинг пересчитывается в конце прогона по фактическому числу постов. Порог описан в [AUTHORIZATION.md](../architecture/AUTHORIZATION.md).
 
 ## Команды
 
-### CLI-скрипты (рекомендуется)
-
 ```bash
 # Windows
-powershell -File .\scripts\dm.ps1 start    # Запуск всех сервисов
-powershell -File .\scripts\dm.ps1 stop     # Остановка
-powershell -File .\scripts\dm.ps1 reset    # Сброс БД и перезапуск
-powershell -File .\scripts\dm.ps1 seed     # Тестовые данные
-powershell -File .\scripts\dm.ps1 e2e      # API для e2e: лимит запросов выключен
-powershell -File .\scripts\dm.ps1 status   # Статус сервисов
-powershell -File .\scripts\dm.ps1 logs     # Логи (или logs dm-api)
+powershell -File .\scripts\dm.ps1 start
+powershell -File .\scripts\dm.ps1 stop
+powershell -File .\scripts\dm.ps1 reset
+powershell -File .\scripts\dm.ps1 seed
+powershell -File .\scripts\dm.ps1 e2e
+powershell -File .\scripts\dm.ps1 status
+powershell -File .\scripts\dm.ps1 logs dm-api
 
-# Linux/Mac
-./scripts/dm.sh start
-./scripts/dm.sh stop
-./scripts/dm.sh reset
-./scripts/dm.sh seed
-./scripts/dm.sh e2e
-./scripts/dm.sh status
-./scripts/dm.sh logs
+# Linux/Mac: те же команды
+./scripts/dm.sh help
 ```
 
-`e2e` пересобирает и пересоздает только API, с тем же выключателем лимита
-запросов, что ставит оверлей джобы e2e в CI. Под лимитом одна загрузка страницы
-тратит больше десятка запросов из сотни в минуту, и набор падает на ответах 429,
-неотличимых от устаревших локаторов. Лимит возвращается следующим `start`. Хук
-перед пушем проверяет стенд до всех гейтов и без выключателя отказывает, называя
-эту команду.
+`reset` стирает тома стека (базы и хранилище) и поднимает его заново. Что делает каждая команда, печатает `help`.
 
-### Docker (ручные команды)
+`e2e` пересобирает и пересоздает только API с выключенным лимитом запросов, как оверлей джобы e2e в CI. Под лимитом одна загрузка страницы тратит больше десятка запросов из сотни в минуту, и набор падает на ответах 429, неотличимых от устаревших локаторов. Лимит возвращает следующий `start`. Хук перед пушем гонит набор только с `DM_GATES_FULL=1` и тогда сначала проверяет стенд: без выключателя отказывает и называет эту команду.
 
-```bash
-docker compose up -d --build          # Запуск с пересборкой
-docker compose down                   # Остановка
-docker logs dm-api --tail 50 -f       # Логи API
-docker exec -it dm-api /bin/sh        # Shell в контейнере
-```
-
-### Frontend
-
-```bash
-cd src/DM.Web.Client
-npm run dev           # Dev server
-npm run build         # Production
-npm run test:unit     # Тесты
-```
-
-### Backend (локальная разработка)
+### Backend из исходников
 
 ```bash
 docker stop dm-api
 dotnet run --project src/DM.Web.API --urls "http://localhost:5000" --environment Development
 ```
 
-Окружение задается явно: без него хост считает себя Production, не читает
-`appsettings.Development.json` с учетными данными localhost и останавливается на
-проверке строк подключения. Там же включается Swagger.
+Без явного окружения хост не стартует, причина в [CONFIGURATION.md](../references/CONFIGURATION.md).
 
 ### Миграции
 
-Только одна миграция `InitialCreate` (см. [DATA_STORAGE.md](../conventions/DATA_STORAGE.md)). После изменения Entity — пересоздать ее, а не добавлять новую:
+Миграция одна, `InitialCreate`, правило в [DATA_STORAGE.md](../conventions/DATA_STORAGE.md). После изменения сущностей ее пересоздают:
 
 ```bash
 dotnet ef migrations remove -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
 dotnet ef migrations add InitialCreate -p src/DM.Infrastructure.Persistence -s src/DM.Web.API
 ```
 
-**Ловушка EF 10:** `migrations add` падает с "Sequence contains no elements" — это
-замаскированное обнаружение цикла в сид-данных (Boards.LastTopicId и Topics.BoardId
-ссылаются друг на друга; EF 8 разрывал nullable-ребро сам, EF 10 отказывается —
-[dotnet/efcore#36682](https://github.com/dotnet/efcore/issues/36682)). Обход: временно
-поставить `LastTopicId = null` в сиде досок в `DmDbContext`, сгенерировать, вернуть
-значение в сид и в три сгенерированных файла (InsertData доски "Общий" в миграции,
-`LastTopicId` в блоке HasData снапшота и дизайнера). Тесты `MigrationShould` и
-`SnapshotAgreementShould` проверяют, что три файла сошлись с моделью.
-
----
+`migrations add` в EF 10 падает с "Sequence contains no elements". Это замаскированное обнаружение цикла в сид-данных: `Boards.LastTopicId` и `Topics.BoardId` ссылаются друг на друга, EF 8 разрывал nullable-ребро сам, EF 10 отказывается ([dotnet/efcore#36682](https://github.com/dotnet/efcore/issues/36682)). Обход: временно поставить `LastTopicId = null` в сиде досок в `DmDbContext`, сгенерировать миграцию, вернуть значение в сид и в три сгенерированных файла (InsertData доски "Общий" в миграции, `LastTopicId` в блоке HasData снапшота и дизайнера). Что три файла сошлись с моделью, проверяют MigrationShould и SnapshotAgreementShould.
 
 ## Конфигурация
 
-### Файлы конфигурации
-
-| Файл | Назначение |
-|------|------------|
-| [`docker/.env`](../../docker/.env.example) | Секреты Docker (пароли БД, хранилища, RabbitMQ) |
-| [`src/DM.Web.API/appsettings.json`](../../src/DM.Web.API/appsettings.json) | Главный конфиг API (сессии, пароли, токены, CDN) |
-| [`src/DM.Web.Client/.env.local`](../../src/DM.Web.Client/) | Адрес API для запуска из исходников: dev-сервер и API отвечают на разных портах. В развернутом виде значение пусто, сайт и API живут на одном origin |
-
-### Workers (наследуют от API через docker-compose)
-
-| Файл | Назначение |
-|------|------------|
-| [`src/DM.Workers.Mail/appsettings.json`](../../src/DM.Workers.Mail/appsettings.json) | Email: SMTP настройки |
-| [`src/DM.Workers.NotificationDispatcher/appsettings.json`](../../src/DM.Workers.NotificationDispatcher/appsettings.json) | Notifications: RabbitMQ |
-
-### Основные секции appsettings.json
-
-| Секция | Что настраивает | См. документацию |
-|--------|-----------------|------------------|
-| `AuthenticationConfiguration` | Сессии (1 год), throttling, lockout | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
-| `PasswordPolicyConfiguration` | Требования к паролям (8+ символов) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
-| `TokenConfiguration` | Срок жизни токенов (активация, сброс пароля) | [AUTHENTICATION.md](../architecture/AUTHENTICATION.md) |
-| `CdnConfiguration` | Объектное хранилище S3 для source-файлов | [UPLOADS.md](../architecture/UPLOADS.md) |
-
-### Frontend
-
-```bash
-# src/DM.Web.Client/.env.local
-VITE_API_HOST=http://localhost:5000
-```
-
-### Docker
-
-Все секреты — в `docker/.env` (создает `docker/scripts/init-env.sh local`):
-```bash
-POSTGRES_PASSWORD=...
-RABBITMQ_DEFAULT_PASS=...
-STORAGE_APP_PASSWORD=...
-STORAGE_IMGPROXY_PASSWORD=...
-STORAGE_BACKUP_PASSWORD=...
-IMGPROXY_KEY=...   # 64 hex chars (32 bytes), HMAC-SHA256 key
-IMGPROXY_SALT=...  # 64 hex chars (32 bytes), HMAC-SHA256 salt
-```
-
----
+Файлы настроек, секции `appsettings.json`, переменные `docker/.env` и `.env.local` клиента описаны в [CONFIGURATION.md](../references/CONFIGURATION.md).
 
 ## Частые проблемы
 
 | Проблема | Решение |
 |----------|---------|
-| Порт занят | `taskkill //F //IM node.exe` (Windows) |
-| Frontend не видит API | Проверить `.env.local`: `VITE_API_HOST=http://localhost:5000` |
-| Изображения не загружаются | API стартует и без хранилища, отказывают только загрузки и картинки. Проверь `docker ps` (`dm-seaweedfs` должен быть healthy) и `docker logs dm-seaweedfs` |
-| Thumbnails не отдаются (404 на imgproxy) | `docker ps \| grep imgproxy`. Проверить `IMGPROXY_KEY`/`IMGPROXY_SALT` в `docker/.env` (64 hex chars each) |
-| Seed: "API not available" | Запусти API: `dotnet run --project src/DM.Web.API --environment Development` |
-| Seed: "PostgreSQL not available" | Запусти: `docker compose up -d postgres` |
-| Пользователи не в "Активных" | Seed обновляет `LastActivityUtc`, перезапусти seed |
-
----
+| Frontend не видит API | Адрес API берется из `VITE_API_HOST` в `src/DM.Web.Client/.env.local`, без файла `http://localhost:5000`. API должен отвечать на http://localhost:5000/_health |
+| Изображения не загружаются | API стартует и без хранилища, отказывают только загрузки и картинки. `dm-seaweedfs` в `docker ps` должен быть healthy, причину смотреть в `docker logs dm-seaweedfs` |
+| Превью картинок 404 от imgproxy | Жив ли `dm-imgproxy` в `docker ps`, заданы ли `IMGPROXY_KEY` и `IMGPROXY_SALT` в `docker/.env` (64 hex-символа каждый) |
+| Seed: "API not available" | Сначала `start` |
 
 ## Preview режим
 
+Стенд как на сервере, за nginx и Basic Auth:
+
 ```bash
 cd docker
-bash scripts/init-htpasswd.sh                                             # спросит пароль
+bash scripts/init-htpasswd.sh
 docker compose -f docker-compose.yml -f docker-compose.preview.yml up -d --build
 ```
 
-URL: http://localhost:80 за Basic Auth, логин `preview`. Пароля в репозитории нет: `docker/nginx/.htpasswd` создается первой командой, без него docker сделает на месте файла каталог и nginx не поднимется. Подробности: [DEPLOYMENT.md](./DEPLOYMENT.md#preview-окружение).
-
----
-
-## Ссылки
-
-- [Архитектура](../architecture/SYSTEM.md)
-- [Тестирование](./TESTING.md)
-- [Деплоймент](./DEPLOYMENT.md)
-- [Конфигурация](../references/CONFIGURATION.md)
-
+Адрес http://localhost, логин `preview`, пароль спрашивает первая команда. Без `docker/nginx/.htpasswd` docker создает на месте файла каталог, и nginx не поднимается. Подробности в [DEPLOYMENT.md](./DEPLOYMENT.md#preview-окружение).

@@ -159,7 +159,7 @@ internal class TicketRepository : ITicketRepository
     /// <remarks>
     /// The status is moved first, by an UPDATE that holds the condition "still
     /// open" in its WHERE, and that statement is also what takes the lock of the
-    /// ticket row (DATA_STORAGE.md, "Транзакция — не снимок"). A closing that
+    /// ticket row (DATA_STORAGE.md, "Транзакция не снимок"). A closing that
     /// landed after the service read the ticket leaves it touching no row, and the
     /// comment is not written. Every other comment to the same ticket waits on
     /// that lock until this transaction ends, so the count read after it is the

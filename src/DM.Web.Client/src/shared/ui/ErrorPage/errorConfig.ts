@@ -27,8 +27,8 @@ export interface ErrorConfig {
 
 // TODO(round-2 art): dedicated illustrations for 404 / 409 / 410 are missing.
 // They currently fall back to general-error.png. Add 404 (empty chest),
-// 409 (fighting goblins), 410 (ashes) per docs/plans/ERROR_PAGES_AND_LORE.md
-// and extend this map. 404 is the most visited error page (catch-all route).
+// 409 (fighting goblins), 410 (ashes) and extend this map. 404 is the most
+// visited error page (catch-all route).
 const generalImage: ErrorImage = { src: imgGeneral, width: 400, height: 265 };
 
 const errorDefaults: Record<number, ErrorConfig> = {

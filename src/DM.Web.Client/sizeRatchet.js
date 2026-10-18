@@ -82,7 +82,7 @@ export const REGISTER = {
   "src/app/providers/routePrefetch.ts": { functions: {
     "installRoutePrefetch": { lines: 157 },
   } },
-  "src/app/providers/router.spec.ts": { lines: 929 },
+  "src/app/providers/router.spec.ts": { lines: 872 },
   "src/app/providers/router.ts": { lines: 1006 },
   "src/confirmCopy.spec.ts": { functions: {
     "literalsIn": { complexity: 16 },

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -10,8 +9,7 @@ using Xunit;
 namespace DM.Architecture.Tests;
 
 /// <summary>
-/// A parameter written as a table row lives in one document, and a table
-/// promised a size has it.
+/// A parameter written as a table row lives in one document.
 /// </summary>
 /// <remarks>
 /// Copying a table is how two documents come to answer one question two ways.
@@ -25,25 +23,11 @@ namespace DM.Architecture.Tests;
 ///
 /// Heading rows are left alone. Two tables answering different questions share
 /// the same pair of column names without either of them lying.
-///
-/// The second rule reads the migration plan, where each rename group promises
-/// its size and the summary promises their sum. Those numbers are the checksum
-/// of a one-way conversion: the run is verified against "expect this many
-/// renames". The summary said 74 while the groups listed 81, so the check would
-/// have been made against a number nothing produces, and a list cut down to the
-/// summary would have left seven accounts carrying names the new rules reject.
 /// </remarks>
 public class DocumentedTablesShould
 {
     /// <summary>The line that stands under the heading of a table.</summary>
     private static readonly Regex Separator = new(@"^\|[\s:|-]+\|$", RegexOptions.Compiled);
-
-    /// <summary>A rename group of the migration plan, and the size it promises.</summary>
-    private static readonly Regex GroupHeading = new(
-        @"^### Группа [A-Z]:.*\((\d+)\)$", RegexOptions.Compiled);
-
-    /// <summary>The number a statistics cell opens with, thousands and all.</summary>
-    private static readonly Regex Amount = new(@"^([\d,]+)", RegexOptions.Compiled);
 
     private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
@@ -113,106 +97,5 @@ public class DocumentedTablesShould
         copied.Should().BeEmpty(
             "a parameter copied into a second document is changed in one of them and read from " +
             "the other, and the document that does not own the rule links to the one that does");
-    }
-
-    [Fact]
-    public void AddUpTheRenamesTheMigrationPlanPromises()
-    {
-        var root = RepositoryRoot;
-        var path = Path.Combine(root.FullName, "docs", "plans", "DM2_MIGRATION.md");
-        File.Exists(path).Should().BeTrue("the conversion plan is where these numbers live");
-
-        var lines = File.ReadAllLines(path).Select(line => line.Trim()).ToArray();
-
-        var groups = new List<(string Heading, int Promised, int Rows)>();
-        var statistics = new Dictionary<string, int>(StringComparer.Ordinal);
-
-        string? heading = null;
-        var promised = 0;
-        var rows = 0;
-
-        void CloseGroup()
-        {
-            var name = heading;
-            if (name != null)
-            {
-                groups.Add((name, promised, rows));
-            }
-
-            heading = null;
-            rows = 0;
-        }
-
-        for (var i = 0; i < lines.Length; i++)
-        {
-            var line = lines[i];
-
-            var group = GroupHeading.Match(line);
-            if (group.Success)
-            {
-                CloseGroup();
-                heading = line;
-                promised = int.Parse(group.Groups[1].Value, CultureInfo.InvariantCulture);
-                continue;
-            }
-
-            if (line.StartsWith('#'))
-            {
-                CloseGroup();
-                continue;
-            }
-
-            if (!IsRow(line) || IsHeading(lines, i))
-            {
-                continue;
-            }
-
-            if (heading != null)
-            {
-                rows++;
-                continue;
-            }
-
-            var cells = Cells(line);
-            if (cells.Length != 2)
-            {
-                continue;
-            }
-
-            var amount = Amount.Match(cells[1]);
-            if (amount.Success)
-            {
-                statistics[cells[0]] = int.Parse(
-                    amount.Groups[1].Value.Replace(",", string.Empty, StringComparison.Ordinal),
-                    CultureInfo.InvariantCulture);
-            }
-        }
-
-        CloseGroup();
-
-        groups.Should().HaveCountGreaterThan(1, "the plan splits the renames into groups");
-
-        foreach (var (name, size, counted) in groups)
-        {
-            counted.Should().Be(size, $"the heading promises the size of its table: {name}");
-        }
-
-        int Statistic(string parameter)
-        {
-            statistics.ContainsKey(parameter).Should().BeTrue(
-                $"the statistics table names \"{parameter}\"");
-            return statistics[parameter];
-        }
-
-        var renamed = Statistic("Требуют переименования");
-        var compliant = Statistic("Соответствуют новым правилам");
-        var total = Statistic("Всего пользователей");
-
-        renamed.Should().Be(groups.Sum(group => group.Promised),
-            "the conversion is verified against this number and the groups below are what " +
-            "produces it, so a list longer than the summary leaves accounts unrenamed");
-
-        (compliant + renamed).Should().Be(total,
-            "an account is either renamed or left as it is");
     }
 }

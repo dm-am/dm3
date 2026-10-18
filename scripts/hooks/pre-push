@@ -168,8 +168,8 @@ if wants frontend; then
 fi
 
 # Юнит-тесты клиента читают документы: имена файлов в комментариях проверяются
-# по дереву, SURFACES.md и BBCODE_RENDERING.md разбираются как данные. Поэтому
-# они идут и тогда, когда пуш правит одни документы (джоба docs).
+# по дереву, BBCODE_RENDERING.md и UI_STANDARDS.md разбираются как данные.
+# Поэтому они идут и тогда, когда пуш правит одни документы (джоба docs).
 if wants frontend || wants docs; then
   say "Фронтенд: юнит-тесты"
 # Через npm run test:coverage, а не npx vitest run: пороги покрытия объявлены в

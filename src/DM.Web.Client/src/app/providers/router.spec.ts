@@ -834,63 +834,6 @@ describe("titles while an error page is showing", () => {
 });
 
 /**
- * The surface inventory of docs/SURFACES.md is a walkthrough checklist: the
- * owner opens the addresses in it one at a time. /auth/transfer stood in that
- * list and matched no route, so a pass produced a bug report about a page nobody
- * had built, and every link in the section pointed at port 5174 — the preview
- * port only the e2e run starts — so none of them opened at all.
- *
- * What is asserted is the LINK, not the route template beside it: the link
- * carries seed values (/game/aaaaa, /forum/general/5) and is the thing a click
- * actually opens, so a template that resolves while its seeded form 404s would
- * still be caught. Templates whose parameter has no seed value are written
- * without a link and are deliberately out of scope here.
- *
- * Only that direction is asserted. A page built and never listed is what the
- * walkthrough itself finds, while teaching this test which routes count as pages
- * would restate the route table inside it.
- */
-const SURFACES = resolve(CLIENT_SRC, "..", "..", "..", "docs", "SURFACES.md");
-
-/**
- * The path of a link the inventory offers: everything after the dev server.
- * A name that is not Latin is linked percent-encoded ("Аккаунт удален"), and
- * the router decodes it the way the browser hands it over.
- */
-const ADDRESS = /http:\/\/localhost:\d+(\/[A-Za-z0-9_.:/%-]*)/g;
-
-/** The server the links of the section point at. */
-const SERVER = /http:\/\/localhost:(\d+)/g;
-
-describe("the page inventory", () => {
-  const inventory =
-    readFileSync(SURFACES, "utf8").split("## Поверхности")[1] ?? "";
-
-  it("is the section this test means", () => {
-    // A renamed heading would leave every assertion below reading an empty
-    // string and passing without having looked at anything.
-    expect(inventory.length).toBeGreaterThan(500);
-  });
-
-  it("names only addresses the route table answers", () => {
-    const linked = [...inventory.matchAll(ADDRESS)].map((match) => match[1]);
-    const dangling = [...new Set(linked)].filter(
-      (address) => router.resolve(address).name === "not-found",
-    );
-
-    expect(dangling).toEqual([]);
-  });
-
-  it("links at the dev server, not at the port only e2e starts", () => {
-    const ports = [
-      ...new Set([...inventory.matchAll(SERVER)].map((match) => match[1])),
-    ];
-
-    expect(ports).toEqual(["5173"]);
-  });
-});
-
-/**
  * The pages a letter leads to stand alone in the shell.
  *
  * The two sidebars are 330px each and they are declared once, by the record

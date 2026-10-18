@@ -70,12 +70,7 @@ public class DocumentSnapshotsShould
 
     private static readonly Recorded[] Register =
     [
-        new("docs/SURFACES.md", "count", 4),
-        new("docs/conventions/CODE_STYLE.md", "count", 1),
         new("docs/conventions/UI_STANDARDS.md", "date", 5),
-        new("docs/plans/DIALOGS.md", "count", 5),
-        new("docs/plans/DIALOGS.md", "date", 3),
-        new("docs/plans/ROADMAP.md", "date", 2),
     ];
 
     [Fact]

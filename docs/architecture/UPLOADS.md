@@ -1,146 +1,70 @@
 # Загрузка изображений
 
-Правила работы upload-пайплайна для аватаров. Контракты и инварианты.
+Как принимаются, хранятся и отдаются загруженные картинки. Держат тесты [ImageProcessingServiceShould](../../test/DM.Infrastructure.Core.Tests/Storage/ImageProcessingServiceShould.cs) и [PostAttachmentAccessShould](../../test/DM.Web.API.IntegrationTests/Controllers/Game/PostAttachmentAccessShould.cs), остальное держит ревью.
 
-## Архитектура
+## Конвейер
 
-**Один source-файл per upload + on-the-fly transforms через [imgproxy](https://imgproxy.net/).**
+Все типы загрузки проходят один конвейер, шаги и их порядок перечислены в
+`src/DM.Domain.Core/Uploads/IImageProcessingService.cs`. Размер файла
+`UploadApiService` проверяет раньше, до буферизации. Из порядка не выпадает
+главное: формат решают magic bytes, а не `Content-Type` клиента и не расширение,
+размеры и площадь с учетом кадров анимации проверяются до декода. Файл всегда
+перекодируется в том же формате, без тихой конвертации: это снимает EXIF с
+координатами GPS и делает сохраненные байты файлом нашего декодера, а не тем, что
+клиент приклеил к заголовку картинки. Отказ отвечает 400 с русским сообщением.
 
-```mermaid
-flowchart LR
-    up["Клиент<br/>файл"] --> api["API<br/>magic bytes, EXIF strip,<br/>даунскейл до 1024px"]
-    api -->|"1: объект"| s3[("Объектное хранилище<br/>SeaweedFS")]
-    api -->|"2: строка"| pg[("PostgreSQL")]
-    view["Браузер<br/>smallUrl / mediumUrl"] --> proxy["imgproxy<br/>ресайз, формат по Accept"]
-    proxy --> s3
-    view2["Браузер<br/>originalUrl"] --> s3
-```
+Второго пути в обход конвейера нет. Исключенный тип обошел бы и magic bytes, и
+список форматов, а его объект отдается с origin приложения. Новый тип проходит
+этот конвейер или приносит свою валидацию, тест требует, чтобы неохваченных
+типов не осталось. Поэтому же не принимаются документы: декодом их не проверить,
+а проверка по одной сигнатуре делает загрузку хранимым XSS.
 
-Порядок записи в схеме — тот самый инвариант из
-[DATA_STORAGE.md](../conventions/DATA_STORAGE.md): сначала объект, потом
-строка о нем; упавшая запись теряет то, чего никто не видел.
+| | Аватар пользователя и персонажа | Вложение поста |
+|---|---|---|
+| Форматы | JPEG, PNG, WebP | плюс GIF |
+| Нижний порог стороны | есть | нет |
+| Хранится | уменьшенным до 1024 px | в своем размере |
+| Превью | imgproxy на лету | нет |
+| Отдача | прямой адрес публичного префикса | `GET /v1/uploads/{id}/content` с проверкой права |
 
-- Бэк хранит ровно один файл per upload (≤1024 px, EXIF-stripped, в формате uploader'а).
-- Thumbnail-варианты генерируются по требованию.
-- Format negotiation (AVIF / WebP / JPEG) — через `Accept` header.
+Вложение не уменьшается, потому что смысл вложения (карты, схемы) в деталях,
+поэтому его потолок файла ниже общего: байты остаются единственной границей
+объема комнаты. Числа живут в `ImageProcessingDefaults`, `UploadPolicy`, а
+потолок файла и пределы стороны и площади в `UploadApiService` и
+`ImageProcessingService`.
 
-## Поддерживаемые форматы
+## Хранение
 
-Только JPEG, PNG, WebP. Остальные отклоняются.
+На загрузку один исходный объект, превью в хранилище не кладутся. Ключ случайный,
+расширение берется из проверенного формата. Порядок записи и удаления,
+неизменность ключа и публичные префиксы описаны в
+[DATA_STORAGE.md](../conventions/DATA_STORAGE.md), раздел "Объектное хранилище".
 
-Content-type определяется по magic-byte'ам файла, **не** по клиентскому заголовку
-и **не** по расширению.
+Загрузка ссылается на цель отдельной колонкой на каждый тип, ограничение
+`CK_Uploads_TypedTarget` требует ровно одну, подходящую типу. Полиморфный ключ на
+цель запрещен. Сид проходит тот же конвейер.
 
 ## API-контракт
 
-Аватар возвращается в DTO как вложенный объект:
+Аватар приходит вложенным объектом `picture`: `smallUrl` и `mediumUrl` это
+квадратные превью imgproxy, `originalUrl` прямой адрес исходника,
+`originalWidth` и `originalHeight` дают странице зарезервировать место. Плоские
+поля `*PictureUrl` запрещены. Какой адрес брать, решает `AvatarImg`
+([UI_STANDARDS.md](../conventions/UI_STANDARDS.md), раздел "Avatars").
 
-```jsonc
-{
-  "picture": {
-    "smallUrl":    "...",  // 100×100 square (через transform layer)
-    "mediumUrl":   "...",  // 400×400 square (через transform layer)
-    "originalUrl": "..."   // ≤1024 px aspect-preserving (прямой CDN link)
-  }
-}
-```
-
-Плоские `*PictureUrl` поля на сущностях запрещены.
-
-UI pick rule:
-- Inline avatars (списки, chat) — `smallUrl`
-- Cards, post sidebars — `mediumUrl`
-- Profile page (большой aspect-preserving) — `originalUrl`
-
-FE собирает `srcset` из small+medium → браузер выбирает по DPR.
+Повтор с тем же `Idempotency-Key` в течение часа получает ответ первого запроса,
+ключ кеша включает пользователя. Лимит запросов описан в
+[API_DESIGN.md](../conventions/API_DESIGN.md), раздел "Rate Limiting".
 
 ## HTTP-кеширование
 
-```
-Cache-Control: public, max-age=31536000
-Vary: Accept
-```
+Объект пишется с `Cache-Control: public, max-age=31536000, immutable`, потому что
+ключ не переписывается: новый аватар это новый ключ. imgproxy выбирает формат
+превью по `Accept`, и кеш перед ним обязан различать ответы по `Accept`. Вложение
+отдается с `private, max-age=300` и `nosniff`: право решено для того, кто спросил,
+а не для адреса.
 
-Ключ объекта случайный, не хеш содержимого, и не переписывается: замена аватара = новый ключ.
+## Подпись адресов превью
 
-## Валидация на upload (обязательные шаги)
-
-1. Pre-check размера (≤10 МБ) — до буферизации в память.
-2. Magic-byte detection формата.
-3. Format whitelist.
-4. Identify-only пас (размеры без полного декода).
-5. Min/max dimension checks.
-6. Decompression-bomb check (pixel area до декода).
-7. Decode + resize если больше 1024 px по любой стороне (aspect-preserving).
-8. EXIF/IPTC/XMP strip.
-9. Re-encode в исходном формате.
-
-Любой fail → HTTP 400 с RU-сообщением для UI.
-
-## Атомарность
-
-Один S3 PUT + один DB INSERT. Failure любого шага → rollback ранее залитого
-объекта. Никаких partial-states.
-
-## URL signing
-
-Transform-URL'ы подписываются HMAC-SHA256: иначе anyone мог бы попросить
-произвольный transform и сжечь CPU.
-
-## Lifecycle
-
-- Аватар указывается на сущности через FK на Upload.
-- При замене старый Upload soft-deleted.
-- Source-объект удаляется фоновым worker'ом через grace-period 24h.
-- Аватар, на который ссылается предупреждение за профиль, worker не стирает, пока
-  пометку удаления не поставил кто-то кроме владельца загрузки (правило в
-  [DATA_STORAGE.md](../conventions/DATA_STORAGE.md), раздел "Объектное хранилище").
-
-## Запрещенные паттерны
-
-- ❌ Доверять `Content-Type` от клиента.
-- ❌ Брать расширение из user-filename — только из validated content-type.
-- ❌ Сохранять EXIF (риск утечки GPS).
-- ❌ Декодировать изображение до проверки размеров.
-- ❌ Partial S3 state при failure.
-- ❌ Mutable object keys.
-- ❌ Пре-генерировать thumbnails в storage (только on-the-fly).
-- ❌ Polymorphic FK для target'а upload'а — отдельная типизированная колонка
-  per upload type с CHECK constraint, гарантирующим консистентность.
-- ❌ Второй путь загрузки в обход валидации. Тип загрузки, для которого сделано
-  исключение, обходит и magic-byte detection, и whitelist — а объект попадает в
-  бакет, в котором анонимно читаемы только объявленные публичными префиксы и который прокси отдает с origin приложения. Новый тип
-  либо проходит этот же конвейер, либо приносит собственную валидацию; тест
-  требует, чтобы неохваченных типов не осталось.
-
-## Rate limit
-
-`POST /v1/uploads` — 10 запросов в минуту per user (fallback на IP для guests).
-Превышение → HTTP 429 с `Retry-After`.
-
-## Idempotency
-
-Клиент шлет header `Idempotency-Key: <uuid>`. Server кеширует response per
-`(userId, key)` на час. Дублирующие retry возвращают тот же ответ.
-
-## Live update
-
-После замены/сброса аватара backend broadcast'ит `UserAvatarChanged` через
-SignalR. Открытые вкладки делают refetch — аватары перерендериваются с
-новыми immutable URL'ами.
-
-## UX на FE
-
-Drag-drop, clipboard paste, прогресс-бар, client-side compression до 1024 px
-перед upload, сброс через `DELETE /v1/users/me/profile/avatar` (идемпотент).
-
-## Observability
-
-OTel spans на upload-пайплайн + Prometheus метрики (success/failure counter,
-duration histogram, size histograms). Атрибуты span: upload type, sizes,
-idempotency key.
-
-## Seed-данные
-
-Seed-аватары проходят тот же pipeline, что и пользовательские — один
-source-файл, никаких прибитых thumbnails.
+Адрес превью подписан HMAC-SHA256 ключом и солью imgproxy, иначе любой заказал бы
+произвольное преобразование и сжег бы процессор. Подробнее в [SYSTEM.md](SYSTEM.md).

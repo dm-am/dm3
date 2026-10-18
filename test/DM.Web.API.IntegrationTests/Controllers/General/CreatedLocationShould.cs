@@ -25,8 +25,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// </summary>
 /// <remarks>
 /// API_DESIGN states it: the header points at the created resource and at
-/// nothing else, and where a sub-resource has no address of its own the answer
-/// is not a 201. Neither half held. Sixty-two operations declared a 201 and none
+/// nothing else, and where a sub-resource has no address of its own the header
+/// is left off. Neither half held. Sixty-two operations declared a 201 and none
 /// declared a header, so the address was on the wire and absent from the
 /// contract; and nine of them pointed somewhere else — a like answered with the
 /// address of the whole topic, so a consumer following the header to read what

@@ -104,5 +104,4 @@ URL:  /users/Adam%20Advena
 ## Ссылки
 
 - [Установка](../guides/LOCAL_SETUP.md) — Тестовые аккаунты с граничными случаями
-- [Миграция пользователей](../plans/DM2_MIGRATION.md)
 

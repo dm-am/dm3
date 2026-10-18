@@ -40,17 +40,6 @@ public class DocumentReachabilityShould
     [
         ".claude/agents/debugger.md",
         ".claude/agents/frontend-developer.md",
-        ".claude/skills/architecture-review/SKILL.md",
-        ".claude/skills/architecture/SKILL.md",
-        ".claude/skills/codex-issue-coordinator/SKILL.md",
-        ".claude/skills/design/SKILL.md",
-        ".claude/skills/html-doc/SKILL.md",
-        ".claude/skills/improve/SKILL.md",
-        ".claude/skills/plan/SKILL.md",
-        ".claude/skills/review/SKILL.md",
-        ".claude/skills/task-to-pr/SKILL.md",
-        ".claude/skills/test/SKILL.md",
-        "docs/plans/DIALOGS.md",
     ];
 
     [Fact]

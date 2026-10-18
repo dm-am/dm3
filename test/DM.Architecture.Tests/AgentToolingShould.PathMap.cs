@@ -215,9 +215,10 @@ public partial class AgentToolingShould
     /// </summary>
     /// <remarks>
     /// DM.Architecture.Tests holds the documents to the tree, and the client
-    /// unit specs resolve every file a comment names and parse SURFACES.md and
-    /// BBCODE_RENDERING.md as data. Without either, a rename in docs/ lands
-    /// green and reddens the next push that happens to run it.
+    /// unit specs resolve every file a comment names and parse
+    /// BBCODE_RENDERING.md and UI_STANDARDS.md as data. Without either, a
+    /// rename in docs/ lands green and reddens the next push that happens to
+    /// run it.
     /// </remarks>
     [Fact]
     public void RunBothSuitesThatReadTheDocuments()

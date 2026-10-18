@@ -13,8 +13,8 @@ namespace DM.Web.API.Swagger;
 /// Without this every sortBy and sortOrder was a bare <c>"type": "string"</c>,
 /// so the contract said nothing about what the endpoint would take, and a
 /// reader had to guess the vocabulary from the response fields — which is what
-/// API_DESIGN promised would never be necessary ("перечислены они не здесь, а
-/// рядом с самим эндпоинтом — в объявлении его параметра").
+/// API_DESIGN promised would never be necessary ("Допустимые поля перечислены не
+/// здесь, а в таблице SortVocabulary по типу запроса").
 ///
 /// The values come from SortVocabulary, the same table the action filter
 /// enforces, so the published contract and the answer on the wire are one

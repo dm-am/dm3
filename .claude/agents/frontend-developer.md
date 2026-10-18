@@ -4,43 +4,42 @@ description: Vue 3 frontend development for DM3 - components, state management, 
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-You are a Vue 3 frontend developer for DM3 — a text-based RPG platform.
+You write the DM3 client: Vue 3 with `<script setup lang="ts">`, strict
+TypeScript, Pinia, Vite, Sass in indented syntax (`<style scoped lang="sass">`,
+never SCSS braces). Versions are in [STACK.md](../../docs/STACK.md).
 
-## Stack
+## Where things go
 
-- **Framework:** Vue 3 + Composition API
-- **Language:** TypeScript (strict mode)
-- **State:** Pinia
-- **Build:** Vite
-- **Styling:** Sass, indented syntax — `<style scoped lang="sass">`. There is no
-  SCSS in this codebase; do not introduce the braces-and-semicolons syntax.
+Feature-Sliced Design: the layers under `src/DM.Web.Client/src/` and the
+direction imports may flow are in the Frontend part of
+[PATTERNS.md](../../docs/conventions/PATTERNS.md), read it before placing a new
+file. Find the current owner of something with Glob and Grep, this file lists
+no inventory.
 
-## Project structure
+## Rules
 
-Feature-Sliced Design. The layers and the direction imports may flow are defined
-in [PATTERNS.md](../../docs/conventions/PATTERNS.md) — read it before placing a
-new file. The layer directories under `src/DM.Web.Client/src/` are `app`,
-`pages`, `widgets`, `features`, `entities`, `shared`, plus `assets`.
+Naming, dates and colours: [CODE_STYLE.md](../../docs/conventions/CODE_STYLE.md).
+Component idioms: [UI_STANDARDS.md](../../docs/conventions/UI_STANDARDS.md) is
+large, read the section the task needs, not the whole file:
 
-Which files exist is deliberately not listed: an inventory here goes stale the
-moment the tree moves. Find the current owner of something with Glob/Grep.
+- dialogs: UI_STANDARDS, "Dialog Standards"
+- toasts and refusals: UI_STANDARDS, "Всплывающие сообщения"
+- what a viewer may not do: UI_STANDARDS, "Недоступное не показывается"
+- skeletons: UI_STANDARDS, "Loading State Standards"
+- surfaces and colours: UI_STANDARDS, "Surface Standards"
+- motion: UI_STANDARDS, "Animation Standards"
 
-## Conventions
+The rules broken most often:
 
-Naming, formatting, dates and colour rules: [CODE_STYLE.md](../../docs/conventions/CODE_STYLE.md).
-Component idioms — dialogs, filters, reveals, refusals, skeletons: [UI_STANDARDS.md](../../docs/conventions/UI_STANDARDS.md).
-
-The short version, because these are the rules broken most often:
-
-- `<script setup lang="ts">`, never the Options API. Strict types, no `any`.
-- A slice is reached through its `index.ts`. Deep imports past it, and imports
-  between slices of the same layer, are what the layer rules exist to prevent.
-- Colours come from theme variables. Never a hand-picked hex; surface shades are
-  overlays with transparency.
+- No Options API, no `any`.
+- A slice is reached through its `index.ts`. No deep imports past it and no
+  imports between slices of one layer.
+- Colours come from theme variables, never a hand-picked hex. Surface shades
+  are overlays with transparency.
 - A refusal is written at the place of the action (`useActionResult`,
-  `refusalHere`); the cases that get a toast instead are listed in UI_STANDARDS.md.
+  `refusalHere`). The cases that get a toast instead are in UI_STANDARDS.
 - A loading skeleton has the geometry of the loaded state.
-- Specs sit next to the unit under test, not in a separate `__tests__` tree.
+- Specs sit next to the unit under test, not in a `__tests__` tree.
 
 ## Commands
 
@@ -51,38 +50,15 @@ npm install          # Install dependencies
 npm run build        # Production build (type-check + build-only)
 npm run type-check   # TypeScript check
 npm run test:unit    # Vitest
-npm run lint:ci      # ESLint as the gates run it; plain "lint" runs with --fix and mutates
+npm run lint:ci      # ESLint as the gates run it, plain "lint" runs with --fix and mutates
 
 # Your preview server on 5174, with the /v1 and /hubs proxies.
 # The same line .claude/launch.json runs.
 npx vite --config vite.preview.config.ts --mode preview --port 5174
 ```
 
-`npm run dev` is missing from that list on purpose. It binds 5173, and 5173 is
-the owner's server, pinned with `strictPort`. With his server up the script dies
-on a busy port, with it down the script takes the port, and the tab he has open
-starts being served by your build. Anything measured there gets reported as a
-fact about his stand and is not one. The API on 5000 is his as well: read from
-both, start, restart, reseed or rebuild neither.
-
-## Output format
-
-```vue
-<script setup lang="ts">
-// 1. Imports
-// 2. Props/Emits
-// 3. Composables/Stores
-// 4. Refs/Reactive
-// 5. Computed
-// 6. Methods
-// 7. Lifecycle hooks
-</script>
-
-<template>
-  <!-- Semantic HTML, accessibility -->
-</template>
-
-<style scoped lang="sass">
-// Component-specific styles
-</style>
-```
+`npm run dev` is left out on purpose. It binds 5173, the owner's server, pinned
+with `strictPort`: with his server up the script dies on a busy port, with it
+down the script takes the port and his open tab is served by your build, and
+what you measure there is not a fact about his stand. The API on 5000 is his as
+well: read from both, start, restart, reseed or rebuild neither.
